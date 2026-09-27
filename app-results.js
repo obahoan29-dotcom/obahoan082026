@@ -1,7 +1,7 @@
-// =========================================================
+/ =========================================================
 // FILE: app-results.js
 // QUẢN LÝ BẢNG KẾT QUẢ THI, THỐNG KÊ & XUẤT BÁO CÁO EXCEL
-// TỐI ƯU SONG SONG PROMISE.ALL - ĐẢM BẢO THÍ SINH TỰ DO 100% HIỂN THỊ
+// ĐẢM BẢO LỚP NÀO CHỈ HIỆN ĐÚNG DANH SÁCH HỌC SINH LỚP ĐÓ
 // =========================================================
 
 let currentExamResultData = {
@@ -20,9 +20,9 @@ let tableDisplaySettings = {
 let autoRefreshTimer = null;
 let isAutoRefreshEnabled = true;
 let scoreChartInstance = null;
-const _examResultsCache = {}; // Bộ nhớ đệm RAM giúp mở lại tức thì trong 0.01 giây
+const _examResultsCache = {};
 
-// Chuyển chuỗi sang Title Case (viết hoa chữ cái đầu)
+// Chuyển chuỗi sang Title Case
 function toTitleCaseName(str) {
     if (!str) return "";
     return str.toLowerCase().split(' ').map(word => {
@@ -79,6 +79,30 @@ function isSameCategory(catA, catB) {
         if (list.includes(a) && list.includes(b)) return true;
     }
     return false;
+}
+
+/**
+ * XÁC ĐỊNH MỘT HỌC SINH THỰC SỰ THUỘC VỀ LỚP NÀO TRONG HỆ THỐNG
+ */
+function getStudentOwnerCategory(sbd, name) {
+    if (!window.STUDENT_ACCOUNTS) return null;
+    let s = String(sbd || "").trim().toLowerCase();
+    let n = normalizeName(name);
+
+    for (let cat in window.STUDENT_ACCOUNTS) {
+        let list = window.STUDENT_ACCOUNTS[cat];
+        if (Array.isArray(list)) {
+            let found = list.find(acc => {
+                let accSbd = String(acc.sbd || "").trim().toLowerCase();
+                let accName = normalizeName(acc.name || acc.username);
+                if (s && accSbd && s === accSbd) return true;
+                if (n && accName && n === accName) return true;
+                return false;
+            });
+            if (found) return cat;
+        }
+    }
+    return null;
 }
 
 function sortDataString(str) {
@@ -516,7 +540,7 @@ function getSubmissionTimestamp(sub) {
     return parseDateString(sub.timestamp) || 0;
 }
 
-// BẢNG KẾT QUẢ: GOM TẤT CẢ HỌC SINH LỚP & THÍ SINH TỰ DO KHÔNG BỎ SÓT BẤT KỲ AI
+// BẢNG KẾT QUẢ: ĐẢM BẢO CHỈ LỚP ĐANG XEM MỚI ĐƯỢC PHÉP HIỂN THỊ
 function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSessionsMap, examItem, examMeta = {}) {
     const classAccounts = getAccountsForCategory(categoryId);
     const targetCatIdLower = (categoryId || "").toLowerCase().trim();
@@ -542,6 +566,11 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
         if ((log.examName || log.quizId) && !isSubmissionMatchingCurrentExam(log, currentExamInfo)) {
             continue;
         }
+
+        // Bỏ qua nhật ký gian lận nếu thuộc lớp khác
+        let ownerCat = getStudentOwnerCategory(log.sbd || log.studentId, log.studentName);
+        if (ownerCat && !isSameCategory(ownerCat, targetCatIdLower)) continue;
+        if (log.categoryId && !isSameCategory(log.categoryId, targetCatIdLower)) continue;
 
         let sbdKey = String(log.sbd || log.studentId || log.soBaoDanh || "").trim().toLowerCase();
         let nameKey = normalizeName(log.studentName);
@@ -583,6 +612,12 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
         let sess = activeSessionsMap[sId];
         let lastPing = (typeof sess === 'number') ? sess : (sess && sess.lastPing ? sess.lastPing : 0);
         if (nowMs - lastPing < 120000) {
+            // Lọc active sessions: Chỉ giữ lại nếu đúng lớp hiện tại
+            let owner = getStudentOwnerCategory(sess.sbd || sId, sess.name);
+            let sessCat = sess.categoryId || sess.cat;
+            if (owner && !isSameCategory(owner, targetCatIdLower)) continue;
+            if (sessCat && !isSameCategory(sessCat, targetCatIdLower)) continue;
+
             activeUsersMap[String(sId).trim().toLowerCase()] = sess;
         }
     }
@@ -599,7 +634,7 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
         });
     }
 
-    // 1. DUYỆT HỌC SINH THEO DANH SÁCH LỚP CHÍNH THỨC
+    // 1. DUYỆT ĐÚNG 100% DANH SÁCH HỌC SINH CỦA LỚP ĐANG XEM
     classAccounts.forEach((acc, idx) => {
         const accSbd = String(acc.sbd || "").trim();
         const accSbdLower = accSbd.toLowerCase();
@@ -669,7 +704,7 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
         });
     });
 
-    // 2. DUYỆT THÍ SINH TỰ DO ĐÃ NỘP BÀI (ĐẢM BẢO 100% HIỂN THỊ, KHÔNG BỊ LOẠI BỎ DO TÊN LỚP)
+    // 2. CHỈ DUYỆT THÍ SINH TỰ DO THỰC SỰ THUỘC VỀ LỚP NÀY (LOẠI BỎ TRIỆT ĐỂ BÀI NỘP TỪ CÁC LỚP KHÁC)
     let freeCounter = classAccounts.length + 1;
     const freeGroups = {};
 
@@ -679,6 +714,20 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
 
         let subSbd = String(sub.sbd || sub.studentId || "free").trim().toLowerCase();
         let subName = normalizeName(sub.studentName) || "free_student";
+
+        // KIỂM TRA QUAN TRỌNG: Học sinh này có thuộc lớp nào khác không?
+        let ownerCat = getStudentOwnerCategory(sub.sbd || sub.studentId, sub.studentName);
+        if (ownerCat && !isSameCategory(ownerCat, targetCatIdLower)) {
+            // Đây là học sinh của lớp khác đang làm bài trên đề được sao chép -> BỎ QUA NGAY
+            continue;
+        }
+
+        // Nếu bài nộp có ghi rõ categoryId/cat khác với lớp đang xem -> BỎ QUA NGAY
+        let subCat = sub.categoryId || sub.cat;
+        if (subCat && !isSameCategory(subCat, targetCatIdLower)) {
+            continue;
+        }
+
         let groupKey = (subSbd !== "---" && subSbd !== "chuanhap" && subSbd !== "free") ? subSbd : subName;
 
         if (!freeGroups[groupKey]) {
@@ -733,7 +782,7 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
         });
     }
 
-    // 3. DUYỆT THÍ SINH TỰ DO ĐANG THI TRỰC TUYẾN
+    // 3. DUYỆT THÍ SINH TỰ DO ĐANG THI TRỰC TUYẾN THUỘC LỚP NÀY
     for (let aKey in activeUsersMap) {
         let session = activeUsersMap[aKey];
         if (!session || typeof session !== 'object') continue;
@@ -744,6 +793,11 @@ function renderExamResultTable(categoryId, submissionsMap, cheatingMap, activeSe
 
         if (sSbd && usedSbdSet.has(sSbd)) continue;
         if (!isSubmissionMatchingCurrentExam(session, currentExamInfo)) continue;
+
+        let owner = getStudentOwnerCategory(session.sbd, sName);
+        if (owner && !isSameCategory(owner, targetCatIdLower)) continue;
+        let sessCat = session.categoryId || session.cat;
+        if (sessCat && !isSameCategory(sessCat, targetCatIdLower)) continue;
 
         usedSbdSet.add(sSbd || normalizeName(sName));
 
