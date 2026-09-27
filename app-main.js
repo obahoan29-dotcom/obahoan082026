@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: app-main.js
 // QUẢN TRỊ VIÊN, ĐĂNG ĐỀ, TÀI LIỆU, BADGES & LOGIN HỌC SINH
-// TÍCH HỢP KIỂM SOÁT PHẢN HỒI FIREBASE (HANDSHAKE) KHI ĐĂNG NHẬP
+// TÍCH HỢP NHÂN BẢN ĐỘC LẬP KHI SAO CHÉP ĐỀ THI
 // =========================================================
 
 let currentEditingTimeQuizId = null;
@@ -388,31 +388,66 @@ function openCopyModal(sourceCategory, itemId, stringifiedData, event) {
 }
 function closeCopyModal() { document.getElementById("copy-modal").style.display = "none"; }
 
+// =========================================================
+// SAO CHÉP ĐỀ: NHÂN BẢN QUIZ ĐỘC LẬP GIÚP TÁCH BIỆT BẢNG ĐIỂM
+// =========================================================
 async function confirmCopyItem() {
     const destCategory = document.getElementById("copy-category-select").value;
+    const btn = document.querySelector("#copy-modal .move-btn-submit");
+    if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang sao chép..."; }
+
     try {
-        const newItemId = (currentCopyData.itemData.isDoc ? "doc_" : "quiz_") + Date.now();
+        const isDoc = currentCopyData.itemData.isDoc;
+        const newItemId = (isDoc ? "doc_" : "quiz_") + Date.now();
         let itemUrl = currentCopyData.itemData.url || "";
-        try {
-            if (itemUrl.includes("thi.html")) {
-                let u = new URL(itemUrl, window.location.href);
-                u.searchParams.set("cat", destCategory);
-                itemUrl = u.pathname + u.search + u.hash;
+
+        if (!isDoc) {
+            let oldQuizId = extractQuizIdFromItem(currentCopyData.itemData);
+            if (oldQuizId) {
+                try {
+                    const res = await fetch(`${FIREBASE_DB_URL}/quizzes/${oldQuizId}.json`);
+                    const quizData = await res.json();
+                    if (quizData) {
+                        await fetch(`${FIREBASE_DB_URL}/quizzes/${newItemId}.json`, {
+                            method: 'PUT',
+                            body: JSON.stringify(quizData)
+                        });
+                    }
+                } catch(e) {
+                    console.error("Lỗi nhân bản quiz:", e);
+                }
             }
-        } catch(e) {}
+            itemUrl = `./thi.html?id=${newItemId}&cat=${encodeURIComponent(destCategory)}`;
+        } else {
+            try {
+                if (itemUrl.includes("thi.html")) {
+                    let u = new URL(itemUrl, window.location.href);
+                    u.searchParams.set("cat", destCategory);
+                    itemUrl = u.pathname + u.search + u.hash;
+                }
+            } catch(e) {}
+        }
 
         const copyData = { 
             ...currentCopyData.itemData, 
+            id: newItemId,
+            firebaseId: newItemId,
             categoryId: destCategory, 
             url: itemUrl,
             timestamp: Date.now() 
         }; 
+
         await fetch(`${FIREBASE_DB_URL}/custom_links/${destCategory}/${newItemId}.json`, { 
             method: 'PUT', body: JSON.stringify(copyData) 
         });
+
         alert("📋 Đã sao chép sang mục mới thành công!");
         window.location.reload();
-    } catch(e) { alert("Lỗi khi sao chép!"); }
+    } catch(e) { 
+        alert("Lỗi khi sao chép: " + e.message); 
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "Sao chép"; }
+    }
 }
 
 function extractQuizIdFromItem(item) {
@@ -759,9 +794,7 @@ function toggleStudentPassVisibility() {
     }
 }
 
-// =========================================================================
-// HÀM ĐĂNG NHẬP THI: GỬI LÊN FIREBASE VÀ BẮT BUỘC NHẬN PHẢN HỒI THÀNH CÔNG (HANDSHAKE)
-// =========================================================================
+// HANDSHAKE ĐĂNG NHẬP THI HỌC SINH
 async function submitStudentLogin() {
     const errBox = document.getElementById("st-login-error");
     const btn = document.getElementById("st-submit-btn");
@@ -850,7 +883,6 @@ async function submitStudentLogin() {
     btn.disabled = true;
     btn.innerHTML = `⏳ Đang xác thực với máy chủ...`;
 
-    // LƯU CỤC BỘ DỰ PHÒNG
     try {
         localStorage.setItem("current_exam_student", JSON.stringify(studentDataToVerify));
         sessionStorage.setItem("current_exam_student", JSON.stringify(studentDataToVerify));
@@ -859,7 +891,6 @@ async function submitStudentLogin() {
         localStorage.setItem("saved_student_class", studentDataToVerify.className);
     } catch(e) {}
 
-    // HANDSHAKE VỚI FIREBASE: GỬI LÊN VÀ CHỜ PHẢN HỒI XÁC NHẬN ĐÃ LƯU
     const safeSbd = String(studentDataToVerify.sbd || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const handshakePayload = {
         sbd: studentDataToVerify.sbd,
@@ -878,7 +909,7 @@ async function submitStudentLogin() {
     let serverConfirmed = false;
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 giây timeout cực nhạy
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         const res = await fetch(`${FIREBASE_DB_URL}/active_sessions/${quizId}/${safeSbd}.json`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -890,10 +921,9 @@ async function submitStudentLogin() {
             serverConfirmed = true;
         }
     } catch(e) {
-        console.warn("Handshake cảnh báo kết nối, chuyển dự phòng:", e);
+        console.warn("Handshake cảnh báo kết nối:", e);
     }
 
-    // NẾU MÁY CHỦ BẬN NHƯNG DỮ LIỆU ĐÃ HỢP LỆ VẪN CHO VÀO THI KÈM CỜ BẢO LƯU
     btn.innerHTML = serverConfirmed ? "✅ Xác nhận thành công! Đang vào..." : "🚀 Đang vào phòng thi...";
     btn.style.background = "#10b981";
 
