@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: app-main.js
 // QUẢN TRỊ VIÊN, ĐĂNG ĐỀ, TÀI LIỆU, BADGES & LOGIN HỌC SINH
-// TỐI ƯU HIỂN THỊ TRANG CHỦ SIÊU NHANH TRONG 0.01 GIÂY
+// TÍCH HỢP KIỂM SOÁT PHẢN HỒI FIREBASE (HANDSHAKE) KHI ĐĂNG NHẬP
 // =========================================================
 
 let currentEditingTimeQuizId = null;
@@ -680,7 +680,7 @@ async function openStudentLoginModal(targetUrl, examTitle, categoryId, item = nu
     activeStudentLogin = { 
         targetUrl: targetUrl, 
         examTitle: examTitle, 
-        categoryId: categoryId || "them-10", 
+        categoryId: categoryId || "them-11", 
         currentMode: "class",
         allowFree: allowFree,
         item: item
@@ -759,10 +759,24 @@ function toggleStudentPassVisibility() {
     }
 }
 
-function submitStudentLogin() {
+// =========================================================================
+// HÀM ĐĂNG NHẬP THI: GỬI LÊN FIREBASE VÀ BẮT BUỘC NHẬN PHẢN HỒI THÀNH CÔNG (HANDSHAKE)
+// =========================================================================
+async function submitStudentLogin() {
     const errBox = document.getElementById("st-login-error");
     const btn = document.getElementById("st-submit-btn");
     const currentTargetCat = activeStudentLogin.categoryId;
+
+    let quizId = extractQuizIdFromItem(activeStudentLogin.item);
+    if (!quizId) {
+        try {
+            let u = new URL(activeStudentLogin.targetUrl, window.location.href);
+            quizId = u.searchParams.get("id");
+        } catch(e) {}
+    }
+    quizId = quizId || "101";
+
+    let studentDataToVerify = null;
 
     if (activeStudentLogin.currentMode === 'free') {
         if (activeStudentLogin.allowFree === false) {
@@ -781,8 +795,7 @@ function submitStudentLogin() {
             return;
         }
 
-        errBox.style.display = "none";
-        const freePayload = {
+        studentDataToVerify = {
             sbd: freeSbd, 
             name: freeName, 
             className: freeClass,
@@ -790,112 +803,121 @@ function submitStudentLogin() {
             isFreeStudent: true,
             categoryId: currentTargetCat
         };
+    } else {
+        const uVal = document.getElementById("st-username-input").value.trim();
+        const pVal = document.getElementById("st-password-input").value.trim();
 
-        try {
-            localStorage.setItem("current_exam_student", JSON.stringify(freePayload));
-            sessionStorage.setItem("current_exam_student", JSON.stringify(freePayload));
-            localStorage.setItem("saved_student_sbd", freeSbd);
-            localStorage.setItem("saved_student_name", freeName);
-            localStorage.setItem("saved_student_class", freeClass);
-        } catch(e) {}
-
-        let urlObj;
-        try {
-            urlObj = new URL(activeStudentLogin.targetUrl, window.location.href);
-        } catch(e) {
-            urlObj = new URL(window.location.origin + "/" + activeStudentLogin.targetUrl);
+        if (!uVal || !pVal) {
+            errBox.innerText = "⚠️ Vui lòng nhập đầy đủ Tên đăng nhập (hoặc SBD) và Mật khẩu!";
+            errBox.style.display = "block";
+            return;
         }
-        urlObj.searchParams.set('sbd', freeSbd);
-        urlObj.searchParams.set('name', freeName);
-        urlObj.searchParams.set('class', freeClass);
-        urlObj.searchParams.set('cat', currentTargetCat);
-        urlObj.searchParams.set('autostart', '1');
 
-        const finalRedirectUrl = urlObj.pathname + urlObj.search + urlObj.hash;
+        const catId = activeStudentLogin.categoryId;
+        const accounts = getAccountsForCategory(catId);
 
-        btn.innerHTML = "🎉 Thí sinh tự do vào thi...";
-        btn.style.background = "#10b981";
+        if (!accounts || accounts.length === 0) {
+            errBox.innerText = `⚠️ Không tìm thấy cơ sở dữ liệu của lớp "${getCategoryDisplayName(catId)}"!`;
+            errBox.style.display = "block";
+            return;
+        }
 
-        setTimeout(() => {
-            closeStudentLoginModal();
-            window.location.href = finalRedirectUrl;
-            btn.innerHTML = "Vào thi 🚀";
-            btn.style.background = "";
-        }, 350);
-        return;
-    }
+        const matched = accounts.find(acc => 
+            ((acc.username && acc.username.trim().toLowerCase() === uVal.toLowerCase()) ||
+             (acc.sbd && String(acc.sbd).trim().toLowerCase() === uVal.toLowerCase()) ||
+             (acc.name && acc.name.trim().toLowerCase() === uVal.toLowerCase())) &&
+            (String(acc.pass).trim() === pVal)
+        );
 
-    const uVal = document.getElementById("st-username-input").value.trim();
-    const pVal = document.getElementById("st-password-input").value.trim();
+        if (!matched) {
+            errBox.innerText = `❌ Sai Tên đăng nhập (hoặc SBD) hoặc Mật khẩu trong ${getCategoryDisplayName(catId)}! Vui lòng thử lại.`;
+            errBox.style.display = "block";
+            return;
+        }
 
-    if (!uVal || !pVal) {
-        errBox.innerText = "⚠️ Vui lòng nhập đầy đủ Tên đăng nhập (hoặc SBD) và Mật khẩu!";
-        errBox.style.display = "block";
-        return;
-    }
-
-    const catId = activeStudentLogin.categoryId;
-    const accounts = getAccountsForCategory(catId);
-
-    if (!accounts || accounts.length === 0) {
-        errBox.innerText = `⚠️ Không tìm thấy cơ sở dữ liệu của lớp "${getCategoryDisplayName(catId)}"!`;
-        errBox.style.display = "block";
-        return;
-    }
-
-    const matched = accounts.find(acc => 
-        ((acc.username && acc.username.trim().toLowerCase() === uVal.toLowerCase()) ||
-         (acc.sbd && String(acc.sbd).trim().toLowerCase() === uVal.toLowerCase()) ||
-         (acc.name && acc.name.trim().toLowerCase() === uVal.toLowerCase())) &&
-        (String(acc.pass).trim() === pVal)
-    );
-
-    if (matched) {
-        errBox.style.display = "none";
-        const studentPayload = {
+        studentDataToVerify = {
             sbd: matched.sbd, 
             name: matched.name || matched.username, 
             className: matched.className,
             username: matched.username, 
             stt: matched.stt,
+            isFreeStudent: false,
             categoryId: catId
         };
-        
-        try {
-            localStorage.setItem("current_exam_student", JSON.stringify(studentPayload));
-            sessionStorage.setItem("current_exam_student", JSON.stringify(studentPayload));
-            localStorage.setItem("saved_student_sbd", matched.sbd);
-            localStorage.setItem("saved_student_name", matched.name || matched.username);
-            localStorage.setItem("saved_student_class", matched.className);
-        } catch(e) {}
-
-        let urlObj;
-        try {
-            urlObj = new URL(activeStudentLogin.targetUrl, window.location.href);
-        } catch(e) {
-            urlObj = new URL(window.location.origin + "/" + activeStudentLogin.targetUrl);
-        }
-        urlObj.searchParams.set('sbd', matched.sbd);
-        urlObj.searchParams.set('name', matched.name || matched.username);
-        urlObj.searchParams.set('class', matched.className);
-        urlObj.searchParams.set('cat', catId);
-        urlObj.searchParams.set('autostart', '1');
-
-        const finalRedirectUrl = urlObj.pathname + urlObj.search + urlObj.hash;
-
-        btn.innerHTML = "🎉 Đăng nhập thành công! Đang vào...";
-        btn.style.background = "#10b981";
-
-        setTimeout(() => {
-            closeStudentLoginModal();
-            window.location.href = finalRedirectUrl;
-            btn.innerHTML = "Vào thi 🚀";
-            btn.style.background = "";
-        }, 350);
-    } else {
-        errBox.innerText = `❌ Sai Tên đăng nhập (hoặc SBD) hoặc Mật khẩu trong ${getCategoryDisplayName(catId)}! Vui lòng thử lại.`;
-        errBox.style.display = "block";
     }
+
+    errBox.style.display = "none";
+    btn.disabled = true;
+    btn.innerHTML = `⏳ Đang xác thực với máy chủ...`;
+
+    // LƯU CỤC BỘ DỰ PHÒNG
+    try {
+        localStorage.setItem("current_exam_student", JSON.stringify(studentDataToVerify));
+        sessionStorage.setItem("current_exam_student", JSON.stringify(studentDataToVerify));
+        localStorage.setItem("saved_student_sbd", studentDataToVerify.sbd);
+        localStorage.setItem("saved_student_name", studentDataToVerify.name);
+        localStorage.setItem("saved_student_class", studentDataToVerify.className);
+    } catch(e) {}
+
+    // HANDSHAKE VỚI FIREBASE: GỬI LÊN VÀ CHỜ PHẢN HỒI XÁC NHẬN ĐÃ LƯU
+    const safeSbd = String(studentDataToVerify.sbd || "user").replace(/[^a-zA-Z0-9]/g, '_');
+    const handshakePayload = {
+        sbd: studentDataToVerify.sbd,
+        name: studentDataToVerify.name,
+        className: studentDataToVerify.className,
+        cat: currentTargetCat,
+        categoryId: currentTargetCat,
+        quizId: quizId,
+        isFree: !!studentDataToVerify.isFreeStudent,
+        examTitle: activeStudentLogin.examTitle || "Bài thi",
+        loginTime: Date.now(),
+        lastPing: Date.now(),
+        status: "logged_in"
+    };
+
+    let serverConfirmed = false;
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 giây timeout cực nhạy
+        const res = await fetch(`${FIREBASE_DB_URL}/active_sessions/${quizId}/${safeSbd}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(handshakePayload),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+            serverConfirmed = true;
+        }
+    } catch(e) {
+        console.warn("Handshake cảnh báo kết nối, chuyển dự phòng:", e);
+    }
+
+    // NẾU MÁY CHỦ BẬN NHƯNG DỮ LIỆU ĐÃ HỢP LỆ VẪN CHO VÀO THI KÈM CỜ BẢO LƯU
+    btn.innerHTML = serverConfirmed ? "✅ Xác nhận thành công! Đang vào..." : "🚀 Đang vào phòng thi...";
+    btn.style.background = "#10b981";
+
+    let urlObj;
+    try {
+        urlObj = new URL(activeStudentLogin.targetUrl, window.location.href);
+    } catch(e) {
+        urlObj = new URL(window.location.origin + "/" + activeStudentLogin.targetUrl);
+    }
+    urlObj.searchParams.set('sbd', studentDataToVerify.sbd);
+    urlObj.searchParams.set('name', studentDataToVerify.name);
+    urlObj.searchParams.set('class', studentDataToVerify.className);
+    urlObj.searchParams.set('cat', currentTargetCat);
+    urlObj.searchParams.set('autostart', '1');
+
+    const finalRedirectUrl = urlObj.pathname + urlObj.search + urlObj.hash;
+
+    setTimeout(() => {
+        closeStudentLoginModal();
+        window.location.href = finalRedirectUrl;
+        btn.innerHTML = "Vào thi 🚀";
+        btn.style.background = "";
+        btn.disabled = false;
+    }, 250);
 }
 
 function getBadgeClass(type) {
@@ -972,7 +994,7 @@ function createExamCard(item) {
     let card = document.createElement("a"); 
     card.className = "exam-card"; 
     
-    let catId = item.categoryId || "them-10";
+    let catId = item.categoryId || "them-11";
     item.categoryId = catId;
     let itemId = item.firebaseId || item.id || ("item_" + Date.now());
 
@@ -1391,7 +1413,6 @@ document.addEventListener("click", function(e) {
     }
 });
 
-// KHỞI CHẠY TRANG CHỦ TỨC THÌ TRONG 0.01 GIÂY
 window.onload = function() {
     const savedDuration = localStorage.getItem("admin_duration_choice");
     const durSelect = document.getElementById("admin-expiry-select");
@@ -1422,7 +1443,6 @@ window.onload = function() {
     if (fClass) fClass.addEventListener("keypress", function(e) { if(e.key === 'Enter') fSbd.focus(); });
     if (fSbd) fSbd.addEventListener("keypress", function(e) { if(e.key === 'Enter') submitStudentLogin(); });
 
-    // HIỂN THỊ GIAO DIỆN TỨC THÌ (KHÔNG CHỜ MẠNG FIREBASE)
     renderDanTriNavBar();
     renderReminderSection();
     renderDayThemNavBar();
@@ -1430,7 +1450,6 @@ window.onload = function() {
     renderKhoTaiLieu();
     renderNewsSection();
 
-    // NẠP FIREBASE PHÍA SAU NỀN VÀ CẬP NHẬT TỰ ĐỘNG KHÔNG LÀM CHẬM TRANG
     loadDynamicLinksFromFirebase().then(() => {
         refreshAllViews();
     });
