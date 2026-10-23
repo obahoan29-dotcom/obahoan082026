@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js
-// ĐỘNG CƠ BÀI THI BẢO MẬT, CLOUD AUTOSAVE REALTIME & BẢO LƯU 100%
+// FILE: exam-engine-core.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -22,29 +21,20 @@ let isSubmittingInProgress = false;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        .quiz-content-locked {
-            pointer-events: none !important;
-            user-select: none !important;
-            opacity: 0.88;
-        }
-        .quiz-content-locked input, 
-        .quiz-content-locked textarea, 
-        .quiz-content-locked select, 
-        .quiz-content-locked button {
-            cursor: not-allowed !important;
-        }
+        .quiz-content-locked { pointer-events: none !important; user-select: none !important; opacity: 0.88; }
+        .quiz-content-locked input, .quiz-content-locked textarea, .quiz-content-locked select, .quiz-content-locked button { cursor: not-allowed !important; }
     `;
     document.head.appendChild(style);
 })();
 
-// TỰ ĐỘNG LƯU ĐÁM MÂY TỨC THỜI MỖI KHI HỌC SINH TÍCH/ĐỔI ĐÁP ÁN (NGẦM HOÀN TOÀN)
-function autoSaveAnswerToCloud(qKey, answerVal) {
-    if (isSubmitted || isExamLocked) return;
+// LƯU NHÁP LÊN SUPABASE (UPSERT 1 DÒNG DUY NHẤT)
+async function autoSaveAnswerToCloud(qKey, answerVal) {
+    if (isSubmitted || isExamLocked || !supabaseClient) return;
     const sId = document.getElementById("student-id")?.value.trim();
     if (!sId) return;
 
     const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || (examData && examData.id);
+    const quizId = urlParams.get('id');
     if (!quizId) return;
 
     const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
@@ -52,24 +42,19 @@ function autoSaveAnswerToCloud(qKey, answerVal) {
     const sClass = document.getElementById("student-class")?.value.trim() || "";
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
 
-    const draftPayload = {
-        sbd: sId,
-        studentName: sName,
-        className: sClass,
-        cat: currentCat,
-        categoryId: currentCat,
-        maDe: typeof getMaDe === 'function' ? getMaDe() : "101",
-        examTitle: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-        userAnswers: window.SECURE_VAULT.userAnswers || {},
-        lastUpdated: Date.now(),
-        lastUpdatedStr: new Date().toLocaleString("vi-VN")
-    };
-
-    fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/live_drafts/${cleanSbd}.json`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draftPayload)
-    }).catch(() => null);
+    try {
+        await supabaseClient.from('live_drafts').upsert({
+            quiz_id: quizId,
+            sbd: cleanSbd,
+            student_name: sName,
+            class_name: sClass,
+            category_id: currentCat,
+            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+            user_answers: window.SECURE_VAULT.userAnswers || {},
+            last_updated: new Date().toISOString()
+        });
+    } catch(e) {}
 }
 
 window.addEventListener('online', function() {
@@ -83,11 +68,7 @@ window.addEventListener('online', function() {
 
 function lockExamInteractions() {
     isExamLocked = true;
-
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 
     const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
     if (!lockedDurationSec && examStartTime) {
@@ -98,8 +79,7 @@ function lockExamInteractions() {
     const quizContent = document.getElementById("quiz-content");
     if (quizContent) {
         quizContent.classList.add("quiz-content-locked");
-        const allInputs = quizContent.querySelectorAll("input, button, select, textarea");
-        allInputs.forEach(el => {
+        quizContent.querySelectorAll("input, button, select, textarea").forEach(el => {
             el.disabled = true;
             if (el.tagName === 'INPUT' && el.type === 'text') el.readOnly = true;
         });
@@ -140,9 +120,23 @@ async function initExamEngine() {
     }
 
     try {
-        const response = await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}.json`);
-        examData = await response.json();
-        if (!examData) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
+        // Tải đúng dữ liệu của đề thi này qua Supabase (Không kéo thừa dữ liệu)
+        const { data, error } = await supabaseClient.from('quizzes').select('*').eq('id', quizId).single();
+        if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
+
+        examData = {
+            ...data,
+            timeLimitMinutes: data.time_limit_minutes,
+            examStartTimeStr: data.exam_start_time,
+            examEndTimeStr: data.exam_end_time,
+            allowFree: data.allow_free,
+            resultMode: data.result_mode,
+            allowReviewOriginal: data.allow_review_original,
+            showOnlineCount: data.show_online_count,
+            allowExportExam: data.allow_export_exam,
+            isShuffled: data.is_shuffled,
+            scoringConfig: data.scoring_config
+        };
 
         if (urlParams.get('review') === "1") {
             if (examData.allowReviewOriginal !== true) {
@@ -175,7 +169,6 @@ async function initExamEngine() {
         checkPendingSubmissionOnLoad();
         await checkSessionStatus(isAutostart);
         startTimeWatcherRealtime(quizId);
-        startImageSyncWatcher(quizId);
     } catch (error) {
         hideLoading();
         showError("Lỗi tải đề thi", error.message);
@@ -337,7 +330,7 @@ function fetchExamQuestions(isAutostart = false) {
         } 
         document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
         if (examData.password !== undefined) EXAM_PASSWORD = String(examData.password).trim(); 
-        if (examData.timeLimitMinutes !== undefined && examData.timeLimitMinutes !== "") { 
+        if (examData.timeLimitMinutes) { 
             TIME_LIMIT_MINUTES = parseInt(examData.timeLimitMinutes, 10); 
             totalTimeSeconds = TIME_LIMIT_MINUTES * 60; 
             remainingSeconds = totalTimeSeconds; 
@@ -360,9 +353,6 @@ function fetchExamQuestions(isAutostart = false) {
                 try {
                     const parsedQ = JSON.parse(cachedShuffle);
                     if (Array.isArray(parsedQ)) {
-                        parsedQ.forEach(q => {
-                            q.imageUrl = getEffectiveImageUrl(q, examData.images || {}) || "";
-                        });
                         examData.questions = parsedQ;
                     } else {
                         shuffleExamData(examData);
@@ -376,16 +366,11 @@ function fetchExamQuestions(isAutostart = false) {
                 shuffleExamData(examData);
                 safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
             }
-        } else {
-            safeLocal.removeItem(shuffleKey);
         }
 
         if (!isAutostart) {
             if (EXAM_PASSWORD !== "") document.getElementById("login-box").style.display = "block"; 
             else document.getElementById("student-card").style.display = "block"; 
-        } else {
-            document.getElementById("login-box").style.display = "none";
-            document.getElementById("student-card").style.display = "none";
         }
         
         renderQuizLayout(examData.questions || [], examData.images || {}); 
@@ -429,7 +414,7 @@ function checkPassword() {
         document.getElementById("student-card").style.display = "block"; 
         if (typeof syncStudentFromParamsAndStorage === 'function') syncStudentFromParamsAndStorage();
     } else { 
-        alert("❌ Mật khẩu bài thi không đúng hoặc không tìm thấy tài khoản học sinh tương ứng!"); 
+        alert("❌ Mật khẩu bài thi không đúng!"); 
     } 
 }
 
@@ -533,7 +518,6 @@ function formatHHMMSS(totalSecs) {
     return `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`; 
 }
 
-// BỘ ĐẾM THỜI GIAN: HẾT GIỜ TỰ ĐỘNG THU BÀI NGAY LẬP TỨC (KHÔNG DÙNG ALERT CHẶN LUỒNG)
 function startCountdownTimer() { 
     if (isExamLocked) return;
     const timerVal = document.getElementById("nav-timer-val"); 
@@ -572,11 +556,9 @@ function startCountdownTimer() {
     }, 1000); 
 }
 
-// BẬT HIỂN THỊ NÚT TẢI FILE DỰ PHÒNG KHI ẤN NỘP BÀI
 function showSubmitConfirmModal() { 
     if (isSubmitted) return; 
 
-    // Hiện thanh topbar và nút tải file dự phòng ngay khi học sinh nhấn Nộp bài
     const topbar = document.getElementById("universal-backup-topbar");
     if (topbar) topbar.style.display = "flex";
     const topDownloadBtn = document.getElementById("btn-always-download-backup");
@@ -601,14 +583,13 @@ function showSubmitConfirmModal() {
     document.getElementById("modal-normal-submit-view").style.display = "block";
     document.getElementById("modal-submitting-progress-view").style.display = "none";
     
-    // Nút tải file dự phòng xuất hiện trực tiếp trong bảng xác nhận nộp
     document.getElementById("modal-actions-container").innerHTML = `
         <div class="modal-btn-row">
             <button type="button" class="btn-modal-cancel" onclick="closeSubmitConfirmModal()">Tiếp tục làm</button>
             <button type="button" class="btn-modal-confirm" onclick="executeSubmitExam()">✓ Nộp bài</button>
         </div>
         <div style="margin-top: 10px; width: 100%;">
-            <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 10px; background: #f0f9ff; color: #0284c7; border: 1.5px solid #7dd3fc; border-radius: 11px; font-weight: 800; font-size: 0.92rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.12);">
+            <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 10px; background: #f0f9ff; color: #0284c7; border: 1.5px solid #7dd3fc; border-radius: 11px; font-weight: 800; font-size: 0.92rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;">
                 💾 Tải file dự phòng bài làm (.json)
             </button>
         </div>
@@ -688,11 +669,10 @@ function restoreExamStateFromStorage() {
     return false; 
 }
 
-// XÁC THỰC 2 CHIỀU ĐỒNG BỘ MÁY CHỦ KHI NỘP BÀI (KHÓA CHẶT THỜI GIAN LÀM BÀI TỐI ĐA)
+// NỘP BÀI CHUẨN XÁC LÊN SUPABASE
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
-    // Đảm bảo hiển thị thanh topbar và nút tải file ngay khi tiến hành nộp bài
     const topbar = document.getElementById("universal-backup-topbar");
     if (topbar) topbar.style.display = "flex";
     const topDownloadBtn = document.getElementById("btn-always-download-backup");
@@ -711,18 +691,17 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (normalView) normalView.style.display = "none";
     if (actionsBox) actionsBox.innerHTML = "";
 
-    const updateProgressStatus = (text, subtext = "Vui lòng giữ kết nối để bảo lưu bài thi thành công 100%.") => {
+    const updateProgressStatus = (text) => {
         if (progressView) {
             progressView.innerHTML = `
                 <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
-                <div style="font-weight:900; color:#0284c7; font-size:1.1rem;" id="submit-progress-text">${text}</div>
-                <div style="font-size:0.88rem; color:#64748b; margin-top:6px; font-weight:600;">${subtext}</div>
+                <div style="font-weight:900; color:#0284c7; font-size:1.1rem;">${text}</div>
             `;
             progressView.style.display = "block";
         }
     };
 
-    updateProgressStatus("⏳ Đang chuẩn bị gói dữ liệu bài thi...");
+    updateProgressStatus("⏳ Đang kết nối máy chủ nộp bài...");
 
     const sId = document.getElementById("student-id").value.trim(); 
     const sName = document.getElementById("student-name").value.trim(); 
@@ -730,12 +709,10 @@ async function executeSubmitExam(isForceSubmit = false) {
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (examData && examData.id) || "exam";
-    const examCode = typeof getExamCode === 'function' ? getExamCode() : currentQuizId;
 
     const isClassAcc = typeof findStudentFromDatabase === 'function' ? !!findStudentFromDatabase(sId, currentCat) : false;
     const isFreeStudent = !isClassAcc;
 
-    // KHỐNG CHẾ CHẶN TRẦN: THỜI GIAN LÀM BÀI KHÔNG BAO GIỜ VƯỢT QUÁ THỜI LƯỢNG ĐỀ THI
     const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
     let actualElapsedSec = lockedDurationSec || (examStartTime ? Math.round((Date.now() - examStartTime) / 1000) : 0);
     const durationSec = Math.min(Math.max(1, actualElapsedSec), maxAllowedSec);
@@ -743,7 +720,6 @@ async function executeSubmitExam(isForceSubmit = false) {
     const spentSecs = durationSec % 60; 
     const completionTimeStr = `${spentMins} phút ${spentSecs} giây`; 
     
-    // TÍNH ĐIỂM BÀI LÀM
     let scoreResult = null;
     if (typeof calculateExamScoreWithConfig === 'function') {
         scoreResult = calculateExamScoreWithConfig(
@@ -753,154 +729,65 @@ async function executeSubmitExam(isForceSubmit = false) {
             examData.scoringConfig || { mode: 'option1' }
         );
     } else {
-        let correctCount = 0; let wrongCount = 0; let totalRawScore = 0; let maxTotalScore = 0; let dataDetails = [];
-        (examData.questions || []).forEach(q => {
-            maxTotalScore += 1.0;
-            if (q.type === "multiple_choice") {
-                const userVal = window.SECURE_VAULT.userAnswers[`q${q.id}`] || "Chưa chọn";
-                const correctVal = window.SECURE_VAULT.answers[`q${q.id}`];
-                if (correctVal && String(userVal).trim().toUpperCase() === String(correctVal).trim().toUpperCase()) { 
-                    correctCount++; totalRawScore += 1.0; dataDetails.push(`${q.id}-${userVal} [ĐÚNG]`); 
-                } else { 
-                    wrongCount++; dataDetails.push(`${q.id}-${userVal} [SAI: ${correctVal || "---"}]`); 
-                }
-            } else if (q.type === "true_false") {
-                let cSt = 0;
-                (q.statements || []).forEach(st => {
-                    const sub = `q${q.id}_${st.id}`; const uVal = window.SECURE_VAULT.userAnswers[sub] || "Chưa chọn"; const cVal = window.SECURE_VAULT.answers[sub];
-                    if (uVal === cVal) { cSt++; dataDetails.push(`${q.id}${st.id}-${uVal} [ĐÚNG]`); }
-                    else { dataDetails.push(`${q.id}${st.id}-${uVal} [SAI]`); }
-                });
-                let qScore = 0;
-                if (cSt === 1) qScore = 0.1; else if (cSt === 2) qScore = 0.25; else if (cSt === 3) qScore = 0.5; else if (cSt === 4) qScore = 1.0;
-                totalRawScore += qScore;
-                if (cSt === 4) correctCount++; else wrongCount++;
-            } else {
-                const uVal = (window.SECURE_VAULT.userAnswers[`q${q.id}`] || "").replace(',', '.');
-                const cVal = String(window.SECURE_VAULT.answers[`q${q.id}`] || "").replace(',', '.');
-                const isRight = (uVal.trim() === cVal.trim()) || (cVal !== "" && Number(uVal) === Number(cVal) && uVal !== "");
-                if (isRight) { correctCount++; totalRawScore += 1.0; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`); }
-                else { wrongCount++; dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal}]`); }
-            }
-        });
-        const score10Scale = Math.round(((totalRawScore / (maxTotalScore || 1)) * 10) * 10) / 10;
-        scoreResult = { correctCount, wrongCount, totalRawScore, maxTotalScore, finalScore: score10Scale, maxScale: 10.0, dataDetails };
+        scoreResult = { correctCount: 0, wrongCount: 0, totalRawScore: 0, finalScore: 0, maxScale: 10.0, dataDetails: [] };
     }
 
-    const { correctCount, wrongCount, totalRawScore, maxTotalScore, finalScore, maxScale, dataDetails } = scoreResult;
+    const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
+    const submissionId = `${currentQuizId}_${cleanSbd}`;
 
     const payload = { 
-        sbd: sId,
-        studentId: sId,
-        studentName: sName,
-        className: sClass,
-        studentClass: sClass,
+        id: submissionId,
+        quiz_id: currentQuizId,
+        sbd: cleanSbd,
+        student_name: sName,
+        class_name: sClass,
         score10: finalScore,
-        rawScore: Math.round(totalRawScore * 100) / 100,
-        maxScale: maxScale,
-        correctCount: correctCount,
-        wrongCount: wrongCount,
-        completionTime: completionTimeStr,
-        spentMins: spentMins,
-        tabSwitchCount: `${tabSwitchCount} lần`,
-        dataString: dataDetails.join(" | "),
-        userAnswers: window.SECURE_VAULT.userAnswers || {},
-        cat: currentCat,
-        categoryId: currentCat,
-        isFree: isFreeStudent,
-        quizId: currentQuizId,
-        maDe: typeof getMaDe === 'function' ? getMaDe() : "101",
-        examTitle: EXAM_NAME,
-        timestamp: new Date().toLocaleString("vi-VN"),
-        createdAt: Date.now()
+        raw_score: Math.round(totalRawScore * 100) / 100,
+        max_scale: maxScale,
+        correct_count: correctCount,
+        wrong_count: wrongCount,
+        completion_time: completionTimeStr,
+        spent_mins: spentMins,
+        tab_switch_count: `${tabSwitchCount} lần`,
+        data_string: dataDetails.join(" | "),
+        user_answers: window.SECURE_VAULT.userAnswers || {},
+        category_id: currentCat,
+        is_free: isFreeStudent,
+        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+        exam_title: EXAM_NAME
     }; 
 
     safeLocal.setItem(`exam_completed_backup_${currentQuizId}`, JSON.stringify(payload));
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
 
-    const targetNodesSet = new Set([
-        `${FIREBASE_DB_URL}/quizzes/${currentQuizId}/submissions/${cleanSbd}.json`,
-        `${FIREBASE_DB_URL}/exams/${currentQuizId}/submissions/${cleanSbd}.json`
-    ]);
-
-    if (examCode && examCode !== currentQuizId) {
-        targetNodesSet.add(`${FIREBASE_DB_URL}/exams/${examCode}/submissions/${cleanSbd}.json`);
-        targetNodesSet.add(`${FIREBASE_DB_URL}/quizzes/${examCode}/submissions/${cleanSbd}.json`);
+    let submitOk = false;
+    try {
+        const { error } = await supabaseClient.from('submissions').upsert(payload);
+        if (!error) submitOk = true;
+    } catch(err) {
+        console.error("Lỗi nộp bài Supabase:", err);
     }
 
-    const targetNodes = Array.from(targetNodesSet);
-
-    let firebaseVerified = false;
-    let attemptsCount = 0;
-    const maxSendAttempts = 3;
-
-    while (attemptsCount < maxSendAttempts && !firebaseVerified) {
-        attemptsCount++;
-        updateProgressStatus(`⏳ Đang gửi bài và chờ máy chủ xác nhận (Lần ${attemptsCount}/${maxSendAttempts})...`, "Vui lòng giữ nguyên kết nối, không tải lại trang.");
-
-        try {
-            const putPromises = targetNodes.map(url => {
-                const controller = new AbortController();
-                const timer = setTimeout(() => controller.abort(), 6500);
-                return fetch(url, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                    signal: controller.signal
-                }).then(res => {
-                    clearTimeout(timer);
-                    return res.ok;
-                }).catch(() => {
-                    clearTimeout(timer);
-                    return false;
-                });
-            });
-
-            const results = await Promise.all(putPromises);
-            const atLeastOneSuccess = results.some(ok => ok === true);
-
-            if (atLeastOneSuccess) {
-                const verifyRes = await fetch(`${FIREBASE_DB_URL}/quizzes/${currentQuizId}/submissions/${cleanSbd}/createdAt.json`);
-                if (verifyRes && verifyRes.ok) {
-                    firebaseVerified = true;
-                    break;
-                }
-                const verifyRes2 = await fetch(`${FIREBASE_DB_URL}/exams/${currentQuizId}/submissions/${cleanSbd}/createdAt.json`);
-                if (verifyRes2 && verifyRes2.ok) {
-                    firebaseVerified = true;
-                    break;
-                }
-            }
-        } catch(netErr) {
-            console.warn(`Lần nộp ${attemptsCount} gặp lỗi mạng:`, netErr);
-        }
-
-        if (!firebaseVerified && attemptsCount < maxSendAttempts) {
-            await new Promise(r => setTimeout(r, 1000));
-        }
-    }
-
-    if (!firebaseVerified) {
+    if (!submitOk) {
         isSubmittingInProgress = false;
         updateTopBackupStatus(false);
         if (progressView) {
             progressView.innerHTML = `
                 <div style="font-size:38px; margin-bottom:8px;">📶⚠️</div>
                 <div style="font-weight:900; color:#ef4444; font-size:1.15rem;">CHƯA THỂ NỘP LÊN MÁY CHỦ!</div>
-                <div style="font-size:0.92rem; color:#334155; margin-top:8px; font-weight:700; line-height:1.45;">
-                    Mạng Internet của bạn bị chập chờn hoặc gián đoạn.<br>
-                    <span style="color:#0284c7;">Bài làm đã được lưu an toàn tuyệt đối trên máy của bạn.</span>
+                <div style="font-size:0.92rem; color:#334155; margin-top:8px; font-weight:700;">
+                    Mạng Internet của em bị chập chờn. Bài làm đã được bảo lưu an toàn trên máy!
                 </div>
             `;
         }
         if (actionsBox) {
             actionsBox.innerHTML = `
                 <div style="margin-top: 15px; display: flex; flex-direction:column; gap: 8px; width:100%;">
-                    <button type="button" onclick="executeSubmitExam(${isForceSubmit})" style="width:100%; padding:12px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; border:none; border-radius:10px; font-weight:900; font-size:1rem; cursor:pointer; box-shadow:0 3px 10px rgba(2,132,199,0.3);">🔄 Bấm để nộp lại</button>
+                    <button type="button" onclick="executeSubmitExam(${isForceSubmit})" style="width:100%; padding:12px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; border:none; border-radius:10px; font-weight:900; font-size:1rem; cursor:pointer;">🔄 Bấm để nộp lại</button>
                     <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width:100%; padding:10px; background:#f1f5f9; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">💾 Tải file dự phòng gửi Thầy</button>
                 </div>
             `;
@@ -909,15 +796,10 @@ async function executeSubmitExam(isForceSubmit = false) {
         return; 
     }
 
-    if (typeof postToGoogleSheet === 'function' && typeof URL2_EXAM_RESULT !== 'undefined' && URL2_EXAM_RESULT) {
-        postToGoogleSheet(URL2_EXAM_RESULT, payload, 15000).catch(() => null);
-    }
-    
+    // XÓA BẢN NHÁP & ACTIVE SESSION KHI ĐÃ NỘP XONG
+    supabaseClient.from('live_drafts').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
     if (typeof clearPresence === 'function') clearPresence(sId);
     if (timerInterval) clearInterval(timerInterval); 
-    if (imageSyncEventSource) { imageSyncEventSource.close(); imageSyncEventSource = null; }
-
-    fetch(`${FIREBASE_DB_URL}/quizzes/${currentQuizId}/live_drafts/${cleanSbd}.json`, { method: "DELETE" }).catch(() => null);
 
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem(getStorageKey()); 
@@ -929,7 +811,6 @@ async function executeSubmitExam(isForceSubmit = false) {
     updateTopBackupStatus(true);
 
     if (confirmModal) confirmModal.style.display = "none"; 
-    
     renderResultSummaryScreen(correctCount, wrongCount, spentMins, completionTimeStr, finalScore, maxScale, currentQuizId); 
 }
 
@@ -937,7 +818,6 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
     document.getElementById("top-navbar").style.display = "none"; 
     document.getElementById("quiz-content").style.display = "none"; 
 
-    // Đảm bảo nút tải file trên cùng luôn hiện sau khi hoàn tất nộp bài
     const topbar = document.getElementById("universal-backup-topbar");
     if (topbar) topbar.style.display = "flex";
     const topDownloadBtn = document.getElementById("btn-always-download-backup");
@@ -962,14 +842,13 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
     document.getElementById("res-user-id").innerText = document.getElementById("student-id").value.trim() || "---"; 
     document.getElementById("res-spent-time").innerText = spentTimeStr; 
 
-    // Thêm nút tải file dự phòng trực tiếp trên màn hình kết quả điểm
     let existingDownloadBtn = document.getElementById("res-btn-download-backup");
     if (!existingDownloadBtn) {
         const btnBox = document.createElement("div");
         btnBox.id = "res-download-container-box";
         btnBox.style.margin = "12px 0";
         btnBox.innerHTML = `
-            <button type="button" id="res-btn-download-backup" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 11px 16px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; border: none; border-radius: 12px; font-weight: 800; font-size: 0.95rem; cursor: pointer; box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3); display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <button type="button" id="res-btn-download-backup" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 11px 16px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; border: none; border-radius: 12px; font-weight: 800; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                 💾 Tải file dự phòng bài làm (.json)
             </button>
         `;
@@ -984,43 +863,17 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
     const statsCardsEl = document.querySelector(".stats-cards-grid");
     const reviewBannerEl = document.querySelector(".review-banner");
     const reviewBodyEl = document.getElementById("review-container-body");
-    
-    const oldMsg = document.getElementById("res-success-msg");
-    if (oldMsg) oldMsg.remove();
 
     if (resultMode === "hide_all") {
         scoreOverviewEl.style.display = "none";
         statsCardsEl.style.display = "none";
         reviewBannerEl.style.display = "none";
         reviewBodyEl.style.display = "none";
-
-        const successMsg = document.createElement("div");
-        successMsg.id = "res-success-msg";
-        successMsg.innerHTML = `
-            <div style="font-size: 55px; margin-bottom: 12px;">🎉</div>
-            <h3 style="color: #16a34a; font-weight: 900; font-size: 1.3rem; margin-bottom: 12px; text-transform: uppercase;">NỘP BÀI THÀNH CÔNG!</h3>
-            <p style="color: #475569; font-weight: 600; font-size: 1rem; line-height: 1.5; background: #f0fdf4; padding: 12px; border-radius: 12px; border: 1px dashed #86efac;">
-                Hệ thống đã ghi nhận bài làm của bạn an toàn 100%.<br>
-                <b style="color: #15803d;">Điểm số và đáp án chi tiết sẽ được giáo viên công bố sau!</b>
-            </p>
-        `;
-        document.querySelector(".result-summary-card").insertBefore(successMsg, document.querySelector(".user-details-grid"));
-        
     } else if (resultMode === "score_only") {
         scoreOverviewEl.style.display = "block";
         statsCardsEl.style.display = "grid";
         reviewBannerEl.style.display = "none";
         reviewBodyEl.style.display = "none";
-
-        const successMsg = document.createElement("div");
-        successMsg.id = "res-success-msg";
-        successMsg.innerHTML = `
-            <p style="color: #b45309; font-weight: 600; font-size: 0.95rem; line-height: 1.5; background: #fffbeb; padding: 10px; border-radius: 10px; border: 1px dashed #fcd34d; margin-bottom: 16px;">
-                🔒 Giáo viên đã tạm khóa tính năng xem lại bài làm chi tiết để đảm bảo công bằng. Bạn chỉ có thể xem điểm tổng quát lúc này.
-            </p>
-        `;
-        document.querySelector(".result-summary-card").insertBefore(successMsg, document.querySelector(".user-details-grid"));
-
     } else {
         scoreOverviewEl.style.display = "block";
         statsCardsEl.style.display = "grid";
@@ -1062,7 +915,6 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
             MathJax.typesetPromise().catch(() => {});
         }
     }
-    
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
 }
 

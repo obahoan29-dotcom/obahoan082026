@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Chuyển dữ liệu Firebase sang Supabase</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app-config.js"></script>
+</head>
+<body style="font-family: Arial, sans-serif; padding: 30px;">
+    <h2>🚀 CÔNG CỤ CHUYỂN DỮ LIỆU TỪ FIREBASE SANG SUPABASE</h2>
+    <p>Chọn file <b>.json</b> Thầy vừa Export từ Firebase để nạp toàn bộ vào Supabase:</p>
+    <input type="file" id="firebase-json-input" accept=".json">
+    <br><br>
+    <button id="btn-run" onclick="startImport()" style="padding: 10px 20px; font-weight: bold; background: #0284c7; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
+        Bắt đầu chuyển dữ liệu
+    </button>
+    <div id="status" style="margin-top: 20px; font-weight: bold; color: #059669;"></div>
+
+    <script>
+        async function startImport() {
+            const input = document.getElementById('firebase-json-input');
+            const status = document.getElementById('status');
+            if (!input.files[0]) return alert("Vui lòng chọn file JSON tải từ Firebase!");
+
+            status.innerText = "⏳ Đang đọc file...";
+            const text = await input.files[0].text();
+            const data = JSON.parse(text);
+
+            status.innerText = "⏳ Đang chuyển đề thi (quizzes)...";
+            if (data.quizzes) {
+                const quizRows = [];
+                for (let qId in data.quizzes) {
+                    const q = data.quizzes[qId];
+                    if (q && q.questions) {
+                        quizRows.push({
+                            id: qId,
+                            title: q.title || "Đề thi",
+                            made: q.maDe || "101",
+                            time_limit_minutes: parseInt(q.timeLimitMinutes, 10) || 90,
+                            scoring_config: q.scoringConfig || { mode: 'option1' },
+                            questions: q.questions,
+                            images: q.images || {}
+                        });
+                    }
+                }
+                if (quizRows.length > 0) {
+                    await supabaseClient.from('quizzes').upsert(quizRows);
+                }
+            }
+
+            status.innerText = "⏳ Đang chuyển danh mục lớp học (custom_links)...";
+            if (data.custom_links) {
+                const linkRows = [];
+                for (let catId in data.custom_links) {
+                    for (let itemId in data.custom_links[catId]) {
+                        const l = data.custom_links[catId][itemId];
+                        if (l && l.title) {
+                            linkRows.push({
+                                id: itemId,
+                                category_id: catId,
+                                title: l.title,
+                                date: l.date,
+                                url: l.url,
+                                badge_text: l.badgeText || "NONE",
+                                is_hot: !!l.isHot,
+                                is_doc: !!l.isDoc,
+                                avatar: l.avatar,
+                                timestamp: l.timestamp || Date.now()
+                            });
+                        }
+                    }
+                }
+                if (linkRows.length > 0) {
+                    await supabaseClient.from('custom_links').upsert(linkRows);
+                }
+            }
+
+            status.innerText = "🎉 HOÀN THÀNH 100%! Toàn bộ đề thi và bài đăng đã được chuyển sang Supabase an toàn.";
+            alert("Đã chuyển toàn bộ dữ liệu thành công sang Supabase!");
+        }
+    </script>
+</body>
+</html>

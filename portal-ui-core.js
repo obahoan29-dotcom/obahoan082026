@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: portal-ui-core.js
-// QUẢN LÝ GIAO DIỆN CHÍNH, KHỞI TẠO, MENU DÂN TRÍ & THU GỌN
+// FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
 // =========================================================
 
 let activeDayThemCatId = null;
@@ -15,75 +14,14 @@ let currentTargetAvatarCatId = "nhac-nho";
 
 const categoryExpandedState = {};
 
-const DEFAULT_PADLET_LINKS = [
-    {
-        id: "tuluan_11a",
-        firebaseId: "tuluan_11a",
-        categoryId: "tu-luan-padlet",
-        title: "11A nộp bài tự luận Google Drive",
-        date: "16/09/2026 - 10:00",
-        timestamp: 1773630004,
-        url: "#",
-        badgeText: "HOT",
-        isDoc: true,
-        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
-    },
-    {
-        id: "tuluan_11c",
-        firebaseId: "tuluan_11c",
-        categoryId: "tu-luan-padlet",
-        title: "11C nộp bài tự luận Google Drive",
-        date: "16/09/2026 - 10:00",
-        timestamp: 1773630003,
-        url: "#",
-        badgeText: "HOT",
-        isDoc: true,
-        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
-    },
-    {
-        id: "tuluan_10p",
-        firebaseId: "tuluan_10p",
-        categoryId: "tu-luan-padlet",
-        title: "10P nộp bài tự luận Google Drive",
-        date: "16/09/2026 - 10:00",
-        timestamp: 1773630002,
-        url: "#",
-        badgeText: "HOT",
-        isDoc: true,
-        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
-    },
-    {
-        id: "tuluan_11e",
-        firebaseId: "tuluan_11e",
-        categoryId: "tu-luan-padlet",
-        title: "11E nộp bài tự luận Google Drive",
-        date: "16/09/2026 - 10:00",
-        timestamp: 1773630001,
-        url: "#",
-        badgeText: "HOT",
-        isDoc: true,
-        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
-    }
-];
-
 document.addEventListener("DOMContentLoaded", async function() {
     initBannerAndAvatars();
     if (typeof initTableSettings === "function") initTableSettings();
     if (typeof initAvatarGrid === "function") initAvatarGrid();
     if (typeof checkAdminSessionValidity === "function") checkAdminSessionValidity();
 
-    const padletCat = CHINH_KHOA_CATEGORIES.find(c => c.id === "tu-luan-padlet");
-    if (padletCat) padletCat.links = [...DEFAULT_PADLET_LINKS];
-
-    try {
-        const rawCachedLinks = safeLocal.getItem("cached_custom_links");
-        if (rawCachedLinks) {
-            applyCustomLinksToCategories(JSON.parse(rawCachedLinks));
-        }
-    } catch(e) {}
-
     refreshAllViews();
-    await loadDataFromFirebase();
+    await loadDataFromSupabase();
     if (typeof initSiteVisitTracker === "function") initSiteVisitTracker();
 });
 
@@ -116,138 +54,73 @@ function sortLinksNewestFirst(linksArray) {
     });
 }
 
-function applyCustomLinksToCategories(customLinksData) {
-    if (!customLinksData || typeof customLinksData !== "object") return;
+async function loadDataFromSupabase() {
+    if (!supabaseClient) return;
 
-    if (customLinksData["nhac-nho"]) {
-        const rLinks = Object.keys(customLinksData["nhac-nho"]).map(k => ({
-            id: k, firebaseId: k, ...customLinksData["nhac-nho"][k], categoryId: "nhac-nho", isDoc: true
-        })).filter(l => l && l.title && l.title !== "undefined");
-        if (rLinks.length > 0) REMINDER_CATEGORY.links = sortLinksNewestFirst(rLinks);
-    }
-
-    [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES].forEach(cat => {
-        if (cat.id === "tu-luan-padlet") {
-            let customPadlet = [];
-            if (customLinksData[cat.id]) {
-                customPadlet = Object.keys(customLinksData[cat.id]).map(k => ({
-                    id: k, firebaseId: k, ...customLinksData[cat.id][k], categoryId: cat.id
-                })).filter(l => l && l.title && l.title !== "undefined" && String(l.title).trim() !== "");
-            }
-            cat.links = customPadlet.length > 0 ? sortLinksNewestFirst(customPadlet) : [...DEFAULT_PADLET_LINKS];
-            return;
-        }
-
-        if (customLinksData[cat.id]) {
-            let list = Object.keys(customLinksData[cat.id]).map(k => ({
-                id: k, firebaseId: k, ...customLinksData[cat.id][k], categoryId: cat.id
-            })).filter(l => l && l.title && l.title !== "undefined" && String(l.title).trim() !== "");
-            cat.links = sortLinksNewestFirst(list);
-        } else if (cat.links) {
-            cat.links = sortLinksNewestFirst(cat.links);
-        }
-    });
-
-    if (customLinksData["kho-tai-lieu"]) {
-        let list = Object.keys(customLinksData["kho-tai-lieu"]).map(k => ({
-            id: k, firebaseId: k, ...customLinksData["kho-tai-lieu"][k], categoryId: "kho-tai-lieu"
-        })).filter(l => l && l.title && l.title !== "undefined");
-        KHO_TAI_LIEU_FOLDER.links = sortLinksNewestFirst(list);
-    }
-}
-
-async function loadDataFromFirebase() {
     try {
-        const [linksRes, metaRes] = await Promise.all([
-            fetch(`${FIREBASE_DB_URL}/custom_links.json`).catch(() => null),
-            fetch(`${FIREBASE_DB_URL}/site_meta.json`).catch(() => null)
-        ]);
+        // 1. LẤY CÁC LIÊN KẾT ĐỀ THI
+        const { data: links, error: lErr } = await supabaseClient
+            .from('custom_links')
+            .select('*');
 
-        let customLinksData = linksRes && linksRes.ok ? await linksRes.json() : null;
-        let siteMetaData = metaRes && metaRes.ok ? await metaRes.json() : null;
-
-        if (siteMetaData && siteMetaData.reminderTitle) {
-            REMINDER_SECTION_TITLE = siteMetaData.reminderTitle;
-        }
-
-        if (customLinksData && typeof customLinksData === "object") {
-            try {
-                safeLocal.setItem("cached_custom_links", JSON.stringify(customLinksData));
-            } catch(e) {}
-
-            applyCustomLinksToCategories(customLinksData);
-            refreshAllViews();
-        }
-
-        const activeQuizIds = new Set();
-        [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES, KHO_TAI_LIEU_FOLDER].forEach(cat => {
-            if (cat.links) {
-                cat.links.forEach(l => {
-                    if (!l.isDoc) {
-                        const qId = extractQuizIdFromItem(l);
-                        if (qId) activeQuizIds.add(qId);
-                    }
+        if (!lErr && Array.isArray(links)) {
+            // Gom nhóm theo category_id
+            const grouped = {};
+            links.forEach(item => {
+                const cat = item.category_id;
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push({
+                    id: item.id,
+                    firebaseId: item.id,
+                    categoryId: cat,
+                    title: item.title,
+                    date: item.date,
+                    url: item.url,
+                    badgeText: item.badge_text,
+                    isHot: item.is_hot,
+                    isDoc: item.is_doc,
+                    avatar: item.avatar,
+                    avatarSize: item.avatar_size,
+                    timestamp: item.timestamp,
+                    isShuffled: item.is_shuffled,
+                    allowFree: item.allow_free,
+                    scoringConfig: item.scoring_config,
+                    timeLimitMinutes: item.time_limit_minutes,
+                    examStartTimeStr: item.exam_start_time_str,
+                    examEndTimeStr: item.exam_end_time_str,
+                    resultMode: item.result_mode,
+                    allowReviewOriginal: item.allow_review_original,
+                    showOnlineCount: item.show_online_count,
+                    allowExportExam: item.allow_export_exam,
+                    articleTitle: item.article_title,
+                    author: item.author,
+                    articleTime: item.article_time,
+                    sapo: item.sapo,
+                    articleImg: item.article_img,
+                    articleImgCaption: item.article_img_caption,
+                    articleBody: item.article_body
                 });
-            }
-        });
+            });
 
-        if (activeQuizIds.size > 0) {
-            let hasConfigUpdates = false;
-            await Promise.all(Array.from(activeQuizIds).map(async (qId) => {
-                try {
-                    const [qRes, cfgRes] = await Promise.all([
-                        fetch(`${FIREBASE_DB_URL}/quizzes/${qId}.json`).catch(() => null),
-                        fetch(`${FIREBASE_DB_URL}/exam_configs/${qId}.json`).catch(() => null)
-                    ]);
+            if (grouped["nhac-nho"]) REMINDER_CATEGORY.links = sortLinksNewestFirst(grouped["nhac-nho"]);
+            if (grouped["kho-tai-lieu"]) KHO_TAI_LIEU_FOLDER.links = sortLinksNewestFirst(grouped["kho-tai-lieu"]);
 
-                    const qData = qRes && qRes.ok ? await qRes.json().catch(() => null) : null;
-                    const cfg = cfgRes && cfgRes.ok ? await cfgRes.json().catch(() => null) : null;
-
-                    const allCats = [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES, KHO_TAI_LIEU_FOLDER];
-                    allCats.forEach(cat => {
-                        (cat.links || []).forEach(l => {
-                            if (extractQuizIdFromItem(l) === qId) {
-                                if (qData) {
-                                    if (qData.timeLimitMinutes !== undefined && qData.timeLimitMinutes !== "") {
-                                        l.timeLimitMinutes = qData.timeLimitMinutes;
-                                    }
-                                    if (qData.examStartTimeStr) l.examStartTimeStr = qData.examStartTimeStr;
-                                    if (qData.examEndTimeStr) l.examEndTimeStr = qData.examEndTimeStr;
-                                    if (qData.allowFree !== undefined) l.allowFree = qData.allowFree;
-                                    if (qData.resultMode !== undefined) l.resultMode = qData.resultMode;
-                                    if (qData.allowReviewOriginal !== undefined) l.allowReviewOriginal = qData.allowReviewOriginal;
-                                    if (qData.showOnlineCount !== undefined) l.showOnlineCount = qData.showOnlineCount;
-                                    if (qData.allowExportExam !== undefined) l.allowExportExam = qData.allowExportExam;
-                                    if (qData.maDe) l.maDe = qData.maDe;
-                                    hasConfigUpdates = true;
-                                }
-
-                                if (cfg) {
-                                    if (cfg.timeLimitMinutes !== undefined && cfg.timeLimitMinutes !== "") {
-                                        l.timeLimitMinutes = cfg.timeLimitMinutes;
-                                    }
-                                    if (cfg.examStartTimeStr) l.examStartTimeStr = cfg.examStartTimeStr;
-                                    if (cfg.examEndTimeStr) l.examEndTimeStr = cfg.examEndTimeStr;
-                                    if (cfg.allowFree !== undefined) l.allowFree = cfg.allowFree;
-                                    if (cfg.resultMode !== undefined) l.resultMode = cfg.resultMode;
-                                    if (cfg.allowReviewOriginal !== undefined) l.allowReviewOriginal = cfg.allowReviewOriginal;
-                                    if (cfg.showOnlineCount !== undefined) l.showOnlineCount = cfg.showOnlineCount;
-                                    if (cfg.allowExportExam !== undefined) l.allowExportExam = cfg.allowExportExam;
-                                    hasConfigUpdates = true;
-                                }
-                            }
-                        });
-                    });
-                } catch(e) {}
-            }));
-
-            if (hasConfigUpdates) {
-                refreshAllViews();
-            }
+            [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES].forEach(cat => {
+                if (grouped[cat.id]) {
+                    cat.links = sortLinksNewestFirst(grouped[cat.id]);
+                }
+            });
         }
-    } catch (e) {
-        console.warn("Lỗi tải dữ liệu Firebase:", e);
+
+        // 2. LẤY TIÊU ĐỀ NHẮC NHỞ
+        const { data: meta } = await supabaseClient.from('app_key_values').select('value').eq('key', 'site_meta').single();
+        if (meta && meta.value && meta.value.reminderTitle) {
+            REMINDER_SECTION_TITLE = meta.value.reminderTitle;
+        }
+
         refreshAllViews();
+    } catch(e) {
+        console.warn("Lỗi nạp Supabase:", e);
     }
 }
 
@@ -372,30 +245,18 @@ function renderLinksWithFold(container, links, categoryId, visibleLimit = 2) {
         toggleBtn.style.cursor = "pointer";
         toggleBtn.style.transition = "all 0.15s ease";
 
-        if (isReminder) {
-            toggleBtn.innerHTML = isExpanded 
-                ? `▲ Thu gọn bài viết (${remainingCount} bài)` 
-                : `▼ Xem tiếp ${remainingCount} bài viết cũ hơn`;
-        } else {
-            toggleBtn.innerHTML = isExpanded 
-                ? `▲ Thu gọn lại (${remainingCount} mục)` 
-                : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
-        }
+        toggleBtn.innerHTML = isExpanded 
+            ? `▲ Thu gọn lại (${remainingCount} mục)` 
+            : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
 
         toggleBtn.onclick = (e) => {
             e.stopPropagation();
             categoryExpandedState[categoryId] = !categoryExpandedState[categoryId];
             const nowExpanded = categoryExpandedState[categoryId];
             hiddenBox.style.display = nowExpanded ? "flex" : "none";
-            if (isReminder) {
-                toggleBtn.innerHTML = nowExpanded 
-                    ? `▲ Thu gọn bài viết (${remainingCount} bài)` 
-                    : `▼ Xem tiếp ${remainingCount} bài viết cũ hơn`;
-            } else {
-                toggleBtn.innerHTML = nowExpanded 
-                    ? `▲ Thu gọn lại (${remainingCount} mục)` 
-                    : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
-            }
+            toggleBtn.innerHTML = nowExpanded 
+                ? `▲ Thu gọn lại (${remainingCount} mục)` 
+                : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
         };
 
         foldWrapper.appendChild(hiddenBox);
