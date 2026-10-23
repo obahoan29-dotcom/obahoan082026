@@ -1,9 +1,9 @@
 // =========================================================
-// FILE: exam-img-uploader.js
-// QUẢN LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V), TỰ ĐỘNG UPLOAD & ĐỒNG BỘ SSE
+// FILE: exam-img-uploader.js (BẢN SUPABASE HOÀN TOÀN)
+// QUẢN LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V), TỰ ĐỘNG UPLOAD & ĐỒNG BỘ SUPABASE
 // =========================================================
 
-let imageSyncEventSource = null;
+let imageSyncChannel = null;
 
 (function injectAdminUploaderStyles() {
     const styleId = "admin-img-uploader-custom-styles";
@@ -120,29 +120,42 @@ function buildImgHtml(imgUrl, qId) {
     </div>`;
 }
 
+// THEO DÕI ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL
 function startImageSyncWatcher(quizId) {
     if (!quizId) return;
-    if (imageSyncEventSource) {
-        imageSyncEventSource.close();
-        imageSyncEventSource = null;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
+
+    if (imageSyncChannel) {
+        client.removeChannel(imageSyncChannel);
+        imageSyncChannel = null;
     }
 
-    const streamUrl = `${FIREBASE_DB_URL}/quizzes/${quizId}/image_sync.json`;
-    imageSyncEventSource = new EventSource(streamUrl);
-
-    const handleSyncEvent = function(e) {
-        try {
-            if (!e.data) return;
-            const parsed = JSON.parse(e.data);
-            if (!parsed) return;
-            let syncData = parsed.path === "/" ? (parsed.data || {}) : parsed.data;
-            if (!syncData || typeof syncData !== 'object' || !syncData.qId) return;
-            applyRealtimeImageUpdate(syncData);
-        } catch(err) {}
-    };
-
-    imageSyncEventSource.addEventListener('put', handleSyncEvent);
-    imageSyncEventSource.addEventListener('patch', handleSyncEvent);
+    imageSyncChannel = client.channel(`image_sync_${quizId}`)
+        .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'quizzes',
+            filter: `id=eq.${quizId}`
+        }, payload => {
+            const fresh = payload.new;
+            if (fresh && fresh.images && examData) {
+                examData.images = fresh.images;
+                if (Array.isArray(fresh.questions)) {
+                    examData.questions = fresh.questions;
+                    fresh.questions.forEach(q => {
+                        const directUrl = getEffectiveImageUrl(q, fresh.images);
+                        applyRealtimeImageUpdate({
+                            qId: q.id,
+                            imageKey: q.imageKey || `img_q_${q.id}`,
+                            imageUrl: directUrl,
+                            action: directUrl ? "set" : "delete"
+                        });
+                    });
+                }
+            }
+        })
+        .subscribe();
 }
 
 function applyRealtimeImageUpdate(syncData) {
@@ -338,6 +351,7 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
         const quizId = urlParams.get('id');
         const effectiveKey = imageKey || `img_q_${qId}`;
 
+        // Cập nhật giao diện trang tại chỗ
         applyRealtimeImageUpdate({
             qId: qId,
             imageKey: effectiveKey,
@@ -345,43 +359,31 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
             action: "set"
         });
 
+        // LƯU TRỰC TIẾP LÊN SUPABASE (TABLE: quizzes)
         if (quizId) {
-            const syncPayload = {
-                qId: qId,
-                imageKey: effectiveKey,
-                origKey: imageKey || "",
-                imageUrl: directImgUrl,
-                action: "set",
-                ts: Date.now()
-            };
-
-            await Promise.all([
-                fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/images/${effectiveKey}.json`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(directImgUrl)
-                }).catch(() => null),
-                fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/image_sync.json`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(syncPayload)
-                }).catch(() => null)
-            ]);
-
-            try {
-                const qRes = await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/questions.json`);
-                const qList = await qRes.json();
-                if (Array.isArray(qList)) {
-                    const targetIdx = qList.findIndex(item => item && String(item.id) === String(qId));
-                    if (targetIdx !== -1) {
-                        fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/questions/${targetIdx}.json`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ imageUrl: directImgUrl, imageKey: effectiveKey })
-                        }).catch(() => null);
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            if (client) {
+                try {
+                    const { data: currentQ } = await client.from('quizzes').select('images, questions').eq('id', quizId).single();
+                    if (currentQ) {
+                        const updatedImages = { ...(currentQ.images || {}), [effectiveKey]: directImgUrl };
+                        let updatedQuestions = currentQ.questions || [];
+                        if (Array.isArray(updatedQuestions)) {
+                            const targetIdx = updatedQuestions.findIndex(item => item && String(item.id) === String(qId));
+                            if (targetIdx !== -1) {
+                                updatedQuestions[targetIdx].imageUrl = directImgUrl;
+                                updatedQuestions[targetIdx].imageKey = effectiveKey;
+                            }
+                        }
+                        await client.from('quizzes').update({
+                            images: updatedImages,
+                            questions: updatedQuestions
+                        }).eq('id', quizId);
                     }
+                } catch(supaErr) {
+                    console.warn("Lỗi lưu ảnh lên Supabase quizzes:", supaErr);
                 }
-            } catch(e) {}
+            }
         }
 
         if (statusEl) {
@@ -440,47 +442,33 @@ async function deleteQuestionImage(qId, imageKey, qIdx) {
             action: "delete"
         });
 
+        // XÓA TRÊN SUPABASE (TABLE: quizzes)
         if (quizId) {
-            const syncPayload = {
-                qId: qId,
-                imageKey: effectiveKey,
-                origKey: origKey || "",
-                imageUrl: "",
-                action: "delete",
-                ts: Date.now()
-            };
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            if (client) {
+                try {
+                    const { data: currentQ } = await client.from('quizzes').select('images, questions').eq('id', quizId).single();
+                    if (currentQ) {
+                        const updatedImages = { ...(currentQ.images || {}) };
+                        delete updatedImages[effectiveKey];
+                        if (origKey) delete updatedImages[origKey];
 
-            const deleteTasks = [
-                fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/image_sync.json`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(syncPayload)
-                }),
-                fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/images/${effectiveKey}.json`, {
-                    method: "DELETE"
-                })
-            ];
-
-            if (origKey && origKey !== effectiveKey) {
-                deleteTasks.push(fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/images/${origKey}.json`, { method: "DELETE" }));
-            }
-
-            await Promise.all(deleteTasks);
-
-            try {
-                const qRes = await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/questions.json`);
-                const qList = await qRes.json();
-                if (Array.isArray(qList)) {
-                    const targetIdx = qList.findIndex(item => item && String(item.id) === String(qId));
-                    if (targetIdx !== -1) {
-                        await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}/questions/${targetIdx}.json`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ imageUrl: "" })
-                        });
+                        let updatedQuestions = currentQ.questions || [];
+                        if (Array.isArray(updatedQuestions)) {
+                            const targetIdx = updatedQuestions.findIndex(item => item && String(item.id) === String(qId));
+                            if (targetIdx !== -1) {
+                                updatedQuestions[targetIdx].imageUrl = "";
+                            }
+                        }
+                        await client.from('quizzes').update({
+                            images: updatedImages,
+                            questions: updatedQuestions
+                        }).eq('id', quizId);
                     }
+                } catch(supaErr) {
+                    console.warn("Lỗi xóa ảnh trên Supabase quizzes:", supaErr);
                 }
-            } catch(e) {}
+            }
         }
 
         if (statusEl) {

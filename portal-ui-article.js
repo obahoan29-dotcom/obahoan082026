@@ -19,10 +19,10 @@ async function editReminderSectionTitle(event) {
         if (titleEl) titleEl.innerText = REMINDER_SECTION_TITLE;
 
         try {
-            await fetch(`${FIREBASE_DB_URL}/site_meta.json`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reminderTitle: REMINDER_SECTION_TITLE })
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            await client.from('app_key_values').upsert({
+                key: 'site_meta',
+                value: { reminderTitle: REMINDER_SECTION_TITLE }
             });
         } catch(e) { console.error("Lỗi lưu tiêu đề nhắc nhở:", e); }
     }
@@ -302,40 +302,28 @@ async function saveArticleToFirebase(event) {
     const itemId = currentActiveArticleItem.id || currentActiveArticleItem.firebaseId;
 
     const payload = {
+        id: itemId,
+        category_id: currentActiveArticleCatId || "nhac-nho",
         title: titleVal, 
-        articleTitle: titleVal, 
+        article_title: titleVal, 
         author: authorVal, 
-        articleTime: timeVal,
+        article_time: timeVal,
         date: cardDateStr, 
         timestamp: currentActiveArticleItem.timestamp || Date.now(),
         sapo: sapoVal, 
-        articleImg: directImgVal, 
-        articleImgCaption: captionVal, 
-        articleBody: bodyVal,
-        isDoc: true,
-        badgeText: currentActiveArticleItem.badgeText || "MỚI",
-        avatar: currentActiveArticleItem.avatar || PRESET_20_AVATARS[0],
-        categoryId: currentActiveArticleCatId || "nhac-nho"
+        article_img: directImgVal, 
+        article_img_caption: captionVal, 
+        article_body: bodyVal,
+        is_doc: true,
+        badge_text: currentActiveArticleItem.badgeText || "MỚI",
+        avatar: currentActiveArticleItem.avatar || PRESET_20_AVATARS[0]
     };
 
     try {
-        await fetch(`${FIREBASE_DB_URL}/custom_links/${currentActiveArticleCatId}/${itemId}.json`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        });
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        await client.from('custom_links').upsert([payload]);
 
-        if (currentActiveArticleCatId === "nhac-nho") {
-            if (!REMINDER_CATEGORY.links) REMINDER_CATEGORY.links = [];
-            const exIdx = REMINDER_CATEGORY.links.findIndex(l => l.id === itemId || l.firebaseId === itemId);
-            if (exIdx !== -1) {
-                REMINDER_CATEGORY.links[exIdx] = { id: itemId, firebaseId: itemId, ...payload };
-            } else {
-                REMINDER_CATEGORY.links.unshift({ id: itemId, firebaseId: itemId, ...payload });
-            }
-            REMINDER_CATEGORY.links = sortLinksNewestFirst(REMINDER_CATEGORY.links);
-        }
-
-        Object.assign(currentActiveArticleItem, payload);
-        alert("🎉 Đã lưu bài viết theo phong cách báo Dân trí thành công!");
+        alert("🎉 Đã lưu bài viết thành công!");
         window.location.reload();
     } catch(e) {
         alert("❌ Lỗi khi lưu bài viết: " + e.message);

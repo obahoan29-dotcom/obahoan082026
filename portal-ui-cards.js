@@ -143,7 +143,6 @@ function buildCardHtmlString(item, categoryId) {
         `;
     }
 
-    // YÊU CẦU 1: Ở BẤT CỨ ĐỀ NÀO (TRẮC NGHIỆM, TỰ LUẬN, BÀI TẬP) ĐỀU LUÔN CÓ NÚT NỘP TỰ LUẬN DRIVE
     let tuLuanBtnHtml = `
         <button type="button" class="btn-tuluan-modal-trigger" onclick="openTuLuanModal('${categoryId}', '${itemId}', event)" title="Mở bảng nộp bài tự luận 45 học sinh lên Google Drive">
             📝 Nộp tự luận Drive
@@ -185,15 +184,6 @@ function buildCardHtmlString(item, categoryId) {
                             <img src="${url}" class="avatar-mini-thumb" title="Avatar ${i+1}">
                         </div>
                     `).join('')}
-                </div>
-
-                <div class="avatar-upload-pc-box">
-                    <button type="button" class="btn-upload-pc-avatar" onclick="triggerItemAvatarUploadPC('${categoryId}', '${itemId}', event)">
-                        📁 Tải ảnh từ máy tính (lưu Google Drive)
-                    </button>
-                    <div class="avatar-upload-note">
-                        💡 <b>Chú ý cỡ ảnh:</b> Khuyên dùng ảnh vuông tỉ lệ <b>1:1</b>.
-                    </div>
                 </div>
             </div>
         `;
@@ -306,7 +296,7 @@ function buildCardHtmlString(item, categoryId) {
             </div>
 
             <div class="admin-card-bottom-row" onclick="handleCardClick('${categoryId}', '${itemId}', ${isDoc}, '${encodeURIComponent(item.url || '')}', '${encodedData}', event)">
-                <div class="exam-thumb-box" onclick="openItemAvatarPicker('${itemId}', event)" title="Ấn để chọn 20 Avatar mẫu, đổi kích thước từ nhỏ đến rất to, hoặc tải từ máy tính" style="width: ${avatarSize}px; height: ${avatarSize}px; cursor: pointer;">
+                <div class="exam-thumb-box" onclick="openItemAvatarPicker('${itemId}', event)" title="Ấn để chọn 20 Avatar mẫu, đổi kích thước từ nhỏ đến rất to" style="width: ${avatarSize}px; height: ${avatarSize}px; cursor: pointer;">
                     <img src="${avatar}" class="exam-thumb" alt="icon">
                     ${avatarPopoverHtml}
                 </div>
@@ -396,6 +386,7 @@ function handleCardClick(categoryId, itemId, isDoc, rawUrl, stringifiedData, eve
     openStudentLoginModal(item, categoryId, event);
 }
 
+// BẬT / TẮT XUẤT ĐỀ THI
 async function handleAllowExportExamToggleChange(categoryId, itemId, quizId, isChecked, event) {
     if (event) event.stopPropagation();
 
@@ -409,38 +400,19 @@ async function handleAllowExportExamToggleChange(categoryId, itemId, quizId, isC
     const slider = document.querySelector(`#export-toggle-${itemId} ~ .slider-toggle`);
     if (slider) slider.style.backgroundColor = isChecked ? '#10b981' : '#cbd5e1';
 
-    const allCats = [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES, KHO_TAI_LIEU_FOLDER];
-    allCats.forEach(cat => {
-        if (cat.links) {
-            const found = cat.links.find(l => (l.firebaseId === itemId || l.id === itemId));
-            if (found) found.allowExportExam = isChecked;
-        }
-    });
-
     try {
-        await fetch(`${FIREBASE_DB_URL}/custom_links/${categoryId}/${itemId}.json`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ allowExportExam: isChecked })
-        });
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        await client.from('custom_links').update({ allow_export_exam: isChecked }).match({ id: itemId, category_id: categoryId });
         const effectiveQuizId = quizId || (itemId.startsWith('quiz_') ? itemId : null);
         if (effectiveQuizId) {
-            await fetch(`${FIREBASE_DB_URL}/quizzes/${effectiveQuizId}.json`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ allowExportExam: isChecked })
-            }).catch(() => null);
-            await fetch(`${FIREBASE_DB_URL}/exam_configs/${effectiveQuizId}.json`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ allowExportExam: isChecked })
-            }).catch(() => null);
+            await client.from('quizzes').update({ allow_export_exam: isChecked }).match({ id: effectiveQuizId });
         }
     } catch(e) {
         console.error("Lỗi cập nhật trạng thái xuất đề:", e);
     }
 }
 
+// BẬT / TẮT SĨ SỐ PHÒNG THI
 async function handleShowOnlineCountToggleChange(categoryId, itemId, quizId, isChecked, event) {
     if (event) event.stopPropagation();
     
@@ -455,16 +427,10 @@ async function handleShowOnlineCountToggleChange(categoryId, itemId, quizId, isC
     if (slider) slider.style.backgroundColor = isChecked ? '#0284c7' : '#cbd5e1';
 
     try {
-        await fetch(`${FIREBASE_DB_URL}/custom_links/${categoryId}/${itemId}.json`, {
-            method: 'PATCH', body: JSON.stringify({ showOnlineCount: isChecked })
-        });
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        await client.from('custom_links').update({ show_online_count: isChecked }).match({ id: itemId, category_id: categoryId });
         if (quizId) {
-            await fetch(`${FIREBASE_DB_URL}/exam_configs/${quizId}.json`, {
-                method: 'PATCH', body: JSON.stringify({ showOnlineCount: isChecked })
-            });
-            await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}.json`, {
-                method: 'PATCH', body: JSON.stringify({ showOnlineCount: isChecked })
-            }).catch(e=>null);
+            await client.from('quizzes').update({ show_online_count: isChecked }).match({ id: quizId });
         }
     } catch(e) { console.error(e); }
 }
@@ -483,9 +449,8 @@ async function selectBadgeOption(categoryId, itemId, badgeType, event) {
     const menu = document.getElementById(`badge-menu-${itemId}`);
     if (menu) menu.classList.remove("show");
     try {
-        await fetch(`${FIREBASE_DB_URL}/custom_links/${categoryId}/${itemId}.json`, {
-            method: 'PATCH', body: JSON.stringify({ badgeText: badgeType })
-        });
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        await client.from('custom_links').update({ badge_text: badgeType }).match({ id: itemId, category_id: categoryId });
         window.location.reload();
     } catch (e) { alert("Lỗi đổi badge!"); }
 }
@@ -501,10 +466,15 @@ async function setResultMode(categoryId, itemId, quizId, mode, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const menu = document.getElementById(`result-mode-menu-${itemId}`); if (menu) menu.classList.remove("show");
     try {
-        await fetch(`${FIREBASE_DB_URL}/custom_links/${categoryId}/${itemId}.json`, { method: 'PATCH', body: JSON.stringify({ resultMode: mode }) });
-        if (quizId && quizId !== itemId) { await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}.json`, { method: 'PATCH', body: JSON.stringify({ resultMode: mode }) }); } 
-        else if (itemId.startsWith('quiz_')) { await fetch(`${FIREBASE_DB_URL}/quizzes/${itemId}.json`, { method: 'PATCH', body: JSON.stringify({ resultMode: mode }) }); }
-        alert("✅ Đã cập nhật chế độ hiển thị kết quả thành công!"); window.location.reload();
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        await client.from('custom_links').update({ result_mode: mode }).match({ id: itemId, category_id: categoryId });
+        if (quizId && quizId !== itemId) {
+            await client.from('quizzes').update({ result_mode: mode }).match({ id: quizId });
+        } else if (itemId.startsWith('quiz_')) {
+            await client.from('quizzes').update({ result_mode: mode }).match({ id: itemId });
+        }
+        alert("✅ Đã cập nhật chế độ hiển thị kết quả thành công!"); 
+        window.location.reload();
     } catch(e) { alert("❌ Lỗi cập nhật: " + e.message); }
 }
 
@@ -513,9 +483,12 @@ async function handleAllowReviewOriginalToggleChange(categoryId, itemId, isCheck
     const txt = document.getElementById(`review-status-txt-${itemId}`);
     if (txt) { txt.innerText = isChecked ? 'MỞ' : 'TẮT'; txt.className = `free-toggle-status ${isChecked ? 'st-on' : 'st-off'}`; }
     try {
-        await fetch(`${FIREBASE_DB_URL}/custom_links/${categoryId}/${itemId}.json`, { method: 'PATCH', body: JSON.stringify({ allowReviewOriginal: isChecked }) });
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        await client.from('custom_links').update({ allow_review_original: isChecked }).match({ id: itemId, category_id: categoryId });
         const quizId = itemId.startsWith('quiz_') ? itemId : null;
-        if (quizId) { await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}.json`, { method: 'PATCH', body: JSON.stringify({ allowReviewOriginal: isChecked }) }); }
+        if (quizId) {
+            await client.from('quizzes').update({ allow_review_original: isChecked }).match({ id: quizId });
+        }
     } catch(e) { console.error(e); }
 }
 

@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-exam-printer.js
+// FILE: portal-exam-printer.js (BẢN SUPABASE HOÀN CHỈNH)
 // BỘ MÁY XUẤT ĐỀ THI CHUẨN ĐẸP (PDF VÀ WORD) ĐẦY ĐỦ CÂU HỎI VÀ HÌNH VẼ
 // =========================================================
 
@@ -39,10 +39,10 @@ function getEffectiveImageUrlForExport(q, imageMap) {
 async function fetchFullExamData(quizId) {
     if (!quizId) return null;
     try {
-        const res = await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}.json`);
-        if (res.ok) {
-            const data = await res.json();
-            if (data && data.questions) return data;
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (client) {
+            const { data, error } = await client.from('quizzes').select('*').eq('id', quizId).single();
+            if (!error && data && data.questions) return data;
         }
     } catch(e) {}
     if (typeof examData !== 'undefined' && examData && examData.questions) {
@@ -80,8 +80,8 @@ async function handleExportExamAction(categoryId, itemId, format, includeKey, ev
         }
 
         const title = data.title || (targetItem ? targetItem.title : "ĐỀ THI TRẮC NGHIỆM");
-        const maDe = data.maDe || "101";
-        const timeLimit = data.timeLimitMinutes || (targetItem ? targetItem.timeLimitMinutes : 90) || 90;
+        const maDe = data.maDe || data.made || "101";
+        const timeLimit = data.time_limit_minutes || data.timeLimitMinutes || (targetItem ? targetItem.timeLimitMinutes : 90) || 90;
 
         if (format === 'pdf') {
             exportExamToPDF(data, title, maDe, timeLimit, includeKey);
@@ -105,6 +105,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
     let questionGlobalIdx = 1;
     let htmlContent = "";
 
+    // PHẦN 1
     if (p1List.length > 0) {
         htmlContent += `
         <div class="part-header-box">
@@ -150,6 +151,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
         });
     }
 
+    // PHẦN 2
     if (p2List.length > 0) {
         htmlContent += `
         <div class="part-header-box">
@@ -195,6 +197,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
         });
     }
 
+    // PHẦN 3
     if (p3List.length > 0) {
         htmlContent += `
         <div class="part-header-box">
@@ -229,6 +232,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
         });
     }
 
+    // PHẦN 4
     if (p4List.length > 0) {
         htmlContent += `
         <div class="part-header-box">
@@ -263,6 +267,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
         });
     }
 
+    // BẢNG ĐÁP ÁN TỔNG HỢP (NẾU CHỌN KÈM ĐÁP ÁN)
     let summaryKeyTableHtml = "";
     if (includeKey) {
         let cellsP1 = "";

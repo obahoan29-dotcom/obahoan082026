@@ -2,7 +2,7 @@
 // FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
 // =========================================================
 
-let activeDayThemCatId = null;
+let activeDayThemCatId = "them-11";
 let activeChinhKhoaRow1CatId = null;
 let activeChinhKhoaRow2CatId = null;
 let activeDantriCatId = null;
@@ -54,16 +54,26 @@ function sortLinksNewestFirst(linksArray) {
     });
 }
 
-// NẠP DỮ LIỆU TỪ SUPABASE (CHỈ LẤY ĐÚNG CÁC CỘT CẦN THIẾT)
+// NẠP DỮ LIỆU TỪ SUPABASE (TỰ ĐỘNG THỬ LẠI NẾU MẠNG CHẬM)
 async function loadDataFromSupabase() {
-    if (!supabaseClient) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) {
+        console.warn("Chờ nạp thư viện Supabase...");
+        setTimeout(loadDataFromSupabase, 500);
+        return;
+    }
 
     try {
-        const { data: links, error: lErr } = await supabaseClient
+        const { data: links, error: lErr } = await client
             .from('custom_links')
             .select('*');
 
-        if (!lErr && Array.isArray(links)) {
+        if (lErr) {
+            console.error("Lỗi đọc dữ liệu custom_links từ Supabase:", lErr.message, lErr.details);
+            return;
+        }
+
+        if (Array.isArray(links)) {
             const grouped = {};
             links.forEach(item => {
                 const cat = item.category_id;
@@ -101,20 +111,20 @@ async function loadDataFromSupabase() {
                 });
             });
 
-            if (grouped["nhac-nho"]) REMINDER_CATEGORY.links = sortLinksNewestFirst(grouped["nhac-nho"]);
-            if (grouped["kho-tai-lieu"]) KHO_TAI_LIEU_FOLDER.links = sortLinksNewestFirst(grouped["kho-tai-lieu"]);
+            REMINDER_CATEGORY.links = grouped["nhac-nho"] ? sortLinksNewestFirst(grouped["nhac-nho"]) : [];
+            KHO_TAI_LIEU_FOLDER.links = grouped["kho-tai-lieu"] ? sortLinksNewestFirst(grouped["kho-tai-lieu"]) : [];
 
             [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES].forEach(cat => {
-                if (grouped[cat.id]) {
-                    cat.links = sortLinksNewestFirst(grouped[cat.id]);
-                }
+                cat.links = grouped[cat.id] ? sortLinksNewestFirst(grouped[cat.id]) : [];
             });
         }
 
-        const { data: meta } = await supabaseClient.from('app_key_values').select('value').eq('key', 'site_meta').single();
-        if (meta && meta.value && meta.value.reminderTitle) {
-            REMINDER_SECTION_TITLE = meta.value.reminderTitle;
-        }
+        try {
+            const { data: meta } = await client.from('app_key_values').select('value').eq('key', 'site_meta').single();
+            if (meta && meta.value && meta.value.reminderTitle) {
+                REMINDER_SECTION_TITLE = meta.value.reminderTitle;
+            }
+        } catch(e) {}
 
         refreshAllViews();
     } catch(e) {
@@ -198,7 +208,6 @@ function renderLinksWithFold(container, links, categoryId, visibleLimit = 2) {
 
     const sortedLinks = sortLinksNewestFirst(links);
     const total = sortedLinks.length;
-    const isReminder = (categoryId === "nhac-nho");
 
     const firstPortion = sortedLinks.slice(0, visibleLimit);
     firstPortion.forEach(item => {
