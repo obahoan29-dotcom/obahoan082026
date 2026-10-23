@@ -1,16 +1,18 @@
 // =========================================================
 // FILE: app-config.js
-// CẤU HÌNH HỆ THỐNG VÀ KẾT NỐI SUPABASE
+// CẤU HÌNH HỆ THỐNG VÀ KẾT NỐI SUPABASE CHÍNH XÁC 100%
 // =========================================================
 
 let ADMIN_PASSWORD_HASH = "0a6c968cd9122c2e6011ae39c4a76ec233eea80946b4920aa6d2f036a7d3f764";
 
-// THAY ĐỔI 2 THÔNG SỐ NÀY TỪ PROJECT SETTINGS -> API CỦA SUPABASE
+// THÔNG SỐ DỰ ÁN SUPABASE CỦA THẦY
 const SUPABASE_URL = "https://vvjstcftecorvmepdkbi.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pLAoa3B4c6Z0N19kbLA9NA_3_npZyaC";
 
-// Khởi tạo Supabase Client dùng chung cho toàn bộ website
-const supabaseClient = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// Khởi tạo Supabase Client dùng chung toàn hệ thống
+const supabaseClient = (typeof window.supabase !== 'undefined' && window.supabase)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
 
 // CẤU HÌNH GOOGLE DRIVE & IMGBB (GIỮ NGUYÊN 100%)
 const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbxrNBRAAeTohrANj3w9_hd9FLBrxZCF0M0PmN290ul0Wrz4zon4-lqYdPOZ7liuePMCgw/exec";

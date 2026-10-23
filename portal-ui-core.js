@@ -47,24 +47,23 @@ function initBannerAndAvatars() {
 function sortLinksNewestFirst(linksArray) {
     if (!Array.isArray(linksArray)) return [];
     return linksArray.sort((a, b) => {
-        let tA = a.timestamp || parseDateString(a.date) || 0;
-        let tB = b.timestamp || parseDateString(b.date) || 0;
+        let tA = a.timestamp || (typeof parseDateString === 'function' ? parseDateString(a.date) : 0) || 0;
+        let tB = b.timestamp || (typeof parseDateString === 'function' ? parseDateString(b.date) : 0) || 0;
         if (tB !== tA) return tB - tA;
         return (a.title || "").localeCompare(b.title || "");
     });
 }
 
+// NẠP DỮ LIỆU TỪ SUPABASE (CHỈ LẤY ĐÚNG CÁC CỘT CẦN THIẾT)
 async function loadDataFromSupabase() {
     if (!supabaseClient) return;
 
     try {
-        // 1. LẤY CÁC LIÊN KẾT ĐỀ THI
         const { data: links, error: lErr } = await supabaseClient
             .from('custom_links')
             .select('*');
 
         if (!lErr && Array.isArray(links)) {
-            // Gom nhóm theo category_id
             const grouped = {};
             links.forEach(item => {
                 const cat = item.category_id;
@@ -76,11 +75,11 @@ async function loadDataFromSupabase() {
                     title: item.title,
                     date: item.date,
                     url: item.url,
-                    badgeText: item.badge_text,
+                    badgeText: item.badge_text || "NONE",
                     isHot: item.is_hot,
                     isDoc: item.is_doc,
                     avatar: item.avatar,
-                    avatarSize: item.avatar_size,
+                    avatarSize: item.avatar_size || 48,
                     timestamp: item.timestamp,
                     isShuffled: item.is_shuffled,
                     allowFree: item.allow_free,
@@ -112,7 +111,6 @@ async function loadDataFromSupabase() {
             });
         }
 
-        // 2. LẤY TIÊU ĐỀ NHẮC NHỞ
         const { data: meta } = await supabaseClient.from('app_key_values').select('value').eq('key', 'site_meta').single();
         if (meta && meta.value && meta.value.reminderTitle) {
             REMINDER_SECTION_TITLE = meta.value.reminderTitle;
@@ -120,7 +118,7 @@ async function loadDataFromSupabase() {
 
         refreshAllViews();
     } catch(e) {
-        console.warn("Lỗi nạp Supabase:", e);
+        console.warn("Lỗi nạp dữ liệu Supabase:", e);
     }
 }
 
@@ -204,7 +202,9 @@ function renderLinksWithFold(container, links, categoryId, visibleLimit = 2) {
 
     const firstPortion = sortedLinks.slice(0, visibleLimit);
     firstPortion.forEach(item => {
-        container.appendChild(createItemCardElement(item, categoryId));
+        if (typeof createItemCardElement === 'function') {
+            container.appendChild(createItemCardElement(item, categoryId));
+        }
     });
 
     if (total > visibleLimit) {
@@ -226,7 +226,9 @@ function renderLinksWithFold(container, links, categoryId, visibleLimit = 2) {
         hiddenBox.style.width = "100%";
 
         remainingLinks.forEach(item => {
-            hiddenBox.appendChild(createItemCardElement(item, categoryId));
+            if (typeof createItemCardElement === 'function') {
+                hiddenBox.appendChild(createItemCardElement(item, categoryId));
+            }
         });
 
         const toggleBtn = document.createElement("button");

@@ -118,7 +118,7 @@ async function processUpload() {
     const btn = document.getElementById("btn-create-quiz");
 
     if (categories.length === 0) { alert("⚠️ Vui lòng chọn ít nhất 1 lớp để đăng đề!"); return; }
-    if (!fileInput || fileInput.files.length === 0) { alert("⚠️ Vui lòng chọn file câu hỏi!"); return; }
+    if (!fileInput || fileInput.files.length === 0) { alert("⚠️ Vui lòng chọn file đề thi!"); return; }
 
     btn.innerText = "⏳ Đang xử lý..."; btn.disabled = true;
 
@@ -126,7 +126,7 @@ async function processUpload() {
         const qContent = await readFileAsTextAsync(fileInput.files[0]);
         let parsedExam = parseScriptOrJson(qContent);
 
-        if (!parsedExam || !parsedExam.questions) throw new Error("File đề thi thiếu mảng questions!");
+        if (!parsedExam || !parsedExam.questions) throw new Error("File đề thi không đúng cấu trúc (thiếu trường questions)!");
 
         if (answerFileInput && answerFileInput.files.length > 0) {
             const aContent = await readFileAsTextAsync(answerFileInput.files[0]);
@@ -143,18 +143,18 @@ async function processUpload() {
         const pad = n => String(n).padStart(2, '0');
         const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-        // 1. LƯU ĐỀ VÀO BẢNG QUIZZES
+        // 1. Lưu vào bảng quizzes
         await supabaseClient.from('quizzes').insert([{
             id: quizId,
             title: parsedExam.title,
             made: parsedExam.maDe || "101",
-            time_limit_minutes: parsedExam.timeLimitMinutes || 90,
+            time_limit_minutes: parseInt(parsedExam.timeLimitMinutes, 10) || 90,
             scoring_config: parsedExam.scoringConfig || { mode: 'option1' },
             images: parsedExam.images || {},
             questions: parsedExam.questions
         }]);
 
-        // 2. TẠO LIÊN KẾT CHO TỪNG LỚP TRONG BẢNG CUSTOM_LINKS
+        // 2. Tạo liên kết cho từng lớp trong custom_links
         const linkRows = categories.map(cat => ({
             id: quizId,
             category_id: cat,
@@ -174,15 +174,15 @@ async function processUpload() {
         await supabaseClient.from('custom_links').insert(linkRows);
 
         alert(`✨ Tạo đề thi "${parsedExam.title}" thành công!`);
-        window.location.reload();
-    } catch (err) {
-        alert("❌ Lỗi: " + err.message);
-    } finally {
-        btn.innerText = "✨ Đăng đề thi"; btn.disabled = false;
+        window.location.reload(); 
+    } catch (err) { 
+        alert("❌ Lỗi: " + err.message); 
+    } finally { 
+        btn.innerText = "✨ Đăng đề thi"; btn.disabled = false; 
     }
 }
 
-// XÓA MỤC ĐỀ HOẶC TÀI LIỆU
+// XÓA MỤC ĐỀ / TÀI LIỆU VĨNH VIỄN
 async function deleteItem(categoryId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA vĩnh viễn mục này không?")) return;
@@ -191,14 +191,203 @@ async function deleteItem(categoryId, itemId, event) {
         await supabaseClient.from('custom_links').delete().match({ id: itemId, category_id: categoryId });
         if (itemId.startsWith('quiz_')) {
             await supabaseClient.from('quizzes').delete().match({ id: itemId });
+            await supabaseClient.from('submissions').delete().match({ quiz_id: itemId });
+            await supabaseClient.from('live_drafts').delete().match({ quiz_id: itemId });
         }
         window.location.reload();
     } catch(e) {
-        alert("Lỗi khi xóa!");
+        alert("Lỗi khi xóa: " + e.message);
     }
 }
 
-// ĐỔI THỜI GIAN LÀM BÀI
+// ĐỔI TÊN TIÊU ĐỀ
+async function renameItem(categoryId, itemId, isDoc, currentTitle, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    let newTitle = prompt("✏️ Nhập tên mới:", currentTitle);
+    if (newTitle !== null && newTitle.trim() !== "" && newTitle.trim() !== currentTitle) {
+        try {
+            await supabaseClient.from('custom_links').update({ title: newTitle.trim() }).match({ id: itemId, category_id: categoryId });
+            if (!isDoc && itemId.startsWith('quiz_')) {
+                await supabaseClient.from('quizzes').update({ title: newTitle.trim() }).match({ id: itemId });
+            }
+            window.location.reload();
+        } catch(e) { alert("Lỗi khi sửa tên!"); }
+    }
+}
+
+// THAY ĐỔI THỨ TỰ TRÊN DƯỚI
+async function moveItemOrder(categoryId, currentId, direction, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    try {
+        const { data: arr } = await supabaseClient.from('custom_links').select('*').eq('category_id', categoryId).order('timestamp', { ascending: false });
+        if (!arr || arr.length === 0) return;
+
+        const currentIndex = arr.findIndex(item => item.id === currentId);
+        if (currentIndex === -1) return;
+
+        let targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+        if (targetIndex >= 0 && targetIndex < arr.length) {
+            let currentItem = arr[currentIndex];
+            let targetItem = arr[targetIndex];
+            let tCurrent = currentItem.timestamp || Date.now();
+            let tTarget = targetItem.timestamp || Date.now();
+
+            if (tCurrent === tTarget) {
+                tTarget = tCurrent + (direction === 'up' ? 10 : -10);
+            }
+
+            await supabaseClient.from('custom_links').update({ timestamp: tTarget }).match({ id: currentItem.id, category_id: categoryId });
+            await supabaseClient.from('custom_links').update({ timestamp: tCurrent }).match({ id: targetItem.id, category_id: categoryId });
+            window.location.reload();
+        } else {
+            alert(direction === 'up' ? "Mục này đã ở trên cùng!" : "Mục này đã ở dưới cùng!");
+        }
+    } catch(e) { alert("Lỗi đổi thứ tự: " + e.message); }
+}
+
+function openMoveModal(oldCategory, quizId, stringifiedData, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    currentMoveData = { oldCategory, quizId, quizData: JSON.parse(decodeURIComponent(stringifiedData)) };
+    document.getElementById("move-category-select").value = oldCategory;
+    document.getElementById("move-modal").style.display = "flex";
+}
+function closeMoveModal() { document.getElementById("move-modal").style.display = "none"; }
+
+async function confirmMoveQuiz() {
+    const newCategory = document.getElementById("move-category-select").value;
+    if (newCategory === currentMoveData.oldCategory) { alert("Đã nằm ở mục này rồi!"); return; }
+    try {
+        let itemUrl = currentMoveData.quizData.url || "";
+        try {
+            if (itemUrl.includes("thi.html")) {
+                let u = new URL(itemUrl, window.location.href);
+                u.searchParams.set("cat", newCategory);
+                itemUrl = u.pathname + u.search + u.hash;
+            }
+        } catch(e) {}
+
+        const row = {
+            id: currentMoveData.quizId,
+            category_id: newCategory,
+            title: currentMoveData.quizData.title,
+            date: currentMoveData.quizData.date,
+            url: itemUrl,
+            badge_text: currentMoveData.quizData.badgeText || "HOT",
+            is_hot: !!currentMoveData.quizData.isHot,
+            is_doc: !!currentMoveData.quizData.isDoc,
+            avatar: currentMoveData.quizData.avatar,
+            timestamp: Date.now()
+        };
+
+        await supabaseClient.from('custom_links').insert([row]);
+        await supabaseClient.from('custom_links').delete().match({ id: currentMoveData.quizId, category_id: currentMoveData.oldCategory });
+        window.location.reload();
+    } catch(e) { alert("Lỗi khi chuyển: " + e.message); }
+}
+
+function openCopyModal(sourceCategory, itemId, stringifiedData, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    currentCopyData = { sourceCategory, itemId, itemData: JSON.parse(decodeURIComponent(stringifiedData)) };
+    document.getElementById("copy-category-select").value = sourceCategory;
+    document.getElementById("copy-modal").style.display = "flex";
+}
+function closeCopyModal() { document.getElementById("copy-modal").style.display = "none"; }
+
+async function confirmCopyItem() {
+    const destCategory = document.getElementById("copy-category-select").value;
+    const btn = document.querySelector("#copy-modal .move-btn-submit");
+    if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang sao chép..."; }
+
+    try {
+        const isDoc = currentCopyData.itemData.isDoc;
+        const newItemId = (isDoc ? "doc_" : "quiz_") + Date.now();
+        let itemUrl = currentCopyData.itemData.url || "";
+
+        if (!isDoc) {
+            let oldQuizId = (typeof extractQuizIdFromItem === 'function') ? extractQuizIdFromItem(currentCopyData.itemData) : currentCopyData.itemData.id;
+            if (oldQuizId) {
+                const { data: quizData } = await supabaseClient.from('quizzes').select('*').eq('id', oldQuizId).single();
+                if (quizData) {
+                    await supabaseClient.from('quizzes').insert([{ ...quizData, id: newItemId }]);
+                }
+            }
+            itemUrl = `./thi.html?id=${newItemId}&cat=${encodeURIComponent(destCategory)}`;
+        }
+
+        await supabaseClient.from('custom_links').insert([{
+            id: newItemId,
+            category_id: destCategory,
+            title: currentCopyData.itemData.title,
+            date: currentCopyData.itemData.date,
+            url: itemUrl,
+            badge_text: currentCopyData.itemData.badgeText || "HOT",
+            is_hot: !!currentCopyData.itemData.isHot,
+            is_doc: !!isDoc,
+            avatar: currentCopyData.itemData.avatar,
+            timestamp: Date.now()
+        }]);
+
+        alert("📋 Đã sao chép sang mục mới thành công!");
+        window.location.reload();
+    } catch(e) { 
+        alert("Lỗi sao chép: " + e.message); 
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "Sao chép"; }
+    }
+}
+
+async function openEditMinutesModal(quizId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    currentEditingTimeQuizId = quizId;
+    currentEditingTimeMode = 'minutes';
+
+    document.getElementById("exam-time-modal-title").innerText = "⏱ Đổi thời lượng làm bài";
+    document.getElementById("modal-time-minutes-group").style.display = "block";
+    document.getElementById("modal-time-schedule-group").style.display = "none";
+    document.getElementById("edit-time-limit").value = "";
+
+    try {
+        const { data: qData } = await supabaseClient.from('quizzes').select('time_limit_minutes').eq('id', quizId).single();
+        if (qData && qData.time_limit_minutes) {
+            document.getElementById("edit-time-limit").value = qData.time_limit_minutes;
+        }
+    } catch(e) {}
+
+    document.getElementById("exam-time-modal").style.display = "flex";
+}
+
+async function openEditScheduleModal(quizId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    currentEditingTimeQuizId = quizId;
+    currentEditingTimeMode = 'schedule';
+
+    document.getElementById("exam-time-modal-title").innerText = "📅 Gia hạn khung giờ làm bài";
+    document.getElementById("modal-time-minutes-group").style.display = "none";
+    document.getElementById("modal-time-schedule-group").style.display = "block";
+
+    const startInput = document.getElementById("edit-start-time");
+    const endInput = document.getElementById("edit-end-time");
+    startInput.value = "";
+    endInput.value = "";
+
+    try {
+        const { data: qData } = await supabaseClient.from('quizzes').select('exam_start_time, exam_end_time').eq('id', quizId).single();
+        if (qData) {
+            if (qData.exam_start_time) startInput.value = qData.exam_start_time;
+            if (qData.exam_end_time) endInput.value = qData.exam_end_time;
+        }
+    } catch(e) {}
+
+    document.getElementById("exam-time-modal").style.display = "flex";
+}
+
+function closeExamTimeModal() {
+    document.getElementById("exam-time-modal").style.display = "none";
+    currentEditingTimeQuizId = null;
+    currentEditingTimeMode = null;
+}
+
 async function saveExamTimeConfig() {
     if (!currentEditingTimeQuizId) return;
     const btn = document.getElementById("btn-save-exam-time");
@@ -208,7 +397,11 @@ async function saveExamTimeConfig() {
         let payload = {};
         if (currentEditingTimeMode === 'minutes') {
             const mins = parseInt(document.getElementById("edit-time-limit").value, 10);
-            if (isNaN(mins) || mins <= 0) return alert("Vui lòng nhập số phút hợp lệ!");
+            if (isNaN(mins) || mins <= 0) {
+                alert("⚠️ Vui lòng nhập số phút hợp lệ (> 0)!");
+                btn.innerText = "Lưu cấu hình"; btn.disabled = false;
+                return;
+            }
             payload.time_limit_minutes = mins;
         } else if (currentEditingTimeMode === 'schedule') {
             payload.exam_start_time = document.getElementById("edit-start-time").value;
@@ -216,12 +409,83 @@ async function saveExamTimeConfig() {
         }
 
         await supabaseClient.from('quizzes').update(payload).match({ id: currentEditingTimeQuizId });
-        alert("✅ Đã cập nhật thời gian đề thi!");
+        await supabaseClient.from('custom_links').update(payload).match({ id: currentEditingTimeQuizId });
+
+        alert("✅ Đã cập nhật thời gian đề thi thành công!");
         closeExamTimeModal();
         window.location.reload();
     } catch(e) {
-        alert("Lỗi: " + e.message);
+        alert("❌ Lỗi lưu cấu hình: " + e.message);
     } finally {
         btn.innerText = "Lưu cấu hình"; btn.disabled = false;
     }
+}
+
+// BẬT / TẮT THÍ SINH TỰ DO
+async function handleAllowFreeToggleChange(categoryId, itemId, isChecked, event) {
+    if (event) event.stopPropagation();
+    const txt = document.getElementById(`free-status-txt-${itemId}`);
+    if (txt) {
+        txt.innerText = isChecked ? 'BẬT' : 'TẮT';
+        txt.className = `free-toggle-status ${isChecked ? 'st-on' : 'st-off'}`;
+    }
+
+    try {
+        await supabaseClient.from('custom_links').update({ allow_free: isChecked }).match({ id: itemId, category_id: categoryId });
+        await supabaseClient.from('quizzes').update({ allow_free: isChecked }).match({ id: itemId });
+    } catch(e) {
+        console.error("Lỗi toggle tự do:", e);
+    }
+}
+
+// BẬT / TẮT ĐẢO ĐỀ
+async function toggleShuffle(categoryId, itemId, isChecked, event) {
+    if (event) event.stopPropagation();
+    try {
+        await supabaseClient.from('custom_links').update({ is_shuffled: isChecked }).match({ id: itemId, category_id: categoryId });
+        await supabaseClient.from('quizzes').update({ is_shuffled: isChecked }).match({ id: itemId });
+    } catch(e) { alert("❌ Lỗi đổi trạng thái đảo đề!"); }
+}
+
+function openItemAvatarPicker(itemId, event) {
+    if (!isAdminLoggedIn) return;
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+
+    const targetPop = document.getElementById(`avatar-popover-${itemId}`);
+    const isAlreadyOpen = targetPop && targetPop.classList.contains("show");
+
+    document.querySelectorAll(".avatar-selection-popover.show").forEach(p => p.classList.remove("show"));
+    document.querySelectorAll(".exam-card.has-active-popover").forEach(c => c.classList.remove("has-active-popover"));
+
+    if (targetPop && !isAlreadyOpen) {
+        targetPop.classList.add("show");
+        const card = document.getElementById(`card-${itemId}`);
+        if (card) card.classList.add("has-active-popover");
+    }
+}
+
+function closeAvatarPopover(itemId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const pop = document.getElementById(`avatar-popover-${itemId}`);
+    if (pop) pop.classList.remove("show");
+    const card = document.getElementById(`card-${itemId}`);
+    if (card) card.classList.remove("has-active-popover");
+}
+
+async function selectItemAvatar(categoryId, itemId, avatarUrl, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    closeAvatarPopover(itemId, event);
+
+    try {
+        await supabaseClient.from('custom_links').update({ avatar: avatarUrl }).match({ id: itemId, category_id: categoryId });
+        window.location.reload();
+    } catch(e) { alert("❌ Lỗi đổi avatar: " + e.message); }
+}
+
+async function changeAvatarSize(categoryId, itemId, sizePx, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    try {
+        await supabaseClient.from('custom_links').update({ avatar_size: sizePx }).match({ id: itemId, category_id: categoryId });
+        window.location.reload();
+    } catch(e) { alert("❌ Lỗi đổi cỡ avatar: " + e.message); }
 }

@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: portal-exam-scoring.js
-// QUẢN LÝ BIỂU ĐIỂM ĐỀ THI, LIVE PREVIEW & TÍNH ĐIỂM ĐỒNG BỘ
+// FILE: portal-exam-scoring.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
 // =========================================================
 
 let currentScoringQuizId = null;
@@ -12,163 +11,21 @@ let currentScoringQuizData = null;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        .btn-time-sub-score {
-            background: #ecfdf5 !important;
-            color: #047857 !important;
-            border: 1px solid #6ee7b7 !important;
-        }
-        .btn-time-sub-score:hover {
-            background: #10b981 !important;
-            color: #ffffff !important;
-        }
-        .scoring-modal-card {
-            max-width: 480px !important;
-            width: min(480px, calc(100vw - 16px)) !important;
-            max-height: calc(100vh - 28px) !important;
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-            padding: 14px 16px !important;
-            border-radius: 16px !important;
-            text-align: left !important;
-            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35) !important;
-            box-sizing: border-box !important;
-        }
-        .scoring-modal-card::-webkit-scrollbar { width: 4px; }
-        .scoring-modal-card::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .scoring-q-count-banner {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            flex-wrap: wrap;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 5px 8px;
-            border-radius: 10px;
-            margin-bottom: 8px;
-            font-size: 11px;
-            font-weight: 700;
-            color: #475569;
-        }
-        .scoring-q-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            padding: 2px 6px;
-            border-radius: 6px;
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            font-weight: 800;
-            color: #0f172a;
-            font-size: 10.5px;
-        }
-        .scoring-option-card {
-            border: 1.5px solid #e2e8f0;
-            border-radius: 11px;
-            padding: 8px 10px;
-            margin-bottom: 6px;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            background: #ffffff;
-        }
-        .scoring-option-card:hover {
-            border-color: #38bdf8;
-            background: #f0f9ff;
-        }
-        .scoring-option-card.selected {
-            border-color: #0284c7;
-            background: #f0f9ff;
-            box-shadow: 0 0 0 1.5px rgba(2, 132, 199, 0.2);
-        }
-        .scoring-option-header {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            font-weight: 800;
-            font-size: 12px;
-            color: #0f172a;
-            line-height: 1.3;
-        }
-        .scoring-option-header input[type="radio"] {
-            width: 15px;
-            height: 15px;
-            accent-color: #0284c7;
-            cursor: pointer;
-            margin: 0;
-            flex-shrink: 0;
-        }
-        .scoring-option-desc {
-            font-size: 10.5px;
-            color: #64748b;
-            font-weight: 600;
-            margin-top: 3px;
-            line-height: 1.35;
-            padding-left: 22px;
-        }
-        .scoring-inputs-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            margin-top: 6px;
-            padding-left: 0;
-        }
-        .scoring-part-box {
-            background: #ffffff;
-            border: 1.2px solid #cbd5e1;
-            border-radius: 8px;
-            padding: 5px 7px;
-        }
-        .scoring-part-label {
-            font-size: 10px;
-            font-weight: 800;
-            color: #334155;
-            margin-bottom: 2px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .scoring-part-input {
-            width: 100%;
-            padding: 4px 6px;
-            border: 1.2px solid #cbd5e1;
-            border-radius: 6px;
-            font-weight: 800;
-            font-size: 12px;
-            outline: none;
-            color: #0f172a;
-            box-sizing: border-box;
-            height: 28px;
-        }
-        .scoring-part-input:focus { border-color: #0284c7; }
-        .scoring-part-hint {
-            font-size: 9.5px;
-            font-weight: 700;
-            color: #0284c7;
-            margin-top: 2px;
-            line-height: 1.25;
-            white-space: pre-line;
-        }
-        .scoring-total-box {
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-            border: 1.2px solid #86efac;
-            border-radius: 9px;
-            padding: 6px 10px;
-            margin-top: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .scoring-total-title { font-size: 11px; font-weight: 800; color: #166534; }
-        .scoring-total-val { font-size: 14px; font-weight: 900; color: #15803d; }
-        @media (max-width: 640px) {
-            .scoring-modal-card {
-                padding: 10px 12px !important;
-                border-radius: 14px !important;
-            }
-            .scoring-inputs-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 5px;
-            }
-        }
+        .btn-time-sub-score { background: #ecfdf5 !important; color: #047857 !important; border: 1px solid #6ee7b7 !important; }
+        .btn-time-sub-score:hover { background: #10b981 !important; color: #ffffff !important; }
+        .scoring-modal-card { max-width: 480px !important; width: min(480px, calc(100vw - 16px)) !important; max-height: calc(100vh - 28px) !important; overflow-y: auto !important; padding: 14px 16px !important; border-radius: 16px !important; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35) !important; }
+        .scoring-q-count-banner { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; padding: 5px 8px; border-radius: 10px; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: #475569; }
+        .scoring-q-badge { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 6px; background: #ffffff; border: 1px solid #cbd5e1; font-weight: 800; color: #0f172a; font-size: 10.5px; }
+        .scoring-option-card { border: 1.5px solid #e2e8f0; border-radius: 11px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; background: #ffffff; }
+        .scoring-option-card.selected { border-color: #0284c7; background: #f0f9ff; box-shadow: 0 0 0 1.5px rgba(2, 132, 199, 0.2); }
+        .scoring-option-header { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 12px; color: #0f172a; }
+        .scoring-option-desc { font-size: 10.5px; color: #64748b; font-weight: 600; margin-top: 3px; padding-left: 22px; }
+        .scoring-inputs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+        .scoring-part-box { background: #ffffff; border: 1.2px solid #cbd5e1; border-radius: 8px; padding: 5px 7px; }
+        .scoring-part-label { font-size: 10px; font-weight: 800; color: #334155; margin-bottom: 2px; }
+        .scoring-part-input { width: 100%; padding: 4px 6px; border: 1.2px solid #cbd5e1; border-radius: 6px; font-weight: 800; font-size: 12px; outline: none; box-sizing: border-box; height: 28px; }
+        .scoring-part-hint { font-size: 9.5px; font-weight: 700; color: #0284c7; margin-top: 2px; }
+        .scoring-total-box { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1.2px solid #86efac; border-radius: 9px; padding: 6px 10px; margin-top: 6px; display: flex; align-items: center; justify-content: space-between; }
     `;
     document.head.appendChild(style);
 })();
@@ -181,92 +38,51 @@ function ensureScoringModalInDOM() {
     modalDiv.innerHTML = `
     <div class="move-modal-box scoring-modal-card">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
-            <h4 style="margin:0; font-size: 13.5px; font-weight: 900; color: #0f172a; display: flex; align-items: center; gap: 6px;">
-                <span>🎯</span> Cấu Hình Biểu Điểm Đề Thi
-            </h4>
-            <button type="button" onclick="closeGradingScaleModal()" style="background:none; border:none; font-size:16px; font-weight:900; color:#94a3b8; cursor:pointer; padding:0 4px;">✕</button>
+            <h4 style="margin:0; font-size: 13.5px; font-weight: 900; color: #0f172a;">🎯 Cấu Hình Biểu Điểm Đề Thi</h4>
+            <button type="button" onclick="closeGradingScaleModal()" style="background:none; border:none; font-size:16px; font-weight:900; color:#94a3b8; cursor:pointer;">✕</button>
         </div>
-
-        <div style="font-size: 11.5px; font-weight: 700; color: #0284c7; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="scoring-modal-exam-title">
-            📑 Đang nạp đề thi...
-        </div>
-
+        <div style="font-size: 11.5px; font-weight: 700; color: #0284c7; margin-bottom: 6px;" id="scoring-modal-exam-title">📑 Đang nạp đề thi...</div>
         <div class="scoring-q-count-banner" id="scoring-q-count-banner">
             <span>Cấu trúc:</span>
             <span class="scoring-q-badge" id="badge-count-p1">P1: --</span>
             <span class="scoring-q-badge" id="badge-count-p2">P2: --</span>
             <span class="scoring-q-badge" id="badge-count-p3">P3: --</span>
             <span class="scoring-q-badge" id="badge-count-p4">P4: --</span>
-            <span class="scoring-q-badge" style="background:#e0f2fe; color:#0369a1; border-color:#7dd3fc;" id="badge-count-total">Tổng: --</span>
+            <span class="scoring-q-badge" style="background:#e0f2fe; color:#0369a1;" id="badge-count-total">Tổng: --</span>
         </div>
-
-        <!-- LỰA CHỌN 1 -->
         <div class="scoring-option-card" id="card-scoring-opt1" onclick="handleScoringModeChange('option1')">
             <div class="scoring-option-header">
                 <input type="radio" name="scoring-mode" id="scoring-mode-opt1" value="option1" checked onchange="handleScoringModeChange('option1')">
-                <label for="scoring-mode-opt1" style="cursor:pointer;">Lựa chọn 1: Mỗi câu 1 điểm (Quy đổi thang 10)</label>
+                <label for="scoring-mode-opt1">Lựa chọn 1: Mỗi câu 1 điểm (Quy thang 10)</label>
             </div>
-            <div class="scoring-option-desc">
-                P1, P3, P4 đúng được 1đ. Riêng P2: đúng 1 ý = <b>0.1đ</b>, 2 ý = <b>0.25đ</b>, 3 ý = <b>0.5đ</b>, 4 ý = <b>1.0đ</b>. Quy thang 10: <code>(Tổng điểm / Tổng câu) × 10</code>.
-            </div>
+            <div class="scoring-option-desc">P1, P3, P4 đúng được 1đ. P2: 0.1 - 0.25 - 0.5 - 1.0.</div>
         </div>
-
-        <!-- LỰA CHỌN 2: MẪU CHUẨN BỘ GD&ĐT -->
         <div class="scoring-option-card" id="card-scoring-opt3" onclick="handleScoringModeChange('option3')">
             <div class="scoring-option-header">
                 <input type="radio" name="scoring-mode" id="scoring-mode-opt3" value="option3" onchange="handleScoringModeChange('option3')">
-                <label for="scoring-mode-opt3" style="cursor:pointer;">Lựa chọn 2: Mẫu chuẩn Bộ GD&ĐT (3 - 4 - 3 - 0)</label>
+                <label for="scoring-mode-opt3">Lựa chọn 2: Chuẩn Bộ GD&ĐT (3 - 4 - 3 - 0)</label>
             </div>
-            <div class="scoring-option-desc">
-                Chuẩn: <b>P1: 3.0đ</b> (0.25đ/câu) • <b>P2: 4.0đ</b> (1.0đ/câu: 0.1 - 0.25 - 0.5 - 1.0) • <b>P3: 3.0đ</b> (0.5đ/câu) • <b>P4: 0đ</b>. Tổng tròn <b>10.0đ</b>.
-            </div>
+            <div class="scoring-option-desc">P1: 3.0đ • P2: 4.0đ • P3: 3.0đ • P4: 0đ.</div>
         </div>
-
-        <!-- LỰA CHỌN 3: TỰ NHẬP ĐIỂM -->
         <div class="scoring-option-card" id="card-scoring-opt2" onclick="handleScoringModeChange('option2')">
             <div class="scoring-option-header">
                 <input type="radio" name="scoring-mode" id="scoring-mode-opt2" value="option2" onchange="handleScoringModeChange('option2')">
-                <label for="scoring-mode-opt2" style="cursor:pointer;">Lựa chọn 3: Tự nhập điểm theo từng phần (Tổng P1 + P2 + P3 + P4)</label>
+                <label for="scoring-mode-opt2">Lựa chọn 3: Tự nhập điểm từng phần</label>
             </div>
-            <div class="scoring-option-desc">
-                Tự nhập điểm từng phần, tự động chia đều. P2: 1 ý=10%, 2 ý=25%, 3 ý=50%, 4 ý=100%. Tổng điểm 4 phần, <b>có thể lớn hơn 10</b>.
-            </div>
-
             <div class="scoring-inputs-grid" id="scoring-inputs-custom-view" style="display:none;">
-                <div class="scoring-part-box">
-                    <div class="scoring-part-label"><span>P1 (4 Đ.Á):</span></div>
-                    <input type="number" step="0.05" min="0" max="100" class="scoring-part-input" id="score-input-p1" placeholder="Điểm..." oninput="updateScoringPreview()">
-                    <div class="scoring-part-hint" id="hint-p1">-- đ/câu</div>
-                </div>
-
-                <div class="scoring-part-box">
-                    <div class="scoring-part-label"><span>P2 (Đúng / Sai):</span></div>
-                    <input type="number" step="0.05" min="0" max="100" class="scoring-part-input" id="score-input-p2" placeholder="Điểm..." oninput="updateScoringPreview()">
-                    <div class="scoring-part-hint" id="hint-p2">-- đ/câu</div>
-                </div>
-
-                <div class="scoring-part-box">
-                    <div class="scoring-part-label"><span>P3 (Trả lời ngắn):</span></div>
-                    <input type="number" step="0.05" min="0" max="100" class="scoring-part-input" id="score-input-p3" placeholder="Điểm..." oninput="updateScoringPreview()">
-                    <div class="scoring-part-hint" id="hint-p3">-- đ/câu</div>
-                </div>
-
-                <div class="scoring-part-box">
-                    <div class="scoring-part-label"><span>P4 (Tự luận):</span></div>
-                    <input type="number" step="0.05" min="0" max="100" class="scoring-part-input" id="score-input-p4" placeholder="Điểm..." oninput="updateScoringPreview()">
-                    <div class="scoring-part-hint" id="hint-p4">-- đ/câu</div>
-                </div>
+                <div class="scoring-part-box"><input type="number" step="0.05" class="scoring-part-input" id="score-input-p1" oninput="updateScoringPreview()"><div class="scoring-part-hint" id="hint-p1">-- đ/câu</div></div>
+                <div class="scoring-part-box"><input type="number" step="0.05" class="scoring-part-input" id="score-input-p2" oninput="updateScoringPreview()"><div class="scoring-part-hint" id="hint-p2">-- đ/câu</div></div>
+                <div class="scoring-part-box"><input type="number" step="0.05" class="scoring-part-input" id="score-input-p3" oninput="updateScoringPreview()"><div class="scoring-part-hint" id="hint-p3">-- đ/câu</div></div>
+                <div class="scoring-part-box"><input type="number" step="0.05" class="scoring-part-input" id="score-input-p4" oninput="updateScoringPreview()"><div class="scoring-part-hint" id="hint-p4">-- đ/câu</div></div>
             </div>
-
             <div class="scoring-total-box" id="scoring-total-box" style="display:none;">
-                <span class="scoring-total-title">🎯 TỔNG ĐIỂM TỐI ĐA:</span>
-                <span class="scoring-total-val" id="scoring-total-preview-val">10.0 điểm</span>
+                <span>🎯 TỔNG ĐIỂM:</span>
+                <span id="scoring-total-preview-val">10.0 điểm</span>
             </div>
         </div>
-
         <div class="move-btn-row" style="margin-top: 8px;">
-            <button type="button" class="move-btn-cancel" onclick="closeGradingScaleModal()" style="padding: 7px 10px; font-size: 12px; border-radius: 9px;">Hủy</button>
-            <button type="button" class="move-btn-submit" id="btn-save-grading-scale" onclick="saveGradingScaleConfig()" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 7px 10px; font-size: 12px; border-radius: 9px;">💾 Lưu Biểu Điểm</button>
+            <button type="button" class="move-btn-cancel" onclick="closeGradingScaleModal()">Hủy</button>
+            <button type="button" class="move-btn-submit" id="btn-save-grading-scale" onclick="saveGradingScaleConfig()">💾 Lưu Biểu Điểm</button>
         </div>
     </div>`;
     document.body.appendChild(modalDiv);
@@ -288,44 +104,33 @@ async function openGradingScaleModal(quizId, categoryId, event) {
 
     const modal = document.getElementById("exam-scoring-modal");
     const titleEl = document.getElementById("scoring-modal-exam-title");
-    if (titleEl) titleEl.innerText = "⏳ Đang tải thông tin cấu trúc đề thi...";
+    if (titleEl) titleEl.innerText = "⏳ Đang tải thông tin đề thi...";
     if (modal) modal.style.display = "flex";
 
     try {
-        const res = await fetch(`${FIREBASE_DB_URL}/quizzes/${quizId}.json`);
-        currentScoringQuizData = await res.json();
+        const { data: qData, error } = await supabaseClient.from('quizzes').select('*').eq('id', quizId).single();
+        if (error || !qData || !qData.questions) throw new Error("Không thể tải cấu trúc đề thi!");
 
-        if (!currentScoringQuizData || !currentScoringQuizData.questions) {
-            throw new Error("Không thể tải cấu trúc câu hỏi của đề thi!");
-        }
+        currentScoringQuizData = qData;
+        if (titleEl) titleEl.innerText = `📑 Đề: ${qData.title || quizId}`;
 
-        if (titleEl) titleEl.innerText = `📑 Đề: ${currentScoringQuizData.title || quizId}`;
+        const counts = countQuestionsByPart(qData.questions);
+        document.getElementById("badge-count-p1").innerText = `P1: ${counts.p1} câu`;
+        document.getElementById("badge-count-p2").innerText = `P2: ${counts.p2} câu`;
+        document.getElementById("badge-count-p3").innerText = `P3: ${counts.p3} câu`;
+        document.getElementById("badge-count-p4").innerText = `P4: ${counts.p4} câu`;
+        document.getElementById("badge-count-total").innerText = `Tổng: ${counts.total} câu`;
 
-        const counts = countQuestionsByPart(currentScoringQuizData.questions);
-        const b1 = document.getElementById("badge-count-p1");
-        const b2 = document.getElementById("badge-count-p2");
-        const b3 = document.getElementById("badge-count-p3");
-        const b4 = document.getElementById("badge-count-p4");
-        const bTot = document.getElementById("badge-count-total");
-
-        if (b1) b1.innerText = `P1: ${counts.p1} câu`;
-        if (b2) b2.innerText = `P2: ${counts.p2} câu`;
-        if (b3) b3.innerText = `P3: ${counts.p3} câu`;
-        if (b4) b4.innerText = `P4: ${counts.p4} câu`;
-        if (bTot) bTot.innerText = `Tổng: ${counts.total} câu`;
-
-        const cfg = currentScoringQuizData.scoringConfig || { mode: 'option1' };
-        const mode = cfg.mode || 'option1';
-
+        const cfg = qData.scoring_config || { mode: 'option1' };
         document.getElementById("score-input-p1").value = cfg.p1Total !== undefined ? cfg.p1Total : 3.0;
         document.getElementById("score-input-p2").value = cfg.p2Total !== undefined ? cfg.p2Total : 4.0;
         document.getElementById("score-input-p3").value = cfg.p3Total !== undefined ? cfg.p3Total : 3.0;
         document.getElementById("score-input-p4").value = cfg.p4Total !== undefined ? cfg.p4Total : 0;
 
-        handleScoringModeChange(mode);
+        handleScoringModeChange(cfg.mode || 'option1');
         updateScoringPreview();
     } catch(err) {
-        alert("❌ Lỗi tải đề thi: " + err.message);
+        alert("❌ Lỗi: " + err.message);
         closeGradingScaleModal();
     }
 }
@@ -338,21 +143,11 @@ function closeGradingScaleModal() {
 }
 
 function handleScoringModeChange(mode) {
-    const rOpt1 = document.getElementById("scoring-mode-opt1");
-    const rOpt2 = document.getElementById("scoring-mode-opt2");
-    const rOpt3 = document.getElementById("scoring-mode-opt3");
-
-    const cOpt1 = document.getElementById("card-scoring-opt1");
-    const cOpt2 = document.getElementById("card-scoring-opt2");
-    const cOpt3 = document.getElementById("card-scoring-opt3");
-
-    if (rOpt1) rOpt1.checked = (mode === 'option1');
-    if (rOpt2) rOpt2.checked = (mode === 'option2');
-    if (rOpt3) rOpt3.checked = (mode === 'option3');
-
-    if (cOpt1) cOpt1.classList.toggle("selected", mode === 'option1');
-    if (cOpt2) cOpt2.classList.toggle("selected", mode === 'option2');
-    if (cOpt3) cOpt3.classList.toggle("selected", mode === 'option3');
+    document.querySelectorAll("input[name='scoring-mode']").forEach(r => r.checked = (r.value === mode));
+    ['opt1', 'opt2', 'opt3'].forEach(id => {
+        const c = document.getElementById(`card-scoring-${id}`);
+        if (c) c.classList.toggle("selected", id === (mode === 'option1' ? 'opt1' : (mode === 'option3' ? 'opt3' : 'opt2')));
+    });
 
     const customInputsView = document.getElementById("scoring-inputs-custom-view");
     const totalBox = document.getElementById("scoring-total-box");
@@ -360,17 +155,15 @@ function handleScoringModeChange(mode) {
     if (mode === 'option1') {
         if (customInputsView) customInputsView.style.display = "none";
         if (totalBox) totalBox.style.display = "none";
-    } else if (mode === 'option3') {
-        if (customInputsView) customInputsView.style.display = "grid";
-        if (totalBox) totalBox.style.display = "flex";
-        document.getElementById("score-input-p1").value = 3.0;
-        document.getElementById("score-input-p2").value = 4.0;
-        document.getElementById("score-input-p3").value = 3.0;
-        document.getElementById("score-input-p4").value = 0;
-        updateScoringPreview();
     } else {
         if (customInputsView) customInputsView.style.display = "grid";
         if (totalBox) totalBox.style.display = "flex";
+        if (mode === 'option3') {
+            document.getElementById("score-input-p1").value = 3.0;
+            document.getElementById("score-input-p2").value = 4.0;
+            document.getElementById("score-input-p3").value = 3.0;
+            document.getElementById("score-input-p4").value = 0;
+        }
         updateScoringPreview();
     }
 }
@@ -384,38 +177,19 @@ function updateScoringPreview() {
     const p3Val = parseFloat(document.getElementById("score-input-p3").value) || 0;
     const p4Val = parseFloat(document.getElementById("score-input-p4").value) || 0;
 
+    const round3 = n => (Math.round(n * 1000) / 1000);
     const h1 = document.getElementById("hint-p1");
     const h2 = document.getElementById("hint-p2");
     const h3 = document.getElementById("hint-p3");
     const h4 = document.getElementById("hint-p4");
 
-    const p1PerQ = counts.p1 > 0 ? (p1Val / counts.p1) : 0;
-    const p2PerQ = counts.p2 > 0 ? (p2Val / counts.p2) : 0;
-    const p3PerQ = counts.p3 > 0 ? (p3Val / counts.p3) : 0;
-    const p4PerQ = counts.p4 > 0 ? (p4Val / counts.p4) : 0;
+    if (h1) h1.innerText = counts.p1 > 0 ? `➔ ${round3(p1Val / counts.p1)} đ/câu` : "--";
+    if (h2) h2.innerText = counts.p2 > 0 ? `➔ ${round3(p2Val / counts.p2)} đ/câu` : "--";
+    if (h3) h3.innerText = counts.p3 > 0 ? `➔ ${round3(p3Val / counts.p3)} đ/câu` : "--";
+    if (h4) h4.innerText = counts.p4 > 0 ? `➔ ${round3(p4Val / counts.p4)} đ/câu` : "--";
 
-    const round3 = n => (Math.round(n * 1000) / 1000);
-
-    if (h1) h1.innerText = counts.p1 > 0 ? `💡 ${counts.p1} câu ➔ ${round3(p1PerQ)} đ/câu` : "Đề không có câu P1";
-
-    if (h2) {
-        if (counts.p2 > 0) {
-            const sc1 = round3(p2PerQ * 0.1);
-            const sc2 = round3(p2PerQ * 0.25);
-            const sc3 = round3(p2PerQ * 0.5);
-            const sc4 = round3(p2PerQ * 1.0);
-            h2.innerText = `💡 ${counts.p2} câu ➔ ${round3(p2PerQ)} đ/câu\n(1 ý=${sc1}đ | 2 ý=${sc2}đ | 3 ý=${sc3}đ | 4 ý=${sc4}đ)`;
-        } else {
-            h2.innerText = "Đề không có câu P2";
-        }
-    }
-
-    if (h3) h3.innerText = counts.p3 > 0 ? `💡 ${counts.p3} câu ➔ ${round3(p3PerQ)} đ/câu` : "Đề không có câu P3";
-    if (h4) h4.innerText = counts.p4 > 0 ? `💡 ${counts.p4} câu ➔ ${round3(p4PerQ)} đ/câu` : "Đề không có câu P4";
-
-    const totalSum = round3(p1Val + p2Val + p3Val + p4Val);
     const totalPreviewEl = document.getElementById("scoring-total-preview-val");
-    if (totalPreviewEl) totalPreviewEl.innerText = `${totalSum} điểm`;
+    if (totalPreviewEl) totalPreviewEl.innerText = `${round3(p1Val + p2Val + p3Val + p4Val)} điểm`;
 }
 
 async function saveGradingScaleConfig() {
@@ -442,69 +216,33 @@ async function saveGradingScaleConfig() {
     };
 
     try {
-        await Promise.all([
-            fetch(`${FIREBASE_DB_URL}/quizzes/${currentScoringQuizId}/scoringConfig.json`, {
-                method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scoringPayload)
-            }),
-            fetch(`${FIREBASE_DB_URL}/exam_configs/${currentScoringQuizId}/scoringConfig.json`, {
-                method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scoringPayload)
-            })
-        ]);
+        await supabaseClient.from('quizzes').update({ scoring_config: scoringPayload }).match({ id: currentScoringQuizId });
+        await supabaseClient.from('custom_links').update({ scoring_config: scoringPayload }).match({ id: currentScoringQuizId });
 
-        if (typeof DAY_THEM_CATEGORIES !== 'undefined' && typeof CHINH_KHOA_CATEGORIES !== 'undefined') {
-            for (let cat of [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES]) {
-                if (cat.links) {
-                    let match = cat.links.find(l => (l.firebaseId === currentScoringQuizId || l.id === currentScoringQuizId));
-                    if (match) {
-                        match.scoringConfig = scoringPayload;
-                        fetch(`${FIREBASE_DB_URL}/custom_links/${cat.id}/${currentScoringQuizId}/scoringConfig.json`, {
-                            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(scoringPayload)
-                        }).catch(() => null);
-                    }
-                }
-            }
-        }
-
-        alert("🎯 ĐÃ LƯU BIỂU ĐIỂM THÀNH CÔNG!\n\n- Bài thi nộp từ giờ sẽ được chấm tự động theo biểu điểm này.\n- Đối với các bài đã nộp trước đó, bạn chỉ cần vào Bảng kết quả và bấm '⚖️ Chấm lại bài' để đồng bộ điểm mới!");
+        alert("🎯 ĐÃ LƯU BIỂU ĐIỂM THÀNH CÔNG!\nBài thi từ giờ sẽ được chấm theo biểu điểm này.");
         closeGradingScaleModal();
     } catch(e) {
-        alert("❌ Lỗi khi lưu biểu điểm: " + e.message);
+        alert("❌ Lỗi: " + e.message);
     } finally {
         btn.disabled = false; btn.innerText = "💾 Lưu Biểu Điểm";
     }
 }
 
-// =========================================================
-// HÀM TÍNH ĐIỂM DÙNG CHUNG TOÀN HỆ THỐNG
-// =========================================================
 function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scoringConfig) {
     const cfg = scoringConfig || { mode: "option1" };
     const mode = cfg.mode || "option1";
     const counts = countQuestionsByPart(questions);
-
     const isOption1 = (mode === "option1");
-    let p1PerQ = 1.0;
-    let p2PerQ = 1.0;
-    let p3PerQ = 1.0;
-    let p4PerQ = 1.0;
 
+    let p1PerQ = 1.0; let p2PerQ = 1.0; let p3PerQ = 1.0; let p4PerQ = 1.0;
     if (!isOption1) {
-        const p1Tot = (cfg.p1Total !== undefined) ? Number(cfg.p1Total) : (mode === "option3" ? 3.0 : 3.0);
-        const p2Tot = (cfg.p2Total !== undefined) ? Number(cfg.p2Total) : (mode === "option3" ? 4.0 : 4.0);
-        const p3Tot = (cfg.p3Total !== undefined) ? Number(cfg.p3Total) : (mode === "option3" ? 3.0 : 3.0);
-        const p4Tot = (cfg.p4Total !== undefined) ? Number(cfg.p4Total) : 0;
-
-        p1PerQ = counts.p1 > 0 ? (p1Tot / counts.p1) : 0;
-        p2PerQ = counts.p2 > 0 ? (p2Tot / counts.p2) : 0;
-        p3PerQ = counts.p3 > 0 ? (p3Tot / counts.p3) : 0;
-        p4PerQ = counts.p4 > 0 ? (p4Tot / counts.p4) : 0;
+        p1PerQ = counts.p1 > 0 ? ((cfg.p1Total ?? 3.0) / counts.p1) : 0;
+        p2PerQ = counts.p2 > 0 ? ((cfg.p2Total ?? 4.0) / counts.p2) : 0;
+        p3PerQ = counts.p3 > 0 ? ((cfg.p3Total ?? 3.0) / counts.p3) : 0;
+        p4PerQ = counts.p4 > 0 ? ((cfg.p4Total ?? 0) / counts.p4) : 0;
     }
 
-    let correctCount = 0;
-    let wrongCount = 0;
-    let totalScore = 0;
-    let maxScoreOfExam = 0;
-    let dataDetails = [];
+    let correctCount = 0; let wrongCount = 0; let totalScore = 0; let maxScoreOfExam = 0; let dataDetails = [];
 
     questions.forEach(q => {
         if (q.type === "multiple_choice") {
@@ -512,12 +250,9 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
             const uVal = userAnswers[`q${q.id}`] || "Chưa chọn";
             const cVal = answerVault[`q${q.id}`];
             if (cVal && String(uVal).trim().toUpperCase() === String(cVal).trim().toUpperCase()) {
-                correctCount++;
-                totalScore += isOption1 ? 1.0 : p1PerQ;
-                dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
+                correctCount++; totalScore += isOption1 ? 1.0 : p1PerQ; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
             } else {
-                wrongCount++;
-                dataDetails.push(`${q.id}-${uVal} [SAI: ${cVal || "---"}]`);
+                wrongCount++; dataDetails.push(`${q.id}-${uVal} [SAI: ${cVal || "---"}]`);
             }
         } else if (q.type === "true_false") {
             maxScoreOfExam += isOption1 ? 1.0 : p2PerQ;
@@ -527,68 +262,37 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
                 const uVal = userAnswers[subKey] || "Chưa chọn";
                 const cVal = answerVault[subKey];
                 if (cVal && uVal === cVal) {
-                    cSt++;
-                    dataDetails.push(`${q.id}${st.id}-${uVal} [ĐÚNG]`);
+                    cSt++; dataDetails.push(`${q.id}${st.id}-${uVal} [ĐÚNG]`);
                 } else {
                     dataDetails.push(`${q.id}${st.id}-${uVal} [SAI]`);
                 }
             });
-
             let qScore = 0;
-            if (isOption1) {
-                if (cSt === 1) qScore = 0.1;
-                else if (cSt === 2) qScore = 0.25;
-                else if (cSt === 3) qScore = 0.5;
-                else if (cSt === 4) qScore = 1.0;
-            } else {
-                if (cSt === 1) qScore = 0.1 * p2PerQ;
-                else if (cSt === 2) qScore = 0.25 * p2PerQ;
-                else if (cSt === 3) qScore = 0.5 * p2PerQ;
-                else if (cSt === 4) qScore = 1.0 * p2PerQ;
-            }
-
+            if (cSt === 1) qScore = 0.1 * (isOption1 ? 1.0 : p2PerQ);
+            else if (cSt === 2) qScore = 0.25 * (isOption1 ? 1.0 : p2PerQ);
+            else if (cSt === 3) qScore = 0.5 * (isOption1 ? 1.0 : p2PerQ);
+            else if (cSt === 4) qScore = 1.0 * (isOption1 ? 1.0 : p2PerQ);
             totalScore += qScore;
-            if (cSt === (q.statements ? q.statements.length : 4)) correctCount++;
-            else wrongCount++;
-        } else if (q.type === "short_answer") {
+            if (cSt === (q.statements ? q.statements.length : 4)) correctCount++; else wrongCount++;
+        } else {
             maxScoreOfExam += isOption1 ? 1.0 : p3PerQ;
             const uVal = String(userAnswers[`q${q.id}`] || "").trim().replace(',', '.');
             const cVal = String(answerVault[`q${q.id}`] || "").trim().replace(',', '.');
             const isRight = (uVal !== "" && cVal !== "" && (uVal === cVal || Number(uVal) === Number(cVal)));
             if (isRight) {
-                correctCount++;
-                totalScore += isOption1 ? 1.0 : p3PerQ;
-                dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
+                correctCount++; totalScore += isOption1 ? 1.0 : p3PerQ; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
             } else {
-                wrongCount++;
-                dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal || "---"}]`);
-            }
-        } else if (q.type === "essay" || q.type === "essay_answer") {
-            maxScoreOfExam += isOption1 ? 1.0 : p4PerQ;
-            const uVal = String(userAnswers[`q${q.id}`] || "").trim().replace(',', '.');
-            const cVal = String(answerVault[`q${q.id}`] || "").trim().replace(',', '.');
-            const isRight = (uVal !== "" && cVal !== "" && (uVal === cVal || Number(uVal) === Number(cVal)));
-            if (isRight) {
-                correctCount++;
-                totalScore += isOption1 ? 1.0 : p4PerQ;
-                dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
-            } else {
-                wrongCount++;
-                dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal || "---"}]`);
+                wrongCount++; dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal}]`);
             }
         }
     });
 
-    let finalScore = 0;
-    if (isOption1) {
-        finalScore = Math.round(((totalScore / (maxScoreOfExam || 1)) * 10) * 10) / 10;
-    } else {
-        finalScore = Math.round(totalScore * 100) / 100;
-    }
+    let finalScore = isOption1 
+        ? Math.round(((totalScore / (maxScoreOfExam || 1)) * 10) * 10) / 10 
+        : Math.round(totalScore * 100) / 100;
 
     return {
-        correctCount,
-        wrongCount,
+        correctCount, wrongCount,
         totalRawScore: Math.round(totalScore * 100) / 100,
         maxTotalScore: Math.round(maxScoreOfExam * 100) / 100,
         finalScore: finalScore,
@@ -596,10 +300,3 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
         dataDetails
     };
 }
-
-window.openGradingScaleModal = openGradingScaleModal;
-window.closeGradingScaleModal = closeGradingScaleModal;
-window.handleScoringModeChange = handleScoringModeChange;
-window.updateScoringPreview = updateScoringPreview;
-window.saveGradingScaleConfig = saveGradingScaleConfig;
-window.calculateExamScoreWithConfig = calculateExamScoreWithConfig;

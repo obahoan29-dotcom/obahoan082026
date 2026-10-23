@@ -3,18 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>Chuyển dữ liệu Firebase sang Supabase</title>
+    <!-- THƯ VIỆN SUPABASE JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app-config.js"></script>
 </head>
-<body style="font-family: Arial, sans-serif; padding: 30px;">
-    <h2>🚀 CÔNG CỤ CHUYỂN DỮ LIỆU TỪ FIREBASE SANG SUPABASE</h2>
+<body style="font-family: Arial, sans-serif; padding: 30px; background: #f8fafc;">
+    <h2>🚀 CÔNG CỤ CHUYỂN TOÀN BỘ DỮ LIỆU SANG SUPABASE</h2>
     <p>Chọn file <b>.json</b> Thầy vừa Export từ Firebase để nạp toàn bộ vào Supabase:</p>
-    <input type="file" id="firebase-json-input" accept=".json">
+    <input type="file" id="firebase-json-input" accept=".json" style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff;">
     <br><br>
-    <button id="btn-run" onclick="startImport()" style="padding: 10px 20px; font-weight: bold; background: #0284c7; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
-        Bắt đầu chuyển dữ liệu
+    <button id="btn-run" onclick="startImport()" style="padding: 12px 24px; font-weight: bold; background: #0284c7; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
+        🚀 Bắt đầu chuyển dữ liệu
     </button>
-    <div id="status" style="margin-top: 20px; font-weight: bold; color: #059669;"></div>
+    <div id="status" style="margin-top: 20px; font-weight: bold; color: #0284c7;"></div>
 
     <script>
         async function startImport() {
@@ -22,12 +23,13 @@
             const status = document.getElementById('status');
             if (!input.files[0]) return alert("Vui lòng chọn file JSON tải từ Firebase!");
 
-            status.innerText = "⏳ Đang đọc file...";
+            status.innerText = "⏳ Đang đọc file JSON...";
             const text = await input.files[0].text();
             const data = JSON.parse(text);
 
-            status.innerText = "⏳ Đang chuyển đề thi (quizzes)...";
+            // 1. Chuyển Đề thi
             if (data.quizzes) {
+                status.innerText = "⏳ Đang chuyển kho đề thi (quizzes)...";
                 const quizRows = [];
                 for (let qId in data.quizzes) {
                     const q = data.quizzes[qId];
@@ -48,8 +50,9 @@
                 }
             }
 
-            status.innerText = "⏳ Đang chuyển danh mục lớp học (custom_links)...";
+            // 2. Chuyển Danh mục bài đăng (custom_links)
             if (data.custom_links) {
+                status.innerText = "⏳ Đang chuyển danh mục các lớp (custom_links)...";
                 const linkRows = [];
                 for (let catId in data.custom_links) {
                     for (let itemId in data.custom_links[catId]) {
@@ -75,8 +78,16 @@
                 }
             }
 
-            status.innerText = "🎉 HOÀN THÀNH 100%! Toàn bộ đề thi và bài đăng đã được chuyển sang Supabase an toàn.";
-            alert("Đã chuyển toàn bộ dữ liệu thành công sang Supabase!");
+            // 3. Chuyển Tiêu đề nhắc nhở
+            if (data.site_meta) {
+                await supabaseClient.from('app_key_values').upsert({
+                    key: 'site_meta',
+                    value: data.site_meta
+                });
+            }
+
+            status.innerText = "🎉 HOÀN THÀNH 100%! Toàn bộ đề thi và danh mục lớp đã được nạp sang Supabase an toàn.";
+            alert("Đã chuyển toàn bộ dữ liệu thành công!");
         }
     </script>
 </body>
