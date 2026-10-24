@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
+// FILE: exam-engine-core.js (BẢN SUPABASE - SỬA LỖI AUTO SUBMIT 0 ĐIỂM)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -27,7 +27,6 @@ let isSubmittingInProgress = false;
     document.head.appendChild(style);
 })();
 
-// LƯU NHÁP LÊN SUPABASE (UPSERT 1 DÒNG DUY NHẤT)
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked || !supabaseClient) return;
     const sId = document.getElementById("student-id")?.value.trim();
@@ -120,7 +119,6 @@ async function initExamEngine() {
     }
 
     try {
-        // Tải đúng dữ liệu của đề thi này qua Supabase (Không kéo thừa dữ liệu)
         const { data, error } = await supabaseClient.from('quizzes').select('*').eq('id', quizId).single();
         if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
 
@@ -296,7 +294,21 @@ async function checkSessionStatus(isAutostart = false) {
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        if (isExamLocked || timeRemaining <= 0) {
+        if (isExamLocked) {
+            lockExamInteractions();
+            executeSubmitExam(true);
+            return;
+        }
+
+        // BẢO VỆ CHỐNG LỖI CACHE: Nếu timeRemaining <= 0 thì xử lý cẩn thận
+        if (timeRemaining <= 0) {
+            // Nếu đã vượt thời gian quá 1 tiếng -> Rõ ràng là Cache rác cũ, dọn sạch và báo reload
+            if (elapsedTimeSec > totalTimeSeconds + 3600) {
+                safeLocal.removeItem(getStorageKey());
+                alert("⚠️ Phát hiện phiên làm bài cũ đã hết hạn. Hệ thống đang tải lại phiên mới...");
+                window.location.reload();
+                return;
+            }
             lockExamInteractions();
             executeSubmitExam(true);
             return;
@@ -346,7 +358,7 @@ function fetchExamQuestions(isAutostart = false) {
             const et = new Date(examData.examEndTimeStr).toLocaleString("vi-VN"); 
             const noticeEl = document.getElementById("exam-time-notice"); 
             noticeEl.innerText = `⏱ Mở từ: ${st} - Đến: ${et}`; 
-            noticeEl.style.display = "block"; 
+            noticeEl.style.display = "inline-block"; 
         } 
         
         const shuffleKey = `shuffled_exam_${getExamCode()}`;
@@ -654,10 +666,21 @@ function restoreExamStateFromStorage() {
         }
 
         if (parsed && parsed.isStarted) { 
+            const savedStartTime = parsed.examStartTime || Date.now();
+            const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
+            const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
+
+            // KIỂM TRA LỌC RÁC: Nếu thời gian đã lố quá 1 TIẾNG mà chưa nộp, đây 100% là rác từ phiên cũ
+            if (elapsed > limitSec + 3600 && !hasPending && !parsed.isExamLocked) {
+                safeLocal.removeItem(getStorageKey());
+                return false;
+            }
+
             window.SECURE_VAULT.userAnswers = parsed.userAnswers || {}; 
             window.SECURE_VAULT.padletClicked = parsed.padletClickedMap || {}; 
             tabSwitchCount = parsed.tabSwitchCount || 0; 
-            examStartTime = parsed.examStartTime || Date.now(); 
+            examStartTime = savedStartTime; 
+            
             if (parsed.timeLimitMinutes) {
                 TIME_LIMIT_MINUTES = parseInt(parsed.timeLimitMinutes, 10);
                 totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
@@ -676,7 +699,6 @@ function restoreExamStateFromStorage() {
     return false; 
 }
 
-// NỘP BÀI CHUẨN XÁC LÊN SUPABASE
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -803,7 +825,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         return; 
     }
 
-    // XÓA BẢN NHÁP & ACTIVE SESSION KHI ĐÃ NỘP XONG
     supabaseClient.from('live_drafts').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
     if (typeof clearPresence === 'function') clearPresence(sId);
     if (timerInterval) clearInterval(timerInterval); 
