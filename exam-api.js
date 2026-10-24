@@ -157,6 +157,16 @@ function applyOnlineCountVisibility() {
     onlineBox.style.display = isShowOnlineCountEnabled ? "flex" : "none";
 }
 
+// SỰ KIỆN KÍCH HOẠT HIỆU ỨNG NHÁY CHỚP KHI SĨ SỐ THAY ĐỔI
+function triggerOnlineBoxAnimation() {
+    const box = document.getElementById("nav-online-box");
+    if (box) {
+        box.classList.remove("nav-online-pulse");
+        void box.offsetWidth; 
+        box.classList.add("nav-online-pulse");
+    }
+}
+
 // ĐẾM SĨ SỐ THÔNG MINH - SIÊU TIẾT KIỆM BĂNG THÔNG
 async function refreshOnlineCount() {
     try {
@@ -164,7 +174,7 @@ async function refreshOnlineCount() {
         const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? (examData.id || "") : "");
         if (!currentQuizId || !supabaseClient) return;
 
-        // Chỉ SELECT COUNT ĐÚNG 1 LẦN khi load trang
+        // Chỉ SELECT COUNT ĐÚNG 1 LẦN khi load trang (Hoặc khi Admin bấm nút)
         const activeThreshold = Date.now() - (3 * 60 * 1000);
         let { count, error } = await supabaseClient
             .from('active_sessions')
@@ -181,6 +191,37 @@ async function refreshOnlineCount() {
     } catch(e) {}
 }
 
+// BỘ CẬP NHẬT KHI THẦY (ADMIN) HOẶC HỌC SINH BẤM VÀO SĨ SỐ
+async function handleOnlineCountClick() {
+    // Kiểm tra quyền Admin (Thầy)
+    let isAdmin = false;
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin') === '1') isAdmin = true;
+        
+        const logged = safeLocal.getItem("adminLoggedInSession");
+        const exp = safeLocal.getItem("admin_expires_at");
+        if (logged === "true" && exp && Date.now() < parseInt(exp, 10)) {
+            isAdmin = true;
+        }
+    } catch(e) {}
+
+    if (isAdmin) {
+        const box = document.getElementById("nav-online-box");
+        if(box) box.style.opacity = "0.5";
+        await refreshOnlineCount();
+        if(box) box.style.opacity = "1";
+        triggerOnlineBoxAnimation();
+        if (typeof showTimeChangeToast === 'function') {
+            showTimeChangeToast(`🔄 Admin: Đã đồng bộ sĩ số thực tế (${window.localOnlineCount} em) !`);
+        }
+    } else {
+        if (typeof showTimeChangeToast === 'function') {
+            showTimeChangeToast(`👥 Đang có ${window.localOnlineCount} bạn cùng thi.`);
+        }
+    }
+}
+
 // LẮNG NGHE REALTIME: CHỈ CỘNG/TRỪ BIẾN CỤC BỘ ĐỂ HIỂN THỊ, KHÔNG TRUY VẤN DB LẠI
 function startOnlineRealtimeWatcher(quizId) {
     if (!quizId || !supabaseClient) return;
@@ -194,11 +235,13 @@ function startOnlineRealtimeWatcher(quizId) {
             window.localOnlineCount++;
             const countEl = document.getElementById("nav-online-val");
             if (countEl) countEl.innerText = window.localOnlineCount;
+            triggerOnlineBoxAnimation();
         })
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'active_sessions', filter: `quiz_id=eq.${quizId}` }, () => {
             window.localOnlineCount = Math.max(1, window.localOnlineCount - 1);
             const countEl = document.getElementById("nav-online-val");
             if (countEl) countEl.innerText = window.localOnlineCount;
+            triggerOnlineBoxAnimation();
         })
         .subscribe();
 }
@@ -450,3 +493,4 @@ function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) {
 window.updateTopBackupStatus = updateTopBackupStatus;
 window.refreshOnlineCount = refreshOnlineCount;
 window.applyOnlineCountVisibility = applyOnlineCountVisibility;
+window.handleOnlineCountClick = handleOnlineCountClick;
