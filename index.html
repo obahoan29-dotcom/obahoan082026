@@ -108,6 +108,32 @@
             line-height: 1.35;
         }
 
+        /* TỐI ƯU CÔNG TẮC CHO PHÉP CLICK TRỰC TIẾP NHẠY 100% */
+        .mini-switch {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            display: inline-block;
+            width: 32px !important;
+            height: 18px !important;
+            margin: 0 2px !important;
+        }
+        .mini-switch input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            margin: 0;
+            cursor: pointer;
+            z-index: 5;
+            pointer-events: auto !important;
+        }
+        .mini-switch .slider-toggle {
+            pointer-events: none;
+        }
+
         @media (max-width: 640px) {
             .btn-upload-json-backup, .btn-auto-collect-drafts {
                 font-size: 11px !important;
@@ -161,7 +187,7 @@
     <span class="mid-autumn-icon">🏮</span>
 </div>
 
-<!-- NÚT NỔI HIỂN THỊ SỐ LƯỢT TRUY CẬP HÔM NAY -->
+<!-- NÚT NỔI HIỂN THỊ SỐ LƯỢT TRUY CẬP HÔM NAY (ĐÃ SỬA HẾT ĐƠ) -->
 <div class="site-visit-badge" id="site-visit-badge" onclick="toggleVisitStatsModal(event)" title="Nhấn để xem chi tiết thống kê lượt truy cập">
     <div class="visit-pulse-dot"></div>
     <span class="visit-icon">👁️</span>
@@ -214,18 +240,18 @@
                     </div>
                 </div>
 
-                <!-- KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG -->
+                <!-- KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG (ĐÃ SỬA NHẠY 100%) -->
                 <div class="admin-redirect-control-box">
                     <div class="admin-redirect-toggle-row">
-                        <span class="admin-redirect-title">
+                        <span class="admin-redirect-title" onclick="document.getElementById('admin-redirect-toggle').click();" style="cursor: pointer;">
                             <span>🔀</span> <b>Tự chuyển sang Web dự phòng:</b>
                         </span>
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span class="mini-switch">
+                            <label class="mini-switch" for="admin-redirect-toggle" title="Gạt để Bật/Tắt chuyển hướng">
                                 <input type="checkbox" id="admin-redirect-toggle" onchange="handleSiteRedirectToggle(this.checked)">
                                 <span class="slider-toggle"></span>
-                            </span>
-                            <b id="admin-redirect-status-txt" style="font-size: 11px; color: #64748b; white-space: nowrap;">TẮT</b>
+                            </label>
+                            <b id="admin-redirect-status-txt" style="font-size: 11px; color: #64748b; white-space: nowrap; cursor: pointer;" onclick="document.getElementById('admin-redirect-toggle').click();">TẮT</b>
                         </div>
                     </div>
                     <div style="display: flex; gap: 6px; margin-top: 6px;">
@@ -499,9 +525,9 @@
     </div>
 </div>
 
-<!-- MODAL THỐNG KÊ CHI TIẾT LƯỢT TRUY CẬP -->
-<div class="visit-stats-modal-overlay" id="visit-stats-modal">
-    <div class="visit-stats-modal-box">
+<!-- MODAL THỐNG KÊ CHI TIẾT LƯỢT TRUY CẬP (ĐÃ KHẮC PHỤC 100%) -->
+<div class="visit-stats-modal-overlay" id="visit-stats-modal" onclick="if(event.target===this) closeVisitStatsModal(event);">
+    <div class="visit-stats-modal-box" onclick="event.stopPropagation();">
         <div class="visit-modal-header">
             <div class="visit-modal-title">
                 <span class="vm-icon">📊</span>

@@ -16,6 +16,20 @@ let SITE_REDIRECT_CONFIG = {
     targetUrl: DEFAULT_BACKUP_WEB_URL
 };
 
+// Đọc ngay cấu hình đã lưu trong LocalStorage để tránh độ trễ mạng
+try {
+    const rawRedirect = localStorage.getItem("site_redirect_config");
+    if (rawRedirect) {
+        const parsed = JSON.parse(rawRedirect);
+        if (parsed) {
+            SITE_REDIRECT_CONFIG = {
+                enabled: !!parsed.enabled,
+                targetUrl: parsed.targetUrl || DEFAULT_BACKUP_WEB_URL
+            };
+        }
+    }
+} catch(e) {}
+
 // Khởi tạo Supabase Client an toàn
 let supabaseClient = null;
 function getSupabaseClient() {
@@ -41,6 +55,7 @@ function isSafeAdminBypass() {
         if (logged === "true" && expiresAt && Date.now() < parseInt(expiresAt, 10)) {
             return true;
         }
+        if (typeof isAdminLoggedIn !== 'undefined' && isAdminLoggedIn) return true;
     } catch(e) {}
     return false;
 }
@@ -70,6 +85,12 @@ function executeStudentRedirect(targetUrl) {
 // LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE
 async function initGlobalSiteRedirectWatcher() {
     const client = getSupabaseClient();
+
+    // Nếu đã kích hoạt chuyển hướng từ trước thì chuyển ngay
+    if (SITE_REDIRECT_CONFIG && SITE_REDIRECT_CONFIG.enabled) {
+        executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
+    }
+
     if (!client) return;
 
     try {
@@ -79,6 +100,14 @@ async function initGlobalSiteRedirectWatcher() {
                 enabled: !!data.value.enabled,
                 targetUrl: data.value.targetUrl || DEFAULT_BACKUP_WEB_URL
             };
+
+            try {
+                localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+            } catch(e) {}
+
+            if (typeof updateRedirectUIElements === 'function') {
+                updateRedirectUIElements();
+            }
 
             if (SITE_REDIRECT_CONFIG.enabled) {
                 executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
@@ -102,6 +131,10 @@ async function initGlobalSiteRedirectWatcher() {
                         targetUrl: fresh.value.targetUrl || DEFAULT_BACKUP_WEB_URL
                     };
 
+                    try {
+                        localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                    } catch(e) {}
+
                     if (typeof updateRedirectUIElements === 'function') {
                         updateRedirectUIElements();
                     }
@@ -115,7 +148,6 @@ async function initGlobalSiteRedirectWatcher() {
     } catch(e) {}
 }
 
-// Tự kích hoạt kiểm tra ngay khi nạp file
 initGlobalSiteRedirectWatcher();
 
 // CẤU HÌNH GOOGLE DRIVE & IMGBB (GIỮ NGUYÊN 100%)

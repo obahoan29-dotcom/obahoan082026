@@ -11,25 +11,37 @@ function updateRedirectUIElements() {
     const statusTxt = document.getElementById("admin-redirect-status-txt");
     const urlInput = document.getElementById("admin-redirect-url-input");
 
-    if (toggle) toggle.checked = !!SITE_REDIRECT_CONFIG.enabled;
+    const isEnabled = Boolean(SITE_REDIRECT_CONFIG && SITE_REDIRECT_CONFIG.enabled);
+    if (toggle) toggle.checked = isEnabled;
     if (statusTxt) {
-        statusTxt.innerText = SITE_REDIRECT_CONFIG.enabled ? "BẬT (Đang chuyển hướng)" : "TẮT (Để im web này)";
-        statusTxt.style.color = SITE_REDIRECT_CONFIG.enabled ? "#dc2626" : "#64748b";
+        statusTxt.innerText = isEnabled ? "BẬT (Đang chuyển hướng)" : "TẮT (Để im web này)";
+        statusTxt.style.color = isEnabled ? "#dc2626" : "#64748b";
     }
     if (urlInput) {
-        urlInput.value = SITE_REDIRECT_CONFIG.targetUrl || DEFAULT_BACKUP_WEB_URL;
+        urlInput.value = (SITE_REDIRECT_CONFIG && SITE_REDIRECT_CONFIG.targetUrl) || DEFAULT_BACKUP_WEB_URL;
     }
 }
 
-// BẬT / TẮT CHUYỂN HƯỚNG WEB DỰ PHÒNG
+// BẬT / TẮT CHUYỂN HƯỚNG WEB DỰ PHÒNG (PHẢN HỒI NGAY LẬP TỨC 100%)
 async function handleSiteRedirectToggle(isChecked) {
     const urlInput = document.getElementById("admin-redirect-url-input");
     const targetUrl = (urlInput && urlInput.value.trim()) ? urlInput.value.trim() : DEFAULT_BACKUP_WEB_URL;
 
+    // 1. Phản hồi giao diện ngay lập tức, không chờ mạng
     SITE_REDIRECT_CONFIG.enabled = isChecked;
     SITE_REDIRECT_CONFIG.targetUrl = targetUrl;
     updateRedirectUIElements();
 
+    // 2. Lưu tạm an toàn vào LocalStorage của Admin
+    try {
+        localStorage.setItem("site_redirect_config", JSON.stringify({
+            enabled: isChecked,
+            targetUrl: targetUrl,
+            updatedAt: Date.now()
+        }));
+    } catch(e) {}
+
+    // 3. Đồng bộ lên Supabase để toàn bộ học sinh nhận lệnh
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (client) {
@@ -48,7 +60,8 @@ async function handleSiteRedirectToggle(isChecked) {
             alert("✅ ĐÃ TẮT CHUYỂN HƯỚNG!\nHọc sinh sẽ vào và làm bài trên web này bình thường.");
         }
     } catch(err) {
-        alert("❌ Lỗi lưu cấu hình: " + err.message);
+        console.warn("Lỗi lưu Supabase:", err);
+        alert("⚠️ Đã đổi trạng thái trên máy này. Lưu ý kết nối mạng nếu Thầy muốn học sinh nhận lệnh ngay!");
     }
 }
 
@@ -64,6 +77,14 @@ async function saveSiteRedirectUrl() {
     }
 
     SITE_REDIRECT_CONFIG.targetUrl = newUrl;
+
+    try {
+        localStorage.setItem("site_redirect_config", JSON.stringify({
+            enabled: SITE_REDIRECT_CONFIG.enabled,
+            targetUrl: newUrl,
+            updatedAt: Date.now()
+        }));
+    } catch(e) {}
 
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
