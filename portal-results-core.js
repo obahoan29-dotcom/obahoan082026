@@ -1,5 +1,6 @@
 // =========================================================
 // FILE: portal-results-core.js (BẢN SUPABASE TỐI ƯU & QUÉT ĐA MÃ ĐỀ)
+// CẬP NHẬT: LẮNG NGHE REALTIME ACTIVE SESSIONS TỨC THÌ 0S & TIẾT KIỆM BĂNG THÔNG
 // =========================================================
 
 let currentExamResultData = {
@@ -14,6 +15,17 @@ let _regradeFileParsedAnswers = null;
 let currentRankSortMode = 'default';
 
 let realtimeSubmissionsChannel = null;
+let realtimeDebounceTimer = null;
+
+// Hàm gom nhóm cập nhật thông minh: cập nhật tức thì nhưng gộp request nếu nhiều em vào cùng lúc
+function debouncedRefreshResults(delayMs = 350) {
+    if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+    realtimeDebounceTimer = setTimeout(() => {
+        if (currentExamResultData.item) {
+            fetchAndRenderExamResults(currentExamResultData.item, true);
+        }
+    }, delayMs);
+}
 
 function normalizeCategoryKey(cat) {
     if (!cat) return "";
@@ -126,25 +138,70 @@ function getSubmissionTimestamp(sub) {
     return parseDateString(sub.timestamp) || 0;
 }
 
+// BỘ LẮNG NGHE REALTIME KẾT HỢP: NHẬN DIỆN CẢ HỌC SINH MỚI VÀO THI & BÀI NỘP
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
-    if (!quizId || !supabaseClient) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
 
-    realtimeSubmissionsChannel = supabaseClient.channel(`admin_realtime_${quizId}`)
-        .on('postgres_changes', { 
+    const currentItem = currentExamResultData.item;
+    const targetQuizId = quizId || (currentItem ? (extractQuizIdFromItem(currentItem) || currentItem.id) : "");
+    if (!targetQuizId) return;
+
+    // Tập hợp toàn bộ ID khả dĩ của đề thi này
+    const candidateIds = new Set();
+    if (targetQuizId) candidateIds.add(String(targetQuizId).trim());
+    if (currentItem) {
+        if (currentItem.id) candidateIds.add(String(currentItem.id).trim());
+        if (currentItem.firebaseId) candidateIds.add(String(currentItem.firebaseId).trim());
+        if (currentItem.title && typeof cleanExamCodeKey === 'function') {
+            candidateIds.add(cleanExamCodeKey(currentItem.title));
+        }
+    }
+
+    let channel = client.channel(`admin_realtime_${targetQuizId}_${Date.now()}`);
+
+    candidateIds.forEach(id => {
+        // 1. Lắng nghe bài thi nộp thành công (submissions)
+        channel = channel.on('postgres_changes', { 
             event: '*', 
             schema: 'public', 
             table: 'submissions', 
-            filter: `quiz_id=eq.${quizId}` 
+            filter: `quiz_id=eq.${id}` 
         }, () => {
-            if (currentExamResultData.item) {
-                fetchAndRenderExamResults(currentExamResultData.item, true);
+            debouncedRefreshResults(200);
+        });
+
+        // 2. Lắng nghe học sinh VÀO THI hoặc THOÁT THI (active_sessions)
+        channel = channel.on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'active_sessions', 
+            filter: `quiz_id=eq.${id}` 
+        }, (payload) => {
+            // TỐI ƯU TIẾT KIỆM BĂNG THÔNG:
+            // Nếu là UPDATE và start_time không đổi (chỉ là ping 60s duy trì mạng) -> Bỏ qua không tải lại
+            if (payload.eventType === 'UPDATE') {
+                const oldStartTime = payload.old ? payload.old.start_time : null;
+                const newStartTime = payload.new ? payload.new.start_time : null;
+                if (oldStartTime && newStartTime && oldStartTime === newStartTime) {
+                    return; 
+                }
             }
-        })
-        .subscribe();
+            // Ngược lại, nếu là INSERT (em mới vừa đăng nhập vào thi) hoặc DELETE (đã nộp/rời bài) -> Cập nhật tức thì!
+            debouncedRefreshResults(200);
+        });
+    });
+
+    channel.subscribe();
+    realtimeSubmissionsChannel = channel;
 }
 
 function stopRealtimeSubmissionsListener() {
+    if (realtimeDebounceTimer) {
+        clearTimeout(realtimeDebounceTimer);
+        realtimeDebounceTimer = null;
+    }
     if (realtimeSubmissionsChannel && supabaseClient) {
         supabaseClient.removeChannel(realtimeSubmissionsChannel);
         realtimeSubmissionsChannel = null;
@@ -153,14 +210,16 @@ function stopRealtimeSubmissionsListener() {
 
 // TẢI KẾT QUẢ ĐÚNG ĐỀ ĐANG XEM (QUÉT TOÀN DIỆN DANH SÁCH MÃ ĐỀ LIÊN QUAN)
 async function fetchAndRenderExamResults(item, isSilent = false) {
-    if (!item || !supabaseClient) return;
+    if (!item) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
 
     let quizId = extractQuizIdFromItem(item) || item.id || "";
     let maDe = "";
     let examTitle = item.title || "";
 
     try {
-        const { data: qData } = await supabaseClient.from('quizzes').select('made, title').eq('id', quizId).single();
+        const { data: qData } = await client.from('quizzes').select('made, title').eq('id', quizId).single();
         if (qData) {
             maDe = qData.made || "";
             if (qData.title) examTitle = qData.title;
@@ -177,9 +236,9 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
     try {
         const [subRes, cheatRes, activeRes] = await Promise.all([
-            supabaseClient.from('submissions').select('*').in('quiz_id', candidateIds),
-            supabaseClient.from('cheating_logs').select('*').in('quiz_id', candidateIds),
-            supabaseClient.from('active_sessions').select('*').in('quiz_id', candidateIds)
+            client.from('submissions').select('*').in('quiz_id', candidateIds),
+            client.from('cheating_logs').select('*').in('quiz_id', candidateIds),
+            client.from('active_sessions').select('*').in('quiz_id', candidateIds)
         ]);
 
         const rawSubs = (subRes.data || []).map(r => ({
@@ -216,7 +275,8 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
                 name: a.name,
                 className: a.class_name,
                 startTime: a.start_time,
-                lastPing: a.last_ping
+                lastPing: a.last_ping,
+                isFree: a.is_free
             };
         });
 
@@ -271,10 +331,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     for (let rawKey in activeSessionsMap) {
         let sess = activeSessionsMap[rawKey];
         if (!sess) continue;
-        let lastPing = sess.lastPing || 0;
+        let lastPing = sess.lastPing || sess.startTime || 0;
+        // Cho phép khoảng thời gian 6 phút kể từ ping gần nhất
         if (nowMs - lastPing < 360000) {
             let sessSbd = String(sess.sbd || "").trim().toLowerCase();
+            let cleanSbdKey = sessSbd.replace(/[^a-zA-Z0-9]/g, '_');
             if (sessSbd) activeUsersMap[sessSbd] = sess;
+            if (cleanSbdKey) activeUsersMap[cleanSbdKey] = sess;
         }
     }
 
@@ -284,10 +347,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     classAccounts.forEach((acc, idx) => {
         const accSbdLower = String(acc.sbd || "").trim().toLowerCase();
+        const accSbdClean = accSbdLower.replace(/[^a-zA-Z0-9]/g, '_');
+
         let matchedSubs = [];
         for (let sub of submissionsList) {
             let subSbd = String(sub.sbd || "").trim().toLowerCase();
-            if (accSbdLower && subSbd && subSbd === accSbdLower) {
+            let subSbdClean = subSbd.replace(/[^a-zA-Z0-9]/g, '_');
+            if ((accSbdLower && subSbd && subSbd === accSbdLower) || (accSbdClean && subSbdClean && subSbdClean === accSbdClean)) {
                 matchedSubs.push(sub);
                 usedSubIds.add(sub.id);
             }
@@ -295,8 +361,9 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
         matchedSubs = deduplicateAttempts(matchedSubs);
 
-        let isDoing = false; let doingStartTime = null;
-        let activeSess = activeUsersMap[accSbdLower];
+        let isDoing = false; 
+        let doingStartTime = null;
+        let activeSess = activeUsersMap[accSbdLower] || activeUsersMap[accSbdClean];
         if (matchedSubs.length === 0 && activeSess) {
             isDoing = true; 
             doingStartTime = activeSess.startTime || Date.now();
@@ -304,24 +371,67 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
         if (matchedSubs.length > 0) usedSbdSet.add(accSbdLower);
 
-        let cheatDurations = cheatHistoryBySbd[accSbdLower] || [];
-        let cheatLogsTabCount = maxCheatCountBySbd[accSbdLower] || cheatDurations.length;
+        let cheatDurations = cheatHistoryBySbd[accSbdLower] || cheatHistoryBySbd[accSbdClean] || [];
+        let cheatLogsTabCount = maxCheatCountBySbd[accSbdLower] || maxCheatCountBySbd[accSbdClean] || cheatDurations.length;
         let cheatTimeString = cheatDurations.length > 0 ? cheatDurations.join(" | ") : "0s";
         let selectedAttemptIndex = matchedSubs.length > 0 ? (matchedSubs.length - 1) : 0;
 
         finalRows.push({
             _rowUid: 'row_cls_' + (acc.sbd || idx) + '_' + Math.random().toString(36).substring(2, 7),
-            stt: acc.stt || (idx + 1), isClassStudent: true, account: acc, allAttempts: matchedSubs,
-            selectedAttemptIndex: selectedAttemptIndex, isDoing: isDoing, doingStartTime: doingStartTime,
-            isFreeDoing: false, cheatTimeString: cheatTimeString, cheatLogsTabCount: cheatLogsTabCount
+            stt: acc.stt || (idx + 1), 
+            isClassStudent: true, 
+            account: acc, 
+            allAttempts: matchedSubs,
+            selectedAttemptIndex: selectedAttemptIndex, 
+            isDoing: isDoing, 
+            doingStartTime: doingStartTime,
+            isFreeDoing: false, 
+            cheatTimeString: cheatTimeString, 
+            cheatLogsTabCount: cheatLogsTabCount
         });
     });
 
-    // Bổ sung thí sinh tự do
     let freeSttCounter = classAccounts.length + 1;
+
+    // 1. Thí sinh tự do ĐANG LÀM BÀI (chưa nộp)
+    for (let sessKey in activeUsersMap) {
+        let sess = activeUsersMap[sessKey];
+        if (!sess) continue;
+        let sessSbdLower = String(sess.sbd || "").trim().toLowerCase();
+        let sessSbdClean = sessSbdLower.replace(/[^a-zA-Z0-9]/g, '_');
+
+        if (usedSbdSet.has(sessSbdLower) || usedSbdSet.has(sessSbdClean)) continue;
+        if (classAccounts.some(acc => {
+            const accSbd = String(acc.sbd || "").trim().toLowerCase();
+            return accSbd === sessSbdLower || accSbd.replace(/[^a-zA-Z0-9]/g, '_') === sessSbdClean;
+        })) continue;
+
+        usedSbdSet.add(sessSbdLower);
+        usedSbdSet.add(sessSbdClean);
+
+        const freeAcc = {
+            sbd: sess.sbd || "---",
+            name: sess.name || "Thí sinh tự do",
+            className: sess.className || "Tự do"
+        };
+        finalRows.push({
+            _rowUid: 'row_free_doing_' + (sess.sbd || freeSttCounter) + '_' + Math.random().toString(36).substring(2, 7),
+            stt: freeSttCounter++, 
+            isClassStudent: false, 
+            account: freeAcc, 
+            allAttempts: [],
+            selectedAttemptIndex: 0, 
+            isDoing: true, 
+            doingStartTime: sess.startTime || Date.now(),
+            isFreeDoing: true, 
+            cheatTimeString: "0s", 
+            cheatLogsTabCount: 0
+        });
+    }
+
+    // 2. Thí sinh tự do ĐÃ NỘP BÀI
     for (let sub of submissionsList) {
         if (usedSubIds.has(sub.id)) continue;
-        const subSbd = String(sub.sbd || "free").trim().toLowerCase();
         const freeAcc = {
             sbd: sub.sbd || "---",
             name: sub.studentName || "Thí sinh tự do",
@@ -329,9 +439,16 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         };
         finalRows.push({
             _rowUid: 'row_free_' + sub.id + '_' + Math.random().toString(36).substring(2, 7),
-            stt: freeSttCounter++, isClassStudent: false, account: freeAcc, allAttempts: [sub],
-            selectedAttemptIndex: 0, isDoing: false, doingStartTime: null,
-            isFreeDoing: false, cheatTimeString: "0s", cheatLogsTabCount: 0
+            stt: freeSttCounter++, 
+            isClassStudent: false, 
+            account: freeAcc, 
+            allAttempts: [sub],
+            selectedAttemptIndex: 0, 
+            isDoing: false, 
+            doingStartTime: null,
+            isFreeDoing: false, 
+            cheatTimeString: "0s", 
+            cheatLogsTabCount: 0
         });
     }
 
@@ -344,7 +461,8 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 async function triggerAutoCollectDrafts(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
-    if (!currentItem || !supabaseClient) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!currentItem || !client) return;
 
     const quizId = extractQuizIdFromItem(currentItem);
     if (!quizId) { alert("⚠️ Không tìm thấy ID đề thi!"); return; }
@@ -356,9 +474,9 @@ async function triggerAutoCollectDrafts(event) {
 
     try {
         const [draftsRes, quizRes, subsRes] = await Promise.all([
-            supabaseClient.from('live_drafts').select('*').eq('quiz_id', quizId),
-            supabaseClient.from('quizzes').select('*').eq('id', quizId).single(),
-            supabaseClient.from('submissions').select('sbd').eq('quiz_id', quizId)
+            client.from('live_drafts').select('*').eq('quiz_id', quizId),
+            client.from('quizzes').select('*').eq('id', quizId).single(),
+            client.from('submissions').select('sbd').eq('quiz_id', quizId)
         ]);
 
         const drafts = draftsRes.data || [];
@@ -393,7 +511,7 @@ async function triggerAutoCollectDrafts(event) {
             const scoreResult = calculateExamScoreWithConfig(quizObj.questions, draft.user_answers, answerVault, scoringConfig);
             const submissionId = `${quizId}_${draft.sbd}`;
 
-            await supabaseClient.from('submissions').upsert({
+            await client.from('submissions').upsert({
                 id: submissionId,
                 quiz_id: quizId,
                 sbd: draft.sbd,
@@ -415,7 +533,7 @@ async function triggerAutoCollectDrafts(event) {
                 exam_title: quizObj.title || "Đề thi"
             });
 
-            await supabaseClient.from('live_drafts').delete().match({ quiz_id: quizId, sbd: draft.sbd });
+            await client.from('live_drafts').delete().match({ quiz_id: quizId, sbd: draft.sbd });
             collectedCount++;
         }
 
