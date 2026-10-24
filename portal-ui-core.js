@@ -2,7 +2,7 @@
 // FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s)
 // =========================================================
 
-let activeDayThemCatId = "them-11";
+let activeDayThemCatId = null; /* SỬA TẠI ĐÂY: Chuyển "them-11" thành null để mặc định thu gọn */
 let activeChinhKhoaRow1CatId = null;
 let activeChinhKhoaRow2CatId = null;
 let activeDantriCatId = null;
