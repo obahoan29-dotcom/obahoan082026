@@ -160,6 +160,9 @@ async function initExamEngine() {
             safeLocal.setItem(`exam_allow_free_${quizId}`, String(examData.allowFree !== false));
         }
 
+        if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
+        if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
+
         fetchExamQuestions(isAutostart);
         setupBackPrevention();
         if (typeof requestWakeLock === 'function') {
@@ -286,6 +289,9 @@ async function checkSessionStatus(isAutostart = false) {
         hideLoading();
         reapplySavedAnswers(); 
         updateProgress(); 
+        
+        if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
+        if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
 
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
@@ -373,6 +379,7 @@ function fetchExamQuestions(isAutostart = false) {
             else document.getElementById("student-card").style.display = "block"; 
         }
         
+        if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
         renderQuizLayout(examData.questions || [], examData.images || {}); 
         if (window.MathJax && MathJax.typesetPromise) {
             MathJax.typesetPromise().catch(() => {});
