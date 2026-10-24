@@ -3,6 +3,7 @@
 // =========================================================
 
 let currentEditingTimeQuizId = null;
+let currentEditingTimeItemId = null;
 let currentEditingTimeMode = null;
 
 // HÀM ĐỒNG BỘ HIỂN THỊ CÔNG TẮC & ĐƯỜNG LINK WEB DỰ PHÒNG TRÊN GIAO DIỆN ADMIN
@@ -572,9 +573,11 @@ async function confirmCopyItem() {
     }
 }
 
-async function openEditMinutesModal(quizId, event) {
+// ĐÃ SỬA: Lưu lại cả itemId và quizId để cập nhật UI không cần Reload
+async function openEditMinutesModal(quizId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentEditingTimeQuizId = quizId;
+    currentEditingTimeItemId = itemId;
     currentEditingTimeMode = 'minutes';
 
     document.getElementById("exam-time-modal-title").innerText = "⏱ Đổi thời lượng làm bài";
@@ -592,9 +595,11 @@ async function openEditMinutesModal(quizId, event) {
     document.getElementById("exam-time-modal").style.display = "flex";
 }
 
-async function openEditScheduleModal(quizId, event) {
+// ĐÃ SỬA: Lưu lại cả itemId và quizId để cập nhật UI không cần Reload
+async function openEditScheduleModal(quizId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentEditingTimeQuizId = quizId;
+    currentEditingTimeItemId = itemId;
     currentEditingTimeMode = 'schedule';
 
     document.getElementById("exam-time-modal-title").innerText = "📅 Gia hạn khung giờ làm bài";
@@ -620,11 +625,13 @@ async function openEditScheduleModal(quizId, event) {
 function closeExamTimeModal() {
     document.getElementById("exam-time-modal").style.display = "none";
     currentEditingTimeQuizId = null;
+    currentEditingTimeItemId = null;
     currentEditingTimeMode = null;
 }
 
+// ĐÃ SỬA: Cập nhật DOM ngay tại chỗ thay vì reload trang
 async function saveExamTimeConfig() {
-    if (!currentEditingTimeQuizId) return;
+    if (!currentEditingTimeQuizId || !currentEditingTimeItemId) return;
     const btn = document.getElementById("btn-save-exam-time");
     btn.innerText = "⏳ Đang lưu..."; btn.disabled = true;
 
@@ -643,12 +650,35 @@ async function saveExamTimeConfig() {
             payload.exam_end_time = document.getElementById("edit-end-time").value;
         }
 
+        // Cập nhật DB
         await supabaseClient.from('quizzes').update(payload).match({ id: currentEditingTimeQuizId });
         await supabaseClient.from('custom_links').update(payload).match({ id: currentEditingTimeQuizId });
 
         alert("✅ Đã cập nhật thời gian đề thi thành công!");
         closeExamTimeModal();
-        window.location.reload();
+        
+        // CẬP NHẬT TRỰC TIẾP LÊN GIAO DIỆN KHÔNG CẦN TẢI LẠI TRANG
+        const timeBox = document.getElementById(`time-box-${currentEditingTimeItemId}`);
+        if (timeBox && typeof buildTimeBoxHtml === 'function') {
+            // Lấy lại dữ liệu mới nhất từ custom_links để render an toàn
+            const { data } = await supabaseClient.from('custom_links').select('*').eq('id', currentEditingTimeItemId).single();
+            if (data) {
+                timeBox.innerHTML = buildTimeBoxHtml(
+                    data.time_limit_minutes, 
+                    data.exam_start_time_str || payload.exam_start_time, 
+                    data.exam_end_time_str || payload.exam_end_time, 
+                    data.date
+                );
+                // Hiệu ứng chớp xanh nhẹ báo thành công
+                timeBox.style.transition = "all 0.3s";
+                timeBox.style.backgroundColor = "#dcfce7";
+                timeBox.style.borderColor = "#22c55e";
+                setTimeout(() => {
+                    timeBox.style.backgroundColor = "";
+                    timeBox.style.borderColor = "";
+                }, 1200);
+            }
+        }
     } catch(e) {
         alert("❌ Lỗi lưu cấu hình: " + e.message);
     } finally {
@@ -728,3 +758,5 @@ async function changeAvatarSize(categoryId, itemId, sizePx, event) {
 window.handleSiteRedirectToggle = handleSiteRedirectToggle;
 window.saveSiteRedirectUrl = saveSiteRedirectUrl;
 window.updateRedirectUIElements = updateRedirectUIElements;
+window.openEditMinutesModal = openEditMinutesModal;
+window.openEditScheduleModal = openEditScheduleModal;
