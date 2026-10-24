@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-analytics.js (BẢN SUPABASE HOÀN CHỈNH 100%)
+// FILE: portal-analytics.js (BẢN SUPABASE TỐI ƯU & ĐẾM ĐẦY ĐỦ LỊCH SỬ)
 // THEO DÕI LƯỢT TRUY CẬP, HIỂN THỊ MODAL VÀ BIỂU ĐỒ REALTIME
 // =========================================================
 
@@ -12,21 +12,31 @@ let siteVisitStatsCache = {
     dailyList: []
 };
 
+// Chuẩn hóa ngày giờ theo đúng múi giờ Việt Nam (UTC+7) chuẩn 100%
 function getVNDateKey(d = new Date()) {
-    const tzOffset = 7 * 60; 
-    const localTime = d.getTime(); 
-    const localOffset = d.getTimezoneOffset() * 60000;
-    const vnTime = new Date(localTime + localOffset + (tzOffset * 60000));
-    const pad = n => String(n).padStart(2, '0');
-    return `${vnTime.getFullYear()}-${pad(vnTime.getMonth() + 1)}-${pad(vnTime.getDate())}`;
+    try {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(d);
+    } catch(e) {
+        const tzOffset = 7 * 60; 
+        const localTime = d.getTime(); 
+        const localOffset = d.getTimezoneOffset() * 60000;
+        const vnTime = new Date(localTime + localOffset + (tzOffset * 60000));
+        const pad = n => String(n).padStart(2, '0');
+        return `${vnTime.getFullYear()}-${pad(vnTime.getMonth() + 1)}-${pad(vnTime.getDate())}`;
+    }
 }
 
 function getVNHour(d = new Date()) {
-    const tzOffset = 7 * 60; 
-    const localTime = d.getTime(); 
-    const localOffset = d.getTimezoneOffset() * 60000;
-    const vnTime = new Date(localTime + localOffset + (tzOffset * 60000));
-    return vnTime.getHours();
+    try {
+        const hourStr = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', hour12: false }).format(d);
+        return parseInt(hourStr, 10);
+    } catch(e) {
+        const tzOffset = 7 * 60; 
+        const localTime = d.getTime(); 
+        const localOffset = d.getTimezoneOffset() * 60000;
+        const vnTime = new Date(localTime + localOffset + (tzOffset * 60000));
+        return vnTime.getHours();
+    }
 }
 
 async function initSiteVisitTracker() {
@@ -70,31 +80,56 @@ async function recordSiteVisit(todayKey, hour) {
     } catch(e) {}
 }
 
+// TÍNH TOÁN VÀ HIỂN THỊ ĐẦY ĐỦ TOÀN BỘ LỊCH SỬ TỪ FIREBASE SANG SUPABASE
 async function fetchAndRenderVisitStats() {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (!client) return;
 
         const todayKey = getVNDateKey();
-        const { data: list } = await client.from('site_visits').select('*').order('day_key', { ascending: false }).limit(30);
+
+        // 1. Lấy toàn bộ danh sách ngày từ bảng site_visits (không giới hạn 30 ngày để tính đúng tổng toàn thời gian)
+        const [visitsRes, metaRes] = await Promise.all([
+            client.from('site_visits').select('*').order('day_key', { ascending: false }),
+            client.from('app_key_values').select('value').eq('key', 'site_meta').single()
+        ]);
+
+        const list = visitsRes.data || [];
+
+        // 2. Trích xuất số lượt truy cập tích lũy từ Firebase (nếu có lưu trong site_meta)
+        let legacyHistoricalVisits = 0;
+        if (metaRes.data && metaRes.data.value) {
+            const metaVal = metaRes.data.value;
+            legacyHistoricalVisits = Number(
+                metaVal.totalVisits || 
+                metaVal.visits || 
+                metaVal.allTimeVisits || 
+                metaVal.total_visits || 
+                metaVal.total || 
+                metaVal.legacyTotal || 
+                0
+            );
+        }
 
         let todayCount = 0;
         let yesterdayCount = 0;
         let weekCount = 0;
-        let allTime = 0;
+        let sumFromDb = 0;
         let hourly = Array(24).fill(0);
-        let dailyList = [];
+
+        const yesterdayDate = new Date(Date.now() - 24 * 3600 * 1000);
+        const yesterdayKey = getVNDateKey(yesterdayDate);
+
+        const sevenDaysAgoDate = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+        const sevenDaysAgoKey = getVNDateKey(sevenDaysAgoDate);
 
         if (Array.isArray(list)) {
-            dailyList = list;
-            const yesterdayDate = new Date(Date.now() - 24 * 3600 * 1000);
-            const yesterdayKey = getVNDateKey(yesterdayDate);
-
-            list.forEach((row, idx) => {
+            list.forEach((row) => {
                 const rowTotal = Number(row.total) || 0;
-                allTime += rowTotal;
+                sumFromDb += rowTotal;
 
-                if (idx < 7) {
+                // Tính tổng trong 7 ngày gần nhất theo đúng ngày lịch
+                if (row.day_key >= sevenDaysAgoKey) {
                     weekCount += rowTotal;
                 }
 
@@ -112,20 +147,31 @@ async function fetchAndRenderVisitStats() {
             });
         }
 
+        // 3. TỔNG TRUY CẬP = Tổng tất cả các ngày trong database + Số tích lũy lịch sử cũ từ Firebase
+        // (Nếu số trong DB đã nạp đủ ngày thì lấy tổng DB, nếu DB mới nạp thì cộng dồn số gốc Firebase vào)
+        let finalAllTime = sumFromDb;
+        if (legacyHistoricalVisits > 0) {
+            if (sumFromDb < legacyHistoricalVisits) {
+                finalAllTime = legacyHistoricalVisits + todayCount;
+            } else {
+                finalAllTime = sumFromDb;
+            }
+        }
+
         siteVisitStatsCache = {
             todayCount,
             yesterdayCount,
-            weekCount,
-            totalCount: allTime,
+            weekCount: Math.max(weekCount, todayCount),
+            totalCount: finalAllTime,
             hourlyCounts: hourly,
-            dailyList: dailyList
+            dailyList: list
         };
 
-        // Cập nhật số trên Widget huy hiệu góc trên
+        // Cập nhật số hiển thị trên Widget nổi góc trên
         const badgeNumber = document.getElementById("visit-today-count");
         if (badgeNumber) badgeNumber.innerText = todayCount.toLocaleString("vi-VN");
 
-        // Cập nhật các ô KPI trong Modal
+        // Cập nhật 4 ô thống kê trong Modal
         const kpiToday = document.getElementById("kpi-visit-today");
         if (kpiToday) kpiToday.innerText = todayCount.toLocaleString("vi-VN");
 
@@ -133,20 +179,20 @@ async function fetchAndRenderVisitStats() {
         if (kpiYesterday) kpiYesterday.innerText = yesterdayCount.toLocaleString("vi-VN");
 
         const kpiWeek = document.getElementById("kpi-visit-7days");
-        if (kpiWeek) kpiWeek.innerText = weekCount.toLocaleString("vi-VN");
+        if (kpiWeek) kpiWeek.innerText = siteVisitStatsCache.weekCount.toLocaleString("vi-VN");
 
         const kpiTotal = document.getElementById("kpi-visit-alltime");
-        if (kpiTotal) kpiTotal.innerText = allTime.toLocaleString("vi-VN");
+        if (kpiTotal) kpiTotal.innerText = finalAllTime.toLocaleString("vi-VN");
 
-        // Vẽ biểu đồ phân bố 24 giờ
+        // Vẽ biểu đồ 24 giờ và bảng ngày gần nhất
         renderHourlyBars(hourly, getVNHour());
-        renderWeeklyBars(dailyList);
+        renderWeeklyBars(list);
     } catch(e) {
         console.warn("Lỗi fetch thống kê:", e);
     }
 }
 
-// HÀM MỞ / ĐÓNG MODAL THỐNG KÊ (ĐÃ KHẮC PHỤC LỖI BỊ ĐƠ)
+// HÀM MỞ / ĐÓNG MODAL THỐNG KÊ
 function toggleVisitStatsModal(event) {
     if (event) {
         event.preventDefault();
@@ -173,7 +219,7 @@ function closeVisitStatsModal(event) {
     if (modal) modal.style.display = "none";
 }
 
-// CHUYỂN ĐỔI TAB TRONG MODAL THỐNG KÊ (THEO GIỜ / THEO NGÀY)
+// CHUYỂN ĐỔI TAB TRONG MODAL
 function switchVisitStatsTab(tabName) {
     const tabHoursBtn = document.getElementById("tab-btn-hours");
     const tabWeekBtn = document.getElementById("tab-btn-week");
@@ -276,7 +322,7 @@ function renderWeeklyBars(dailyList) {
     container.innerHTML = html;
 }
 
-// Đăng ký toàn cục để các thẻ HTML gọi không bao giờ bị undefined
+// Đăng ký toàn cục
 window.initSiteVisitTracker = initSiteVisitTracker;
 window.fetchAndRenderVisitStats = fetchAndRenderVisitStats;
 window.toggleVisitStatsModal = toggleVisitStatsModal;
