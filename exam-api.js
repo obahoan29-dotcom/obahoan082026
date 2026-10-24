@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
+// FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG & ĐẾM SĨ SỐ REALTIME)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -26,6 +26,8 @@ let currentActiveQId = null;
 let pendingSubmissionPayload = null;
 let presenceInterval = null;
 let realtimeConfigChannel = null;
+let onlineRealtimeChannel = null;
+let onlineDebounceTimer = null;
 
 let wakeLockSentinel = null;
 async function requestWakeLock() {
@@ -146,6 +148,79 @@ async function postToGoogleSheet(url, payload, timeoutMs = 15000) {
     } catch(e) {}
 }
 
+// HÀM ĐIỀU KHIỂN ẨN / HIỆN HỘP SĨ SỐ
+function applyOnlineCountVisibility() {
+    const onlineBox = document.getElementById("nav-online-box");
+    if (!onlineBox) return;
+    if (typeof examData !== 'undefined' && examData && examData.show_online_count !== undefined) {
+        isShowOnlineCountEnabled = (examData.show_online_count !== false);
+    }
+    onlineBox.style.display = isShowOnlineCountEnabled ? "flex" : "none";
+}
+
+// HÀM ĐẾM SĨ SỐ ĐANG THI CHÍNH XÁC (TỐI ƯU 0 BYTES EGRESS BĂNG THÔNG)
+async function refreshOnlineCount() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search); 
+        const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? (examData.id || "") : "");
+        if (!currentQuizId || !supabaseClient) return;
+
+        // Chỉ tính những bạn có tín hiệu trong vòng 3 phút trở lại
+        const activeThreshold = Date.now() - (3 * 60 * 1000);
+        let { count, error } = await supabaseClient
+            .from('active_sessions')
+            .select('*', { count: 'exact', head: true })
+            .eq('quiz_id', currentQuizId)
+            .gte('last_ping', activeThreshold);
+
+        if (error || count === null || count === 0) {
+            const fallback = await supabaseClient
+                .from('active_sessions')
+                .select('*', { count: 'exact', head: true })
+                .eq('quiz_id', currentQuizId);
+            if (!fallback.error && fallback.count !== null) {
+                count = fallback.count;
+            }
+        }
+
+        const countEl = document.getElementById("nav-online-val");
+        if (countEl) {
+            countEl.innerText = Math.max(1, count || 1);
+        }
+    } catch(e) {}
+}
+
+// LẮNG NGHE REALTIME HỌC SINH VÀO HOẶC RA PHÒNG THI ĐỂ NHẢY SỐ TỨC THÌ
+function startOnlineRealtimeWatcher(quizId) {
+    if (!quizId || !supabaseClient) return;
+    if (onlineRealtimeChannel) {
+        supabaseClient.removeChannel(onlineRealtimeChannel);
+        onlineRealtimeChannel = null;
+    }
+
+    const debouncedRefresh = () => {
+        if (onlineDebounceTimer) clearTimeout(onlineDebounceTimer);
+        onlineDebounceTimer = setTimeout(() => {
+            refreshOnlineCount();
+        }, 300);
+    };
+
+    onlineRealtimeChannel = supabaseClient.channel(`online_count_${quizId}_${Date.now()}`)
+        .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'active_sessions',
+            filter: `quiz_id=eq.${quizId}`
+        }, debouncedRefresh)
+        .on('postgres_changes', {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'active_sessions',
+            filter: `quiz_id=eq.${quizId}`
+        }, debouncedRefresh)
+        .subscribe();
+}
+
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     const currentCat = getExamCategory(); const urlParams = new URLSearchParams(window.location.search); const currentQuizId = urlParams.get('id') || "";
     const startBtn = document.getElementById("btn-start-exam");
@@ -200,8 +275,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     if (!examStartTime) { examStartTime = Date.now(); if (typeof window.__saveExamState === 'function') window.__saveExamState(); } 
     if (typeof window.__updateProgress === 'function') window.__updateProgress(); 
     
-    if (examData && examData.show_online_count !== undefined) isShowOnlineCountEnabled = examData.show_online_count;
-
+    applyOnlineCountVisibility();
     startCountdownTimer(); 
     startPresenceSystem(sId);
     updateTopBackupStatus(false);
@@ -212,10 +286,20 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 function startPresenceSystem(sId) {
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     updatePresence(cleanSbd);
+    refreshOnlineCount();
+
+    const urlParams = new URLSearchParams(window.location.search); 
+    const currentQuizId = urlParams.get('id') || "";
+    if (currentQuizId) {
+        startOnlineRealtimeWatcher(currentQuizId);
+    }
 
     if (presenceInterval) clearInterval(presenceInterval);
-    // Tăng thời gian ping lên 60s để bảo vệ tuyệt đối hạn mức
-    presenceInterval = setInterval(() => { updatePresence(cleanSbd); }, 60000);
+    // Ping mỗi 45s để giữ kết nối chính xác và làm mới sĩ số
+    presenceInterval = setInterval(() => { 
+        updatePresence(cleanSbd); 
+        refreshOnlineCount();
+    }, 45000);
 }
 
 async function updatePresence(cleanSbd) {
@@ -231,6 +315,10 @@ async function updatePresence(cleanSbd) {
 
 function clearPresence(sId) {
     if (presenceInterval) clearInterval(presenceInterval);
+    if (onlineRealtimeChannel && supabaseClient) {
+        supabaseClient.removeChannel(onlineRealtimeChannel);
+        onlineRealtimeChannel = null;
+    }
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
@@ -272,6 +360,11 @@ function startTimeWatcherRealtime(quizId) {
             if (freshData.exam_end_time && examData && freshData.exam_end_time !== examData.exam_end_time) {
                 examData.exam_end_time = freshData.exam_end_time;
                 showTimeChangeToast(`📅 Giáo viên vừa gia hạn lịch nộp bài!`);
+            }
+
+            if (freshData.show_online_count !== undefined) {
+                examData.show_online_count = freshData.show_online_count;
+                applyOnlineCountVisibility();
             }
         })
         .subscribe();
@@ -390,3 +483,5 @@ function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) {
 }
 
 window.updateTopBackupStatus = updateTopBackupStatus;
+window.refreshOnlineCount = refreshOnlineCount;
+window.applyOnlineCountVisibility = applyOnlineCountVisibility;
