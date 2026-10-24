@@ -3,8 +3,6 @@
 // CẤU HÌNH HỆ THỐNG VÀ KẾT NỐI SUPABASE CHÍNH XÁC 100%
 // =========================================================
 
-let ADMIN_PASSWORD_HASH = "0a6c968cd9122c2e6011ae39c4a76ec233eea80946b4920aa6d2f036a7d3f764";
-
 // THÔNG SỐ DỰ ÁN SUPABASE CỦA THẦY
 const SUPABASE_URL = "https://vvjstcftecorvmepdkbi.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pLAoa3B4c6Z0N19kbLA9NA_3_npZyaC";
