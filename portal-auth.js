@@ -43,27 +43,79 @@ async function checkAdminPassword() {
         return;
     }
 
-    const inputHash = await sha256Hash(rawPass);
-    let isMatched = (typeof ADMIN_PASSWORD_HASH === "string" && ADMIN_PASSWORD_HASH.length === 64 && inputHash.toLowerCase() === ADMIN_PASSWORD_HASH.toLowerCase());
+    const authBtn = document.querySelector(".auth-btn");
+    if(authBtn) { authBtn.innerText = "⏳..."; authBtn.disabled = true; }
 
-    if (isMatched) {
-        isAdminLoggedIn = true;
-        const durationVal = document.getElementById("admin-expiry-select") ? document.getElementById("admin-expiry-select").value : "1d";
-        const durationMs = parseExpiryDurationMs(durationVal);
-        const expiresAt = Date.now() + durationMs;
+    try {
+        const inputHash = await sha256Hash(rawPass);
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        
+        // Gọi hàm kiểm tra ngầm trên Supabase (RPC)
+        const { data: isMatched, error } = await client.rpc('verify_admin_password', { input_hash: inputHash });
 
-        safeLocal.setItem("adminLoggedInSession", "true");
-        safeLocal.setItem("admin_expires_at", String(expiresAt));
-        safeLocal.setItem("admin_duration_choice", durationVal);
-        safeSession.setItem("adminLoggedInSession", "true");
+        if (error) throw error;
 
-        document.getElementById("auth-container").classList.remove("show");
-        document.getElementById("admin-popover-panel").classList.add("show");
-        document.getElementById("gear-btn").classList.add("active-gear");
-        inputEl.value = "";
-        refreshAllViews();
-    } else {
-        alert("❌ Sai mật khẩu quản trị viên!");
+        if (isMatched) {
+            isAdminLoggedIn = true;
+            const durationVal = document.getElementById("admin-expiry-select") ? document.getElementById("admin-expiry-select").value : "1d";
+            const durationMs = parseExpiryDurationMs(durationVal);
+            const expiresAt = Date.now() + durationMs;
+
+            safeLocal.setItem("adminLoggedInSession", "true");
+            safeLocal.setItem("admin_expires_at", String(expiresAt));
+            safeLocal.setItem("admin_duration_choice", durationVal);
+            safeSession.setItem("adminLoggedInSession", "true");
+
+            document.getElementById("auth-container").classList.remove("show");
+            document.getElementById("admin-popover-panel").classList.add("show");
+            document.getElementById("gear-btn").classList.add("active-gear");
+            inputEl.value = "";
+            refreshAllViews();
+        } else {
+            alert("❌ Sai mật khẩu quản trị viên!");
+        }
+    } catch(err) {
+        alert("❌ Lỗi kết nối: " + err.message);
+    } finally {
+        if(authBtn) { authBtn.innerText = "VÀO"; authBtn.disabled = false; }
+    }
+}
+
+async function changeAdminPassword(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    
+    const oldPass = prompt("🔐 Nhập mật khẩu HIỆN TẠI của quản trị viên:");
+    if (!oldPass) return;
+
+    const newPass = prompt("🔑 Nhập mật khẩu MỚI muốn thay đổi:");
+    if (!newPass) return;
+
+    const confirmPass = prompt("🔑 Xác nhận lại mật khẩu MỚI:");
+    if (newPass !== confirmPass) {
+        alert("❌ Mật khẩu xác nhận không khớp!");
+        return;
+    }
+
+    try {
+        const oldHash = await sha256Hash(oldPass);
+        const newHash = await sha256Hash(newPass);
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+
+        // Gọi hàm đổi mật khẩu ngầm trên Supabase
+        const { data: isSuccess, error } = await client.rpc('change_admin_password', { 
+            old_hash: oldHash, 
+            new_hash: newHash 
+        });
+
+        if (error) throw error;
+
+        if (isSuccess) {
+            alert("🎉 ĐỔI MẬT KHẨU THÀNH CÔNG!\nVui lòng sử dụng mật khẩu mới cho lần đăng nhập sau.");
+        } else {
+            alert("❌ Đổi mật khẩu thất bại! Mật khẩu hiện tại không đúng.");
+        }
+    } catch(err) {
+        alert("❌ Lỗi hệ thống: " + err.message);
     }
 }
 
