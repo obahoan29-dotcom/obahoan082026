@@ -230,7 +230,8 @@
                 <div class="exam-code-pill"><span style="font-size: 0.95rem;">📑</span> <span id="nav-exam-code-text">Đề: ---</span></div>
                 
                 <div style="display: flex; gap: 8px;">
-                    <div class="progress-pill" id="nav-online-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); border-color: #1d4ed8; pointer-events: none;" title="Số học sinh đang làm bài">
+                    <!-- SỬA TẠI ĐÂY: Thêm onclick và thay đổi con trỏ chuột -->
+                    <div class="progress-pill" id="nav-online-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); border-color: #1d4ed8; cursor: pointer;" title="Số học sinh đang làm bài (Admin bấm vào để cập nhật)" onclick="handleOnlineCountClick()">
                         <span class="progress-icon">👥</span>
                         <span class="progress-val" id="nav-online-val">1</span>
                     </div>
