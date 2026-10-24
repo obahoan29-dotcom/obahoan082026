@@ -108,7 +108,7 @@ function sortLinksNewestFirst(linksArray) {
     });
 }
 
-// NẠP DỮ LIỆU TỪ SUPABASE (BẢO LƯU 100% CÁC CỘT BÀI BÁO DÂN TRÍ)
+// NẠP DỮ LIỆU TỪ SUPABASE (BẢO LƯU 100% CÁC CỘT BÀI BÁO DÂN TRÍ & CẤU HÌNH WEB DỰ PHÒNG)
 async function loadDataFromSupabase() {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) {
@@ -154,7 +154,6 @@ async function loadDataFromSupabase() {
                     allowReviewOriginal: item.allow_review_original,
                     showOnlineCount: item.show_online_count,
                     allowExportExam: item.allow_export_exam,
-                    // BẢO LƯU 100% CÁC TRƯỜNG BÀI BÁO DÂN TRÍ:
                     articleTitle: item.article_title || item.title,
                     author: item.author || "Thầy Hoan",
                     articleTime: item.article_time || "",
@@ -186,6 +185,21 @@ async function loadDataFromSupabase() {
             }
         } catch(e) {}
 
+        // Đọc cấu hình chuyển hướng web dự phòng và cập nhật giao diện Admin
+        try {
+            const { data: redirectData } = await client.from('app_key_values').select('value').eq('key', 'site_redirect_config').single();
+            if (redirectData && redirectData.value) {
+                SITE_REDIRECT_CONFIG = {
+                    enabled: !!redirectData.value.enabled,
+                    targetUrl: redirectData.value.targetUrl || DEFAULT_BACKUP_WEB_URL
+                };
+            }
+        } catch(e) {}
+
+        if (typeof updateRedirectUIElements === 'function') {
+            updateRedirectUIElements();
+        }
+
         refreshAllViews();
     } catch(e) {
         console.warn("Lỗi nạp dữ liệu Supabase:", e);
@@ -204,6 +218,10 @@ function refreshAllViews() {
     if (gear) {
         if (isAdminLoggedIn) gear.classList.add("active-gear");
         else gear.classList.remove("active-gear");
+    }
+
+    if (typeof updateRedirectUIElements === 'function') {
+        updateRedirectUIElements();
     }
 }
 

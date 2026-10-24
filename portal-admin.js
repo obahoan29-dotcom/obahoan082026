@@ -5,6 +5,84 @@
 let currentEditingTimeQuizId = null;
 let currentEditingTimeMode = null;
 
+// HÀM ĐỒNG BỘ HIỂN THỊ CÔNG TẮC & ĐƯỜNG LINK WEB DỰ PHÒNG TRÊN GIAO DIỆN ADMIN
+function updateRedirectUIElements() {
+    const toggle = document.getElementById("admin-redirect-toggle");
+    const statusTxt = document.getElementById("admin-redirect-status-txt");
+    const urlInput = document.getElementById("admin-redirect-url-input");
+
+    if (toggle) toggle.checked = !!SITE_REDIRECT_CONFIG.enabled;
+    if (statusTxt) {
+        statusTxt.innerText = SITE_REDIRECT_CONFIG.enabled ? "BẬT (Đang chuyển hướng)" : "TẮT (Để im web này)";
+        statusTxt.style.color = SITE_REDIRECT_CONFIG.enabled ? "#dc2626" : "#64748b";
+    }
+    if (urlInput) {
+        urlInput.value = SITE_REDIRECT_CONFIG.targetUrl || DEFAULT_BACKUP_WEB_URL;
+    }
+}
+
+// BẬT / TẮT CHUYỂN HƯỚNG WEB DỰ PHÒNG
+async function handleSiteRedirectToggle(isChecked) {
+    const urlInput = document.getElementById("admin-redirect-url-input");
+    const targetUrl = (urlInput && urlInput.value.trim()) ? urlInput.value.trim() : DEFAULT_BACKUP_WEB_URL;
+
+    SITE_REDIRECT_CONFIG.enabled = isChecked;
+    SITE_REDIRECT_CONFIG.targetUrl = targetUrl;
+    updateRedirectUIElements();
+
+    try {
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (client) {
+            await client.from('app_key_values').upsert({
+                key: 'site_redirect_config',
+                value: {
+                    enabled: isChecked,
+                    targetUrl: targetUrl,
+                    updatedAt: Date.now()
+                }
+            });
+        }
+        if (isChecked) {
+            alert(`⚠️ ĐÃ BẬT TỰ ĐỘNG CHUYỂN HƯỚNG!\n\nToàn bộ học sinh mở web này sẽ tự động chuyển sang:\n👉 ${targetUrl}\n\n(Thầy là Admin nên luôn được giữ lại trang chính này an toàn 100%)`);
+        } else {
+            alert("✅ ĐÃ TẮT CHUYỂN HƯỚNG!\nHọc sinh sẽ vào và làm bài trên web này bình thường.");
+        }
+    } catch(err) {
+        alert("❌ Lỗi lưu cấu hình: " + err.message);
+    }
+}
+
+// LƯU ĐƯỜNG DẪN WEB DỰ PHÒNG MỚI
+async function saveSiteRedirectUrl() {
+    const urlInput = document.getElementById("admin-redirect-url-input");
+    if (!urlInput || !urlInput.value.trim()) return alert("Vui lòng nhập đường dẫn web dự phòng!");
+    
+    let newUrl = urlInput.value.trim();
+    if (!newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
+        newUrl = "https://" + newUrl;
+        urlInput.value = newUrl;
+    }
+
+    SITE_REDIRECT_CONFIG.targetUrl = newUrl;
+
+    try {
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (client) {
+            await client.from('app_key_values').upsert({
+                key: 'site_redirect_config',
+                value: {
+                    enabled: SITE_REDIRECT_CONFIG.enabled,
+                    targetUrl: newUrl,
+                    updatedAt: Date.now()
+                }
+            });
+        }
+        alert("✅ Đã cập nhật địa chỉ web dự phòng thành công!");
+    } catch(err) {
+        alert("❌ Lỗi lưu: " + err.message);
+    }
+}
+
 function parseScriptOrJson(content) {
     if (!content) return null;
     let clean = String(content).trim();
@@ -625,3 +703,7 @@ async function changeAvatarSize(categoryId, itemId, sizePx, event) {
         window.location.reload();
     } catch(e) { alert("❌ Lỗi đổi cỡ avatar: " + e.message); }
 }
+
+window.handleSiteRedirectToggle = handleSiteRedirectToggle;
+window.saveSiteRedirectUrl = saveSiteRedirectUrl;
+window.updateRedirectUIElements = updateRedirectUIElements;

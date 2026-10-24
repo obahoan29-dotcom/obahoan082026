@@ -9,7 +9,14 @@ let ADMIN_PASSWORD_HASH = "0a6c968cd9122c2e6011ae39c4a76ec233eea80946b4920aa6d2f
 const SUPABASE_URL = "https://vvjstcftecorvmepdkbi.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pLAoa3B4c6Z0N19kbLA9NA_3_npZyaC";
 
-// Khởi tạo Supabase Client an toàn, tự động thử lại nếu thư viện tải chậm
+// CẤU HÌNH WEB DỰ PHÒNG & CHUYỂN HƯỚNG TỰ ĐỘNG
+const DEFAULT_BACKUP_WEB_URL = "https://obahoan2026.vercel.app/";
+let SITE_REDIRECT_CONFIG = {
+    enabled: false,
+    targetUrl: DEFAULT_BACKUP_WEB_URL
+};
+
+// Khởi tạo Supabase Client an toàn
 let supabaseClient = null;
 function getSupabaseClient() {
     if (!supabaseClient && typeof window.supabase !== 'undefined' && window.supabase && window.supabase.createClient) {
@@ -22,6 +29,94 @@ function getSupabaseClient() {
     return supabaseClient;
 }
 getSupabaseClient();
+
+// HÀM KIỂM TRA QUYỀN ADMIN AN TOÀN TRƯỚC KHI CHUYỂN HƯỚNG
+function isSafeAdminBypass() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin') === '1' || window.location.hash.includes('admin')) return true;
+        
+        const logged = localStorage.getItem("adminLoggedInSession");
+        const expiresAt = localStorage.getItem("admin_expires_at");
+        if (logged === "true" && expiresAt && Date.now() < parseInt(expiresAt, 10)) {
+            return true;
+        }
+    } catch(e) {}
+    return false;
+}
+
+// HÀM THỰC HIỆN CHUYỂN HƯỚNG SANG WEB DỰ PHÒNG CHO HỌC SINH
+function executeStudentRedirect(targetUrl) {
+    if (isSafeAdminBypass()) return; // Tuyệt đối không chuyển hướng Admin
+    
+    let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
+    if (!destination.startsWith("http://") && !destination.startsWith("https://")) {
+        destination = "https://" + destination;
+    }
+    
+    // Nếu học sinh đang mở đề thi cụ thể, tự đính kèm lại tham số truy vấn
+    try {
+        const currentSearch = window.location.search;
+        if (currentSearch && destination.endsWith('/')) {
+            destination = destination.slice(0, -1) + currentSearch;
+        } else if (currentSearch) {
+            destination = destination + currentSearch;
+        }
+    } catch(e) {}
+
+    window.location.replace(destination);
+}
+
+// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE
+async function initGlobalSiteRedirectWatcher() {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    try {
+        const { data } = await client.from('app_key_values').select('value').eq('key', 'site_redirect_config').single();
+        if (data && data.value) {
+            SITE_REDIRECT_CONFIG = {
+                enabled: !!data.value.enabled,
+                targetUrl: data.value.targetUrl || DEFAULT_BACKUP_WEB_URL
+            };
+
+            if (SITE_REDIRECT_CONFIG.enabled) {
+                executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
+            }
+        }
+    } catch(e) {}
+
+    // Lắng nghe Realtime: khi Admin bật công tắc, học sinh lập tức bị chuyển hướng
+    try {
+        client.channel('realtime_redirect_watcher')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'app_key_values',
+                filter: 'key=eq.site_redirect_config'
+            }, payload => {
+                const fresh = payload.new;
+                if (fresh && fresh.value) {
+                    SITE_REDIRECT_CONFIG = {
+                        enabled: !!fresh.value.enabled,
+                        targetUrl: fresh.value.targetUrl || DEFAULT_BACKUP_WEB_URL
+                    };
+
+                    if (typeof updateRedirectUIElements === 'function') {
+                        updateRedirectUIElements();
+                    }
+
+                    if (SITE_REDIRECT_CONFIG.enabled) {
+                        executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
+                    }
+                }
+            })
+            .subscribe();
+    } catch(e) {}
+}
+
+// Tự kích hoạt kiểm tra ngay khi nạp file
+initGlobalSiteRedirectWatcher();
 
 // CẤU HÌNH GOOGLE DRIVE & IMGBB (GIỮ NGUYÊN 100%)
 const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbxrNBRAAeTohrANj3w9_hd9FLBrxZCF0M0PmN290ul0Wrz4zon4-lqYdPOZ7liuePMCgw/exec";

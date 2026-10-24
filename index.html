@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     
-    <title>Kho Đề Thi & Tài Liệu - Máy Chủ 01</title>
+    <title>Kho đề thi & tài liệu trực tuyến</title>
     <!-- FAVICON: Logo chữ H in hoa 3 màu sặc sỡ -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231e293b'/%3E%3Cpath d='M30 25v50' stroke='%2300E5FF' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M70 25v50' stroke='%23FF007F' stroke-width='14' stroke-linecap='round'/%3E%3Cpath d='M30 50h40' stroke='%23FFEA00' stroke-width='14' stroke-linecap='round'/%3E%3C/svg%3E">
 
@@ -77,6 +77,37 @@
             filter: brightness(0.92);
         }
 
+        /* KHỐI CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG CHO ADMIN */
+        .admin-redirect-control-box {
+            background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+            border: 1.5px solid #fecdd3;
+            border-radius: 12px;
+            padding: 9px 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(225, 29, 72, 0.08);
+        }
+        .admin-redirect-toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .admin-redirect-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #991b1b;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .admin-redirect-subhint {
+            font-size: 10.5px;
+            color: #64748b;
+            font-weight: 600;
+            margin-top: 4px;
+            line-height: 1.35;
+        }
+
         @media (max-width: 640px) {
             .btn-upload-json-backup, .btn-auto-collect-drafts {
                 font-size: 11px !important;
@@ -94,7 +125,7 @@
     <!-- TẬP TIN DỮ LIỆU TÀI KHOẢN HỌC SINH -->
     <script src="accounts-data.js"></script>
 
-    <!-- 1. THƯ VIỆN SUPABASE JS CHÍNH THỨC (BẮT BUỘC PHẢI CÓ TRƯỚC APP-CONFIG.JS) -->
+    <!-- 1. THƯ VIỆN SUPABASE JS CHÍNH THỨC -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <!-- CÁC MODULE JAVASCRIPT HỆ THỐNG PHÂN THEO NHIỆM VỤ -->
@@ -175,11 +206,34 @@
 
             <!-- BẢNG QUẢN TRỊ XÒE RA -->
             <div class="admin-popover-panel" id="admin-popover-panel">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-                    <div class="admin-popover-title" style="margin-bottom: 0;">🚀 Đăng đề thi & tài liệu</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div class="admin-popover-title" style="margin-bottom: 0;">🚀 Bảng Điều Khiển Quản Trị</div>
                     <div style="display: flex; gap: 6px; align-items: center;">
                         <button type="button" class="admin-cleanup-btn" onclick="openDbCleanupModal(event)" title="Dọn dẹp cơ sở dữ liệu an toàn">🧹 Dọn Database</button>
                         <button type="button" class="admin-logout-btn" onclick="logoutAdmin(event)" title="Khóa quyền quản trị ngay lập tức">🔒 Khóa lại</button>
+                    </div>
+                </div>
+
+                <!-- KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG -->
+                <div class="admin-redirect-control-box">
+                    <div class="admin-redirect-toggle-row">
+                        <span class="admin-redirect-title">
+                            <span>🔀</span> <b>Tự chuyển sang Web dự phòng:</b>
+                        </span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span class="mini-switch">
+                                <input type="checkbox" id="admin-redirect-toggle" onchange="handleSiteRedirectToggle(this.checked)">
+                                <span class="slider-toggle"></span>
+                            </span>
+                            <b id="admin-redirect-status-txt" style="font-size: 11px; color: #64748b; white-space: nowrap;">TẮT</b>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-top: 6px;">
+                        <input type="text" id="admin-redirect-url-input" placeholder="https://obahoan2026.vercel.app/" style="flex:1; padding: 5px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 7px; outline: none; background: #fff;">
+                        <button type="button" onclick="saveSiteRedirectUrl()" style="background: #0284c7; color:#fff; border:none; border-radius:7px; padding:5px 9px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">Lưu link</button>
+                    </div>
+                    <div class="admin-redirect-subhint">
+                        💡 <b>BẬT:</b> Học sinh ấn vào web này sẽ tự động chuyển sang link dự phòng trên. Thầy là Admin được giữ lại trang chính an toàn 100%.
                     </div>
                 </div>
                 
