@@ -1596,3 +1596,16 @@
         transform: translateZ(0);
     }
 }
+/* THÊM VÀO ĐỂ TẠO HIỆU ỨNG CHỚP SÁNG CHO NÚT SĨ SỐ ADMIN */
+.admin-live-count-badge {
+    background: #f1f5f9; color: #0284c7; border: 1.5px solid #bae6fd;
+    padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 800;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    transition: all 0.15s ease; user-select: none; white-space: nowrap; margin-left: 6px;
+}
+.admin-live-count-badge:hover {
+    background: #e0f2fe; border-color: #38bdf8; transform: translateY(-1px);
+}
+.admin-live-count-badge:active { transform: scale(0.95); }
+.admin-live-count-badge.updated {
+    background: #dcfce7; color: #15803d; border-color: #86efac;
