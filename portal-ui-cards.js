@@ -73,10 +73,11 @@ function buildCardHtmlString(item, categoryId) {
     else if (badge === "CHÚ Ý" || badge === "WARNING") badgeClass = "b-warning";
     else if (badge === "BẮT ĐẦU") badgeClass = "b-start";
 
+    // THÊM ID CHO TIME BOX ĐỂ JS CẬP NHẬT TRỰC TIẾP KHÔNG CẦN RELOAD
     let timeBoxHtml = "";
     if (!isDoc && (categoryId.includes("them") || categoryId.includes("lop") || categoryId.includes("hsg"))) {
         timeBoxHtml = `
-            <div class="st-modal-time-box" style="margin: 6px 0 0 0; padding: 6px 10px; font-size: 11.5px; text-align: left;">
+            <div class="st-modal-time-box" id="time-box-${itemId}" style="margin: 6px 0 0 0; padding: 6px 10px; font-size: 11.5px; text-align: left;">
                 ${buildTimeBoxHtml(item.timeLimitMinutes, item.examStartTimeStr, item.examEndTimeStr, item.date || displayDate)}
             </div>
         `;
@@ -189,6 +190,16 @@ function buildCardHtmlString(item, categoryId) {
         `;
     }
 
+    // NÚT ĐẾM SĨ SỐ THÔNG MINH CHO ADMIN TRÊN TRANG CHỦ
+    let liveCountBadgeHtml = "";
+    if (!isDoc && isAdminLoggedIn) {
+        liveCountBadgeHtml = `
+            <span class="admin-live-count-badge" id="live-count-${itemId}" onclick="fetchLiveCountForCard('${quizId}', '${itemId}', event)" title="Bấm để đếm số học sinh đang làm bài thi này">
+                👥 Đếm
+            </span>
+        `;
+    }
+
     if (isAdminLoggedIn) {
         return `
         <div class="exam-card admin-card-mode" id="card-${itemId}">
@@ -244,10 +255,10 @@ function buildCardHtmlString(item, categoryId) {
                         </label>
 
                         <div class="left-sub-btns-row">
-                            <button type="button" class="btn-time-sub-action btn-time-sub-minutes" onclick="openEditMinutesModal('${quizId}', event)" title="Đổi số phút làm bài">
+                            <button type="button" class="btn-time-sub-action btn-time-sub-minutes" onclick="openEditMinutesModal('${quizId}', '${itemId}', event)" title="Đổi số phút làm bài">
                                 ⏱ Đổi phút
                             </button>
-                            <button type="button" class="btn-time-sub-action btn-time-sub-schedule" onclick="openEditScheduleModal('${quizId}', event)" title="Gia hạn thời gian đóng/mở đề">
+                            <button type="button" class="btn-time-sub-action btn-time-sub-schedule" onclick="openEditScheduleModal('${quizId}', '${itemId}', event)" title="Gia hạn thời gian đóng/mở đề">
                                 📅 Gia hạn
                             </button>
                             <button type="button" class="btn-time-sub-action btn-time-sub-score" onclick="openGradingScaleModal('${quizId}', '${categoryId}', event)" title="Cấu hình thang điểm và phân bổ điểm cho đề thi">
@@ -315,6 +326,7 @@ function buildCardHtmlString(item, categoryId) {
                             </div>
                         </div>
                         <span class="exam-title-text">${item.title}</span>
+                        ${liveCountBadgeHtml}
                         ${isReminder ? `
                             <button type="button" class="btn-edit-inline-title" onclick="openDantriArticleModal(${JSON.stringify(item).replace(/"/g, '&quot;')}, '${categoryId}', event, true)" title="Chỉnh sửa bài viết">
                                 ✏️ Sửa
@@ -352,6 +364,39 @@ function buildCardHtmlString(item, categoryId) {
     </div>`;
 }
 
+// HÀM FETCH ĐẾM SĨ SỐ (CHỈ DÀNH CHO ADMIN)
+async function fetchLiveCountForCard(quizId, itemId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const badge = document.getElementById(`live-count-${itemId}`);
+    if (!badge) return;
+    badge.innerText = "⏳...";
+    badge.style.pointerEvents = "none";
+
+    try {
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (!client) throw new Error("Chưa kết nối");
+
+        const activeThreshold = Date.now() - (3 * 60 * 1000);
+        let { count, error } = await client
+            .from('active_sessions')
+            .select('*', { count: 'exact', head: true })
+            .eq('quiz_id', quizId)
+            .gte('last_ping', activeThreshold);
+
+        if (!error && count !== null) {
+            badge.innerHTML = `👥 <b>${count}</b> đang thi`;
+            badge.classList.add('updated');
+            setTimeout(() => badge.classList.remove('updated'), 2000);
+        } else {
+            badge.innerText = "👥 Lỗi";
+        }
+    } catch(e) {
+        badge.innerText = "👥 Lỗi";
+    } finally {
+        badge.style.pointerEvents = "auto";
+    }
+}
+
 function handleCardClick(categoryId, itemId, isDoc, rawUrl, stringifiedData, event) {
     if (event) {
         if (event.target.closest('.exam-thumb-box') ||
@@ -365,7 +410,8 @@ function handleCardClick(categoryId, itemId, isDoc, rawUrl, stringifiedData, eve
             event.target.closest('.btn-edit-inline-title') ||
             event.target.closest('.btn-test-exam-admin') ||
             event.target.closest('.exam-export-dropdown-wrapper') ||
-            event.target.closest('.btn-tuluan-modal-trigger')) {
+            event.target.closest('.btn-tuluan-modal-trigger') ||
+            event.target.closest('.admin-live-count-badge')) {
             return;
         }
     }
@@ -516,3 +562,5 @@ document.addEventListener("click", function(event) {
     const articleModal = document.getElementById("dantri-article-modal");
     if (articleModal && articleModal.style.display === "flex") { if (event.target.id === "dantri-article-modal") { closeArticleModal(); } }
 });
+
+window.fetchLiveCountForCard = fetchLiveCountForCard;
