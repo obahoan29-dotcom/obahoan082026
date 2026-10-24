@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
+// FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s)
 // =========================================================
 
 let activeDayThemCatId = "them-11";
@@ -74,8 +74,13 @@ document.addEventListener("DOMContentLoaded", async function() {
     const padletCat = CHINH_KHOA_CATEGORIES.find(c => c.id === "tu-luan-padlet");
     if (padletCat) padletCat.links = [...DEFAULT_PADLET_LINKS];
 
+    // 1. NẠP DỮ LIỆU TỪ CACHE (BỘ NHỚ ĐỆM) ĐỂ HIỂN THỊ NGAY LẬP TỨC 0s
+    loadDataFromCache();
     refreshAllViews();
+
+    // 2. NGẦM TẢI DỮ LIỆU MỚI TỪ SUPABASE (KHÔNG LÀM KHỰNG GIAO DIỆN)
     await loadDataFromSupabase();
+    
     if (typeof initSiteVisitTracker === "function") initSiteVisitTracker();
 });
 
@@ -108,7 +113,70 @@ function sortLinksNewestFirst(linksArray) {
     });
 }
 
-// NẠP DỮ LIỆU TỪ SUPABASE (BẢO LƯU 100% CÁC CỘT BÀI BÁO DÂN TRÍ & CẤU HÌNH WEB DỰ PHÒNG)
+// HÀM XỬ LÝ PHÂN LOẠI DỮ LIỆU DÙNG CHUNG CHO CACHE VÀ SUPABASE
+function processLinksData(links) {
+    if (!Array.isArray(links)) return;
+    const grouped = {};
+    links.forEach(item => {
+        const cat = item.category_id || item.categoryId;
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push({
+            id: item.id,
+            firebaseId: item.id,
+            categoryId: cat,
+            title: item.title,
+            date: item.date,
+            url: item.url,
+            badgeText: item.badge_text || item.badgeText || "NONE",
+            isHot: item.is_hot !== undefined ? item.is_hot : item.isHot,
+            isDoc: item.is_doc !== undefined ? item.is_doc : item.isDoc,
+            avatar: item.avatar,
+            avatarSize: item.avatar_size || item.avatarSize || 48,
+            timestamp: item.timestamp,
+            isShuffled: item.is_shuffled !== undefined ? item.is_shuffled : item.isShuffled,
+            allowFree: item.allow_free !== undefined ? item.allow_free : item.allowFree,
+            scoringConfig: item.scoring_config || item.scoringConfig,
+            timeLimitMinutes: item.time_limit_minutes || item.timeLimitMinutes,
+            examStartTimeStr: item.exam_start_time_str || item.examStartTimeStr,
+            examEndTimeStr: item.exam_end_time_str || item.examEndTimeStr,
+            resultMode: item.result_mode || item.resultMode,
+            allowReviewOriginal: item.allow_review_original !== undefined ? item.allow_review_original : item.allowReviewOriginal,
+            showOnlineCount: item.show_online_count !== undefined ? item.show_online_count : item.showOnlineCount,
+            allowExportExam: item.allow_export_exam !== undefined ? item.allow_export_exam : item.allowExportExam,
+            articleTitle: item.article_title || item.articleTitle || item.title,
+            author: item.author || "Thầy Hoan",
+            articleTime: item.article_time || item.articleTime || "",
+            sapo: item.sapo || "",
+            articleImg: item.article_img || item.articleImg || "",
+            articleImgCaption: item.article_img_caption || item.articleImgCaption || "",
+            articleBody: item.article_body || item.articleBody || ""
+        });
+    });
+
+    REMINDER_CATEGORY.links = grouped["nhac-nho"] ? sortLinksNewestFirst(grouped["nhac-nho"]) : [];
+    KHO_TAI_LIEU_FOLDER.links = grouped["kho-tai-lieu"] ? sortLinksNewestFirst(grouped["kho-tai-lieu"]) : [];
+
+    [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES].forEach(cat => {
+        if (cat.id === "tu-luan-padlet") {
+            cat.links = grouped[cat.id] && grouped[cat.id].length > 0 
+                ? sortLinksNewestFirst(grouped[cat.id]) 
+                : [...DEFAULT_PADLET_LINKS];
+        } else {
+            cat.links = grouped[cat.id] ? sortLinksNewestFirst(grouped[cat.id]) : [];
+        }
+    });
+}
+
+function loadDataFromCache() {
+    try {
+        const cachedLinks = safeLocal.getItem("cached_custom_links");
+        if (cachedLinks) {
+            processLinksData(JSON.parse(cachedLinks));
+        }
+    } catch (e) {}
+}
+
+// NẠP DỮ LIỆU TỪ SUPABASE
 async function loadDataFromSupabase() {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) {
@@ -127,55 +195,10 @@ async function loadDataFromSupabase() {
         }
 
         if (Array.isArray(links)) {
-            const grouped = {};
-            links.forEach(item => {
-                const cat = item.category_id;
-                if (!grouped[cat]) grouped[cat] = [];
-                grouped[cat].push({
-                    id: item.id,
-                    firebaseId: item.id,
-                    categoryId: cat,
-                    title: item.title,
-                    date: item.date,
-                    url: item.url,
-                    badgeText: item.badge_text || "NONE",
-                    isHot: item.is_hot,
-                    isDoc: item.is_doc,
-                    avatar: item.avatar,
-                    avatarSize: item.avatar_size || 48,
-                    timestamp: item.timestamp,
-                    isShuffled: item.is_shuffled,
-                    allowFree: item.allow_free,
-                    scoringConfig: item.scoring_config,
-                    timeLimitMinutes: item.time_limit_minutes,
-                    examStartTimeStr: item.exam_start_time_str,
-                    examEndTimeStr: item.exam_end_time_str,
-                    resultMode: item.result_mode,
-                    allowReviewOriginal: item.allow_review_original,
-                    showOnlineCount: item.show_online_count,
-                    allowExportExam: item.allow_export_exam,
-                    articleTitle: item.article_title || item.title,
-                    author: item.author || "Thầy Hoan",
-                    articleTime: item.article_time || "",
-                    sapo: item.sapo || "",
-                    articleImg: item.article_img || "",
-                    articleImgCaption: item.article_img_caption || "",
-                    articleBody: item.article_body || ""
-                });
-            });
-
-            REMINDER_CATEGORY.links = grouped["nhac-nho"] ? sortLinksNewestFirst(grouped["nhac-nho"]) : [];
-            KHO_TAI_LIEU_FOLDER.links = grouped["kho-tai-lieu"] ? sortLinksNewestFirst(grouped["kho-tai-lieu"]) : [];
-
-            [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES].forEach(cat => {
-                if (cat.id === "tu-luan-padlet") {
-                    cat.links = grouped[cat.id] && grouped[cat.id].length > 0 
-                        ? sortLinksNewestFirst(grouped[cat.id]) 
-                        : [...DEFAULT_PADLET_LINKS];
-                } else {
-                    cat.links = grouped[cat.id] ? sortLinksNewestFirst(grouped[cat.id]) : [];
-                }
-            });
+            // Lưu dữ liệu vào LocalStorage để lần truy cập sau hiển thị ngay lập tức
+            try { safeLocal.setItem("cached_custom_links", JSON.stringify(links)); } catch(e) {}
+            
+            processLinksData(links);
         }
 
         try {
