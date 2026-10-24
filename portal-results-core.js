@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-results-core.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
+// FILE: portal-results-core.js (BẢN SUPABASE TỐI ƯU & QUÉT ĐA MÃ ĐỀ)
 // =========================================================
 
 let currentExamResultData = {
@@ -79,6 +79,7 @@ function getExamPossibleQuizIds(examItem, examMeta) {
         let extracted = extractQuizIdFromItem(examItem);
         if (extracted) ids.add(String(extracted).trim());
         if (examItem.id) ids.add(String(examItem.id).trim());
+        if (examItem.firebaseId) ids.add(String(examItem.firebaseId).trim());
     }
     return Array.from(ids).filter(Boolean);
 }
@@ -125,7 +126,6 @@ function getSubmissionTimestamp(sub) {
     return parseDateString(sub.timestamp) || 0;
 }
 
-// BẬT LẮNG NGHE SUPABASE REALTIME (THAY THẾ EVENTSOURCE ĐỐT BĂNG THÔNG)
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
     if (!quizId || !supabaseClient) return;
@@ -151,7 +151,7 @@ function stopRealtimeSubmissionsListener() {
     }
 }
 
-// TẢI KẾT QUẢ ĐÚNG ĐỀ ĐANG XEM (TIẾT KIỆM 99% BĂNG THÔNG)
+// TẢI KẾT QUẢ ĐÚNG ĐỀ ĐANG XEM (QUÉT TOÀN DIỆN DANH SÁCH MÃ ĐỀ LIÊN QUAN)
 async function fetchAndRenderExamResults(item, isSilent = false) {
     if (!item || !supabaseClient) return;
 
@@ -160,10 +160,26 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     let examTitle = item.title || "";
 
     try {
+        const { data: qData } = await supabaseClient.from('quizzes').select('made, title').eq('id', quizId).single();
+        if (qData) {
+            maDe = qData.made || "";
+            if (qData.title) examTitle = qData.title;
+        }
+    } catch(e) {}
+
+    const candidateIds = Array.from(new Set([
+        quizId,
+        cleanExamCodeKey(maDe),
+        cleanExamCodeKey(examTitle),
+        item.id,
+        item.firebaseId
+    ].filter(Boolean)));
+
+    try {
         const [subRes, cheatRes, activeRes] = await Promise.all([
-            supabaseClient.from('submissions').select('*').eq('quiz_id', quizId),
-            supabaseClient.from('cheating_logs').select('*').eq('quiz_id', quizId),
-            supabaseClient.from('active_sessions').select('*').eq('quiz_id', quizId)
+            supabaseClient.from('submissions').select('*').in('quiz_id', candidateIds),
+            supabaseClient.from('cheating_logs').select('*').in('quiz_id', candidateIds),
+            supabaseClient.from('active_sessions').select('*').in('quiz_id', candidateIds)
         ]);
 
         const rawSubs = (subRes.data || []).map(r => ({
@@ -264,6 +280,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     const finalRows = [];
     const usedSbdSet = new Set();
+    const usedSubIds = new Set();
 
     classAccounts.forEach((acc, idx) => {
         const accSbdLower = String(acc.sbd || "").trim().toLowerCase();
@@ -272,6 +289,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             let subSbd = String(sub.sbd || "").trim().toLowerCase();
             if (accSbdLower && subSbd && subSbd === accSbdLower) {
                 matchedSubs.push(sub);
+                usedSubIds.add(sub.id);
             }
         }
 
@@ -298,6 +316,24 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             isFreeDoing: false, cheatTimeString: cheatTimeString, cheatLogsTabCount: cheatLogsTabCount
         });
     });
+
+    // Bổ sung thí sinh tự do
+    let freeSttCounter = classAccounts.length + 1;
+    for (let sub of submissionsList) {
+        if (usedSubIds.has(sub.id)) continue;
+        const subSbd = String(sub.sbd || "free").trim().toLowerCase();
+        const freeAcc = {
+            sbd: sub.sbd || "---",
+            name: sub.studentName || "Thí sinh tự do",
+            className: sub.studentClass || "Tự do"
+        };
+        finalRows.push({
+            _rowUid: 'row_free_' + sub.id + '_' + Math.random().toString(36).substring(2, 7),
+            stt: freeSttCounter++, isClassStudent: false, account: freeAcc, allAttempts: [sub],
+            selectedAttemptIndex: 0, isDoing: false, doingStartTime: null,
+            isFreeDoing: false, cheatTimeString: "0s", cheatLogsTabCount: 0
+        });
+    }
 
     if (typeof calculateRanksForRows === 'function') calculateRanksForRows(finalRows);
     currentExamResultData.rawRows = finalRows;

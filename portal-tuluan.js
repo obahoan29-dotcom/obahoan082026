@@ -1,383 +1,149 @@
 // =========================================================
 // FILE: portal-tuluan.js (BẢN SUPABASE TOÀN DIỆN 100%)
 // QUẢN LÝ NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB ĐỒNG BỘ 1 THƯ MỤC DUY NHẤT
-// BẢO MẬT XÓA ẢNH (CHỈ CHÍNH CHỦ & ADMIN) | QUẢN LÝ 5 ĐỀ MỚI NHẤT
-// TỰ ĐỘNG TẠO THƯ MỤC CHUẨN XÁC THEO LỚP ĐANG CHỌN (11C, 11A, 10P...)
-// NÚT XÓA ĐỀ CHỈ HIỆN KHI LÀ ADMIN | ĐỔI MẬT KHẨU 4 SỐ NỔI LÊN TRÊN
-// CỘT CHẤM CHÉO NHAU (GHI NHẬN DANH TÍNH & HIỆN TOOLTIP KHI HOVER)
-// CỘT NHẬN XÉT (XÒE RA) & XUẤT EXCEL CÓ ẢNH VÀ NGƯỜI CHẤM
+// THƯ MỤC GỐC: BAI_TAP_TU_LUAN_SUPABASE
 // =========================================================
 
-// TỰ ĐỘNG NHÚNG CSS NÚT XÓA ẢNH, NÚT XÓA ĐỀ, CHẤM CHÉO, NHẬN XÉT & EXCEL
 (function injectTuLuanButtonStyles() {
     const styleId = "tuluan-custom-delete-btn-styles";
     if (document.getElementById(styleId)) return;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        .tuluan-img-thumbnail-item {
-            position: relative !important;
-            display: inline-block !important;
-        }
+        .tuluan-img-thumbnail-item { position: relative !important; display: inline-block !important; }
         .btn-del-single-thumb {
-            position: absolute !important;
-            top: 2px !important;
-            right: 2px !important;
-            width: 18px !important;
-            height: 18px !important;
-            background: #ef4444 !important;
-            color: #ffffff !important;
-            border: 1px solid #ffffff !important;
-            border-radius: 50% !important;
-            font-size: 10px !important;
-            font-weight: 900 !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            cursor: pointer !important;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45) !important;
-            z-index: 20 !important;
-            padding: 0 !important;
-            user-select: none !important;
+            position: absolute !important; top: 2px !important; right: 2px !important;
+            width: 18px !important; height: 18px !important; background: #ef4444 !important;
+            color: #ffffff !important; border: 1px solid #ffffff !important; border-radius: 50% !important;
+            font-size: 10px !important; font-weight: 900 !important; line-height: 1 !important;
+            display: flex !important; align-items: center !important; justify-content: center !important;
+            cursor: pointer !important; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45) !important;
+            z-index: 20 !important; padding: 0 !important; user-select: none !important;
             transition: transform 0.15s ease, background 0.15s ease !important;
         }
-        .btn-del-single-thumb:hover {
-            background: #b91c1c !important;
-            transform: scale(1.2) !important;
-        }
-        .btn-del-single-thumb:active {
-            transform: scale(0.9) !important;
-        }
+        .btn-del-single-thumb:hover { background: #b91c1c !important; transform: scale(1.2) !important; }
+        .btn-del-single-thumb:active { transform: scale(0.9) !important; }
 
         .btn-del-exam-selector {
             background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
-            color: #dc2626 !important;
-            border: 1.5px solid #f87171 !important;
-            border-radius: 9px !important;
-            padding: 6px 12px !important;
-            height: 34px !important;
-            font-size: 12px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            display: none;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 4px !important;
-            transition: all 0.16s ease !important;
-            flex-shrink: 0 !important;
-            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.18) !important;
-            user-select: none !important;
-            white-space: nowrap !important;
+            color: #dc2626 !important; border: 1.5px solid #f87171 !important; border-radius: 9px !important;
+            padding: 6px 12px !important; height: 34px !important; font-size: 12px !important; font-weight: 800 !important;
+            cursor: pointer !important; display: none; align-items: center !important; justify-content: center !important;
+            gap: 4px !important; transition: all 0.16s ease !important; flex-shrink: 0 !important;
+            box-shadow: 0 2px 6px rgba(220, 38, 38, 0.18) !important; user-select: none !important; white-space: nowrap !important;
         }
         .btn-del-exam-selector:hover {
             background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-            color: #ffffff !important;
-            border-color: #dc2626 !important;
-            transform: translateY(-1px) scale(1.03) !important;
+            color: #ffffff !important; border-color: #dc2626 !important; transform: translateY(-1px) scale(1.03) !important;
             box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3) !important;
         }
-        .btn-del-exam-selector:active {
-            transform: translateY(2px) scale(0.95) !important;
-        }
+        .btn-del-exam-selector:active { transform: translateY(2px) scale(0.95) !important; }
 
         .btn-tuluan-export-excel {
             background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
-            color: #ffffff !important;
-            border: 1.2px solid #34d399 !important;
-            border-radius: 7px !important;
-            padding: 4px 11px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            height: 30px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 4px !important;
-            transition: all 0.15s ease !important;
-            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25) !important;
-            white-space: nowrap !important;
-            user-select: none !important;
+            color: #ffffff !important; border: 1.2px solid #34d399 !important; border-radius: 7px !important;
+            padding: 4px 11px !important; font-size: 11px !important; font-weight: 800 !important;
+            cursor: pointer !important; height: 30px !important; display: inline-flex !important;
+            align-items: center !important; justify-content: center !important; gap: 4px !important;
+            transition: all 0.15s ease !important; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25) !important;
+            white-space: nowrap !important; user-select: none !important;
         }
-        .btn-tuluan-export-excel:hover {
-            filter: brightness(1.12) !important;
-            transform: translateY(-1px) !important;
-            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35) !important;
-        }
-        .btn-tuluan-export-excel:active {
-            transform: translateY(2px) scale(0.96) !important;
-        }
+        .btn-tuluan-export-excel:hover { filter: brightness(1.12) !important; transform: translateY(-1px) !important; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.35) !important; }
+        .btn-tuluan-export-excel:active { transform: translateY(2px) scale(0.96) !important; }
 
         .tuluan-score-input {
-            width: 76px !important;
-            padding: 5px 6px !important;
-            border: 1.5px solid #cbd5e1 !important;
-            border-radius: 8px !important;
-            font-size: 13px !important;
-            font-weight: 900 !important;
-            text-align: center !important;
-            outline: none !important;
-            color: #0284c7 !important;
-            background: #ffffff !important;
-            box-sizing: border-box !important;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
+            width: 76px !important; padding: 5px 6px !important; border: 1.5px solid #cbd5e1 !important;
+            border-radius: 8px !important; font-size: 13px !important; font-weight: 900 !important;
+            text-align: center !important; outline: none !important; color: #0284c7 !important; background: #ffffff !important;
+            box-sizing: border-box !important; transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
             cursor: pointer !important;
         }
-        .tuluan-score-input:hover {
-            border-color: #0284c7 !important;
-            background: #f0f9ff !important;
-        }
-        .tuluan-score-input:focus {
-            border-color: #0284c7 !important;
-            box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important;
-            background: #f0f9ff !important;
-            cursor: text !important;
-        }
+        .tuluan-score-input:hover { border-color: #0284c7 !important; background: #f0f9ff !important; }
+        .tuluan-score-input:focus { border-color: #0284c7 !important; box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2) !important; background: #f0f9ff !important; cursor: text !important; }
 
         .btn-tuluan-comment {
-            background: #f8fafc !important;
-            color: #475569 !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 8px !important;
-            padding: 5px 9px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            transition: all 0.15s ease !important;
-            white-space: nowrap !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
+            background: #f8fafc !important; color: #475569 !important; border: 1.2px solid #cbd5e1 !important;
+            border-radius: 8px !important; padding: 5px 9px !important; font-size: 11px !important;
+            font-weight: 800 !important; cursor: pointer !important; transition: all 0.15s ease !important;
+            white-space: nowrap !important; display: inline-flex !important; align-items: center !important; gap: 3px !important;
         }
-        .btn-tuluan-comment:hover {
-            background: #e0f2fe !important;
-            color: #0284c7 !important;
-            border-color: #7dd3fc !important;
-        }
-        .btn-tuluan-comment.active {
-            background: #fef3c7 !important;
-            color: #b45309 !important;
-            border-color: #fde68a !important;
-            font-weight: 900 !important;
-        }
+        .btn-tuluan-comment:hover { background: #e0f2fe !important; color: #0284c7 !important; border-color: #7dd3fc !important; }
+        .btn-tuluan-comment.active { background: #fef3c7 !important; color: #b45309 !important; border-color: #fde68a !important; font-weight: 900 !important; }
 
         .student-feedback-popover {
-            display: none;
-            position: absolute !important;
-            right: 0 !important;
-            bottom: calc(100% + 6px) !important;
-            top: auto !important;
-            width: 300px !important;
-            background: #ffffff !important;
-            border: 1.5px solid #d97706 !important;
-            border-radius: 14px !important;
-            padding: 12px 14px !important;
-            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(217, 119, 6, 0.2) !important;
-            z-index: 100000 !important;
-            text-align: left !important;
-            animation: popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            display: none; position: absolute !important; right: 0 !important; bottom: calc(100% + 6px) !important;
+            top: auto !important; width: 300px !important; background: #ffffff !important; border: 1.5px solid #d97706 !important;
+            border-radius: 14px !important; padding: 12px 14px !important; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(217, 119, 6, 0.2) !important;
+            z-index: 100000 !important; text-align: left !important; animation: popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
-        .student-feedback-popover.show {
-            display: block !important;
-        }
+        .student-feedback-popover.show { display: block !important; }
         .feedback-textarea {
-            width: 100% !important;
-            padding: 8px 10px !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 8px !important;
-            font-size: 12.5px !important;
-            font-family: inherit !important;
-            font-weight: 600 !important;
-            color: #0f172a !important;
-            outline: none !important;
-            resize: vertical !important;
-            box-sizing: border-box !important;
-            margin-bottom: 6px !important;
+            width: 100% !important; padding: 8px 10px !important; border: 1.2px solid #cbd5e1 !important;
+            border-radius: 8px !important; font-size: 12.5px !important; font-family: inherit !important;
+            font-weight: 600 !important; color: #0f172a !important; outline: none !important; resize: vertical !important;
+            box-sizing: border-box !important; margin-bottom: 6px !important;
         }
-        .feedback-textarea:focus {
-            border-color: #d97706 !important;
-            box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15) !important;
-        }
+        .feedback-textarea:focus { border-color: #d97706 !important; box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15) !important; }
 
-        .tuluan-action-btn-group {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 5px !important;
-            flex-wrap: nowrap !important;
-        }
-
+        .tuluan-action-btn-group { display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 5px !important; flex-wrap: nowrap !important; }
         .btn-tuluan-change-pass {
-            background: #f0fdf4 !important;
-            color: #166534 !important;
-            border: 1px solid #86efac !important;
-            border-radius: 8px !important;
-            padding: 6px 9px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            transition: all 0.15s ease !important;
-            white-space: nowrap !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            box-shadow: 0 1px 3px rgba(22, 101, 52, 0.1) !important;
+            background: #f0fdf4 !important; color: #166534 !important; border: 1px solid #86efac !important;
+            border-radius: 8px !important; padding: 6px 9px !important; font-size: 11px !important; font-weight: 800 !important;
+            cursor: pointer !important; transition: all 0.15s ease !important; white-space: nowrap !important;
+            display: inline-flex !important; align-items: center !important; gap: 3px !important; box-shadow: 0 1px 3px rgba(22, 101, 52, 0.1) !important;
         }
-        .btn-tuluan-change-pass:hover {
-            background: #16a34a !important;
-            color: #ffffff !important;
-            border-color: #16a34a !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-tuluan-change-pass:active {
-            transform: scale(0.95) !important;
-        }
+        .btn-tuluan-change-pass:hover { background: #16a34a !important; color: #ffffff !important; border-color: #16a34a !important; transform: translateY(-1px) !important; }
+        .btn-tuluan-change-pass:active { transform: scale(0.95) !important; }
 
         .btn-tuluan-reset-pass {
-            background: #fff7ed !important;
-            color: #c2410c !important;
-            border: 1px solid #fdba74 !important;
-            border-radius: 8px !important;
-            padding: 6px 8px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            transition: all 0.15s ease !important;
-            white-space: nowrap !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 2px !important;
-            box-shadow: 0 1px 3px rgba(194, 65, 12, 0.1) !important;
+            background: #fff7ed !important; color: #c2410c !important; border: 1px solid #fdba74 !important;
+            border-radius: 8px !important; padding: 6px 8px !important; font-size: 11px !important; font-weight: 800 !important;
+            cursor: pointer !important; transition: all 0.15s ease !important; white-space: nowrap !important;
+            display: inline-flex !important; align-items: center !important; gap: 2px !important; box-shadow: 0 1px 3px rgba(194, 65, 12, 0.1) !important;
         }
-        .btn-tuluan-reset-pass:hover {
-            background: #ea580c !important;
-            color: #ffffff !important;
-            border-color: #ea580c !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-tuluan-reset-pass:active {
-            transform: scale(0.95) !important;
-        }
+        .btn-tuluan-reset-pass:hover { background: #ea580c !important; color: #ffffff !important; border-color: #ea580c !important; transform: translateY(-1px) !important; }
+        .btn-tuluan-reset-pass:active { transform: scale(0.95) !important; }
 
         .tuluan-td-active-popover,
         .tuluan-table tbody td.tuluan-td-active-popover,
         .tuluan-table tbody td:has(.student-pass-popover.show),
-        .tuluan-table tbody td:has(.student-feedback-popover.show) {
-            z-index: 99999 !important;
-            position: relative !important;
-        }
+        .tuluan-table tbody td:has(.student-feedback-popover.show) { z-index: 99999 !important; position: relative !important; }
         .tuluan-table tbody tr:has(.student-pass-popover.show),
-        .tuluan-table tbody tr:has(.student-feedback-popover.show) {
-            z-index: 99999 !important;
-            position: relative !important;
-        }
+        .tuluan-table tbody tr:has(.student-feedback-popover.show) { z-index: 99999 !important; position: relative !important; }
 
         .student-pass-popover {
-            display: none;
-            position: absolute !important;
-            right: 4px !important;
-            bottom: calc(100% + 6px) !important;
-            top: auto !important;
-            width: 280px !important;
-            background: #ffffff !important;
-            border: 1.5px solid #0284c7 !important;
-            border-radius: 14px !important;
-            padding: 12px 14px !important;
-            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(2, 132, 199, 0.2) !important;
-            z-index: 100000 !important;
-            text-align: left !important;
-            animation: popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            display: none; position: absolute !important; right: 4px !important; bottom: calc(100% + 6px) !important;
+            top: auto !important; width: 280px !important; background: #ffffff !important; border: 1.5px solid #0284c7 !important;
+            border-radius: 14px !important; padding: 12px 14px !important; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(2, 132, 199, 0.2) !important;
+            z-index: 100000 !important; text-align: left !important; animation: popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
-        .student-pass-popover.show {
-            display: block !important;
-        }
+        .student-pass-popover.show { display: block !important; }
         .pass-popover-header {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            font-size: 12.5px !important;
-            font-weight: 900 !important;
-            color: #0f172a !important;
-            border-bottom: 1px solid #f1f5f9 !important;
-            padding-bottom: 6px !important;
-            margin-bottom: 8px !important;
+            display: flex !important; align-items: center !important; justify-content: space-between !important;
+            font-size: 12.5px !important; font-weight: 900 !important; color: #0f172a !important;
+            border-bottom: 1px solid #f1f5f9 !important; padding-bottom: 6px !important; margin-bottom: 8px !important;
         }
-        .btn-close-pass-pop {
-            background: none !important;
-            border: none !important;
-            font-size: 14px !important;
-            font-weight: 900 !important;
-            color: #94a3b8 !important;
-            cursor: pointer !important;
-            padding: 0 4px !important;
-        }
-        .btn-close-pass-pop:hover {
-            color: #ef4444 !important;
-        }
+        .btn-close-pass-pop { background: none !important; border: none !important; font-size: 14px !important; font-weight: 900 !important; color: #94a3b8 !important; cursor: pointer !important; padding: 0 4px !important; }
+        .btn-close-pass-pop:hover { color: #ef4444 !important; }
         .pass-popover-hint {
-            font-size: 11px !important;
-            color: #475569 !important;
-            background: #f0f9ff !important;
-            border: 1px solid #bae6fd !important;
-            padding: 6px 8px !important;
-            border-radius: 8px !important;
-            margin-bottom: 9px !important;
-            line-height: 1.4 !important;
+            font-size: 11px !important; color: #475569 !important; background: #f0f9ff !important;
+            border: 1px solid #bae6fd !important; padding: 6px 8px !important; border-radius: 8px !important;
+            margin-bottom: 9px !important; line-height: 1.4 !important;
         }
-        .pass-input-row {
-            margin-bottom: 8px !important;
-        }
-        .pass-input-row label {
-            display: block !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            color: #334155 !important;
-            margin-bottom: 3px !important;
-        }
+        .pass-input-row { margin-bottom: 8px !important; }
+        .pass-input-row label { display: block !important; font-size: 11px !important; font-weight: 800 !important; color: #334155 !important; margin-bottom: 3px !important; }
         .pass-input-row input {
-            width: 100% !important;
-            padding: 6px 9px !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 7px !important;
-            font-size: 13px !important;
-            font-weight: 700 !important;
-            outline: none !important;
-            box-sizing: border-box !important;
-            color: #0f172a !important;
-            letter-spacing: 1px !important;
+            width: 100% !important; padding: 6px 9px !important; border: 1.2px solid #cbd5e1 !important;
+            border-radius: 7px !important; font-size: 13px !important; font-weight: 700 !important; outline: none !important;
+            box-sizing: border-box !important; color: #0f172a !important; letter-spacing: 1px !important;
         }
-        .pass-input-row input:focus {
-            border-color: #0284c7 !important;
-            box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important;
-        }
-        .pass-popover-actions {
-            display: flex !important;
-            gap: 6px !important;
-            margin-top: 10px !important;
-        }
-        .btn-pass-cancel {
-            flex: 1 !important;
-            padding: 6px !important;
-            background: #f1f5f9 !important;
-            border: 1px solid #cbd5e1 !important;
-            border-radius: 7px !important;
-            font-size: 11.5px !important;
-            font-weight: 800 !important;
-            color: #475569 !important;
-            cursor: pointer !important;
-        }
+        .pass-input-row input:focus { border-color: #0284c7 !important; box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15) !important; }
+        .pass-popover-actions { display: flex !important; gap: 6px !important; margin-top: 10px !important; }
+        .btn-pass-cancel { flex: 1 !important; padding: 6px !important; background: #f1f5f9 !important; border: 1px solid #cbd5e1 !important; border-radius: 7px !important; font-size: 11.5px !important; font-weight: 800 !important; color: #475569 !important; cursor: pointer !important; }
         .btn-pass-save {
-            flex: 1.5 !important;
-            padding: 6px !important;
-            background: linear-gradient(135deg, #16a34a, #15803d) !important;
-            border: none !important;
-            border-radius: 7px !important;
-            font-size: 11.5px !important;
-            font-weight: 800 !important;
-            color: #ffffff !important;
-            cursor: pointer !important;
-            box-shadow: 0 2px 5px rgba(22, 163, 74, 0.25) !important;
+            flex: 1.5 !important; padding: 6px !important; background: linear-gradient(135deg, #16a34a, #15803d) !important;
+            border: none !important; border-radius: 7px !important; font-size: 11.5px !important; font-weight: 800 !important;
+            color: #ffffff !important; cursor: pointer !important; box-shadow: 0 2px 5px rgba(22, 163, 74, 0.25) !important;
         }
     `;
     document.head.appendChild(style);
@@ -655,7 +421,7 @@ function ensureTuLuanModalDOM() {
                     <div>
                         <h3 id="tuluan-modal-heading" style="margin:0; color:#0f172a; font-size:16px; font-weight:900;">📤 NỘP BÀI TỰ LUẬN GOOGLE DRIVE</h3>
                         <div id="tuluan-modal-subheading" style="font-size:12px; color:#64748b; font-weight:700; margin-top:2px;">
-                            Thư mục Drive: <code id="tuluan-drive-folder-path" style="color:#0284c7; background:#e0f2fe; padding:2px 6px; border-radius:6px;">BAI_TAP_TU_LUAN</code>
+                            Thư mục Drive: <code id="tuluan-drive-folder-path" style="color:#0284c7; background:#e0f2fe; padding:2px 6px; border-radius:6px;">BAI_TAP_TU_LUAN_SUPABASE</code>
                         </div>
                     </div>
                 </div>
@@ -881,7 +647,7 @@ async function switchTuLuanExam(examId, examTitle) {
     const headTitle = document.getElementById("tuluan-modal-heading");
     const pathCode = document.getElementById("tuluan-drive-folder-path");
     if (headTitle) headTitle.innerText = `📤 NỘP BÀI TỰ LUẬN - ${examTitle}`;
-    if (pathCode) pathCode.innerText = `BAI_TAP_TU_LUAN / ${driveClassName} / ${folderKey} / [STT_SBD_HỌ_TÊN]`;
+    if (pathCode) pathCode.innerText = `BAI_TAP_TU_LUAN_SUPABASE / ${driveClassName} / ${folderKey} / [STT_SBD_HỌ_TÊN]`;
 
     updateTuLuanAdminUI();
     await loadTuLuanSubmissionsFromSupabase();
@@ -974,7 +740,7 @@ async function promptAddNewTuLuanExam() {
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({
                     action: "createExamFolders",
-                    rootFolder: "BAI_TAP_TU_LUAN",
+                    rootFolder: "BAI_TAP_TU_LUAN_SUPABASE",
                     className: driveClassName,
                     class: driveClassName,
                     lop: driveClassName,
@@ -1732,7 +1498,7 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
             if (upBtn) upBtn.innerText = `🚀 Lưu trang ${pageIdx}...`;
 
             const payload = {
-                rootFolder: "BAI_TAP_TU_LUAN",
+                rootFolder: "BAI_TAP_TU_LUAN_SUPABASE",
                 className: driveClassName,
                 class: driveClassName,
                 lop: driveClassName,
@@ -1796,7 +1562,7 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
 
         await loadTuLuanSubmissionsFromSupabase();
         renderTuLuanStudentsTable();
-        alert(`🎉 THÀNH CÔNG!\nĐã lưu ${successCount} ảnh bài làm vào Drive.`);
+        alert(`🎉 THÀNH CÔNG!\nĐã lưu ${successCount} ảnh bài làm vào Drive theo đường dẫn:\nBAI_TAP_TU_LUAN_SUPABASE / ${driveClassName} / ${unifiedFolder} / ${studentFolderName}`);
     }
 
     if (upBtn) { upBtn.disabled = false; upBtn.innerText = "📷 Tải ảnh"; }
@@ -1874,7 +1640,7 @@ async function triggerExamRoomDriveUpload(qId) {
                 try {
                     const comp = await compressImageForTuLuanAsync(f, 2048, 0.82);
                     const payload = {
-                        rootFolder: "BAI_TAP_TU_LUAN",
+                        rootFolder: "BAI_TAP_TU_LUAN_SUPABASE",
                         className: driveClassName,
                         class: driveClassName,
                         lop: driveClassName,
@@ -1928,7 +1694,7 @@ async function triggerExamRoomDriveUpload(qId) {
                     statusEl.className = "drive-up-status success";
                     statusEl.innerText = `✅ Đã lưu ${existingImages.length} ảnh lên Drive!`;
                 }
-                alert(`✅ ĐÃ LƯU BÀI TỰ LUẬN THÀNH CÔNG!`);
+                alert(`✅ ĐÃ LƯU BÀI TỰ LUẬN THÀNH CÔNG!\nThư mục Drive: BAI_TAP_TU_LUAN_SUPABASE / ${driveClassName} / ${unifiedFolder} / ${studentFolderName}`);
             } else {
                 if (statusEl) {
                     statusEl.className = "drive-up-status error";

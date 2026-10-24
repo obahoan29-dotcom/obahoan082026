@@ -14,11 +14,65 @@ let currentTargetAvatarCatId = "nhac-nho";
 
 const categoryExpandedState = {};
 
+const DEFAULT_PADLET_LINKS = [
+    {
+        id: "tuluan_11a",
+        firebaseId: "tuluan_11a",
+        categoryId: "tu-luan-padlet",
+        title: "11A nộp bài tự luận Google Drive",
+        date: "16/09/2026 - 10:00",
+        timestamp: 1773630004,
+        url: "#",
+        badgeText: "HOT",
+        isDoc: true,
+        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
+    },
+    {
+        id: "tuluan_11c",
+        firebaseId: "tuluan_11c",
+        categoryId: "tu-luan-padlet",
+        title: "11C nộp bài tự luận Google Drive",
+        date: "16/09/2026 - 10:00",
+        timestamp: 1773630003,
+        url: "#",
+        badgeText: "HOT",
+        isDoc: true,
+        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
+    },
+    {
+        id: "tuluan_10p",
+        firebaseId: "tuluan_10p",
+        categoryId: "tu-luan-padlet",
+        title: "10P nộp bài tự luận Google Drive",
+        date: "16/09/2026 - 10:00",
+        timestamp: 1773630002,
+        url: "#",
+        badgeText: "HOT",
+        isDoc: true,
+        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
+    },
+    {
+        id: "tuluan_11e",
+        firebaseId: "tuluan_11e",
+        categoryId: "tu-luan-padlet",
+        title: "11E nộp bài tự luận Google Drive",
+        date: "16/09/2026 - 10:00",
+        timestamp: 1773630001,
+        url: "#",
+        badgeText: "HOT",
+        isDoc: true,
+        avatar: "https://cdn-icons-png.flaticon.com/512/3074/3074058.png"
+    }
+];
+
 document.addEventListener("DOMContentLoaded", async function() {
     initBannerAndAvatars();
     if (typeof initTableSettings === "function") initTableSettings();
     if (typeof initAvatarGrid === "function") initAvatarGrid();
     if (typeof checkAdminSessionValidity === "function") checkAdminSessionValidity();
+
+    const padletCat = CHINH_KHOA_CATEGORIES.find(c => c.id === "tu-luan-padlet");
+    if (padletCat) padletCat.links = [...DEFAULT_PADLET_LINKS];
 
     refreshAllViews();
     await loadDataFromSupabase();
@@ -54,11 +108,10 @@ function sortLinksNewestFirst(linksArray) {
     });
 }
 
-// NẠP DỮ LIỆU TỪ SUPABASE (TỰ ĐỘNG THỬ LẠI NẾU MẠNG CHẬM)
+// NẠP DỮ LIỆU TỪ SUPABASE (BẢO LƯU 100% CÁC CỘT BÀI BÁO DÂN TRÍ)
 async function loadDataFromSupabase() {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) {
-        console.warn("Chờ nạp thư viện Supabase...");
         setTimeout(loadDataFromSupabase, 500);
         return;
     }
@@ -69,7 +122,7 @@ async function loadDataFromSupabase() {
             .select('*');
 
         if (lErr) {
-            console.error("Lỗi đọc dữ liệu custom_links từ Supabase:", lErr.message, lErr.details);
+            console.error("Lỗi đọc dữ liệu custom_links từ Supabase:", lErr.message);
             return;
         }
 
@@ -101,13 +154,14 @@ async function loadDataFromSupabase() {
                     allowReviewOriginal: item.allow_review_original,
                     showOnlineCount: item.show_online_count,
                     allowExportExam: item.allow_export_exam,
-                    articleTitle: item.article_title,
-                    author: item.author,
-                    articleTime: item.article_time,
-                    sapo: item.sapo,
-                    articleImg: item.article_img,
-                    articleImgCaption: item.article_img_caption,
-                    articleBody: item.article_body
+                    // BẢO LƯU 100% CÁC TRƯỜNG BÀI BÁO DÂN TRÍ:
+                    articleTitle: item.article_title || item.title,
+                    author: item.author || "Thầy Hoan",
+                    articleTime: item.article_time || "",
+                    sapo: item.sapo || "",
+                    articleImg: item.article_img || "",
+                    articleImgCaption: item.article_img_caption || "",
+                    articleBody: item.article_body || ""
                 });
             });
 
@@ -115,7 +169,13 @@ async function loadDataFromSupabase() {
             KHO_TAI_LIEU_FOLDER.links = grouped["kho-tai-lieu"] ? sortLinksNewestFirst(grouped["kho-tai-lieu"]) : [];
 
             [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES].forEach(cat => {
-                cat.links = grouped[cat.id] ? sortLinksNewestFirst(grouped[cat.id]) : [];
+                if (cat.id === "tu-luan-padlet") {
+                    cat.links = grouped[cat.id] && grouped[cat.id].length > 0 
+                        ? sortLinksNewestFirst(grouped[cat.id]) 
+                        : [...DEFAULT_PADLET_LINKS];
+                } else {
+                    cat.links = grouped[cat.id] ? sortLinksNewestFirst(grouped[cat.id]) : [];
+                }
             });
         }
 
@@ -208,6 +268,7 @@ function renderLinksWithFold(container, links, categoryId, visibleLimit = 2) {
 
     const sortedLinks = sortLinksNewestFirst(links);
     const total = sortedLinks.length;
+    const isReminder = (categoryId === "nhac-nho");
 
     const firstPortion = sortedLinks.slice(0, visibleLimit);
     firstPortion.forEach(item => {
@@ -256,18 +317,30 @@ function renderLinksWithFold(container, links, categoryId, visibleLimit = 2) {
         toggleBtn.style.cursor = "pointer";
         toggleBtn.style.transition = "all 0.15s ease";
 
-        toggleBtn.innerHTML = isExpanded 
-            ? `▲ Thu gọn lại (${remainingCount} mục)` 
-            : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
+        if (isReminder) {
+            toggleBtn.innerHTML = isExpanded 
+                ? `▲ Thu gọn bài viết (${remainingCount} bài)` 
+                : `▼ Xem tiếp ${remainingCount} bài viết cũ hơn`;
+        } else {
+            toggleBtn.innerHTML = isExpanded 
+                ? `▲ Thu gọn lại (${remainingCount} mục)` 
+                : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
+        }
 
         toggleBtn.onclick = (e) => {
             e.stopPropagation();
             categoryExpandedState[categoryId] = !categoryExpandedState[categoryId];
             const nowExpanded = categoryExpandedState[categoryId];
             hiddenBox.style.display = nowExpanded ? "flex" : "none";
-            toggleBtn.innerHTML = nowExpanded 
-                ? `▲ Thu gọn lại (${remainingCount} mục)` 
-                : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
+            if (isReminder) {
+                toggleBtn.innerHTML = nowExpanded 
+                    ? `▲ Thu gọn bài viết (${remainingCount} bài)` 
+                    : `▼ Xem tiếp ${remainingCount} bài viết cũ hơn`;
+            } else {
+                toggleBtn.innerHTML = nowExpanded 
+                    ? `▲ Thu gọn lại (${remainingCount} mục)` 
+                    : `▼ Ấn vào đây để xem tiếp ${remainingCount} mục còn lại`;
+            }
         };
 
         foldWrapper.appendChild(hiddenBox);

@@ -182,6 +182,142 @@ async function processUpload() {
     }
 }
 
+// TẢI FILE PDF / WORD / ẢNH LÊN GOOGLE DRIVE
+async function processUploadToGoogleDrive() {
+    const fileInput = document.getElementById("admin-drive-file");
+    const titleInput = document.getElementById("admin-drive-title");
+    const categories = getSelectedAdminCategories();
+    const btn = document.getElementById("btn-upload-drive");
+    const statusBox = document.getElementById("drive-upload-status");
+
+    if (categories.length === 0) {
+        alert("⚠️ Vui lòng tích chọn ít nhất 1 lớp / chuyên mục để đăng tài liệu!");
+        return;
+    }
+    if (!fileInput || fileInput.files.length === 0) {
+        alert("⚠️ Vui lòng chọn file PDF, Word hoặc Ảnh trên máy tính!");
+        return;
+    }
+    if (!GOOGLE_DRIVE_UPLOAD_GAS_URL || GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
+        alert("⚠️ Bạn chưa cấu hình GOOGLE_DRIVE_UPLOAD_GAS_URL trong file app-config.js!");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    if (file.size > 25 * 1024 * 1024) {
+        alert("⚠️ Dung lượng file quá lớn (> 25MB). Vui lòng nén file trước khi tải.");
+        return;
+    }
+
+    let finalTitle = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : file.name;
+
+    btn.disabled = true;
+    btn.innerText = "⏳ Đang chuyển đổi...";
+    if (statusBox) {
+        statusBox.style.display = "block";
+        statusBox.innerText = `⏳ Đang đọc file "${file.name}"...`;
+    }
+
+    try {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                let rawResult = e.target.result || "";
+                let base64Data = rawResult.includes("base64,") ? rawResult.split("base64,")[1] : rawResult.split(",")[1];
+
+                btn.innerText = "🚀 Đang tải lên Drive...";
+                if (statusBox) statusBox.innerText = "🚀 Đang gửi file lên Google Drive...";
+
+                let mimeType = file.type || "application/octet-stream";
+                const payload = { filename: file.name, mimeType: mimeType, base64: base64Data };
+
+                const res = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await res.json();
+                if (result.status === "success" && result.fileUrl) {
+                    btn.innerText = "💾 Đang lưu hệ thống...";
+                    if (statusBox) statusBox.innerText = "💾 Đang tạo mục liên kết trên website...";
+
+                    const docId = "doc_" + Date.now();
+                    const now = new Date();
+                    const pad = n => String(n).padStart(2, '0');
+                    const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                    
+                    const saveTasks = categories.map(cat => ({
+                        id: docId,
+                        category_id: cat,
+                        title: finalTitle,
+                        date: dateStr,
+                        url: result.fileUrl,
+                        badge_text: "MỚI",
+                        is_hot: false,
+                        is_doc: true,
+                        avatar: selectedAvatarUrl,
+                        timestamp: Date.now()
+                    }));
+
+                    await supabaseClient.from('custom_links').insert(saveTasks);
+                    alert(`🎉 Tải file lên Google Drive thành công!\n📁 Tên: ${finalTitle}`);
+                    window.location.reload();
+                } else {
+                    throw new Error(result.message || "Máy chủ Google Drive không phản hồi đường dẫn file!");
+                }
+            } catch(uploadErr) {
+                alert("❌ Lỗi khi tải file lên Google Drive: " + uploadErr.message);
+                btn.disabled = false; btn.innerText = "📤 Tải lên Drive";
+                if (statusBox) statusBox.style.display = "none";
+            }
+        };
+        reader.readAsDataURL(file);
+    } catch (err) {
+        alert("❌ Lỗi đọc file: " + err.message);
+        btn.disabled = false; btn.innerText = "📤 Tải lên Drive";
+        if (statusBox) statusBox.style.display = "none";
+    }
+}
+
+// ĐĂNG LINK TÀI LIỆU
+async function processAddDocument() {
+    const titleInput = document.getElementById("admin-doc-title").value.trim();
+    const urlInput = document.getElementById("admin-doc-url").value.trim();
+    const categories = getSelectedAdminCategories();
+    const btn = document.getElementById("btn-create-doc");
+
+    if (categories.length === 0) { alert("⚠️ Vui lòng chọn ít nhất 1 mục để đăng!"); return; }
+    if (!titleInput || !urlInput) { alert("⚠️ Vui lòng nhập đủ tên tài liệu và đường link!"); return; }
+
+    btn.innerText = "⏳ Đang đăng..."; btn.disabled = true;
+
+    try {
+        const docId = "doc_" + Date.now();
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        
+        const tasks = categories.map(cat => ({
+            id: docId,
+            category_id: cat,
+            title: titleInput,
+            date: dateStr,
+            url: urlInput,
+            badge_text: "NONE",
+            is_hot: false,
+            is_doc: true,
+            avatar: selectedAvatarUrl,
+            timestamp: Date.now()
+        }));
+
+        await supabaseClient.from('custom_links').insert(tasks);
+        alert(`📤 Đăng tài liệu thành công!`);
+        window.location.reload(); 
+    } catch (err) { alert("❌ Lỗi: " + err.message); } 
+    finally { btn.innerText = "🔗 Đăng tài liệu"; btn.disabled = false; }
+}
+
 // XÓA MỤC ĐỀ / TÀI LIỆU VĨNH VIỄN
 async function deleteItem(categoryId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }

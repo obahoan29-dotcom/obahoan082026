@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-ui-article.js
+// FILE: portal-ui-article.js (BẢN SUPABASE HOÀN HẢO)
 // QUẢN LÝ BÀI VIẾT, BẢN TIN THƯỜNG NGÀY PHONG CÁCH BÁO DÂN TRÍ
 // =========================================================
 
@@ -323,7 +323,7 @@ async function saveArticleToFirebase(event) {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         await client.from('custom_links').upsert([payload]);
 
-        alert("🎉 Đã lưu bài viết thành công!");
+        alert("🎉 Đã lưu bài viết lên hệ thống thành công!");
         window.location.reload();
     } catch(e) {
         alert("❌ Lỗi khi lưu bài viết: " + e.message);

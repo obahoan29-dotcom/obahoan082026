@@ -2,92 +2,284 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Chuyển dữ liệu Firebase sang Supabase</title>
-    <!-- THƯ VIỆN SUPABASE JS -->
+    <title>Chuyển dữ liệu Firebase sang Supabase (Bản Hoàn Chỉnh 100%)</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app-config.js"></script>
 </head>
-<body style="font-family: Arial, sans-serif; padding: 30px; background: #f8fafc;">
-    <h2>🚀 CÔNG CỤ CHUYỂN TOÀN BỘ DỮ LIỆU SANG SUPABASE</h2>
-    <p>Chọn file <b>.json</b> Thầy vừa Export từ Firebase để nạp toàn bộ vào Supabase:</p>
-    <input type="file" id="firebase-json-input" accept=".json" style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff;">
+<body style="font-family: Arial, sans-serif; padding: 30px; background: #f8fafc; line-height: 1.6;">
+    <h2 style="color: #0284c7;">🚀 CÔNG CỤ CHUYỂN TOÀN BỘ 100% DỮ LIỆU SANG SUPABASE</h2>
+    <p>Chọn file <b>.json</b> Thầy vừa Export từ Firebase Database để nạp toàn bộ (Đề thi, Bài nộp điểm số, Bài báo Dân trí, Tự luận):</p>
+    <input type="file" id="firebase-json-input" accept=".json" style="padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; background: #fff;">
     <br><br>
-    <button id="btn-run" onclick="startImport()" style="padding: 12px 24px; font-weight: bold; background: #0284c7; color: #fff; border: none; border-radius: 8px; cursor: pointer;">
-        🚀 Bắt đầu chuyển dữ liệu
+    <button id="btn-run" onclick="startImport()" style="padding: 12px 28px; font-weight: bold; background: #16a34a; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 15px;">
+        🚀 Bắt đầu chuyển dữ liệu toàn diện
     </button>
-    <div id="status" style="margin-top: 20px; font-weight: bold; color: #0284c7;"></div>
+    <div id="status" style="margin-top: 20px; font-weight: bold; color: #0284c7; white-space: pre-line;"></div>
 
     <script>
         async function startImport() {
             const input = document.getElementById('firebase-json-input');
             const status = document.getElementById('status');
+            const btn = document.getElementById('btn-run');
             if (!input.files[0]) return alert("Vui lòng chọn file JSON tải từ Firebase!");
 
+            btn.disabled = true;
             status.innerText = "⏳ Đang đọc file JSON...";
             const text = await input.files[0].text();
-            const data = JSON.parse(text);
-
-            // 1. Chuyển Đề thi
-            if (data.quizzes) {
-                status.innerText = "⏳ Đang chuyển kho đề thi (quizzes)...";
-                const quizRows = [];
-                for (let qId in data.quizzes) {
-                    const q = data.quizzes[qId];
-                    if (q && q.questions) {
-                        quizRows.push({
-                            id: qId,
-                            title: q.title || "Đề thi",
-                            made: q.maDe || "101",
-                            time_limit_minutes: parseInt(q.timeLimitMinutes, 10) || 90,
-                            scoring_config: q.scoringConfig || { mode: 'option1' },
-                            questions: q.questions,
-                            images: q.images || {}
-                        });
-                    }
-                }
-                if (quizRows.length > 0) {
-                    await supabaseClient.from('quizzes').upsert(quizRows);
-                }
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch(e) {
+                btn.disabled = false;
+                return alert("File JSON không đúng cấu trúc!");
             }
 
-            // 2. Chuyển Danh mục bài đăng (custom_links)
-            if (data.custom_links) {
-                status.innerText = "⏳ Đang chuyển danh mục các lớp (custom_links)...";
-                const linkRows = [];
-                for (let catId in data.custom_links) {
-                    for (let itemId in data.custom_links[catId]) {
-                        const l = data.custom_links[catId][itemId];
-                        if (l && l.title) {
-                            linkRows.push({
-                                id: itemId,
-                                category_id: catId,
-                                title: l.title,
-                                date: l.date,
-                                url: l.url,
-                                badge_text: l.badgeText || "NONE",
-                                is_hot: !!l.isHot,
-                                is_doc: !!l.isDoc,
-                                avatar: l.avatar,
-                                timestamp: l.timestamp || Date.now()
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            if (!client) {
+                btn.disabled = false;
+                return alert("Chưa kết nối được Supabase Client! Vui lòng kiểm tra file app-config.js.");
+            }
+
+            try {
+                // 1. Chuyển Đề thi (quizzes)
+                if (data.quizzes) {
+                    status.innerText += "\n⏳ Đang chuyển đề thi (quizzes)...";
+                    const quizRows = [];
+                    for (let qId in data.quizzes) {
+                        const q = data.quizzes[qId];
+                        if (q && (q.questions || q.title)) {
+                            quizRows.push({
+                                id: qId,
+                                title: q.title || "Đề thi",
+                                made: q.maDe || q.made || "101",
+                                time_limit_minutes: parseInt(q.timeLimitMinutes, 10) || 90,
+                                exam_start_time: q.examStartTimeStr || null,
+                                exam_end_time: q.examEndTimeStr || null,
+                                allow_free: q.allowFree !== false,
+                                result_mode: q.resultMode || "show_all",
+                                allow_review_original: !!q.allowReviewOriginal,
+                                show_online_count: q.showOnlineCount !== false,
+                                allow_export_exam: !!q.allowExportExam,
+                                is_shuffled: q.isShuffled !== false,
+                                scoring_config: q.scoringConfig || { mode: 'option1' },
+                                questions: q.questions || [],
+                                images: q.images || {}
                             });
                         }
                     }
+                    if (quizRows.length > 0) {
+                        for (let i = 0; i < quizRows.length; i += 50) {
+                            await client.from('quizzes').upsert(quizRows.slice(i, i + 50));
+                        }
+                    }
                 }
-                if (linkRows.length > 0) {
-                    await supabaseClient.from('custom_links').upsert(linkRows);
+
+                // 2. Chuyển Danh mục bài đăng & BÀI BÁO DÂN TRÍ ĐẦY ĐỦ CÁC CỘT (custom_links)
+                if (data.custom_links) {
+                    status.innerText += "\n⏳ Đang chuyển bài viết, chuyên mục & bài báo Dân trí (custom_links)...";
+                    const linkRows = [];
+                    for (let catId in data.custom_links) {
+                        for (let itemId in data.custom_links[catId]) {
+                            const l = data.custom_links[catId][itemId];
+                            if (l && l.title) {
+                                linkRows.push({
+                                    id: itemId,
+                                    category_id: catId,
+                                    title: l.title,
+                                    date: l.date || "",
+                                    url: l.url || "#",
+                                    badge_text: l.badgeText || "NONE",
+                                    is_hot: !!l.isHot,
+                                    is_doc: !!l.isDoc,
+                                    avatar: l.avatar || "",
+                                    avatar_size: l.avatarSize || 48,
+                                    timestamp: l.timestamp || Date.now(),
+                                    is_shuffled: l.isShuffled !== false,
+                                    allow_free: l.allowFree !== false,
+                                    scoring_config: l.scoringConfig || { mode: 'option1' },
+                                    time_limit_minutes: l.timeLimitMinutes || 90,
+                                    exam_start_time_str: l.examStartTimeStr || null,
+                                    exam_end_time_str: l.examEndTimeStr || null,
+                                    result_mode: l.resultMode || "show_all",
+                                    allow_review_original: !!l.allowReviewOriginal,
+                                    show_online_count: l.showOnlineCount !== false,
+                                    allow_export_exam: !!l.allowExportExam,
+                                    // BẢO LƯU 100% CÁC TRƯỜNG BÀI BÁO:
+                                    article_title: l.articleTitle || l.title || "",
+                                    author: l.author || "Thầy Hoan",
+                                    article_time: l.articleTime || "",
+                                    sapo: l.sapo || "",
+                                    article_img: l.articleImg || l.articleImage || "",
+                                    article_img_caption: l.articleImgCaption || "",
+                                    article_body: l.articleBody || ""
+                                });
+                            }
+                        }
+                    }
+                    if (linkRows.length > 0) {
+                        for (let i = 0; i < linkRows.length; i += 50) {
+                            await client.from('custom_links').upsert(linkRows.slice(i, i + 50));
+                        }
+                    }
                 }
-            }
 
-            // 3. Chuyển Tiêu đề nhắc nhở
-            if (data.site_meta) {
-                await supabaseClient.from('app_key_values').upsert({
-                    key: 'site_meta',
-                    value: data.site_meta
-                });
-            }
+                // 3. Chuyển BÀI NỘP CỦA HỌC SINH (submissions)
+                status.innerText += "\n⏳ Đang quét và chuyển toàn bộ bài nộp của học sinh (submissions)...";
+                const subRows = [];
+                const seenSubKeys = new Set();
 
-            status.innerText = "🎉 HOÀN THÀNH 100%! Toàn bộ đề thi và danh mục lớp đã được nạp sang Supabase an toàn.";
-            alert("Đã chuyển toàn bộ dữ liệu thành công!");
+                // Quét từ quizzes/${qId}/submissions
+                if (data.quizzes) {
+                    for (let qId in data.quizzes) {
+                        const subs = data.quizzes[qId]?.submissions;
+                        if (subs && typeof subs === 'object') {
+                            for (let sbdKey in subs) {
+                                const s = subs[sbdKey];
+                                if (!s) continue;
+                                const sbdClean = String(s.sbd || s.studentId || sbdKey).replace(/[^a-zA-Z0-9]/g, '_');
+                                const subId = `${qId}_${sbdClean}`;
+                                if (!seenSubKeys.has(subId)) {
+                                    seenSubKeys.add(subId);
+                                    subRows.push({
+                                        id: subId,
+                                        quiz_id: qId,
+                                        sbd: sbdClean,
+                                        student_name: s.studentName || s.name || "Học sinh",
+                                        class_name: s.studentClass || s.className || "Lớp học",
+                                        score10: parseFloat(s.score10) || 0,
+                                        raw_score: parseFloat(s.rawScore) || 0,
+                                        max_scale: parseFloat(s.maxScale) || 10.0,
+                                        correct_count: parseInt(s.correctCount, 10) || 0,
+                                        wrong_count: parseInt(s.wrongCount, 10) || 0,
+                                        completion_time: s.completionTime || "",
+                                        spent_mins: parseInt(s.spentMins, 10) || 0,
+                                        tab_switch_count: String(s.tabSwitchCount || "0 lần"),
+                                        data_string: s.dataString || "",
+                                        user_answers: s.userAnswers || {},
+                                        category_id: s.categoryId || s.cat || "them-11",
+                                        is_free: !!s.isFree,
+                                        ma_de: s.maDe || "101",
+                                        exam_title: s.examTitle || s.examName || "Đề thi",
+                                        created_at: s.createdAt ? new Date(s.createdAt).toISOString() : new Date().toISOString()
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Quét thêm từ exams/${code}/submissions
+                if (data.exams) {
+                    for (let code in data.exams) {
+                        const subs = data.exams[code]?.submissions;
+                        if (subs && typeof subs === 'object') {
+                            for (let sbdKey in subs) {
+                                const s = subs[sbdKey];
+                                if (!s) continue;
+                                const qId = s.quizId || code;
+                                const sbdClean = String(s.sbd || s.studentId || sbdKey).replace(/[^a-zA-Z0-9]/g, '_');
+                                const subId = `${qId}_${sbdClean}`;
+                                if (!seenSubKeys.has(subId)) {
+                                    seenSubKeys.add(subId);
+                                    subRows.push({
+                                        id: subId,
+                                        quiz_id: qId,
+                                        sbd: sbdClean,
+                                        student_name: s.studentName || s.name || "Học sinh",
+                                        class_name: s.studentClass || s.className || "Lớp học",
+                                        score10: parseFloat(s.score10) || 0,
+                                        raw_score: parseFloat(s.rawScore) || 0,
+                                        max_scale: parseFloat(s.maxScale) || 10.0,
+                                        correct_count: parseInt(s.correctCount, 10) || 0,
+                                        wrong_count: parseInt(s.wrongCount, 10) || 0,
+                                        completion_time: s.completionTime || "",
+                                        spent_mins: parseInt(s.spentMins, 10) || 0,
+                                        tab_switch_count: String(s.tabSwitchCount || "0 lần"),
+                                        data_string: s.dataString || "",
+                                        user_answers: s.userAnswers || {},
+                                        category_id: s.categoryId || s.cat || "them-11",
+                                        is_free: !!s.isFree,
+                                        ma_de: s.maDe || "101",
+                                        exam_title: s.examTitle || s.examName || "Đề thi",
+                                        created_at: s.createdAt ? new Date(s.createdAt).toISOString() : new Date().toISOString()
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (subRows.length > 0) {
+                    for (let i = 0; i < subRows.length; i += 50) {
+                        await client.from('submissions').upsert(subRows.slice(i, i + 50));
+                    }
+                    status.innerText += `\n-> Đã nạp thành công ${subRows.length} bài nộp của học sinh!`;
+                }
+
+                // 4. Chuyển BÀI TỰ LUẬN (tu_luan_submissions)
+                status.innerText += "\n⏳ Đang chuyển dữ liệu bài nộp tự luận (tu_luan)...";
+                const tuLuanRows = [];
+                const scanTuLuan = (container) => {
+                    if (!container) return;
+                    for (let exId in container) {
+                        const tlData = container[exId]?.tu_luan;
+                        if (tlData && typeof tlData === 'object') {
+                            for (let sbdKey in tlData) {
+                                const row = tlData[sbdKey];
+                                if (row && row.images) {
+                                    tuLuanRows.push({
+                                        quiz_id: exId,
+                                        sbd: sbdKey,
+                                        stt: String(row.stt || "00"),
+                                        student_name: row.studentName || "Học sinh",
+                                        class_name: row.className || "Lớp",
+                                        exam_title: row.examTitle || "Tự luận",
+                                        last_submit: row.lastSubmit || "",
+                                        last_submit_time: row.lastSubmitTime || Date.now(),
+                                        count: row.count || row.images.length || 0,
+                                        images: row.images || [],
+                                        cross_score: row.crossScore || "",
+                                        cross_score_by: row.crossScoreBy || "",
+                                        cross_score_time: row.crossScoreTime || "",
+                                        feedback: row.feedback || "",
+                                        feedback_time: row.feedbackTime || "",
+                                        is_approved: !!row.isApproved
+                                    });
+                                }
+                            }
+                        }
+                    }
+                };
+                scanTuLuan(data.quizzes);
+                scanTuLuan(data.exams);
+
+                if (tuLuanRows.length > 0) {
+                    await client.from('tu_luan_submissions').upsert(tuLuanRows);
+                    status.innerText += `\n-> Đã nạp thành công ${tuLuanRows.length} bài tự luận!`;
+                }
+
+                // 5. Chuyển Site Meta & Mật khẩu
+                if (data.site_meta) {
+                    await client.from('app_key_values').upsert({
+                        key: 'site_meta',
+                        value: data.site_meta
+                    });
+                }
+                if (data.student_custom_passwords) {
+                    await client.from('app_key_values').upsert({
+                        key: 'student_custom_passwords',
+                        value: data.student_custom_passwords
+                    });
+                }
+
+                status.innerText += "\n\n🎉 HOÀN THÀNH 100%! Đã chuyển toàn bộ đề thi, điểm thi học sinh và nội dung bài báo Dân trí sang Supabase.";
+                alert("Đã chuyển toàn bộ dữ liệu sang Supabase thành công!");
+            } catch(err) {
+                status.innerText += `\n❌ LỖI: ${err.message}`;
+                alert("Lỗi import: " + err.message);
+            } finally {
+                btn.disabled = false;
+            }
         }
     </script>
 </body>
