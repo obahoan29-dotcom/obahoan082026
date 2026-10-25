@@ -1,7 +1,24 @@
 // =========================================================
-// FILE: portal-tuluan-admin.js
-// QUẢN LÝ ĐỀ THI TỰ LUẬN, ĐÁP ÁN CHẤM, HẸN GIỜ & REALTIME SUPABASE
+// FILE: portal-tuluan-admin.js (BẢN HỖ TRỢ ĐA ĐÁP ÁN: SAU XẾP TRÊN - TRƯỚC XẾP DƯỚI)
+// QUẢN LÝ ĐỀ THI TỰ LUẬN, NHIỀU ĐÁP ÁN CHẤM, HẸN GIỜ & REALTIME SUPABASE
 // =========================================================
+
+// HÀM TIỆN ÍCH TRÍCH XUẤT DANH SÁCH ĐÁP ÁN (TƯƠNG THÍCH NGƯỢC CẢ DỮ LIỆU CŨ VÀ MỚI)
+function getDapAnChamList() {
+    if (Array.isArray(currentTuLuanModalData.dapAnChamList)) {
+        return currentTuLuanModalData.dapAnChamList;
+    }
+    if (Array.isArray(currentTuLuanModalData.dapAnCham)) {
+        return currentTuLuanModalData.dapAnCham;
+    }
+    if (currentTuLuanModalData.dapAnCham && currentTuLuanModalData.dapAnCham.list && Array.isArray(currentTuLuanModalData.dapAnCham.list)) {
+        return currentTuLuanModalData.dapAnCham.list;
+    }
+    if (currentTuLuanModalData.dapAnCham && currentTuLuanModalData.dapAnCham.fileUrl) {
+        return [currentTuLuanModalData.dapAnCham];
+    }
+    return [];
+}
 
 async function refreshTuLuanExamList(targetCat, preferredExamId = null) {
     const selector = document.getElementById("tuluan-exam-selector");
@@ -156,7 +173,12 @@ async function deleteCurrentTuLuanExam(event) {
 async function loadTuLuanSubmissionsFromSupabase() {
     const qId = currentTuLuanModalData.quizId; if (!qId) return;
     const client = getDbClient();
-    if (!client) { currentTuLuanModalData.submissionsMap = {}; currentTuLuanModalData.dapAnCham = null; return; }
+    if (!client) { 
+        currentTuLuanModalData.submissionsMap = {}; 
+        currentTuLuanModalData.dapAnChamList = [];
+        currentTuLuanModalData.dapAnCham = null; 
+        return; 
+    }
 
     try {
         const [subsRes, passRes, dapanRes, detailScoresRes] = await Promise.all([
@@ -187,8 +209,30 @@ async function loadTuLuanSubmissionsFromSupabase() {
         }
         currentTuLuanModalData.submissionsMap = combined;
         currentTuLuanModalData.customPasswords = (passRes && passRes.data && passRes.data.value) ? passRes.data.value : {};
-        currentTuLuanModalData.dapAnCham = (dapanRes && dapanRes.data && dapanRes.data.value && dapanRes.data.value.fileUrl) ? dapanRes.data.value : null;
-    } catch(e) { console.warn("Lỗi đọc dữ liệu tự luận Supabase:", e); currentTuLuanModalData.submissionsMap = {}; currentTuLuanModalData.dapAnCham = null; }
+
+        // ĐỌC VÀ CHUẨN HÓA DANH SÁCH NHIỀU ĐÁP ÁN
+        let rawDapan = (dapanRes && dapanRes.data && dapanRes.data.value) ? dapanRes.data.value : null;
+        let parsedDapanList = [];
+
+        if (Array.isArray(rawDapan)) {
+            parsedDapanList = rawDapan;
+        } else if (rawDapan && Array.isArray(rawDapan.list)) {
+            parsedDapanList = rawDapan.list;
+        } else if (rawDapan && rawDapan.fileUrl) {
+            parsedDapanList = [rawDapan];
+        }
+
+        // SẮP XẾP CHUẨN: ĐĂNG SAU (MỚI HƠN) XẾP TRÊN, ĐĂNG TRƯỚC (CŨ HƠN) XẾP DƯỚI
+        parsedDapanList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        currentTuLuanModalData.dapAnChamList = parsedDapanList;
+        currentTuLuanModalData.dapAnCham = parsedDapanList[0] || null;
+    } catch(e) { 
+        console.warn("Lỗi đọc dữ liệu tự luận Supabase:", e); 
+        currentTuLuanModalData.submissionsMap = {}; 
+        currentTuLuanModalData.dapAnChamList = [];
+        currentTuLuanModalData.dapAnCham = null; 
+    }
 }
 
 function startTuLuanRealtimeListener(quizId) {
@@ -212,63 +256,181 @@ function startTuLuanRealtimeListener(quizId) {
 function triggerUploadDapAnCham(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const fileIn = document.getElementById("tuluan-dapan-file-input");
-    if (fileIn) { fileIn.value = ""; fileIn.click(); }
+    if (fileIn) { 
+        fileIn.value = ""; 
+        fileIn.multiple = true; // Cho phép tải 1 hoặc nhiều file đáp án cùng lúc
+        fileIn.click(); 
+    }
 }
 
 async function handleUploadDapAnCham(fileInput) {
     if (!fileInput.files || fileInput.files.length === 0) return;
-    const file = fileInput.files[0]; const btn = document.getElementById("btn-up-dapan-cham");
+    const files = Array.from(fileInput.files);
+    const btn = document.getElementById("btn-up-dapan-cham");
     if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang gửi..."; }
     
     const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) ? GOOGLE_DRIVE_TULUAN_GAS_URL : GOOGLE_DRIVE_UPLOAD_GAS_URL;
-    if (!gasUrl || gasUrl.includes("DÁN_URL")) { alert("⚠️ Chưa cấu hình GOOGLE_DRIVE_TULUAN_GAS_URL!"); if (btn) { btn.disabled = false; btn.innerText = "📤 Đ.Á chấm"; } return; }
+    if (!gasUrl || gasUrl.includes("DÁN_URL")) { 
+        alert("⚠️ Chưa cấu hình GOOGLE_DRIVE_TULUAN_GAS_URL!"); 
+        if (btn) { btn.disabled = false; btn.innerText = "📤 Đ.Á chấm"; } 
+        return; 
+    }
 
     try {
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-            try {
-                let rawResult = String(e.target.result || ""); let base64Data = rawResult.includes("base64,") ? rawResult.split("base64,")[1] : rawResult;
-                const payload = { action: "uploadDapAnCham", rootFolder: "KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO", className: "Dap_an_cham_tu_luan", class: "Dap_an_cham_tu_luan", lop: "Dap_an_cham_tu_luan", examTitle: "Dap_an_cham_tu_luan", folderKey: "Dap_an_cham_tu_luan", studentFolder: "Dap_an_cham_tu_luan", filename: file.name, mimeType: file.type || "application/octet-stream", base64: base64Data };
-                
-                const result = await fetch(gasUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) }).then(res => res.json());
-                
-                if (result && result.status === "success" && result.fileUrl) {
-                    const now = new Date(); const pad = n => String(n).padStart(2, '0');
-                    const uploadTimeStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-                    const directUrl = result.directUrl || (typeof toDirectGoogleDriveImageUrl === 'function' ? toDirectGoogleDriveImageUrl(result.fileUrl) : result.fileUrl);
-                    const dapanData = { quizId: currentTuLuanModalData.quizId, classId: currentTuLuanModalData.classId, fileName: file.name, fileUrl: result.fileUrl, directUrl: directUrl, fileId: result.fileId || "", uploadedAt: uploadTimeStr, timestamp: Date.now(), scheduleTime: (currentTuLuanModalData.dapAnCham || {}).scheduleTime || null };
-                    
-                    const client = getDbClient();
-                    if (client) await client.from('app_key_values').upsert({ key: 'dapan_' + currentTuLuanModalData.quizId, value: dapanData });
-                    
-                    currentTuLuanModalData.dapAnCham = dapanData;
-                    if(typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
-                    alert(`🎉 ĐÃ TẢI LÊN ĐÁP ÁN CHẤM THÀNH CÔNG!\n\n📁 Tên file: ${file.name}`);
-                }
-            } catch(upErr) { alert("❌ Lỗi khi tải file lên Drive: " + upErr.message); } 
-            finally { if (btn) { btn.disabled = false; btn.innerText = "📤 Đ.Á chấm"; } fileInput.value = ""; }
-        };
-        reader.readAsDataURL(file);
-    } catch(err) { alert("❌ Lỗi đọc file từ máy: " + err.message); if (btn) { btn.disabled = false; btn.innerText = "📤 Đ.Á chấm"; } fileInput.value = ""; }
+        let currentList = getDapAnChamList();
+        let defaultSchedule = null;
+        if (currentList.length > 0 && currentList[0].scheduleTime) {
+            defaultSchedule = currentList[0].scheduleTime;
+        }
+
+        let uploadedSuccessCount = 0;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (btn) btn.innerText = `⏳ Tải ${i + 1}/${files.length}...`;
+
+            const base64Data = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    let rawResult = String(e.target.result || "");
+                    resolve(rawResult.includes("base64,") ? rawResult.split("base64,")[1] : rawResult);
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsDataURL(file);
+            });
+
+            const payload = { 
+                action: "uploadDapAnCham", 
+                rootFolder: "KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO", 
+                className: "Dap_an_cham_tu_luan", 
+                class: "Dap_an_cham_tu_luan", 
+                lop: "Dap_an_cham_tu_luan", 
+                examTitle: "Dap_an_cham_tu_luan", 
+                folderKey: "Dap_an_cham_tu_luan", 
+                studentFolder: "Dap_an_cham_tu_luan", 
+                filename: file.name, 
+                mimeType: file.type || "application/octet-stream", 
+                base64: base64Data 
+            };
+
+            const result = await fetch(gasUrl, { 
+                method: "POST", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                body: JSON.stringify(payload) 
+            }).then(res => res.json());
+
+            if (result && result.status === "success" && result.fileUrl) {
+                const now = new Date(); 
+                const pad = n => String(n).padStart(2, '0');
+                const uploadTimeStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                const directUrl = result.directUrl || (typeof toDirectGoogleDriveImageUrl === 'function' ? toDirectGoogleDriveImageUrl(result.fileUrl) : result.fileUrl);
+
+                const dapanItem = {
+                    id: "dp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+                    quizId: currentTuLuanModalData.quizId,
+                    classId: currentTuLuanModalData.classId,
+                    fileName: file.name,
+                    fileUrl: result.fileUrl,
+                    directUrl: directUrl,
+                    fileId: result.fileId || "",
+                    uploadedAt: uploadTimeStr,
+                    timestamp: Date.now() + i, // timestamp để đăng sau luôn lớn hơn
+                    scheduleTime: defaultSchedule
+                };
+
+                currentList.push(dapanItem);
+                uploadedSuccessCount++;
+            }
+        }
+
+        if (uploadedSuccessCount > 0) {
+            // SẮP XẾP: ĐĂNG SAU (MỚI HƠN) XẾP TRÊN, ĐĂNG TRƯỚC (CŨ HƠN) XẾP DƯỚI
+            currentList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            const client = getDbClient();
+            if (client) {
+                await client.from('app_key_values').upsert({ 
+                    key: 'dapan_' + currentTuLuanModalData.quizId, 
+                    value: { list: currentList, scheduleTime: defaultSchedule } 
+                });
+            }
+
+            currentTuLuanModalData.dapAnChamList = currentList;
+            currentTuLuanModalData.dapAnCham = currentList[0] || null;
+
+            if (typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
+            alert(`🎉 ĐÃ TẢI LÊN THÀNH CÔNG ${uploadedSuccessCount} FILE ĐÁP ÁN CHẤM!\n\nCác file đáp án mới đã được xếp lên trên cùng.`);
+        }
+    } catch(err) {
+        alert("❌ Lỗi khi tải file lên Drive: " + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "📤 Đ.Á chấm"; }
+        fileInput.value = "";
+    }
 }
 
-async function deleteDapAnCham(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
+async function deleteDapAnCham(identifier, event) {
+    let e = (event && event.preventDefault) ? event : ((identifier && identifier.preventDefault) ? identifier : null);
+    if (e) { e.preventDefault(); e.stopPropagation(); }
     if (!checkCurrentIsAdmin()) { alert("⛔ Chỉ Giáo viên quản trị mới có quyền xóa file Đáp án chấm!"); return; }
-    if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA file Đáp án chấm của đề này không?")) return;
+
+    let currentList = getDapAnChamList();
+    if (currentList.length === 0) {
+        alert("⚠️ Hiện không có file đáp án nào để xóa!");
+        return;
+    }
+
+    let targetItem = null;
+    let targetIdx = -1;
+
+    if (typeof identifier === 'string' && identifier) {
+        targetIdx = currentList.findIndex(x => x.fileId === identifier || x.id === identifier || String(x.timestamp) === identifier);
+        if (targetIdx !== -1) targetItem = currentList[targetIdx];
+    }
+
+    if (!targetItem) {
+        targetItem = currentList[0];
+        targetIdx = 0;
+    }
+
+    if (!confirm(`⚠️ Bạn có chắc chắn muốn XÓA file Đáp án:\n"${targetItem.fileName}"\nkhỏi hệ thống không?`)) return;
 
     try {
+        const removedItem = currentList.splice(targetIdx, 1)[0];
         const client = getDbClient();
-        if (client) await client.from('app_key_values').delete().eq('key', 'dapan_' + currentTuLuanModalData.quizId);
-        
-        if (currentTuLuanModalData.dapAnCham && currentTuLuanModalData.dapAnCham.fileId) {
-            const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) ? GOOGLE_DRIVE_TULUAN_GAS_URL : GOOGLE_DRIVE_UPLOAD_GAS_URL;
-            if (gasUrl && !gasUrl.includes("DÁN_URL")) { fetch(gasUrl, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "deleteFile", fileId: currentTuLuanModalData.dapAnCham.fileId }) }).catch(() => null); }
+
+        if (currentList.length === 0) {
+            if (client) await client.from('app_key_values').delete().eq('key', 'dapan_' + currentTuLuanModalData.quizId);
+            currentTuLuanModalData.dapAnChamList = [];
+            currentTuLuanModalData.dapAnCham = null;
+        } else {
+            if (client) {
+                await client.from('app_key_values').upsert({ 
+                    key: 'dapan_' + currentTuLuanModalData.quizId, 
+                    value: { list: currentList, scheduleTime: currentList[0]?.scheduleTime || null } 
+                });
+            }
+            currentTuLuanModalData.dapAnChamList = currentList;
+            currentTuLuanModalData.dapAnCham = currentList[0];
         }
-        currentTuLuanModalData.dapAnCham = null;
-        if(typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
-        alert("🗑️ Đã xóa file Đáp án chấm thành công!");
-    } catch(err) { alert("❌ Lỗi khi xóa: " + err.message); }
+
+        // Gọi Google Drive xóa file vật lý ngầm
+        if (removedItem && removedItem.fileId) {
+            const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) ? GOOGLE_DRIVE_TULUAN_GAS_URL : GOOGLE_DRIVE_UPLOAD_GAS_URL;
+            if (gasUrl && !gasUrl.includes("DÁN_URL")) {
+                fetch(gasUrl, { 
+                    method: "POST", 
+                    headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                    body: JSON.stringify({ action: "deleteFile", fileId: removedItem.fileId }) 
+                }).catch(() => null);
+            }
+        }
+
+        if (typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
+        alert(`🗑️ Đã xóa file "${targetItem.fileName}" thành công!`);
+    } catch(err) {
+        alert("❌ Lỗi khi xóa: " + err.message);
+    }
 }
 
 function toggleDapAnSchedulePopover(event) {
@@ -280,10 +442,11 @@ function toggleDapAnSchedulePopover(event) {
 
     if (!isShown) {
         pop.classList.add("show");
-        const curDapan = currentTuLuanModalData.dapAnCham;
-        if (curDapan && curDapan.scheduleTime) {
+        const curList = getDapAnChamList();
+        const schedTime = (curList.length > 0 && curList[0].scheduleTime) ? curList[0].scheduleTime : null;
+        if (schedTime) {
             document.getElementById("sched-mode-auto").checked = true; onDapAnScheduleModeChanged('auto');
-            const d = new Date(curDapan.scheduleTime);
+            const d = new Date(schedTime);
             if (!isNaN(d.getTime())) {
                 const pad = n => String(n).padStart(2, '0');
                 document.getElementById("dapan-sched-datetime").value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -335,7 +498,12 @@ function setScheduleToExamDeadline() {
 
 async function saveDapAnSchedule(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    if (!currentTuLuanModalData.dapAnCham) { alert("⚠️ Vui lòng upload file Đáp án chấm trước khi thiết lập lịch hẹn giờ!"); closeDapAnSchedulePopover(); return; }
+    let currentList = getDapAnChamList();
+    if (currentList.length === 0) { 
+        alert("⚠️ Vui lòng upload file Đáp án chấm trước khi thiết lập lịch hẹn giờ!"); 
+        closeDapAnSchedulePopover(); 
+        return; 
+    }
     
     let scheduleTimeISO = null;
     if (document.getElementById("sched-mode-auto").checked) {
@@ -345,14 +513,29 @@ async function saveDapAnSchedule(event) {
         scheduleTimeISO = d.toISOString();
     }
     
-    currentTuLuanModalData.dapAnCham.scheduleTime = scheduleTimeISO;
+    // CẬP NHẬT ĐỒNG BỘ HẸN GIỜ CHO TẤT CẢ FILE ĐÁP ÁN CỦA ĐỀ NÀY
+    currentList.forEach(dp => {
+        dp.scheduleTime = scheduleTimeISO;
+    });
+
     try {
         const client = getDbClient();
-        if (client) await client.from('app_key_values').upsert({ key: 'dapan_' + currentTuLuanModalData.quizId, value: currentTuLuanModalData.dapAnCham });
+        if (client) {
+            await client.from('app_key_values').upsert({ 
+                key: 'dapan_' + currentTuLuanModalData.quizId, 
+                value: { list: currentList, scheduleTime: scheduleTimeISO } 
+            });
+        }
+        currentTuLuanModalData.dapAnChamList = currentList;
+        currentTuLuanModalData.dapAnCham = currentList[0] || null;
+
         if(typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
         closeDapAnSchedulePopover();
-        if (scheduleTimeISO) { alert(`⏰ ĐÃ THIẾT LẬP HẸN GIỜ MỞ ĐÁP ÁN!\n\n- Đề thi: ${currentTuLuanModalData.examTitle}\n- Tự động mở: ${new Date(scheduleTimeISO).toLocaleString("vi-VN")}`); } 
-        else { alert("🔓 Đã mở đáp án tự do cho học sinh xem ngay lập tức!"); }
+        if (scheduleTimeISO) { 
+            alert(`⏰ ĐÃ THIẾT LẬP HẸN GIỜ MỞ ĐÁP ÁN!\n\n- Đề thi: ${currentTuLuanModalData.examTitle}\n- Tự động mở: ${new Date(scheduleTimeISO).toLocaleString("vi-VN")}`); 
+        } else { 
+            alert("🔓 Đã mở đáp án tự do cho học sinh xem ngay lập tức!"); 
+        }
     } catch(err) { alert("❌ Lỗi khi lưu hẹn giờ: " + err.message); }
 }
 
@@ -375,61 +558,142 @@ function formatRemainingLockTime(targetMs) {
 }
 
 function renderDapAnChamUI() {
-    const dapan = currentTuLuanModalData.dapAnCham; const isAdmin = checkCurrentIsAdmin();
+    const dapAnList = getDapAnChamList();
+    // ĐẢM BẢO CHUẨN XÁC: ĐĂNG SAU (MỚI HƠN) XẾP TRÊN, ĐĂNG TRƯỚC (CŨ HƠN) XẾP DƯỚI
+    dapAnList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    const isAdmin = checkCurrentIsAdmin();
     const schedBtn = document.getElementById("btn-schedule-dapan");
-    const badgeWrap = document.getElementById("tuluan-dapan-badge-wrap"); const badgeLink = document.getElementById("tuluan-dapan-badge-link");
-    const badgeFilename = document.getElementById("tuluan-dapan-badge-filename"); const badgeMoiMini = document.getElementById("badge-moi-mini-text");
-    const delMiniBtn = document.getElementById("btn-del-dapan-mini");
-    const fullStrip = document.getElementById("tuluan-dapan-full-strip"); const stripFilename = document.getElementById("strip-dapan-filename");
-    const stripLink = document.getElementById("strip-dapan-link"); const stripTime = document.getElementById("strip-dapan-time");
-    const stripOpenBtn = document.getElementById("strip-dapan-open-btn"); const stripDelBtn = document.getElementById("strip-dapan-del-btn");
-    const stripBadgeTag = document.getElementById("strip-dapan-badge-tag");
+    const badgeWrap = document.getElementById("tuluan-dapan-badge-wrap");
+    const origFullStrip = document.getElementById("tuluan-dapan-full-strip");
 
+    // 1. CẬP NHẬT TRẠNG THÁI NÚT HẸN GIỜ
+    const hasAnySchedule = dapAnList.some(dp => dp.scheduleTime);
     if (schedBtn) {
-        if (dapan && dapan.scheduleTime) { schedBtn.classList.add("has-schedule"); schedBtn.title = `Đang hẹn giờ mở lúc: ${new Date(dapan.scheduleTime).toLocaleString("vi-VN")}`; schedBtn.innerHTML = `⏰ Đã hẹn`; } 
-        else { schedBtn.classList.remove("has-schedule"); schedBtn.title = "Hẹn giờ tự động mở đáp án cho học sinh"; schedBtn.innerHTML = `⏰ Hẹn giờ`; }
+        if (hasAnySchedule) {
+            const firstSched = dapAnList.find(dp => dp.scheduleTime);
+            schedBtn.classList.add("has-schedule"); 
+            schedBtn.title = `Đang hẹn giờ mở lúc: ${new Date(firstSched.scheduleTime).toLocaleString("vi-VN")}`; 
+            schedBtn.innerHTML = `⏰ Đã hẹn`; 
+        } else { 
+            schedBtn.classList.remove("has-schedule"); 
+            schedBtn.title = "Hẹn giờ tự động mở đáp án cho học sinh"; 
+            schedBtn.innerHTML = `⏰ Hẹn giờ`; 
+        }
     }
 
-    if (dapan && dapan.fileUrl) {
-        const directUrl = dapan.fileUrl; const name = dapan.fileName || "Đáp án chấm"; const uploadTime = dapan.uploadedAt || "";
-        const isUnlocked = isDapAnUnlocked(dapan);
+    // 2. CẬP NHẬT ROW 1 (MINI BADGES Ở THANH CÔNG CỤ TRÊN)
+    if (badgeWrap) {
+        if (dapAnList.length > 0) {
+            badgeWrap.style.display = "inline-flex";
+            badgeWrap.innerHTML = dapAnList.map((dp, idx) => {
+                const isUnlocked = isDapAnUnlocked(dp);
+                const directUrl = dp.directUrl || dp.fileUrl;
+                const name = dp.fileName || `Đáp án ${idx + 1}`;
+                const uploadTime = dp.uploadedAt || "";
+                const remain = dp.scheduleTime ? formatRemainingLockTime(new Date(dp.scheduleTime).getTime()) : "";
 
-        if (badgeWrap) badgeWrap.style.display = "inline-flex";
-        if (badgeFilename) badgeFilename.innerText = name;
-        if (badgeLink) {
-            if (isUnlocked) { badgeLink.href = directUrl; badgeLink.classList.remove("is-locked"); badgeLink.title = `Mở Đáp án: ${name} (${uploadTime})`; if (badgeMoiMini) { badgeMoiMini.innerText = "MỚI"; badgeMoiMini.style.backgroundColor = "#0284c7"; } } 
-            else { badgeLink.href = "javascript:void(0)"; badgeLink.classList.add("is-locked"); const remain = formatRemainingLockTime(new Date(dapan.scheduleTime).getTime()); badgeLink.title = `🔒 Đáp án đang khóa! Sẽ mở sau: ${remain}`; if (badgeMoiMini) { badgeMoiMini.innerText = "KHÓA"; badgeMoiMini.style.backgroundColor = "#ea580c"; } }
-        }
-        if (delMiniBtn) delMiniBtn.style.display = isAdmin ? "inline-flex" : "none";
+                const href = isUnlocked ? directUrl : "javascript:void(0)";
+                const lockClass = isUnlocked ? "" : "is-locked";
+                const title = isUnlocked ? `Mở Đáp án: ${name} (${uploadTime})` : `🔒 Đáp án đang khóa! Sẽ mở sau: ${remain}`;
+                const tagText = isUnlocked ? "MỚI" : "KHÓA";
+                const tagBg = isUnlocked ? "#0284c7" : "#ea580c";
+                const delBtn = isAdmin ? `<button type="button" class="btn-del-dapan-mini" onclick="deleteDapAnCham('${dp.fileId || dp.id || idx}', event)" title="Xóa file: ${name}">✕</button>` : '';
 
-        if (fullStrip) {
-            fullStrip.style.display = "flex";
-            if (!isUnlocked) fullStrip.classList.add("strip-locked"); else fullStrip.classList.remove("strip-locked");
-        }
-
-        if (isUnlocked) {
-            if (stripBadgeTag) { stripBadgeTag.className = "dapan-badge-new"; stripBadgeTag.innerText = "MỚI"; }
-            if (stripFilename) stripFilename.innerText = name;
-            if (stripLink) { stripLink.href = directUrl; stripLink.style.pointerEvents = "auto"; }
-            if (stripTime) stripTime.innerText = `📅 ${uploadTime}`;
-            if (stripOpenBtn) { stripOpenBtn.href = directUrl; stripOpenBtn.className = "btn-open-dapan-strip"; stripOpenBtn.innerText = isAdmin ? "🔗 Mở xem (Admin)" : "🔗 Mở xem"; }
+                return `
+                    <div style="display:inline-flex; align-items:center; gap:2px;">
+                        <a href="${href}" target="_blank" class="btn-dapan-badge-active ${lockClass}" title="${title}">
+                            <span class="badge-moi-mini" style="background-color:${tagBg};">${tagText}</span>
+                            <span class="dapan-filename-truncate" style="max-width:130px;">${name}</span>
+                        </a>
+                        ${delBtn}
+                    </div>
+                `;
+            }).join('');
         } else {
-            const schedStr = new Date(dapan.scheduleTime).toLocaleString("vi-VN"); const remain = formatRemainingLockTime(new Date(dapan.scheduleTime).getTime());
-            if (stripBadgeTag) { stripBadgeTag.className = "dapan-badge-new badge-lock"; stripBadgeTag.innerText = "HẸN GIỜ"; }
-            if (stripFilename) { stripFilename.innerText = `${name} [Mở lúc: ${schedStr} - Còn ${remain}]`; }
-            if (stripTime) stripTime.innerText = `⏳ Đang khóa với học sinh`;
-            if (isAdmin) {
-                if (stripLink) { stripLink.href = directUrl; stripLink.style.pointerEvents = "auto"; }
-                if (stripOpenBtn) { stripOpenBtn.href = directUrl; stripOpenBtn.className = "btn-open-dapan-strip"; stripOpenBtn.innerText = "🔗 Mở xem (Admin)"; }
-            } else {
-                if (stripLink) { stripLink.href = "javascript:void(0)"; stripLink.style.pointerEvents = "none"; }
-                if (stripOpenBtn) { stripOpenBtn.href = "javascript:void(0)"; stripOpenBtn.className = "btn-open-dapan-strip disabled-strip"; stripOpenBtn.innerText = "🔒 Đang khóa"; }
-            }
+            badgeWrap.style.display = "none";
+            badgeWrap.innerHTML = "";
         }
-        if (stripDelBtn) stripDelBtn.style.display = isAdmin ? "inline-flex" : "none";
-    } else {
-        if (badgeWrap) badgeWrap.style.display = "none"; if (fullStrip) fullStrip.style.display = "none";
     }
+
+    // 3. CẬP NHẬT ROW 2 (FULL STRIPS: XẾP ĐĂNG TRƯỚC Ở DƯỚI, ĐĂNG SAU Ở TRÊN)
+    let container = document.getElementById("tuluan-dapan-multi-container");
+    if (!container && origFullStrip && origFullStrip.parentNode) {
+        container = document.createElement("div");
+        container.id = "tuluan-dapan-multi-container";
+        container.style.display = "flex";
+        container.style.flexDirection = "column";
+        container.style.width = "100%";
+        container.style.flexShrink = "0";
+        origFullStrip.parentNode.insertBefore(container, origFullStrip);
+    }
+    if (origFullStrip) origFullStrip.style.display = "none";
+
+    if (container) {
+        if (dapAnList.length > 0) {
+            container.style.display = "flex";
+            container.innerHTML = dapAnList.map((dp, idx) => {
+                const isUnlocked = isDapAnUnlocked(dp);
+                const directUrl = dp.directUrl || dp.fileUrl;
+                const name = dp.fileName || `Đáp án ${idx + 1}`;
+                const uploadTime = dp.uploadedAt || "";
+                const schedStr = dp.scheduleTime ? new Date(dp.scheduleTime).toLocaleString("vi-VN") : "";
+                const remain = dp.scheduleTime ? formatRemainingLockTime(new Date(dp.scheduleTime).getTime()) : "";
+
+                let badgeClass = "dapan-badge-new";
+                let badgeText = "MỚI";
+                let titleText = name;
+                let timeText = `📅 ${uploadTime}`;
+                let linkHref = directUrl;
+                let linkPointer = "auto";
+                let openBtnHref = directUrl;
+                let openBtnClass = "btn-open-dapan-strip";
+                let openBtnText = isAdmin ? "🔗 Mở xem (Admin)" : "🔗 Mở xem";
+
+                if (!isUnlocked) {
+                    badgeClass = "dapan-badge-new badge-lock";
+                    badgeText = "HẸN GIỜ";
+                    titleText = `${name} [Mở lúc: ${schedStr} - Còn ${remain}]`;
+                    timeText = `⏳ Đang khóa với học sinh`;
+                    if (isAdmin) {
+                        linkHref = directUrl;
+                        linkPointer = "auto";
+                        openBtnHref = directUrl;
+                        openBtnClass = "btn-open-dapan-strip";
+                        openBtnText = "🔗 Mở xem (Admin)";
+                    } else {
+                        linkHref = "javascript:void(0)";
+                        linkPointer = "none";
+                        openBtnHref = "javascript:void(0)";
+                        openBtnClass = "btn-open-dapan-strip disabled-strip";
+                        openBtnText = "🔒 Đang khóa";
+                    }
+                }
+
+                const delBtn = isAdmin ? `<button type="button" class="btn-del-dapan-strip" onclick="deleteDapAnCham('${dp.fileId || dp.id || idx}', event)" title="Xóa file: ${name}">🗑️</button>` : '';
+
+                return `
+                    <div class="tuluan-dapan-full-strip ${!isUnlocked ? 'strip-locked' : ''}">
+                        <div class="dapan-strip-content">
+                            <span class="${badgeClass}">${badgeText}</span>
+                            <a href="${linkHref}" target="_blank" class="dapan-strip-title" style="pointer-events:${linkPointer};" title="${name}">
+                                ĐÁP ÁN: <span>${titleText}</span>
+                            </a>
+                            <span class="dapan-strip-time">${timeText}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <a href="${openBtnHref}" target="_blank" class="${openBtnClass}">${openBtnText}</a>
+                            ${delBtn}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            container.style.display = "none";
+            container.innerHTML = "";
+        }
+    }
+
     if (typeof updateTuLuanAdminUI === 'function') updateTuLuanAdminUI();
 }
 
@@ -452,3 +716,4 @@ window.saveDapAnSchedule = saveDapAnSchedule;
 window.isDapAnUnlocked = isDapAnUnlocked;
 window.formatRemainingLockTime = formatRemainingLockTime;
 window.renderDapAnChamUI = renderDapAnChamUI;
+window.getDapAnChamList = getDapAnChamList;
