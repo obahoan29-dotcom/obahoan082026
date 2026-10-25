@@ -1,8 +1,8 @@
 // =========================================================
 // FILE: portal-tuluan.js
 // QUẢN LÝ NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB & ĐỒNG BỘ 100% QUA SUPABASE
-// NÂNG CẤP: BẢNG ĐIỂM TP CHUẨN MÀN HÌNH ĐIỆN THOẠI 100%, XUẤT EXCEL CHI TIẾT
-// TỪNG CÂU + TỔNG ĐIỂM, LIGHTBOX PINCH-ZOOM 2 NGÓN TAY & BẢO MẬT PHÂN QUYỀN
+// NÂNG CẤP: GIAO DIỆN CHẤM ĐIỂM THÀNH PHẦN THÔNG MINH (LƯU ĐỆM RAM, ENTER CHUYỂN Ô)
+// MỞ RỘNG LIGHTBOX TỐI ĐA, XUẤT EXCEL CHI TIẾT ĐIỂM TỪNG CÂU & LIÊN KẾT GAS TẠO THƯ MỤC
 // =========================================================
 
 // TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ BẢNG ĐIỂM THÀNH PHẦN
@@ -38,47 +38,27 @@
             display: block !important;
         }
 
-        /* Vị trí riêng của Popover Hẹn Giờ */
-        .dapan-schedule-popover {
-            top: calc(100% + 4px) !important;
-            left: 0 !important;
-            width: 310px !important;
-            border: 1.5px solid #f59e0b !important;
-        }
+        .dapan-schedule-popover { top: calc(100% + 4px) !important; left: 0 !important; width: 310px !important; border: 1.5px solid #f59e0b !important; }
+        .student-feedback-popover { right: 0 !important; bottom: calc(100% + 4px) !important; top: auto !important; width: 290px !important; border: 1.5px solid #d97706 !important; }
+        .student-pass-popover { right: 0 !important; bottom: calc(100% + 4px) !important; top: auto !important; width: 280px !important; border: 1.5px solid #0284c7 !important; }
 
-        /* Vị trí riêng của Popover Nhận Xét */
-        .student-feedback-popover {
-            right: 0 !important;
-            bottom: calc(100% + 4px) !important;
-            top: auto !important;
-            width: 290px !important;
-            border: 1.5px solid #d97706 !important;
-        }
-
-        /* Vị trí riêng của Popover Đổi Mật Khẩu */
-        .student-pass-popover {
-            right: 0 !important;
-            bottom: calc(100% + 4px) !important;
-            top: auto !important;
-            width: 280px !important;
-            border: 1.5px solid #0284c7 !important;
-        }
-
-        /* POPOVER BẢNG ĐIỂM THÀNH PHẦN (DESKTOP) */
+        /* POPOVER BẢNG ĐIỂM THÀNH PHẦN (DESKTOP) - Thiết kế giống ảnh cung cấp */
         .component-score-popover {
             top: calc(100% + 6px) !important;
             right: 0 !important;
             left: auto !important;
-            width: 420px !important;
+            width: 440px !important;
             max-width: 95vw !important;
             max-height: 84vh !important;
             overflow-y: auto !important;
-            border: 1.5px solid #0284c7 !important;
-            padding: 10px 12px !important;
+            border: 1.5px solid #059669 !important;
+            padding: 12px 14px !important;
             background: #ffffff !important;
+            border-radius: 14px !important;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3) !important;
         }
 
-        /* FIX CHUẨN 100% TRÊN MÀN HÌNH ĐIỆN THOẠI: GHIM CĂN GIỮA KHÔNG LỆCH LỀ */
+        /* FIX CHUẨN 100% TRÊN MÀN HÌNH ĐIỆN THOẠI */
         @media (max-width: 640px) {
             .component-score-popover {
                 position: fixed !important;
@@ -87,13 +67,11 @@
                 right: auto !important;
                 bottom: auto !important;
                 transform: translate(-50%, -50%) !important;
-                width: min(390px, calc(100vw - 16px)) !important;
+                width: min(400px, calc(100vw - 16px)) !important;
                 max-width: calc(100vw - 16px) !important;
                 max-height: 88vh !important;
-                border-radius: 14px !important;
                 z-index: 100000000 !important;
                 box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important;
-                padding: 12px !important;
             }
         }
 
@@ -118,839 +96,174 @@
         }
 
         .tuluan-modal-header {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            padding: 4px 8px !important;
-            border-bottom: 1px solid #e2e8f0 !important;
-            background: #ffffff !important;
-            flex-shrink: 0 !important;
-            min-height: 32px !important;
-            gap: 4px !important;
+            display: flex !important; align-items: center !important; justify-content: space-between !important;
+            padding: 4px 8px !important; border-bottom: 1px solid #e2e8f0 !important; background: #ffffff !important;
+            flex-shrink: 0 !important; min-height: 32px !important; gap: 4px !important;
         }
-        .tuluan-header-title-box {
-            display: flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-            min-width: 0 !important;
-            flex: 1 !important;
-        }
+        .tuluan-header-title-box { display: flex !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; flex: 1 !important; }
         .tuluan-icon-badge {
-            width: 24px !important;
-            height: 24px !important;
-            border-radius: 6px !important;
-            background: linear-gradient(135deg, #4f46e5 0%, #0284c7 100%) !important;
-            color: #fff !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            font-size: 13px !important;
-            box-shadow: 0 1px 4px rgba(79, 70, 229, 0.25) !important;
-            flex-shrink: 0 !important;
+            width: 24px !important; height: 24px !important; border-radius: 6px !important;
+            background: linear-gradient(135deg, #4f46e5 0%, #0284c7 100%) !important; color: #fff !important;
+            display: flex !important; align-items: center !important; justify-content: center !important; font-size: 13px !important; flex-shrink: 0 !important;
         }
-        #tuluan-modal-heading {
-            font-size: 12.5px !important;
-            font-weight: 900 !important;
-            line-height: 1.2 !important;
-            margin: 0 !important;
-            color: #0f172a !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-        #tuluan-modal-subheading {
-            font-size: 9.5px !important;
-            margin-top: 1px !important;
-            line-height: 1.15 !important;
-            color: #64748b !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
+        #tuluan-modal-heading { font-size: 12.5px !important; font-weight: 900 !important; margin: 0 !important; color: #0f172a !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+        #tuluan-modal-subheading { font-size: 9.5px !important; color: #64748b !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
 
-        .tuluan-select-bar {
-            display: flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            padding: 3px 6px !important;
-            background: #f1f5f9 !important;
-            border-bottom: 1px solid #cbd5e1 !important;
-            flex-wrap: wrap !important;
-            flex-shrink: 0 !important;
-        }
-        .tuluan-select-group {
-            display: flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-        }
-        .tuluan-select-group label {
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-            color: #334155 !important;
-            white-space: nowrap !important;
-        }
-        .tuluan-class-compact-select {
-            width: 76px !important;
-            max-width: 76px !important;
-            padding: 2px 4px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            border-radius: 6px !important;
-            border: 1.2px solid #cbd5e1 !important;
-            background: #ffffff !important;
-            color: #0f172a !important;
-            height: 27px !important;
-            cursor: pointer !important;
-        }
-        #tuluan-exam-selector {
-            padding: 2px 6px !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 6px !important;
-            font-size: 11.5px !important;
-            font-weight: 700 !important;
-            background: #ffffff !important;
-            color: #0f172a !important;
-            outline: none !important;
-            cursor: pointer !important;
-            height: 27px !important;
-            flex: 1 !important;
-            min-width: 110px !important;
-        }
+        .tuluan-select-bar { display: flex !important; align-items: center !important; gap: 4px !important; padding: 4px 8px !important; background: #f1f5f9 !important; border-bottom: 1px solid #cbd5e1 !important; flex-wrap: wrap !important; flex-shrink: 0 !important; }
+        .tuluan-select-group { display: flex !important; align-items: center !important; gap: 4px !important; }
+        .tuluan-select-group label { font-size: 11px !important; font-weight: 800 !important; color: #334155 !important; white-space: nowrap !important; }
+        .tuluan-class-compact-select { width: 76px !important; max-width: 76px !important; padding: 2px 4px !important; font-size: 11px !important; font-weight: 800 !important; border-radius: 6px !important; border: 1.2px solid #cbd5e1 !important; height: 28px !important; cursor: pointer !important; }
+        
+        #tuluan-exam-selector { padding: 2px 6px !important; border: 1.2px solid #cbd5e1 !important; border-radius: 6px !important; font-size: 11.5px !important; font-weight: 700 !important; height: 28px !important; flex: 1 !important; min-width: 130px !important; cursor: pointer !important; }
 
-        .tuluan-dapan-mini-box {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            flex-shrink: 0 !important;
-        }
+        .tuluan-dapan-mini-box { display: inline-flex !important; align-items: center !important; gap: 4px !important; flex-shrink: 0 !important; }
 
-        .btn-tuluan-upload-dapan,
-        .btn-tuluan-schedule-dapan,
-        .btn-del-exam-selector,
-        .btn-tuluan-add-exam,
-        .btn-tuluan-approve-all,
-        .btn-tuluan-export-excel {
-            height: 27px !important;
-            padding: 2px 7px !important;
-            font-size: 10.5px !important;
-            border-radius: 6px !important;
-            font-weight: 800 !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 2px !important;
-            white-space: nowrap !important;
-            cursor: pointer !important;
+        .btn-tuluan-upload-dapan, .btn-tuluan-schedule-dapan, .btn-del-exam-selector, .btn-tuluan-add-exam, .btn-tuluan-approve-all, .btn-tuluan-export-excel {
+            height: 28px !important; padding: 2px 8px !important; font-size: 11px !important; border-radius: 6px !important; font-weight: 800 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 3px !important; white-space: nowrap !important; cursor: pointer !important; transition: all 0.15s ease !important;
         }
+        .btn-tuluan-upload-dapan { background: linear-gradient(135deg, #0284c7, #0369a1) !important; color: #fff !important; border: 1px solid #38bdf8 !important; }
+        .btn-tuluan-schedule-dapan { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: #fff !important; border: 1px solid #fde68a !important; }
+        .btn-del-exam-selector { background: #fee2e2 !important; color: #dc2626 !important; border: 1px solid #f87171 !important; }
+        .btn-tuluan-add-exam { background: #e0f2fe !important; color: #0369a1 !important; border: 1px solid #7dd3fc !important; }
+        .btn-tuluan-approve-all { background: #f0fdf4 !important; color: #166534 !important; border: 1px solid #86efac !important; }
+        .btn-tuluan-export-excel { background: linear-gradient(135deg, #059669, #047857) !important; color: #fff !important; border: 1px solid #34d399 !important; box-shadow: 0 2px 5px rgba(5,150,105,0.2) !important;}
+        
+        .btn-del-exam-selector:hover { background: #ef4444 !important; color: #fff !important; }
+        .btn-tuluan-add-exam:hover { background: #0284c7 !important; color: #fff !important; }
 
-        .btn-tuluan-upload-dapan {
-            background: linear-gradient(135deg, #0284c7, #0369a1) !important;
-            color: #fff !important;
-            border: 1px solid #38bdf8 !important;
-        }
-        .btn-tuluan-schedule-dapan {
-            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
-            color: #fff !important;
-            border: 1px solid #fde68a !important;
-        }
-        .btn-tuluan-schedule-dapan.has-schedule {
-            background: linear-gradient(135deg, #10b981, #059669) !important;
-            border-color: #86efac !important;
-        }
+        .tuluan-toolbar-bar { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 4px !important; padding: 4px 8px !important; background: #f8fafc !important; border-bottom: 1px solid #e2e8f0 !important; flex-wrap: wrap !important; flex-shrink: 0 !important; }
+        .tuluan-search-box { padding: 2px 8px !important; border: 1.2px solid #cbd5e1 !important; border-radius: 6px !important; font-size: 11.5px !important; font-weight: 600 !important; width: 160px !important; height: 28px !important; outline: none !important; }
+        .tuluan-filter-tabs { display: flex !important; gap: 3px !important; }
+        .tuluan-tab-pill { padding: 3px 8px !important; font-size: 11px !important; border-radius: 6px !important; height: 28px !important; border: 1px solid #cbd5e1 !important; background: #ffffff !important; color: #475569 !important; cursor: pointer !important; font-weight: 800 !important; }
+        .tuluan-tab-pill.active { background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important; color: #ffffff !important; border-color: #4f46e5 !important; }
 
-        .btn-del-exam-selector {
-            background: #fee2e2 !important;
-            color: #dc2626 !important;
-            border: 1px solid #f87171 !important;
-        }
-        .btn-tuluan-add-exam {
-            background: #e0f2fe !important;
-            color: #0369a1 !important;
-            border: 1px solid #7dd3fc !important;
-        }
-        .btn-tuluan-approve-all {
-            background: #f0fdf4 !important;
-            color: #166534 !important;
-            border: 1px solid #86efac !important;
-        }
-        .btn-tuluan-export-excel {
-            background: linear-gradient(135deg, #059669, #047857) !important;
-            color: #fff !important;
-            border: 1px solid #34d399 !important;
-        }
+        /* BẢNG DANH SÁCH HỌC SINH */
+        .tuluan-table-wrap { flex: 1 !important; height: 100% !important; overflow: auto !important; background: #ffffff !important; -webkit-overflow-scrolling: touch !important; }
+        .tuluan-table { width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; font-size: 12.5px !important; text-align: left !important; white-space: nowrap !important; }
+        .tuluan-table thead th { padding: 6px 6px !important; font-size: 11px !important; position: sticky !important; top: 0 !important; z-index: 10 !important; background: #0f172a !important; color: #ffffff !important; font-weight: 800 !important; border-bottom: 2px solid #4f46e5 !important; }
+        .tuluan-table tbody td { padding: 5px 6px !important; font-size: 12px !important; border-bottom: 1px solid #e2e8f0 !important; vertical-align: middle !important; }
 
-        .btn-dapan-badge-active {
-            height: 27px !important;
-            padding: 2px 6px !important;
-            font-size: 10.5px !important;
-            border-radius: 6px !important;
-            max-width: 120px !important;
-            background: #f0fdf4 !important;
-            border: 1px solid #86efac !important;
-            color: #166534 !important;
-            text-decoration: none !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            overflow: hidden !important;
-            white-space: nowrap !important;
-            text-overflow: ellipsis !important;
-        }
-        .badge-moi-mini {
-            background: #0284c7 !important;
-            color: #fff !important;
-            font-size: 9px !important;
-            padding: 1px 4px !important;
-            border-radius: 4px !important;
-            font-weight: 900 !important;
-        }
-        .dapan-filename-truncate {
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            white-space: nowrap !important;
-        }
-        .btn-del-dapan-mini {
-            background: #fee2e2 !important;
-            color: #dc2626 !important;
-            border: 1px solid #fca5a5 !important;
-            border-radius: 50% !important;
-            width: 18px !important;
-            height: 18px !important;
-            font-size: 9px !important;
-            font-weight: 900 !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            cursor: pointer !important;
-            padding: 0 !important;
-        }
-
-        .tuluan-dapan-full-strip {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            gap: 6px !important;
-            padding: 2px 8px !important;
-            background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%) !important;
-            border-bottom: 1px solid #bae6fd !important;
-            flex-shrink: 0 !important;
-            min-height: 28px !important;
-        }
-        .dapan-strip-content {
-            display: flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            min-width: 0 !important;
-            flex: 1 !important;
-        }
-        .dapan-badge-new {
-            font-size: 9px !important;
-            font-weight: 900 !important;
-            padding: 1px 5px !important;
-            border-radius: 4px !important;
-            background: #0284c7 !important;
-            color: #fff !important;
-        }
-        .dapan-badge-new.badge-lock {
-            background: #ea580c !important;
-        }
-        .dapan-strip-title {
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            color: #0369a1 !important;
-            text-decoration: none !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-        .dapan-strip-time {
-            font-size: 10px !important;
-            color: #64748b !important;
-        }
-        .btn-open-dapan-strip {
-            padding: 2px 7px !important;
-            font-size: 10.5px !important;
-            border-radius: 5px !important;
-            height: 24px !important;
-            line-height: 20px !important;
-            background: #0284c7 !important;
-            color: #fff !important;
-            text-decoration: none !important;
-            font-weight: 800 !important;
-            white-space: nowrap !important;
-        }
-        .btn-del-dapan-strip {
-            padding: 2px 5px !important;
-            font-size: 10px !important;
-            border-radius: 5px !important;
-            height: 24px !important;
-            background: #fee2e2 !important;
-            color: #dc2626 !important;
-            border: 1px solid #fca5a5 !important;
-            cursor: pointer !important;
-            font-weight: 800 !important;
-        }
-
-        .tuluan-toolbar-bar {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            gap: 4px !important;
-            padding: 3px 6px !important;
-            background: #f8fafc !important;
-            border-bottom: 1px solid #e2e8f0 !important;
-            flex-wrap: wrap !important;
-            flex-shrink: 0 !important;
-        }
-        .tuluan-search-box {
-            padding: 2px 8px !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 6px !important;
-            font-size: 11.5px !important;
-            font-weight: 600 !important;
-            width: 145px !important;
-            height: 27px !important;
-            outline: none !important;
-        }
-        .tuluan-filter-tabs {
-            display: flex !important;
-            gap: 3px !important;
-        }
-        .tuluan-tab-pill {
-            padding: 3px 6px !important;
-            font-size: 10.5px !important;
-            border-radius: 6px !important;
-            line-height: 1.2 !important;
-            height: 27px !important;
-            border: 1px solid #cbd5e1 !important;
-            background: #ffffff !important;
-            color: #475569 !important;
-            cursor: pointer !important;
-            font-weight: 800 !important;
-        }
-        .tuluan-tab-pill.active {
-            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
-            color: #ffffff !important;
-            border-color: #4f46e5 !important;
-        }
-
-        .tuluan-table-wrap {
-            flex: 1 !important;
-            height: 100% !important;
-            max-height: none !important;
-            overflow-y: auto !important;
-            overflow-x: auto !important;
-            background: #ffffff !important;
-            -webkit-overflow-scrolling: touch !important;
-        }
-        .tuluan-table {
-            width: 100% !important;
-            border-collapse: separate !important;
-            border-spacing: 0 !important;
-            font-size: 12.5px !important;
-            text-align: left !important;
-            white-space: nowrap !important;
-        }
-        .tuluan-table thead th {
-            padding: 6px 6px !important;
-            font-size: 11px !important;
-            position: sticky !important;
-            top: 0 !important;
-            z-index: 10 !important;
-            background: #0f172a !important;
-            color: #ffffff !important;
-            font-weight: 800 !important;
-            border-bottom: 2px solid #4f46e5 !important;
-        }
-        .tuluan-table tbody td {
-            padding: 5px 6px !important;
-            font-size: 12px !important;
-            border-bottom: 1px solid #e2e8f0 !important;
-            vertical-align: middle !important;
-            position: relative !important;
-        }
-
-        .tuluan-status-badge {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            padding: 2px 7px !important;
-            border-radius: 10px !important;
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-        }
+        .tuluan-status-badge { display: inline-flex !important; align-items: center !important; gap: 3px !important; padding: 2px 7px !important; border-radius: 10px !important; font-size: 10.5px !important; font-weight: 800 !important; }
         .tuluan-status-badge.done { background: #dcfce7 !important; color: #15803d !important; border: 1px solid #86efac !important; }
         .tuluan-status-badge.pending { background: #fee2e2 !important; color: #b91c1c !important; border: 1px solid #fca5a5 !important; }
 
-        .tuluan-thumb-row {
-            display: flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            flex-wrap: wrap !important;
-        }
-        .tuluan-img-thumbnail-item {
-            position: relative !important;
-            display: inline-block !important;
-            width: 38px !important;
-            height: 38px !important;
-            border-radius: 6px !important;
-            overflow: hidden !important;
-            border: 1.2px solid #cbd5e1 !important;
-            cursor: pointer !important;
-            background: #f1f5f9 !important;
-        }
-        .tuluan-img-thumbnail-item img {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover !important;
-        }
-        .tuluan-thumb-page {
-            position: absolute !important;
-            bottom: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            background: rgba(15, 23, 42, 0.75) !important;
-            color: #fff !important;
-            font-size: 8px !important;
-            font-weight: 800 !important;
-            text-align: center !important;
-            padding: 1px 0 !important;
-        }
-        .btn-del-single-thumb {
-            position: absolute !important;
-            top: 1px !important;
-            right: 1px !important;
-            width: 17px !important;
-            height: 17px !important;
-            background: #ef4444 !important;
-            color: #ffffff !important;
-            border: 1px solid #ffffff !important;
-            border-radius: 50% !important;
-            font-size: 9.5px !important;
-            font-weight: 900 !important;
-            line-height: 1 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            cursor: pointer !important;
-            z-index: 20 !important;
-            padding: 0 !important;
-            user-select: none !important;
-            transition: transform 0.15s ease !important;
-        }
-        .btn-del-single-thumb:hover { transform: scale(1.2) !important; background: #b91c1c !important; }
+        .tuluan-thumb-row { display: flex !important; align-items: center !important; gap: 4px !important; flex-wrap: wrap !important; }
+        .tuluan-img-thumbnail-item { position: relative !important; display: inline-block !important; width: 38px !important; height: 38px !important; border-radius: 6px !important; overflow: hidden !important; border: 1.2px solid #cbd5e1 !important; cursor: pointer !important; background: #f1f5f9 !important; }
+        .tuluan-img-thumbnail-item img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+        .tuluan-thumb-page { position: absolute !important; bottom: 0 !important; left: 0 !important; right: 0 !important; background: rgba(15, 23, 42, 0.75) !important; color: #fff !important; font-size: 8px !important; font-weight: 800 !important; text-align: center !important; padding: 1px 0 !important; }
 
         /* Ô NHẬP ĐIỂM CHẤM CHÉO NGOÀI BẢNG (KHÓA VỚI HỌC SINH) */
-        .tuluan-score-input {
-            width: 68px !important;
-            padding: 4px 4px !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 7px !important;
-            font-size: 12.5px !important;
-            font-weight: 900 !important;
-            text-align: center !important;
-            outline: none !important;
-            color: #0284c7 !important;
-            background: #ffffff !important;
-        }
-        .tuluan-score-input.is-locked-for-student {
-            background: #f8fafc !important;
-            color: #0369a1 !important;
-            border-color: #e2e8f0 !important;
-            cursor: not-allowed !important;
-        }
+        .tuluan-score-input { width: 68px !important; padding: 4px 4px !important; border: 1.2px solid #cbd5e1 !important; border-radius: 7px !important; font-size: 12.5px !important; font-weight: 900 !important; text-align: center !important; outline: none !important; color: #0284c7 !important; background: #ffffff !important; }
+        .tuluan-score-input.is-locked-for-student { background: #f8fafc !important; color: #0369a1 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; }
 
-        .btn-tuluan-comment {
-            background: #f8fafc !important;
-            color: #475569 !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 7px !important;
-            padding: 4px 7px !important;
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-        }
-        .btn-tuluan-comment.active {
-            background: #fef3c7 !important;
-            color: #b45309 !important;
-            border-color: #fde68a !important;
-        }
+        .btn-tuluan-comment { background: #f8fafc !important; color: #475569 !important; border: 1.2px solid #cbd5e1 !important; border-radius: 7px !important; padding: 4px 7px !important; font-size: 10.5px !important; font-weight: 800 !important; cursor: pointer !important; }
+        .btn-tuluan-comment.active { background: #fef3c7 !important; color: #b45309 !important; border-color: #fde68a !important; }
 
-        .tuluan-action-btn-group {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-        }
-        .btn-tuluan-upload-row {
-            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
-            color: #ffffff !important;
-            border: none !important;
-            border-radius: 6px !important;
-            padding: 4px 8px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            height: 28px !important;
-        }
-        .btn-tuluan-change-pass {
-            background: #f0fdf4 !important;
-            color: #166534 !important;
-            border: 1px solid #86efac !important;
-            border-radius: 6px !important;
-            padding: 4px 6px !important;
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            height: 28px !important;
-        }
-        .btn-tuluan-reset-pass {
-            background: #fff7ed !important;
-            color: #c2410c !important;
-            border: 1px solid #fdba74 !important;
-            border-radius: 6px !important;
-            padding: 4px 6px !important;
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            height: 28px !important;
-        }
+        .tuluan-action-btn-group { display: inline-flex !important; align-items: center !important; gap: 4px !important; }
+        .btn-tuluan-upload-row { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important; color: #ffffff !important; border: none !important; border-radius: 6px !important; padding: 4px 8px !important; font-size: 11px !important; font-weight: 800 !important; cursor: pointer !important; height: 28px !important; }
+        .btn-tuluan-change-pass { background: #f0fdf4 !important; color: #166534 !important; border: 1px solid #86efac !important; border-radius: 6px !important; padding: 4px 6px !important; font-size: 10.5px !important; font-weight: 800 !important; cursor: pointer !important; height: 28px !important; }
 
-        .pass-popover-header {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            font-size: 12px !important;
-            font-weight: 900 !important;
-            color: #0f172a !important;
-            border-bottom: 1px solid #f1f5f9 !important;
-            padding-bottom: 5px !important;
-            margin-bottom: 7px !important;
-        }
-        .btn-close-pass-pop {
-            background: none !important;
-            border: none !important;
-            font-size: 14px !important;
-            font-weight: 900 !important;
-            color: #94a3b8 !important;
-            cursor: pointer !important;
-        }
+        .pass-popover-header { display: flex !important; align-items: center !important; justify-content: space-between !important; font-size: 12px !important; font-weight: 900 !important; color: #0f172a !important; border-bottom: 1px solid #f1f5f9 !important; padding-bottom: 5px !important; margin-bottom: 7px !important; }
+        .btn-close-pass-pop { background: none !important; border: none !important; font-size: 14px !important; font-weight: 900 !important; color: #94a3b8 !important; cursor: pointer !important; }
 
-        .tuluan-modal-footer {
-            padding: 3px 8px !important;
-            min-height: 28px !important;
-            background: #f8fafc !important;
-            border-top: 1px solid #e2e8f0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            flex-shrink: 0 !important;
-        }
+        .tuluan-modal-footer { padding: 3px 8px !important; min-height: 28px !important; background: #f8fafc !important; border-top: 1px solid #e2e8f0 !important; display: flex !important; align-items: center !important; justify-content: space-between !important; flex-shrink: 0 !important; }
 
         /* ============================================================ */
         /* 3. LIGHTBOX XEM ẢNH, NÚT "ĐIỂM TP" VÀ CẢM ỨNG PINCH-ZOOM     */
+        /* MỞ RỘNG TỐI ĐA 95vw TRÊN MÁY TÍNH                            */
         /* ============================================================ */
         .tuluan-lightbox-overlay {
-            position: fixed !important;
-            inset: 0 !important;
-            background: rgba(10, 15, 29, 0.94) !important;
-            backdrop-filter: blur(12px) !important;
-            -webkit-backdrop-filter: blur(12px) !important;
-            z-index: 10000000 !important;
-            display: none;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 8px !important;
-            animation: fadeInModal 0.2s ease-out !important;
-            touch-action: none !important;
-            user-select: none !important;
+            position: fixed !important; inset: 0 !important; background: rgba(10, 15, 29, 0.94) !important;
+            backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important;
+            z-index: 10000000 !important; display: none; align-items: center !important; justify-content: center !important;
+            padding: 10px !important; animation: fadeInModal 0.2s ease-out !important; touch-action: none !important; user-select: none !important;
         }
         .tuluan-lightbox-content {
-            background: #0f172a !important;
-            border: 1.5px solid #334155 !important;
-            border-radius: 16px !important;
-            max-width: 940px !important;
-            width: 100% !important;
-            height: 94vh !important;
-            max-height: 96vh !important;
-            display: flex !important;
-            flex-direction: column !important;
-            overflow: hidden !important;
-            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6) !important;
-            position: relative !important;
+            background: #0f172a !important; border: 1.5px solid #334155 !important; border-radius: 16px !important;
+            width: 95vw !important; max-width: 1600px !important; /* ĐÃ MỞ RỘNG SIÊU TO */
+            height: 96vh !important; max-height: 98vh !important;
+            display: flex !important; flex-direction: column !important; overflow: hidden !important;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6) !important; position: relative !important;
         }
-        .tuluan-lightbox-header {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            padding: 6px 12px !important;
-            background: #1e293b !important;
-            border-bottom: 1.5px solid #334155 !important;
-            flex-shrink: 0 !important;
-            gap: 8px !important;
-        }
-        .lightbox-title-wrap {
-            display: flex !important;
-            align-items: center !important;
-            gap: 6px !important;
-            min-width: 0 !important;
-            flex: 1 !important;
-        }
-        #lightbox-student-title {
-            font-weight: 800 !important;
-            font-size: 13.5px !important;
-            color: #ffffff !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-        .lightbox-page-badge {
-            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
-            color: #ffffff !important;
-            border: 1px solid #38bdf8 !important;
-            padding: 2px 8px !important;
-            border-radius: 12px !important;
-            font-size: 11px !important;
-            font-weight: 900 !important;
-            letter-spacing: 0.5px !important;
-            flex-shrink: 0 !important;
-            box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4) !important;
-        }
+        .tuluan-lightbox-header { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 6px 12px !important; background: #1e293b !important; border-bottom: 1.5px solid #334155 !important; flex-shrink: 0 !important; gap: 8px !important; }
+        .lightbox-title-wrap { display: flex !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; flex: 1 !important; }
+        #lightbox-student-title { font-weight: 800 !important; font-size: 13.5px !important; color: #ffffff !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; text-transform: uppercase !important;}
+        .lightbox-page-badge { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important; color: #ffffff !important; border: 1px solid #38bdf8 !important; padding: 2px 8px !important; border-radius: 12px !important; font-size: 11px !important; font-weight: 900 !important; flex-shrink: 0 !important; }
 
         /* NÚT "ĐIỂM TP" THAY THẾ CHO NÚT DRIVE */
         .btn-lightbox-component-score {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-            color: #ffffff !important;
-            border: 1.2px solid #6ee7b7 !important;
-            padding: 4px 10px !important;
-            border-radius: 8px !important;
-            font-size: 11.5px !important;
-            font-weight: 900 !important;
-            cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important;
-            transition: all 0.15s ease !important;
-            white-space: nowrap !important;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: #ffffff !important;
+            border: 1px solid #34d399 !important; padding: 5px 12px !important; border-radius: 8px !important;
+            font-size: 12px !important; font-weight: 900 !important; cursor: pointer !important;
+            display: inline-flex !important; align-items: center !important; gap: 5px !important;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important; transition: all 0.15s ease !important;
         }
-        .btn-lightbox-component-score:hover {
-            filter: brightness(1.1) !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-lightbox-component-score:active {
-            transform: scale(0.95) !important;
-        }
+        .btn-lightbox-component-score:hover { filter: brightness(1.1) !important; transform: translateY(-1px) !important; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45) !important;}
 
-        .btn-close-lightbox {
-            background: #334155 !important;
-            border: none !important;
-            border-radius: 50% !important;
-            color: #ffffff !important;
-            width: 28px !important;
-            height: 28px !important;
-            font-size: 15px !important;
-            font-weight: 900 !important;
-            cursor: pointer !important;
-            display: flex !align-items: center !important;
-            justify-content: center !important;
-            line-height: 1 !important;
-        }
+        .btn-close-lightbox { background: #334155 !important; border: none !important; border-radius: 50% !important; color: #ffffff !important; width: 30px !important; height: 30px !important; font-size: 16px !important; font-weight: 900 !important; cursor: pointer !important; display: flex !align-items: center !important; justify-content: center !important; }
         .btn-close-lightbox:hover { background: #ef4444 !important; }
 
-        .tuluan-lightbox-img-box {
-            flex: 1 !important;
-            position: relative !important;
-            overflow: hidden !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: #070b14 !important;
-            touch-action: none !important;
-            user-select: none !important;
-            cursor: grab !important;
-        }
+        .tuluan-lightbox-img-box { flex: 1 !important; position: relative !important; overflow: hidden !important; display: flex !important; align-items: center !important; justify-content: center !important; background: #070b14 !important; touch-action: none !important; user-select: none !important; cursor: grab !important; }
         .tuluan-lightbox-img-box.is-zoomed { cursor: move !important; }
-        #lightbox-full-img {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            object-fit: contain !important;
-            border-radius: 6px !important;
-            transform-origin: center center !important;
-            will-change: transform !important;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-            pointer-events: auto !important;
-        }
+        #lightbox-full-img { max-width: 100% !important; max-height: 100% !important; object-fit: contain !important; border-radius: 6px !important; transform-origin: center center !important; will-change: transform !important; box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important; pointer-events: auto !important; }
 
-        .btn-lightbox-nav {
-            position: absolute !important;
-            top: 50% !important;
-            transform: translateY(-50%) !important;
-            width: 44px !important;
-            height: 44px !important;
-            background: rgba(15, 23, 42, 0.72) !important;
-            color: #ffffff !important;
-            border: 1.5px solid rgba(255, 255, 255, 0.35) !important;
-            border-radius: 50% !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            font-size: 20px !important;
-            cursor: pointer !important;
-            z-index: 100 !important;
-            backdrop-filter: blur(8px) !important;
-            -webkit-backdrop-filter: blur(8px) !important;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
-            transition: all 0.18s ease !important;
-            user-select: none !important;
-        }
-        .btn-lightbox-nav:hover {
-            background: #0284c7 !important;
-            border-color: #38bdf8 !important;
-            transform: translateY(-50%) scale(1.12) !important;
-        }
-        .btn-lightbox-nav.btn-nav-prev { left: 12px !important; }
-        .btn-lightbox-nav.btn-nav-next { right: 12px !important; }
-        .btn-lightbox-nav.disabled {
-            opacity: 0.25 !important;
-            cursor: not-allowed !important;
-            pointer-events: none !important;
-        }
+        .btn-lightbox-nav { position: absolute !important; top: 50% !important; transform: translateY(-50%) !important; width: 44px !important; height: 44px !important; background: rgba(15, 23, 42, 0.72) !important; color: #ffffff !important; border: 1.5px solid rgba(255, 255, 255, 0.35) !important; border-radius: 50% !important; display: flex !important; align-items: center !important; justify-content: center !important; font-size: 20px !important; cursor: pointer !important; z-index: 100 !important; backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important; transition: all 0.18s ease !important; user-select: none !important; }
+        .btn-lightbox-nav:hover { background: #0284c7 !important; border-color: #38bdf8 !important; transform: translateY(-50%) scale(1.12) !important; }
+        .btn-lightbox-nav.btn-nav-prev { left: 16px !important; }
+        .btn-lightbox-nav.btn-nav-next { right: 16px !important; }
 
-        .lightbox-bottom-bar {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            padding: 6px 12px !important;
-            background: #1e293b !important;
-            border-top: 1.5px solid #334155 !important;
-            font-size: 11px !important;
-            color: #94a3b8 !important;
-            font-weight: 700 !important;
-            flex-shrink: 0 !important;
-            gap: 8px !important;
-        }
-        .lightbox-zoom-tools {
-            display: flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            flex-shrink: 0 !important;
-        }
-        .btn-zoom-tool {
-            background: #334155 !important;
-            color: #ffffff !important;
-            border: 1px solid #475569 !important;
-            border-radius: 6px !important;
-            padding: 3px 7px !important;
-            font-size: 11.5px !important;
-            font-weight: 900 !important;
-            cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            transition: all 0.15s ease !important;
-        }
+        .lightbox-bottom-bar { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 8px 14px !important; background: #1e293b !important; border-top: 1.5px solid #334155 !important; font-size: 11.5px !important; color: #94a3b8 !important; font-weight: 700 !important; flex-shrink: 0 !important; gap: 8px !important; }
+        .btn-zoom-tool { background: #334155 !important; color: #ffffff !important; border: 1px solid #475569 !important; border-radius: 6px !important; padding: 4px 8px !important; font-size: 12px !important; font-weight: 900 !important; cursor: pointer !important; margin: 0 2px !important; transition: all 0.15s ease !important; }
         .btn-zoom-tool:hover { background: #0284c7 !important; border-color: #38bdf8 !important; }
-        .btn-zoom-tool:active { transform: scale(0.92) !important; }
 
-        .lightbox-dots-container {
-            display: flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-        }
-        .lightbox-dot-item {
-            width: 7px !important;
-            height: 7px !important;
-            border-radius: 50% !important;
-            background: #475569 !important;
-            transition: all 0.2s ease !important;
-            cursor: pointer !important;
-        }
-        .lightbox-dot-item.active {
-            background: #38bdf8 !important;
-            width: 16px !important;
-            border-radius: 8px !important;
-        }
+        .lightbox-dots-container { display: flex !important; align-items: center !important; gap: 5px !important; }
+        .lightbox-dot-item { width: 8px !important; height: 8px !important; border-radius: 50% !important; background: #475569 !important; transition: all 0.2s ease !important; cursor: pointer !important; }
+        .lightbox-dot-item.active { background: #38bdf8 !important; width: 18px !important; border-radius: 9px !important; }
 
-        /* LƯỚI Ô NHẬP ĐIỂM THÀNH PHẦN (SIÊU GỌN 10 CỘT) */
+        /* LƯỚI Ô NHẬP ĐIỂM THÀNH PHẦN (SIÊU GỌN 10 CỘT ĐỂ GIỐNG ẢNH YÊU CẦU) */
         .comp-score-grid-10 {
             display: grid !important;
             grid-template-columns: repeat(10, 1fr) !important;
-            gap: 4px !important;
+            gap: 5px !important;
             background: #f8fafc !important;
-            padding: 6px !important;
+            padding: 8px !important;
             border-radius: 8px !important;
             border: 1px solid #e2e8f0 !important;
-            margin-bottom: 6px !important;
+            margin-bottom: 8px !important;
         }
-        .comp-score-cell-box {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-        }
+        .comp-score-cell-box { display: flex !important; flex-direction: column !important; align-items: center !important; position: relative !important;}
         .comp-score-cell-input {
             width: 100% !important;
-            padding: 3px 1px !important;
+            padding: 5px 2px !important;
             text-align: center !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 5px !important;
-            font-size: 11px !important;
+            border: 1.5px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            font-size: 12px !important;
             font-weight: 800 !important;
             color: #0f172a !important;
             background: #ffffff !important;
             outline: none !important;
             box-sizing: border-box !important;
+            transition: all 0.2s ease !important;
         }
-        .comp-score-cell-input:focus {
+        .comp-score-cell-input:focus { border-color: #0ea5e9 !important; box-shadow: 0 0 0 2px rgba(14,165,233,0.2) !important; }
+        .comp-score-cell-input::placeholder { color: #94a3b8 !important; font-weight: 600 !important; font-size: 10.5px !important; }
+        
+        /* Hiệu ứng ô đã nhập điểm thành màu xanh giống ảnh */
+        .comp-score-cell-input.has-val {
             border-color: #10b981 !important;
             background: #ecfdf5 !important;
-            box-shadow: 0 0 0 1.5px rgba(16, 185, 129, 0.3) !important;
-        }
-        .comp-score-cell-input::placeholder {
-            color: #94a3b8 !important;
-            font-weight: 600 !important;
-            font-size: 9.5px !important;
+            color: #047857 !important;
         }
 
         .comp-score-footer-row {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            background: #f0fdf4 !important;
-            border: 1.2px solid #86efac !important;
-            border-radius: 8px !important;
-            padding: 6px 8px !important;
-            gap: 6px !important;
-            flex-wrap: wrap !important;
+            display: flex !important; align-items: center !important; justify-content: space-between !important;
+            background: #f0fdf4 !important; border: 1.5px solid #86efac !important; border-radius: 8px !important;
+            padding: 8px 10px !important; gap: 6px !important; flex-wrap: wrap !important;
         }
-        .comp-score-kpi-item {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            font-size: 11.5px !important;
-            font-weight: 800 !important;
-            color: #166534 !important;
-        }
-        .comp-score-kpi-val {
-            background: #ffffff !important;
-            border: 1px solid #86efac !important;
-            padding: 2px 7px !important;
-            border-radius: 6px !important;
-            font-size: 13px !important;
-            font-weight: 900 !important;
-            color: #15803d !important;
-        }
+        .comp-score-kpi-item { display: inline-flex !important; align-items: center !important; gap: 5px !important; font-size: 12.5px !important; font-weight: 800 !important; color: #166534 !important; }
+        .comp-score-kpi-val { background: #ffffff !important; border: 1.5px solid #86efac !important; padding: 2px 8px !important; border-radius: 6px !important; font-size: 14px !important; font-weight: 900 !important; color: #15803d !important; }
 
-        @media (max-width: 640px) {
-            .btn-lightbox-nav {
-                width: 36px !important;
-                height: 36px !important;
-                font-size: 17px !important;
-            }
-            .btn-lightbox-nav.btn-nav-prev { left: 6px !important; }
-            .btn-lightbox-nav.btn-nav-next { right: 6px !important; }
-            .lightbox-bottom-bar span.lightbox-hint-text { display: none !important; }
-            .comp-score-grid-10 { grid-template-columns: repeat(5, 1fr) !important; }
-        }
     `;
     document.head.appendChild(style);
 })();
@@ -1284,7 +597,7 @@ function ensureTuLuanModalDOM() {
                         </div>
                     </div>
                 </div>
-                <button type="button" class="btn-close-cleanup-modal" onclick="closeTuLuanModal(event)">✕</button>
+                <button type="button" class="btn-close-cleanup-modal" onclick="closeTuLuanModal(event)" style="background:none;border:none;font-size:18px;font-weight:900;color:#94a3b8;cursor:pointer;">✕</button>
             </div>
 
             <!-- THANH ĐIỀU HƯỚNG CHỌN LỚP, ĐÁP ÁN, HẸN GIỜ & CHỌN ĐỀ SÁT NHAU -->
@@ -1303,59 +616,6 @@ function ensureTuLuanModalDOM() {
                     </select>
                 </div>
 
-                <div class="tuluan-dapan-mini-box" id="tuluan-dapan-mini-box">
-                    <input type="file" id="tuluan-dapan-file-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip,.rar,.xlsx" style="display:none;" onchange="handleUploadDapAnCham(this)">
-                    <button type="button" class="btn-tuluan-upload-dapan" id="btn-up-dapan-cham" onclick="triggerUploadDapAnCham(event)" title="Tải file Đáp án chấm tự luận lên Drive">
-                        📤 Đ.Á chấm
-                    </button>
-
-                    <div style="position:relative; display:inline-block;" id="box-schedule-dapan-wrap">
-                        <button type="button" class="btn-tuluan-schedule-dapan" id="btn-schedule-dapan" onclick="toggleDapAnSchedulePopover(event)" title="Hẹn giờ tự động mở đáp án cho học sinh">
-                            ⏰ Hẹn giờ
-                        </button>
-
-                        <div class="dapan-schedule-popover" id="dapan-schedule-popover" onclick="event.stopPropagation()">
-                            <div class="pass-popover-header">
-                                <span>⏰ Hẹn Giờ Mở Đáp Án Chấm</span>
-                                <button type="button" class="btn-close-pass-pop" onclick="closeDapAnSchedulePopover(event)">✕</button>
-                            </div>
-                            <div style="font-size:11px; color:#64748b; margin-bottom:8px; line-height:1.4;">
-                                Cài đặt thời điểm học sinh được phép xem đáp án. Trước thời điểm này, đáp án sẽ tự động khóa để bảo mật.
-                            </div>
-
-                            <label class="dapan-sched-radio-item">
-                                <input type="radio" name="dapan-sched-mode" id="sched-mode-now" value="now" checked onchange="onDapAnScheduleModeChanged('now')">
-                                <span>🔓 Mở ngay lập tức (Học sinh xem được luôn)</span>
-                            </label>
-
-                            <label class="dapan-sched-radio-item">
-                                <input type="radio" name="dapan-sched-mode" id="sched-mode-auto" value="auto" onchange="onDapAnScheduleModeChanged('auto')">
-                                <span>⏰ Tự động mở vào ngày & giờ quy định:</span>
-                            </label>
-
-                            <div id="sched-datetime-input-group" style="display:none; padding-left:20px; margin-bottom:8px;">
-                                <input type="datetime-local" id="dapan-sched-datetime" class="dapan-sched-input">
-                                <button type="button" class="btn-quick-deadline" onclick="setScheduleToExamDeadline()">
-                                    ⚡ Lấy giờ đóng đề thi
-                                </button>
-                            </div>
-
-                            <div class="pass-popover-actions">
-                                <button type="button" class="btn-pass-cancel" onclick="closeDapAnSchedulePopover(event)">Hủy</button>
-                                <button type="button" class="btn-pass-save" style="background:linear-gradient(135deg, #f59e0b, #d97706);" onclick="saveDapAnSchedule(event)">💾 Lưu hẹn giờ</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="tuluan-dapan-badge-wrap" style="display:none; align-items:center; gap:3px;">
-                        <a id="tuluan-dapan-badge-link" href="#" target="_blank" class="btn-dapan-badge-active" title="Mở file đáp án chấm">
-                            <span class="badge-moi-mini" id="badge-moi-mini-text">MỚI</span>
-                            <span id="tuluan-dapan-badge-filename" class="dapan-filename-truncate">Đáp án</span>
-                        </a>
-                        <button type="button" class="btn-del-dapan-mini" id="btn-del-dapan-mini" style="display:none;" onclick="deleteDapAnCham(event)" title="Xóa file đáp án chấm này">✕</button>
-                    </div>
-                </div>
-
                 <div class="tuluan-select-group" style="flex:1; min-width:140px;">
                     <label>📝 Đề:</label>
                     <div style="display:flex; align-items:center; gap:3px; width:100%;">
@@ -1366,27 +626,15 @@ function ensureTuLuanModalDOM() {
                     </div>
                 </div>
 
-                <div id="tuluan-admin-add-exam-box" style="display:none; align-items:center; gap:3px; flex-wrap:wrap;">
+                <div id="tuluan-admin-add-exam-box" style="display:none; align-items:center; gap:4px; flex-wrap:wrap;">
                     <button type="button" class="btn-tuluan-add-exam" onclick="promptAddNewTuLuanExam()">➕ Thêm đề</button>
                     <button type="button" class="btn-tuluan-approve-all" onclick="toggleApproveAllSubmissions(true)" title="Duyệt tất cả bài làm của đề này">✅ Duyệt hết</button>
-                    <button type="button" class="btn-tuluan-export-excel" onclick="exportTuLuanToExcel(event)" title="Xuất Excel bài làm">📊 Xuất excel</button>
+                    <button type="button" class="btn-tuluan-export-excel" onclick="exportTuLuanToExcel(event)" title="Xuất Excel bài làm chi tiết từng câu">📊 Xuất excel</button>
                 </div>
             </div>
 
-            <!-- DÒNG ĐÁP ÁN GỌN GÀNG -->
-            <div id="tuluan-dapan-full-strip" class="tuluan-dapan-full-strip" style="display:none;">
-                <div class="dapan-strip-content">
-                    <span class="dapan-badge-new" id="strip-dapan-badge-tag">MỚI</span>
-                    <a id="strip-dapan-link" href="#" target="_blank" class="dapan-strip-title" title="Bấm vào để mở xem file Đáp án chấm">
-                        ĐÁP ÁN: <span id="strip-dapan-filename">...</span>
-                    </a>
-                    <span class="dapan-strip-time" id="strip-dapan-time">📅 ...</span>
-                </div>
-                <div style="display:flex; align-items:center; gap:4px;">
-                    <a id="strip-dapan-open-btn" href="#" target="_blank" class="btn-open-dapan-strip">🔗 Mở xem</a>
-                    <button type="button" id="strip-dapan-del-btn" class="btn-del-dapan-strip" style="display:none;" onclick="deleteDapAnCham(event)" title="Xóa file đáp án này">🗑️</button>
-                </div>
-            </div>
+            <!-- DÒNG ĐÁP ÁN KHÔNG HIỂN THỊ ĐỂ TIẾT KIỆM DIỆN TÍCH (Giữ ẩn) -->
+            <div id="tuluan-dapan-full-strip" style="display:none;"></div>
 
             <!-- TOOLBAR TÌM KIẾM & BỘ LỌC GỌN -->
             <div class="tuluan-toolbar-bar">
@@ -1442,33 +690,33 @@ function ensureTuLuanModalDOM() {
                                 📊 Điểm TP ▾
                             </button>
 
-                            <!-- POPOVER BẢNG ĐIỂM THÀNH PHẦN NỔI LÊN (SIÊU NHỎ GỌN) -->
+                            <!-- POPOVER BẢNG ĐIỂM THÀNH PHẦN NỔI LÊN (GIỐNG ẢNH THIẾT KẾ) -->
                             <div class="component-score-popover" id="component-score-popover" onclick="event.stopPropagation()">
                                 <div class="pass-popover-header">
                                     <span style="color:#059669;">📊 Chấm Điểm Từng Câu: <b id="comp-score-st-name">Học sinh</b></span>
                                     <button type="button" class="btn-close-pass-pop" onclick="closeComponentScorePopover(event)">✕</button>
                                 </div>
 
-                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:4px; font-size:11px; flex-wrap:wrap;">
-                                    <div style="display:flex; align-items:center; gap:4px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:6px; font-size:12px; flex-wrap:wrap;">
+                                    <div style="display:flex; align-items:center; gap:6px;">
                                         <b style="color:#334155;">Số câu của đề:</b>
                                         <input type="number" id="comp-score-q-count" min="1" max="120" value="40" 
-                                               style="width:48px; padding:2px 4px; border:1px solid #cbd5e1; border-radius:5px; font-weight:800; text-align:center;"
+                                               style="width:55px; padding:3px 6px; border:1.5px solid #cbd5e1; border-radius:6px; font-weight:800; text-align:center; font-size:13px;"
                                                onchange="onComponentQuestionCountChanged(this.value)">
                                     </div>
-                                    <div style="display:flex; gap:3px;">
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(30)">30</button>
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(36)">36</button>
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(40)">40</button>
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(50)">50</button>
+                                    <div style="display:flex; gap:4px;">
+                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:3px 8px; font-size:12px;" onclick="setQuickQuestionCount(30)">30</button>
+                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:3px 8px; font-size:12px;" onclick="setQuickQuestionCount(36)">36</button>
+                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:3px 8px; font-size:12px;" onclick="setQuickQuestionCount(40)">40</button>
+                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:3px 8px; font-size:12px;" onclick="setQuickQuestionCount(50)">50</button>
                                     </div>
                                 </div>
 
                                 <!-- LƯỚI Ô NHẬP ĐIỂM SÁT SẠT NHAU -->
                                 <div class="comp-score-grid-10" id="comp-score-grid-container"></div>
 
-                                <div style="font-size:10px; color:#64748b; font-style:italic; margin-bottom:6px;">
-                                    💡 Nhập dấu chấm (.) hoặc phẩy (,). Nhấn Enter để sang câu tiếp theo.
+                                <div style="font-size:11px; color:#64748b; font-style:italic; margin-bottom:10px;">
+                                    💡 Nhập dấu chấm (.) hoặc phẩy (,). Nhấn Enter để tự nhảy sang câu tiếp theo.
                                 </div>
 
                                 <!-- HÀNG THỨ 5: TỔNG ĐIỂM, THANG 10 VÀ LƯU -->
@@ -1483,12 +731,12 @@ function ensureTuLuanModalDOM() {
                                         <span class="comp-score-kpi-val" id="comp-score-scale10-val" style="color:#0284c7; border-color:#38bdf8;">0.0</span>
                                     </div>
 
-                                    <div style="display:flex; gap:4px; margin-left:auto;">
-                                        <select id="comp-score-apply-mode" style="font-size:10.5px; font-weight:700; border-radius:6px; border:1px solid #86efac; padding:2px 4px; background:#fff;" title="Chọn điểm đưa ra bảng ngoài">
+                                    <div style="display:flex; gap:6px; margin-left:auto; align-items:center;">
+                                        <select id="comp-score-apply-mode" style="font-size:11.5px; font-weight:800; border-radius:6px; border:1.5px solid #86efac; padding:3px 6px; background:#fff; outline:none; color:#15803d;" title="Chọn điểm đưa ra bảng ngoài">
                                             <option value="scale10">Điểm thang 10</option>
                                             <option value="raw">Điểm cộng dồn</option>
                                         </select>
-                                        <button type="button" class="btn-pass-save" onclick="saveComponentScoresAction(event)" style="padding:4px 8px; font-size:11px;">
+                                        <button type="button" class="btn-pass-save" onclick="saveComponentScoresAction(event)" style="padding:5px 12px; font-size:12px;">
                                             💾 Lưu & Đưa ra bảng
                                         </button>
                                     </div>
@@ -1520,7 +768,7 @@ function ensureTuLuanModalDOM() {
                     </div>
 
                     <div class="lightbox-dots-container" id="lightbox-dots-container"></div>
-                    <span class="lightbox-hint-text">💡 Dùng 2 ngón tay zoom to/nhỏ • Nhấp đúp phóng to • Kéo rê đọc bài</span>
+                    <span class="lightbox-hint-text" style="display:none;">💡 Dùng 2 ngón tay zoom to/nhỏ • Nhấp đúp phóng to • Kéo rê đọc bài</span>
                 </div>
             </div>
         </div>
@@ -1597,7 +845,7 @@ function setupLightboxTouchAndZoom() {
             e.preventDefault();
             const touch = e.touches[0];
             lightboxZoomState.posX = touch.clientX - lightboxZoomState.startX;
-            lightboxZoomState.posY = touch.clientY - lightboxZoomState.startY;
+            lightboxZoomState.posY = touch.clientY - lightboxZoomState.posY;
             applyImageTransform(false);
         }
     }, { passive: false });
@@ -1713,7 +961,7 @@ function zoomLightboxStep(step, event) {
 }
 
 // =========================================================
-// LOGIC BẢNG ĐIỂM THÀNH PHẦN TỪNG CÂU
+// LOGIC BẢNG ĐIỂM THÀNH PHẦN TỪNG CÂU VÀ LƯU ĐỆM
 // =========================================================
 function toggleComponentScorePopover(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -1761,17 +1009,20 @@ function renderComponentScoreGrid() {
 
     const sbd = currentLightboxGallery.studentSbd;
     const record = currentTuLuanModalData.submissionsMap[sbd] || {};
+    
+    // NẠP ĐIỂM TỪ RAM
     const savedDetails = record.detailScores || currentLightboxGallery.componentScores || {};
     currentLightboxGallery.componentScores = { ...savedDetails };
 
     let html = "";
     for (let i = 1; i <= totalQ; i++) {
         const val = (savedDetails[i] !== undefined && savedDetails[i] !== null) ? savedDetails[i] : "";
+        const hasValClass = (val !== "") ? "has-val" : "";
         html += `
             <div class="comp-score-cell-box">
-                <input type="text" class="comp-score-cell-input" id="comp-q-${i}" 
+                <input type="text" class="comp-score-cell-input ${hasValClass}" id="comp-q-${i}" 
                        value="${val}" placeholder="C${i}" 
-                       oninput="onComponentCellInput(${i}, this.value)" 
+                       oninput="onComponentCellInput(${i}, this)" 
                        onkeydown="onComponentCellKeyDown(event, ${i}, ${totalQ})">
             </div>
         `;
@@ -1780,26 +1031,46 @@ function renderComponentScoreGrid() {
     updateComponentScoreTotals();
 }
 
-function onComponentCellInput(qIdx, val) {
+function onComponentCellInput(qIdx, inputEl) {
+    let val = inputEl.value;
     let cleanVal = String(val).trim().replace(',', '.');
+    
     if (cleanVal === "") {
         delete currentLightboxGallery.componentScores[qIdx];
+        inputEl.classList.remove("has-val");
     } else {
         let num = parseFloat(cleanVal);
         if (!isNaN(num)) {
             currentLightboxGallery.componentScores[qIdx] = num;
+            inputEl.classList.add("has-val");
+        } else {
+            inputEl.classList.remove("has-val");
         }
     }
+    
+    // LƯU ĐỆM NGAY VÀO RAM ĐỂ TRÁNH MẤT KHI TẮT BẢNG
+    const sbd = currentLightboxGallery.studentSbd;
+    if (sbd && currentTuLuanModalData.submissionsMap[sbd]) {
+        currentTuLuanModalData.submissionsMap[sbd].detailScores = { ...currentLightboxGallery.componentScores };
+        currentTuLuanModalData.submissionsMap[sbd].questionCount = currentLightboxGallery.currentQuestionCount;
+    }
+    
     updateComponentScoreTotals();
 }
 
+// BẮT SỰ KIỆN ENTER ĐỂ TỰ ĐỘNG CHUYỂN Ô TIẾP THEO
 function onComponentCellKeyDown(event, currentIdx, totalQ) {
     if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault();
         const nextIdx = currentIdx + 1;
         if (nextIdx <= totalQ) {
             const nextInput = document.getElementById(`comp-q-${nextIdx}`);
-            if (nextInput) nextInput.focus();
+            if (nextInput) {
+                nextInput.focus();
+                nextInput.select(); // Bôi đen luôn số cũ để tiện sửa
+            }
+        } else if (event.key === "Enter") {
+            saveComponentScoresAction(); // Nếu ấn Enter ở câu cuối thì Lưu luôn
         }
     }
 }
@@ -1847,7 +1118,7 @@ async function saveComponentScoresAction(event) {
     const pad = n => String(n).padStart(2, '0');
     const scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
 
-    // Cập nhật RAM
+    // Cập nhật RAM (Đã có lưu đệm nhưng củng cố lại khi bấm nút Lưu)
     if (!currentTuLuanModalData.submissionsMap[sbd]) {
         currentTuLuanModalData.submissionsMap[sbd] = {
             sbd: sbd,
@@ -1858,14 +1129,14 @@ async function saveComponentScoresAction(event) {
             crossScore: finalScore,
             crossScoreBy: graderDisplay,
             crossScoreTime: scoreTimeStr,
-            detailScores: currentLightboxGallery.componentScores,
+            detailScores: { ...currentLightboxGallery.componentScores },
             questionCount: currentLightboxGallery.currentQuestionCount
         };
     } else {
         currentTuLuanModalData.submissionsMap[sbd].crossScore = finalScore;
         currentTuLuanModalData.submissionsMap[sbd].crossScoreBy = graderDisplay;
         currentTuLuanModalData.submissionsMap[sbd].crossScoreTime = scoreTimeStr;
-        currentTuLuanModalData.submissionsMap[sbd].detailScores = currentLightboxGallery.componentScores;
+        currentTuLuanModalData.submissionsMap[sbd].detailScores = { ...currentLightboxGallery.componentScores };
         currentTuLuanModalData.submissionsMap[sbd].questionCount = currentLightboxGallery.currentQuestionCount;
     }
 
@@ -1885,7 +1156,7 @@ async function saveComponentScoresAction(event) {
                 detail_scores: currentLightboxGallery.componentScores
             }, { onConflict: 'quiz_id,sbd' });
 
-            // 2. Cơ chế lưu trữ kép an toàn 100% vào app_key_values (đảm bảo không bị thiếu cột database)
+            // 2. Cơ chế lưu trữ kép an toàn vào app_key_values
             try {
                 const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single();
                 const allCompScores = (existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {};
@@ -1930,18 +1201,6 @@ function updateTuLuanAdminUI() {
     if (delExamBtn) {
         delExamBtn.style.setProperty("display", isAdmin ? "inline-flex" : "none", "important");
     }
-    const upDapanBtn = document.getElementById("btn-up-dapan-cham");
-    if (upDapanBtn) {
-        upDapanBtn.style.setProperty("display", isAdmin ? "inline-flex" : "none", "important");
-    }
-    const schedWrap = document.getElementById("box-schedule-dapan-wrap");
-    if (schedWrap) {
-        schedWrap.style.setProperty("display", isAdmin ? "inline-block" : "none", "important");
-    }
-    const delDapanMini = document.getElementById("btn-del-dapan-mini");
-    const delDapanStrip = document.getElementById("strip-dapan-del-btn");
-    if (delDapanMini) delDapanMini.style.display = isAdmin ? "inline-flex" : "none";
-    if (delDapanStrip) delDapanStrip.style.display = isAdmin ? "inline-flex" : "none";
 }
 
 async function openTuLuanModal(classId, itemId, event) {
@@ -2009,9 +1268,7 @@ async function refreshTuLuanExamList(targetCat, preferredExamId = null) {
                     }
                 });
             }
-        } catch(e) {
-            console.warn("Lỗi tải đề từ Supabase custom_links:", e);
-        }
+        } catch(e) {}
     }
 
     const allCats = [...(window.DAY_THEM_CATEGORIES || []), ...(window.CHINH_KHOA_CATEGORIES || [])];
@@ -2094,7 +1351,6 @@ async function switchTuLuanExam(examId, examTitle) {
     updateTuLuanAdminUI();
 
     await loadTuLuanSubmissionsFromSupabase();
-    renderDapAnChamUI();
     renderTuLuanStudentsTable();
     startTuLuanRealtimeListener(examId);
 }
@@ -2109,6 +1365,64 @@ function onTuLuanExamChanged(newExamId) {
     const selectedOpt = selector.options[selector.selectedIndex];
     const examTitle = selectedOpt ? selectedOpt.dataset.title : newExamId;
     switchTuLuanExam(newExamId, examTitle);
+}
+
+// LIÊN KẾT VỚI GAS ĐỂ TẠO THƯ MỤC TRỰC TIẾP TRÊN GOOGLE DRIVE
+async function promptAddNewTuLuanExam() {
+    const inputTitle = prompt("➕ NHẬP TÊN ĐỀ THI TỰ LUẬN MỚI (VD: Đề 109 Giữa Kỳ 1, Đề 108 Toán 11...):");
+    if (!inputTitle || !inputTitle.trim()) return;
+
+    const examTitle = inputTitle.trim();
+    const classSelector = document.getElementById("tuluan-class-selector");
+    const classId = (classSelector && classSelector.value) ? classSelector.value : (currentTuLuanModalData.classId || "lop-11a");
+    currentTuLuanModalData.classId = classId;
+
+    const examId = "exam_" + Date.now();
+    const folderKey = getUnifiedExamFolderKey(examTitle, "", examId);
+    const driveClassName = getCleanDriveClassName(classId);
+
+    try {
+        const client = getDbClient();
+        if (client) {
+            await client.from('custom_links').upsert({
+                id: examId,
+                category_id: classId,
+                title: examTitle,
+                is_doc: true,
+                badge_text: "MỚI",
+                timestamp: Date.now(),
+                date: new Date().toLocaleDateString("vi-VN"),
+                url: "#"
+            });
+        }
+
+        // Gọi Google Apps Script để tạo sẵn folder trên Drive
+        const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+            ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+            : GOOGLE_DRIVE_UPLOAD_GAS_URL;
+
+        if (gasUrl && !gasUrl.includes("DÁN_URL")) {
+            fetch(gasUrl, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({
+                    action: "createExamFolders",
+                    rootFolder: "BAI_TAP_TU_LUAN",
+                    className: driveClassName,
+                    class: driveClassName,
+                    lop: driveClassName,
+                    classList: [driveClassName],
+                    examTitle: folderKey,
+                    folderKey: folderKey
+                })
+            }).catch(() => null);
+        }
+
+        alert(`✅ Đã thêm đề "${examTitle}" thành công cho lớp ${driveClassName}! Máy chủ Drive đang tự động tạo Folder nhận ảnh.`);
+        await refreshTuLuanExamList(classId, examId);
+    } catch(err) {
+        alert("❌ Lỗi khi thêm đề: " + err.message);
+    }
 }
 
 async function deleteCurrentTuLuanExam(event) {
@@ -2173,62 +1487,6 @@ async function deleteCurrentTuLuanExam(event) {
     }
 }
 
-async function promptAddNewTuLuanExam() {
-    const inputTitle = prompt("➕ NHẬP TÊN ĐỀ THI TỰ LUẬN MỚI (VD: Đề 109 Giữa Kỳ 1, Đề 108 Toán 11...):");
-    if (!inputTitle || !inputTitle.trim()) return;
-
-    const examTitle = inputTitle.trim();
-    const classSelector = document.getElementById("tuluan-class-selector");
-    const classId = (classSelector && classSelector.value) ? classSelector.value : (currentTuLuanModalData.classId || "lop-11a");
-    currentTuLuanModalData.classId = classId;
-
-    const examId = "exam_" + Date.now();
-    const folderKey = getUnifiedExamFolderKey(examTitle, "", examId);
-    const driveClassName = getCleanDriveClassName(classId);
-
-    try {
-        const client = getDbClient();
-        if (client) {
-            await client.from('custom_links').upsert({
-                id: examId,
-                category_id: classId,
-                title: examTitle,
-                is_doc: true,
-                badge_text: "MỚI",
-                timestamp: Date.now(),
-                date: new Date().toLocaleDateString("vi-VN"),
-                url: "#"
-            });
-        }
-
-        const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-            ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-            : GOOGLE_DRIVE_UPLOAD_GAS_URL;
-
-        if (gasUrl && !gasUrl.includes("DÁN_URL")) {
-            fetch(gasUrl, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    action: "createExamFolders",
-                    rootFolder: "BAI_TAP_TU_LUAN",
-                    className: driveClassName,
-                    class: driveClassName,
-                    lop: driveClassName,
-                    classList: [driveClassName],
-                    examTitle: folderKey,
-                    folderKey: folderKey
-                })
-            }).catch(() => null);
-        }
-
-        alert(`✅ Đã thêm đề "${examTitle}" thành công cho lớp ${driveClassName}!`);
-        await refreshTuLuanExamList(classId, examId);
-    } catch(err) {
-        alert("❌ Lỗi khi thêm đề: " + err.message);
-    }
-}
-
 // ĐỌC BÀI NỘP, MẬT KHẨU & ĐIỂM THÀNH PHẦN TỪ SUPABASE
 async function loadTuLuanSubmissionsFromSupabase() {
     const qId = currentTuLuanModalData.quizId;
@@ -2237,15 +1495,13 @@ async function loadTuLuanSubmissionsFromSupabase() {
     const client = getDbClient();
     if (!client) {
         currentTuLuanModalData.submissionsMap = {};
-        currentTuLuanModalData.dapAnCham = null;
         return;
     }
 
     try {
-        const [subsRes, passRes, dapanRes, detailScoresRes] = await Promise.all([
+        const [subsRes, passRes, detailScoresRes] = await Promise.all([
             client.from('tu_luan_submissions').select('*').eq('quiz_id', qId),
             client.from('app_key_values').select('value').eq('key', 'student_custom_passwords').single(),
-            client.from('app_key_values').select('value').eq('key', 'dapan_' + qId).single(),
             client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single()
         ]);
 
@@ -2297,15 +1553,9 @@ async function loadTuLuanSubmissionsFromSupabase() {
             currentTuLuanModalData.customPasswords = {};
         }
 
-        if (dapanRes && dapanRes.data && dapanRes.data.value && dapanRes.data.value.fileUrl) {
-            currentTuLuanModalData.dapAnCham = dapanRes.data.value;
-        } else {
-            currentTuLuanModalData.dapAnCham = null;
-        }
     } catch(e) {
         console.warn("Lỗi đọc dữ liệu tự luận Supabase:", e);
         currentTuLuanModalData.submissionsMap = {};
-        currentTuLuanModalData.dapAnCham = null;
     }
 }
 
@@ -2327,17 +1577,7 @@ function startTuLuanRealtimeListener(quizId) {
                 filter: `quiz_id=eq.${quizId}`
             }, async () => {
                 await loadTuLuanSubmissionsFromSupabase();
-                renderDapAnChamUI();
                 renderTuLuanStudentsTable();
-            })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'app_key_values',
-                filter: `key=eq.dapan_${quizId}`
-            }, async () => {
-                await loadTuLuanSubmissionsFromSupabase();
-                renderDapAnChamUI();
             })
             .subscribe();
     } catch(e) {
@@ -2345,456 +1585,6 @@ function startTuLuanRealtimeListener(quizId) {
     }
 }
 
-function triggerUploadDapAnCham(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const fileIn = document.getElementById("tuluan-dapan-file-input");
-    if (fileIn) {
-        fileIn.value = "";
-        fileIn.click();
-    }
-}
-
-async function handleUploadDapAnCham(fileInput) {
-    if (!fileInput.files || fileInput.files.length === 0) return;
-    const file = fileInput.files[0];
-
-    const btn = document.getElementById("btn-up-dapan-cham");
-    if (btn) {
-        btn.disabled = true;
-        btn.innerText = "⏳ Đang gửi...";
-    }
-
-    const qId = currentTuLuanModalData.quizId || "quiz";
-    const classId = currentTuLuanModalData.classId || "lop-11a";
-
-    const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-        ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-        : GOOGLE_DRIVE_UPLOAD_GAS_URL;
-
-    if (!gasUrl || gasUrl.includes("DÁN_URL")) {
-        alert("⚠️ Chưa cấu hình GOOGLE_DRIVE_TULUAN_GAS_URL trong app-config.js!");
-        if (btn) { btn.disabled = false; btn.innerText = "📤 Đ.Á chấm"; }
-        return;
-    }
-
-    try {
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-            try {
-                let rawResult = String(e.target.result || "");
-                let base64Data = rawResult.includes("base64,") ? rawResult.split("base64,")[1] : rawResult;
-
-                const payload = {
-                    action: "uploadDapAnCham",
-                    rootFolder: "KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO",
-                    className: "Dap_an_cham_tu_luan",
-                    class: "Dap_an_cham_tu_luan",
-                    lop: "Dap_an_cham_tu_luan",
-                    examTitle: "Dap_an_cham_tu_luan",
-                    folderKey: "Dap_an_cham_tu_luan",
-                    studentFolder: "Dap_an_cham_tu_luan",
-                    filename: file.name,
-                    mimeType: file.type || "application/octet-stream",
-                    base64: base64Data
-                };
-
-                const result = await sendToGoogleDriveWithRetry(gasUrl, payload, 2, 75000);
-                if (result && result.status === "success" && result.fileUrl) {
-                    const now = new Date();
-                    const pad = n => String(n).padStart(2, '0');
-                    const uploadTimeStr = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-
-                    const directUrl = result.directUrl || (typeof toDirectGoogleDriveImageUrl === 'function' ? toDirectGoogleDriveImageUrl(result.fileUrl) : result.fileUrl);
-                    const existingDapan = currentTuLuanModalData.dapAnCham || {};
-
-                    const dapanData = {
-                        quizId: qId,
-                        classId: classId,
-                        fileName: file.name,
-                        fileUrl: result.fileUrl,
-                        directUrl: directUrl,
-                        fileId: result.fileId || "",
-                        uploadedAt: uploadTimeStr,
-                        timestamp: Date.now(),
-                        scheduleTime: existingDapan.scheduleTime || null
-                    };
-
-                    const client = getDbClient();
-                    if (client) {
-                        await client.from('app_key_values').upsert({
-                            key: 'dapan_' + qId,
-                            value: dapanData
-                        });
-                    }
-
-                    currentTuLuanModalData.dapAnCham = dapanData;
-                    renderDapAnChamUI();
-                    alert(`🎉 ĐÃ TẢI LÊN ĐÁP ÁN CHẤM THÀNH CÔNG!\n\n📁 Tên file: ${file.name}`);
-                } else {
-                    throw new Error(result.message || "Không thể lấy đường dẫn tệp từ Google Drive.");
-                }
-            } catch(upErr) {
-                alert("❌ Lỗi khi tải file lên Drive: " + upErr.message);
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerText = "📤 Đ.Á chấm";
-                }
-                fileInput.value = "";
-            }
-        };
-        reader.readAsDataURL(file);
-    } catch(err) {
-        alert("❌ Lỗi đọc file từ máy: " + err.message);
-        if (btn) {
-            btn.disabled = false;
-            btn.innerText = "📤 Đ.Á chấm";
-        }
-        fileInput.value = "";
-    }
-}
-
-async function deleteDapAnCham(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    if (!checkCurrentIsAdmin()) {
-        alert("⛔ Chỉ Giáo viên quản trị mới có quyền xóa file Đáp án chấm!");
-        return;
-    }
-
-    if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA file Đáp án chấm của đề này không?")) return;
-
-    const qId = currentTuLuanModalData.quizId;
-    const curDapan = currentTuLuanModalData.dapAnCham;
-
-    try {
-        const client = getDbClient();
-        if (client) {
-            await client.from('app_key_values').delete().eq('key', 'dapan_' + qId);
-        }
-
-        if (curDapan && curDapan.fileId) {
-            const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-                ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-                : GOOGLE_DRIVE_UPLOAD_GAS_URL;
-            if (gasUrl && !gasUrl.includes("DÁN_URL")) {
-                fetch(gasUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "text/plain;charset=utf-8" },
-                    body: JSON.stringify({ action: "deleteFile", fileId: curDapan.fileId })
-                }).catch(() => null);
-            }
-        }
-
-        currentTuLuanModalData.dapAnCham = null;
-        renderDapAnChamUI();
-        alert("🗑️ Đã xóa file Đáp án chấm thành công!");
-    } catch(err) {
-        alert("❌ Lỗi khi xóa: " + err.message);
-    }
-}
-
-function toggleDapAnSchedulePopover(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById("dapan-schedule-popover");
-    if (!pop) return;
-    const isShown = pop.classList.contains("show");
-
-    document.querySelectorAll(".student-pass-popover.show").forEach(p => p.classList.remove("show"));
-    document.querySelectorAll(".student-feedback-popover.show").forEach(p => p.classList.remove("show"));
-    document.querySelectorAll(".dapan-schedule-popover.show").forEach(p => p.classList.remove("show"));
-    document.querySelectorAll(".component-score-popover.show").forEach(p => p.classList.remove("show"));
-
-    if (!isShown) {
-        pop.classList.add("show");
-
-        const curDapan = currentTuLuanModalData.dapAnCham;
-        const radioNow = document.getElementById("sched-mode-now");
-        const radioAuto = document.getElementById("sched-mode-auto");
-        const dateInput = document.getElementById("dapan-sched-datetime");
-
-        if (curDapan && curDapan.scheduleTime) {
-            if (radioAuto) radioAuto.checked = true;
-            onDapAnScheduleModeChanged('auto');
-            if (dateInput) {
-                const d = new Date(curDapan.scheduleTime);
-                if (!isNaN(d.getTime()) && typeof toLocalDatetimeString === 'function') {
-                    dateInput.value = toLocalDatetimeString(d);
-                } else if (!isNaN(d.getTime())) {
-                    const pad = n => String(n).padStart(2, '0');
-                    dateInput.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-                }
-            }
-        } else {
-            if (radioNow) radioNow.checked = true;
-            onDapAnScheduleModeChanged('now');
-            if (dateInput) dateInput.value = "";
-        }
-    }
-}
-
-function closeDapAnSchedulePopover(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById("dapan-schedule-popover");
-    if (pop) pop.classList.remove("show");
-}
-
-function onDapAnScheduleModeChanged(mode) {
-    const inputGroup = document.getElementById("sched-datetime-input-group");
-    if (inputGroup) {
-        inputGroup.style.display = (mode === 'auto') ? 'block' : 'none';
-        if (mode === 'auto') {
-            const dateInput = document.getElementById("dapan-sched-datetime");
-            if (dateInput && !dateInput.value) {
-                setScheduleToExamDeadline();
-            }
-        }
-    }
-}
-
-function setScheduleToExamDeadline() {
-    const dateInput = document.getElementById("dapan-sched-datetime");
-    if (!dateInput) return;
-
-    let deadlineStr = null;
-    const currentQuizId = currentTuLuanModalData.quizId;
-
-    if (typeof examData !== 'undefined' && examData && examData.examEndTimeStr) {
-        deadlineStr = examData.examEndTimeStr;
-    } else {
-        const allCats = [...(window.DAY_THEM_CATEGORIES || []), ...(window.CHINH_KHOA_CATEGORIES || [])];
-        for (const cat of allCats) {
-            if (Array.isArray(cat.links)) {
-                const match = cat.links.find(l => (l.id === currentQuizId || l.firebaseId === currentQuizId));
-                if (match && match.examEndTimeStr) {
-                    deadlineStr = match.examEndTimeStr;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (deadlineStr) {
-        const d = new Date(deadlineStr);
-        if (!isNaN(d.getTime()) && typeof toLocalDatetimeString === 'function') {
-            dateInput.value = toLocalDatetimeString(d);
-            return;
-        }
-    }
-
-    const def = new Date();
-    def.setHours(21, 0, 0, 0);
-    const pad = n => String(n).padStart(2, '0');
-    dateInput.value = `${def.getFullYear()}-${pad(def.getMonth() + 1)}-${pad(def.getDate())}T${pad(def.getHours())}:${pad(def.getMinutes())}`;
-}
-
-async function saveDapAnSchedule(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const qId = currentTuLuanModalData.quizId;
-    if (!qId) return;
-
-    const curDapan = currentTuLuanModalData.dapAnCham;
-    if (!curDapan) {
-        alert("⚠️ Vui lòng upload file Đáp án chấm trước khi thiết lập lịch hẹn giờ!");
-        closeDapAnSchedulePopover();
-        return;
-    }
-
-    const radioAuto = document.getElementById("sched-mode-auto");
-    const isAuto = radioAuto && radioAuto.checked;
-    let scheduleTimeISO = null;
-
-    if (isAuto) {
-        const dateInput = document.getElementById("dapan-sched-datetime");
-        const val = dateInput ? dateInput.value : "";
-        if (!val) {
-            alert("⚠️ Vui lòng chọn ngày và giờ mở đáp án!");
-            return;
-        }
-        const d = new Date(val);
-        if (isNaN(d.getTime())) {
-            alert("⚠️ Thời gian hẹn không hợp lệ!");
-            return;
-        }
-        scheduleTimeISO = d.toISOString();
-    }
-
-    curDapan.scheduleTime = scheduleTimeISO;
-
-    try {
-        const client = getDbClient();
-        if (client) {
-            await client.from('app_key_values').upsert({
-                key: 'dapan_' + qId,
-                value: curDapan
-            });
-        }
-
-        renderDapAnChamUI();
-        closeDapAnSchedulePopover();
-
-        if (scheduleTimeISO) {
-            const formatted = new Date(scheduleTimeISO).toLocaleString("vi-VN");
-            alert(`⏰ ĐÃ THIẾT LẬP HẸN GIỜ MỞ ĐÁP ÁN!\n\n- Đề thi: ${currentTuLuanModalData.examTitle}\n- Tự động mở: ${formatted}`);
-        } else {
-            alert("🔓 Đã mở đáp án tự do cho học sinh xem ngay lập tức!");
-        }
-    } catch(err) {
-        alert("❌ Lỗi khi lưu hẹn giờ: " + err.message);
-    }
-}
-
-function isDapAnUnlocked(dapan) {
-    if (!dapan || !dapan.fileUrl) return false;
-    if (checkCurrentIsAdmin()) return true;
-    if (!dapan.scheduleTime) return true;
-    const targetMs = new Date(dapan.scheduleTime).getTime();
-    if (isNaN(targetMs)) return true;
-    return Date.now() >= targetMs;
-}
-
-function formatRemainingLockTime(targetMs) {
-    const diffSec = Math.max(0, Math.floor((targetMs - Date.now()) / 1000));
-    if (diffSec <= 0) return "Đang mở...";
-    const days = Math.floor(diffSec / 86400);
-    const hours = Math.floor((diffSec % 86400) / 3600);
-    const mins = Math.floor((diffSec % 3600) / 60);
-
-    if (days > 0) return `${days} ngày ${hours} giờ`;
-    if (hours > 0) return `${hours} giờ ${mins} phút`;
-    return `${mins} phút`;
-}
-
-function renderDapAnChamUI() {
-    const dapan = currentTuLuanModalData.dapAnCham;
-    const isAdmin = checkCurrentIsAdmin();
-
-    const schedBtn = document.getElementById("btn-schedule-dapan");
-    const badgeWrap = document.getElementById("tuluan-dapan-badge-wrap");
-    const badgeLink = document.getElementById("tuluan-dapan-badge-link");
-    const badgeFilename = document.getElementById("tuluan-dapan-badge-filename");
-    const badgeMoiMini = document.getElementById("badge-moi-mini-text");
-    const delMiniBtn = document.getElementById("btn-del-dapan-mini");
-
-    const fullStrip = document.getElementById("tuluan-dapan-full-strip");
-    const stripFilename = document.getElementById("strip-dapan-filename");
-    const stripLink = document.getElementById("strip-dapan-link");
-    const stripTime = document.getElementById("strip-dapan-time");
-    const stripOpenBtn = document.getElementById("strip-dapan-open-btn");
-    const stripDelBtn = document.getElementById("strip-dapan-del-btn");
-    const stripBadgeTag = document.getElementById("strip-dapan-badge-tag");
-
-    if (schedBtn) {
-        if (dapan && dapan.scheduleTime) {
-            schedBtn.classList.add("has-schedule");
-            schedBtn.title = `Đang hẹn giờ mở lúc: ${new Date(dapan.scheduleTime).toLocaleString("vi-VN")}`;
-            schedBtn.innerHTML = `⏰ Đã hẹn`;
-        } else {
-            schedBtn.classList.remove("has-schedule");
-            schedBtn.title = "Hẹn giờ tự động mở đáp án cho học sinh";
-            schedBtn.innerHTML = `⏰ Hẹn giờ`;
-        }
-    }
-
-    if (dapan && dapan.fileUrl) {
-        const directUrl = dapan.fileUrl;
-        const name = dapan.fileName || "Đáp án chấm";
-        const uploadTime = dapan.uploadedAt || "";
-        const isUnlocked = isDapAnUnlocked(dapan);
-
-        if (badgeWrap) badgeWrap.style.display = "inline-flex";
-        if (badgeFilename) badgeFilename.innerText = name;
-
-        if (badgeLink) {
-            if (isUnlocked) {
-                badgeLink.href = directUrl;
-                badgeLink.classList.remove("is-locked");
-                badgeLink.title = `Mở Đáp án: ${name} (${uploadTime})`;
-                if (badgeMoiMini) {
-                    badgeMoiMini.innerText = "MỚI";
-                    badgeMoiMini.style.backgroundColor = "#0284c7";
-                }
-            } else {
-                badgeLink.href = "javascript:void(0)";
-                badgeLink.classList.add("is-locked");
-                const remain = formatRemainingLockTime(new Date(dapan.scheduleTime).getTime());
-                badgeLink.title = `🔒 Đáp án đang khóa! Sẽ mở sau: ${remain}`;
-                if (badgeMoiMini) {
-                    badgeMoiMini.innerText = "KHÓA";
-                    badgeMoiMini.style.backgroundColor = "#ea580c";
-                }
-            }
-        }
-        if (delMiniBtn) delMiniBtn.style.display = isAdmin ? "inline-flex" : "none";
-
-        if (fullStrip) {
-            fullStrip.style.display = "flex";
-            if (!isUnlocked) {
-                fullStrip.classList.add("strip-locked");
-            } else {
-                fullStrip.classList.remove("strip-locked");
-            }
-        }
-
-        if (isUnlocked) {
-            if (stripBadgeTag) {
-                stripBadgeTag.className = "dapan-badge-new";
-                stripBadgeTag.innerText = "MỚI";
-            }
-            if (stripFilename) stripFilename.innerText = name;
-            if (stripLink) {
-                stripLink.href = directUrl;
-                stripLink.style.pointerEvents = "auto";
-            }
-            if (stripTime) stripTime.innerText = `📅 ${uploadTime}`;
-            if (stripOpenBtn) {
-                stripOpenBtn.href = directUrl;
-                stripOpenBtn.className = "btn-open-dapan-strip";
-                stripOpenBtn.innerText = isAdmin ? "🔗 Mở xem (Admin)" : "🔗 Mở xem";
-            }
-        } else {
-            const schedStr = new Date(dapan.scheduleTime).toLocaleString("vi-VN");
-            const remain = formatRemainingLockTime(new Date(dapan.scheduleTime).getTime());
-
-            if (stripBadgeTag) {
-                stripBadgeTag.className = "dapan-badge-new badge-lock";
-                stripBadgeTag.innerText = "HẸN GIỜ";
-            }
-            if (stripFilename) {
-                stripFilename.innerText = `${name} [Mở lúc: ${schedStr} - Còn ${remain}]`;
-            }
-            if (stripTime) stripTime.innerText = `⏳ Đang khóa với học sinh`;
-
-            if (isAdmin) {
-                if (stripLink) {
-                    stripLink.href = directUrl;
-                    stripLink.style.pointerEvents = "auto";
-                }
-                if (stripOpenBtn) {
-                    stripOpenBtn.href = directUrl;
-                    stripOpenBtn.className = "btn-open-dapan-strip";
-                    stripOpenBtn.innerText = "🔗 Mở xem (Admin)";
-                }
-            } else {
-                if (stripLink) {
-                    stripLink.href = "javascript:void(0)";
-                    stripLink.style.pointerEvents = "none";
-                }
-                if (stripOpenBtn) {
-                    stripOpenBtn.href = "javascript:void(0)";
-                    stripOpenBtn.className = "btn-open-dapan-strip disabled-strip";
-                    stripOpenBtn.innerText = "🔒 Đang khóa";
-                }
-            }
-        }
-
-        if (stripDelBtn) stripDelBtn.style.display = isAdmin ? "inline-flex" : "none";
-    } else {
-        if (badgeWrap) badgeWrap.style.display = "none";
-        if (fullStrip) fullStrip.style.display = "none";
-    }
-
-    updateTuLuanAdminUI();
-}
 
 function renderTuLuanStudentsTable() {
     const tbody = document.getElementById("tuluan-students-tbody");
@@ -2914,7 +1704,6 @@ function renderTuLuanStudentsTable() {
             scoreTooltip = isAdmin ? "Thầy có thể sửa trực tiếp hoặc mở ảnh bấm Điểm TP" : "🔒 Học sinh mở ảnh bấm Điểm TP để chấm từng câu";
         }
 
-        // Ô CHẤM CHÉO: KHÓA VỚI HỌC SINH, CHỈ ADMIN MỚI ĐƯỢC GÕ TRỰC TIẾP
         const crossScoreHtml = isAdmin ? `
             <input type="text" class="tuluan-score-input" id="cross-score-${cleanSbd}"
                    value="${currentCrossScore}" placeholder="VD: 8.5"
@@ -2969,11 +1758,6 @@ function renderTuLuanStudentsTable() {
                     <button type="button" class="btn-tuluan-change-pass" onclick="toggleStudentPassPopover('${cleanSbd}', event)" title="Đổi mật khẩu nộp bài (4 số)">
                         🔑 Đổi MK
                     </button>
-                    ${isAdmin ? `
-                        <button type="button" class="btn-tuluan-reset-pass" onclick="resetStudentPasswordToDefault('${cleanSbd}', '${st.sbd}', '${st.name}', event)" title="[Admin] Reset mật khẩu (${st.sbd})">
-                            ↺ Reset
-                        </button>
-                    ` : ''}
                 </div>
 
                 <div class="student-pass-popover" id="pass-popover-${cleanSbd}" onclick="event.stopPropagation()">
@@ -3022,6 +1806,8 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     currentLightboxGallery.images = record.images;
     currentLightboxGallery.currentIndex = Math.max(0, Math.min(imgIndex, record.images.length - 1));
     currentLightboxGallery.currentQuestionCount = record.questionCount || detectExamQuestionCount();
+    
+    // Khôi phục bộ điểm đệm từ RAM
     currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {};
 
     resetLightboxZoom(false);
@@ -3264,7 +2050,6 @@ function exportTuLuanToExcel(event) {
     const driveClassName = getCleanDriveClassName(currentTuLuanModalData.classId);
     const subMap = currentTuLuanModalData.submissionsMap || {};
 
-    // 1. Tự động xác định số lượng câu tối đa của đề để tạo các cột Câu 1 -> Câu N
     let maxQ = detectExamQuestionCount() || 40;
     students.forEach(st => {
         const cleanSbd = String(st.sbd || "").trim().replace(/[^a-zA-Z0-9]/g, '_');
@@ -3280,7 +2065,6 @@ function exportTuLuanToExcel(event) {
         }
     });
 
-    // 2. Tạo Header HTML cho các câu hỏi
     let questionHeadersHtml = "";
     for (let c = 1; c <= maxQ; c++) {
         questionHeadersHtml += `<th style="width: 38px; background-color: #0369a1; border: 1px solid #94a3b8; text-align: center;">C${c}</th>`;
@@ -3292,7 +2076,6 @@ function exportTuLuanToExcel(event) {
         const record = subMap[cleanSbd] || {};
         const detailScores = record.detailScores || {};
 
-        // Tính toán các cột điểm thành phần
         let qCellsHtml = "";
         let sumRaw = 0;
         let answeredCount = 0;
@@ -3512,41 +2295,6 @@ async function saveStudentPasswordChange(cleanSbd, defaultSbd, studentName, defa
     }
 }
 
-async function resetStudentPasswordToDefault(cleanSbd, defaultSbd, studentName, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const isAdmin = checkCurrentIsAdmin();
-    if (!isAdmin) {
-        alert("⛔ Chỉ Giáo viên quản trị mới có quyền Reset mật khẩu!");
-        return;
-    }
-
-    if (!confirm(`⚠️ XÁC NHẬN RESET MẬT KHẨU (ADMIN):\n\nKhôi phục mật khẩu của [${studentName}] về mặc định (${defaultSbd})?`)) {
-        return;
-    }
-
-    try {
-        if (currentTuLuanModalData.customPasswords) {
-            delete currentTuLuanModalData.customPasswords[cleanSbd];
-        }
-
-        const client = getDbClient();
-        if (client) {
-            await client.from('app_key_values').upsert({
-                key: 'student_custom_passwords',
-                value: currentTuLuanModalData.customPasswords || {}
-            });
-        }
-
-        const sessionAuthKey = `tuluan_authed_${currentTuLuanModalData.quizId}_${cleanSbd}`;
-        safeSession.removeItem(sessionAuthKey);
-
-        alert(`✅ Đã reset mật khẩu của em [${studentName}] về: ${defaultSbd}.`);
-        renderTuLuanStudentsTable();
-    } catch(err) {
-        alert("❌ Lỗi reset mật khẩu: " + err.message);
-    }
-}
-
 async function deleteSingleStudentImage(cleanSbd, imgIndex, studentName, defaultPass, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
 
@@ -3652,7 +2400,7 @@ async function toggleApproveAllSubmissions(isApproved) {
         return;
     }
 
-    if (!confirm(`Bạn có chắc muốn ${isApproved ? 'PHÊ DUYỆT TẤT CẢ' : 'HỦY DUYỆT'} bài làm của đề này không?`)) return;
+    if (!confirm(`Bạn có chắc muốn PHÊ DUYỆT TẤT CẢ bài làm của đề này không?`)) return;
 
     try {
         const client = getDbClient();
@@ -3664,7 +2412,7 @@ async function toggleApproveAllSubmissions(isApproved) {
 
         keys.forEach(k => { if (subMap[k]) subMap[k].isApproved = isApproved; });
         renderTuLuanStudentsTable();
-        alert(`✅ Đã cập nhật trạng thái phê duyệt cho ${keys.length} học sinh!`);
+        alert(`✅ Đã cập nhật trạng thái phê duyệt cho toàn bộ bài làm!`);
     } catch(e) {
         alert("❌ Lỗi duyệt bài: " + e.message);
     }
@@ -3774,7 +2522,6 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
                 successCount++;
             }
         } catch(err) {
-            console.error(`Lỗi upload ảnh trang ${i + 1}:`, err);
             alert(`⚠️ Lỗi tải ảnh trang ${i + 1}: ${err.message}`);
         }
     }
@@ -3809,21 +2556,8 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
         }
 
         currentTuLuanModalData.submissionsMap[cleanSbd] = {
-            stt: stt,
-            sbd: sbd,
-            studentName: studentName,
-            className: driveClassName,
-            examTitle: examTitle,
-            lastSubmit: submitDateStr,
-            lastSubmitTime: Date.now(),
-            count: existingImages.length,
-            images: existingImages,
-            crossScore: currentSub.crossScore || "",
-            crossScoreBy: currentSub.crossScoreBy || "",
-            crossScoreTime: currentSub.crossScoreTime || "",
-            feedback: currentSub.feedback || "",
-            feedbackTime: currentSub.feedbackTime || "",
-            isApproved: !!currentSub.isApproved
+            ...currentTuLuanModalData.submissionsMap[cleanSbd],
+            ...subPayload
         };
 
         renderTuLuanStudentsTable();
@@ -4010,24 +2744,7 @@ window.getStudentFolderKey = getStudentFolderKey;
 window.toggleStudentPassPopover = toggleStudentPassPopover;
 window.closeStudentPassPopover = closeStudentPassPopover;
 window.saveStudentPasswordChange = saveStudentPasswordChange;
-window.resetStudentPasswordToDefault = resetStudentPasswordToDefault;
-window.getEffectiveStudentPassword = getEffectiveStudentPassword;
-window.getCurrentGraderInfo = getCurrentGraderInfo;
-window.saveStudentCrossScore = saveStudentCrossScore;
-window.toggleStudentFeedbackPopover = toggleStudentFeedbackPopover;
-window.closeStudentFeedbackPopover = closeStudentFeedbackPopover;
-window.saveStudentFeedback = saveStudentFeedback;
-window.exportTuLuanToExcel = exportTuLuanToExcel;
-window.triggerUploadDapAnCham = triggerUploadDapAnCham;
-window.handleUploadDapAnCham = handleUploadDapAnCham;
 window.deleteDapAnCham = deleteDapAnCham;
-window.renderDapAnChamUI = renderDapAnChamUI;
-window.toggleDapAnSchedulePopover = toggleDapAnSchedulePopover;
-window.closeDapAnSchedulePopover = closeDapAnSchedulePopover;
-window.onDapAnScheduleModeChanged = onDapAnScheduleModeChanged;
-window.setScheduleToExamDeadline = setScheduleToExamDeadline;
-window.saveDapAnSchedule = saveDapAnSchedule;
-window.isDapAnUnlocked = isDapAnUnlocked;
 window.toggleComponentScorePopover = toggleComponentScorePopover;
 window.closeComponentScorePopover = closeComponentScorePopover;
 window.setQuickQuestionCount = setQuickQuestionCount;
@@ -4035,3 +2752,4 @@ window.onComponentQuestionCountChanged = onComponentQuestionCountChanged;
 window.onComponentCellInput = onComponentCellInput;
 window.onComponentCellKeyDown = onComponentCellKeyDown;
 window.saveComponentScoresAction = saveComponentScoresAction;
+window.exportTuLuanToExcel = exportTuLuanToExcel;
