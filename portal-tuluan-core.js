@@ -1,6 +1,9 @@
+--- START OF FILE text/javascript ---
+
 // =========================================================
 // FILE: portal-tuluan-core.js
 // QUẢN LÝ GIAO DIỆN CƠ SỞ, BIẾN TRẠNG THÁI, NÉN ẢNH & KẾT NỐI DRIVE
+// SỬA LỖI: BỔ SUNG HÀM ensureTuLuanModalDOM ĐỂ TẠO GIAO DIỆN MODAL
 // =========================================================
 
 // TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ BẢNG ĐIỂM THÀNH PHẦN
@@ -954,6 +957,225 @@
     document.head.appendChild(style);
 })();
 
+// BỔ SUNG HÀM TẠO MODAL ĐỂ KHÔNG BỊ NULL
+function ensureTuLuanModalDOM() {
+    if (document.getElementById("modal-tuluan-submission")) return;
+    
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = `
+    <!-- MODAL NỘP TỰ LUẬN CHÍNH -->
+    <div class="move-modal-overlay" id="modal-tuluan-submission" style="z-index: 1000000;" onclick="if(event.target===this) closeTuLuanModal(event);">
+        <div class="tuluan-modal-card" onclick="event.stopPropagation();">
+            
+            <div class="tuluan-modal-header">
+                <div class="tuluan-header-title-box">
+                    <div class="tuluan-icon-badge">📁</div>
+                    <div style="min-width:0; flex:1;">
+                        <h3 id="tuluan-modal-heading">📤 NỘP BÀI TỰ LUẬN</h3>
+                        <div id="tuluan-modal-subheading">Hệ thống đồng bộ trực tiếp lên Google Drive 5TB</div>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-pass-pop" onclick="closeTuLuanModal(event)">✕</button>
+            </div>
+
+            <div class="tuluan-select-bar">
+                <div class="tuluan-select-group">
+                    <label>Lớp:</label>
+                    <select class="tuluan-class-compact-select" id="tuluan-class-selector" onchange="onTuLuanClassChanged(this.value)">
+                        <option value="lop-11a">11A</option>
+                        <option value="lop-11c">11C</option>
+                        <option value="lop-10p">10P</option>
+                        <option value="lop-11e">11E</option>
+                    </select>
+                </div>
+                <div class="tuluan-select-group" style="flex:1;">
+                    <label>Đề:</label>
+                    <select id="tuluan-exam-selector" onchange="onTuLuanExamChanged(this.value)"></select>
+                </div>
+                <div class="tuluan-select-group" id="tuluan-admin-add-exam-box" style="display:none;">
+                    <button type="button" class="btn-del-exam-selector" id="btn-del-current-exam" onclick="deleteCurrentTuLuanExam(event)" title="Xóa đề này khỏi danh sách">🗑️ Xóa đề</button>
+                    <button type="button" class="btn-tuluan-add-exam" onclick="promptAddNewTuLuanExam()" title="Thêm đề tự luận mới vào danh sách">➕ Thêm đề</button>
+                    <input type="file" id="tuluan-dapan-file-input" style="display:none;" onchange="handleUploadDapAnCham(this)">
+                    <button type="button" class="btn-tuluan-upload-dapan" id="btn-up-dapan-cham" onclick="triggerUploadDapAnCham(event)" title="Tải file PDF/Ảnh đáp án lên cho học sinh tự chấm điểm">📤 Đ.Á chấm</button>
+                    <div style="position:relative; display:inline-block;" id="box-schedule-dapan-wrap">
+                        <button type="button" class="btn-tuluan-schedule-dapan" id="btn-schedule-dapan" onclick="toggleDapAnSchedulePopover(event)">⏰ Hẹn giờ</button>
+                        
+                        <!-- POPOVER HẸN GIỜ ĐÁP ÁN -->
+                        <div class="dapan-schedule-popover" id="dapan-schedule-popover" onclick="event.stopPropagation()">
+                            <div class="pass-popover-header">
+                                <span>⏰ Hẹn giờ mở Đáp án</span>
+                                <button type="button" class="btn-close-pass-pop" onclick="closeDapAnSchedulePopover(event)">✕</button>
+                            </div>
+                            <div style="font-size:11px; color:#475569; margin-bottom:10px; line-height:1.4;">
+                                Hệ thống sẽ khóa file Đáp án và tự động mở khóa cho học sinh xem vào thời điểm Thầy cài đặt bên dưới.
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
+                                <label style="font-size:12px; font-weight:800; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                                    <input type="radio" name="dapan-sched-mode" id="sched-mode-now" value="now" checked onchange="onDapAnScheduleModeChanged('now')"> Mở ngay lập tức
+                                </label>
+                                <label style="font-size:12px; font-weight:800; display:flex; align-items:center; gap:5px; cursor:pointer;">
+                                    <input type="radio" name="dapan-sched-mode" id="sched-mode-auto" value="auto" onchange="onDapAnScheduleModeChanged('auto')"> Tự động mở theo lịch hẹn
+                                </label>
+                            </div>
+                            <div id="sched-datetime-input-group" style="display:none; margin-bottom:10px;">
+                                <label style="display:block; font-size:11px; font-weight:700; margin-bottom:4px; color:#334155;">Chọn ngày và giờ mở khóa:</label>
+                                <input type="datetime-local" id="dapan-sched-datetime" style="width:100%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; font-family:inherit;">
+                                <button type="button" onclick="setScheduleToExamDeadline()" style="margin-top:6px; font-size:10px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:3px 6px; cursor:pointer; font-weight:700;">🕒 Lấy theo hạn chót nộp bài</button>
+                            </div>
+                            <div class="pass-popover-actions" style="display:flex; gap:6px; margin-top:10px;">
+                                <button type="button" style="flex:1; padding:6px; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc; font-weight:800; cursor:pointer;" onclick="closeDapAnSchedulePopover(event)">Hủy</button>
+                                <button type="button" style="flex:1; padding:6px; border-radius:8px; border:none; background:linear-gradient(135deg, #10b981, #059669); color:white; font-weight:800; cursor:pointer;" onclick="saveDapAnSchedule(event)">💾 Lưu thiết lập</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- THANH STRIP ĐÁP ÁN CHẤM GẮN LIỀN -->
+            <div class="tuluan-dapan-full-strip" id="tuluan-dapan-full-strip" style="display:none;">
+                <div class="dapan-strip-content">
+                    <span class="dapan-badge-new" id="strip-dapan-badge-tag">MỚI</span>
+                    <span class="dapan-strip-title" id="strip-dapan-filename">Đáp án chấm...</span>
+                    <span class="dapan-strip-time" id="strip-dapan-time">📅 --/--/----</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:4px;">
+                    <a href="#" target="_blank" class="btn-open-dapan-strip" id="strip-dapan-open-btn">🔗 Mở xem</a>
+                    <button type="button" class="btn-del-dapan-strip" id="strip-dapan-del-btn" onclick="deleteDapAnCham(event)" style="display:none;">✕ Xóa</button>
+                </div>
+            </div>
+
+            <div class="tuluan-toolbar-bar">
+                <input type="text" id="tuluan-search-student" class="tuluan-search-box" placeholder="🔍 Tìm kiếm SBD, Họ tên..." oninput="filterTuLuanStudentTable()">
+                <div class="tuluan-filter-tabs">
+                    <button type="button" class="tuluan-tab-pill active" id="tab-filter-all" onclick="filterTuLuanStatus('all')">Tất cả (<span id="count-all-st">0</span>)</button>
+                    <button type="button" class="tuluan-tab-pill" id="tab-filter-submitted" onclick="filterTuLuanStatus('submitted')">Đã nộp (<span id="count-sub-st">0</span>)</button>
+                    <button type="button" class="tuluan-tab-pill" id="tab-filter-pending" onclick="filterTuLuanStatus('pending')">Chưa nộp (<span id="count-pen-st">0</span>)</button>
+                </div>
+            </div>
+
+            <div class="tuluan-table-wrap">
+                <table class="tuluan-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px; text-align: center;">STT</th>
+                            <th style="width: 155px;">Họ và Tên</th>
+                            <th style="width: 65px; text-align: center;">SBD</th>
+                            <th style="width: 110px;">Trạng thái</th>
+                            <th style="width: 100px; text-align: center;">Phê duyệt</th>
+                            <th style="width: 280px;">Ảnh bài làm</th>
+                            <th style="width: 90px; text-align: center;">Điểm số</th>
+                            <th style="width: 115px; text-align: center;">Nhận xét</th>
+                            <th style="width: 155px; text-align: center;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tuluan-students-tbody"></tbody>
+                </table>
+            </div>
+
+            <div class="tuluan-modal-footer">
+                <div style="font-size: 10.5px; font-weight: 700; color: #64748b;" id="tuluan-drive-folder-path">Path: BAI_TAP_TU_LUAN / ...</div>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" class="btn-tuluan-approve-all" onclick="toggleApproveAllSubmissions(true)">✅ Duyệt toàn bộ</button>
+                    <button type="button" class="btn-tuluan-export-excel" onclick="exportTuLuanToExcel(event)">📥 Tải Excel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIGHTBOX CHẤM BÀI -->
+    <div class="tuluan-lightbox-overlay" id="tuluan-lightbox">
+        <div class="tuluan-lightbox-content">
+            <div class="tuluan-lightbox-header">
+                <div class="lightbox-title-wrap">
+                    <span class="lightbox-page-badge" id="lightbox-page-indicator">Tr 1/1</span>
+                    <span id="lightbox-student-title">Học sinh - Trang 1</span>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="position: relative;">
+                        <button type="button" class="btn-lightbox-component-score" id="btn-open-component-score" onclick="toggleComponentScorePopover(event)">
+                            📊 Điểm TP ▾
+                        </button>
+
+                        <!-- POPOVER NHẬP ĐIỂM THÀNH PHẦN TỪNG CÂU -->
+                        <div class="component-score-popover" id="component-score-popover" onclick="event.stopPropagation()">
+                            <div class="pass-popover-header" style="border-bottom: 2px solid #e2e8f0; margin-bottom: 10px; padding-bottom: 6px;">
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <span style="font-size:16px;">📊</span>
+                                    <div style="display:flex; flex-direction:column;">
+                                        <span style="font-size:13px; font-weight:900; color:#0f172a;">Nhập điểm thành phần</span>
+                                        <span style="font-size:10px; color:#64748b; font-weight:600;" id="comp-score-st-name">Học sinh</span>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close-pass-pop" onclick="closeComponentScorePopover(event)">✕</button>
+                            </div>
+                            
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:8px;">
+                                <div style="font-size:11.5px; font-weight:800; color:#334155; display:flex; align-items:center; gap:6px;">
+                                    <span>Số lượng câu tự luận:</span>
+                                    <input type="number" id="comp-score-q-count" value="40" min="1" max="120" style="width:48px; padding:2px 4px; border:1px solid #cbd5e1; border-radius:5px; font-size:12px; font-weight:800; text-align:center;" onchange="onComponentQuestionCountChanged(this.value)">
+                                </div>
+                                <div style="display:flex; gap:3px;">
+                                    <button type="button" class="preset-btn" style="padding:2px 6px; font-size:10px;" onclick="setQuickQuestionCount(5)">5</button>
+                                    <button type="button" class="preset-btn" style="padding:2px 6px; font-size:10px;" onclick="setQuickQuestionCount(10)">10</button>
+                                    <button type="button" class="preset-btn" style="padding:2px 6px; font-size:10px;" onclick="setQuickQuestionCount(40)">40</button>
+                                    <button type="button" class="preset-btn" style="padding:2px 6px; font-size:10px;" onclick="setQuickQuestionCount(50)">50</button>
+                                </div>
+                            </div>
+
+                            <div id="comp-score-grid-container" class="comp-score-grid-10">
+                                <!-- JS sẽ sinh ra các ô nhập điểm ở đây -->
+                            </div>
+
+                            <div class="comp-score-footer-row">
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <div class="comp-score-kpi-item">Tổng: <span class="comp-score-kpi-val" id="comp-score-total-sum" style="color:#b45309; border-color:#fde047;">0</span></div>
+                                    <div class="comp-score-kpi-item">Thang 10: <span class="comp-score-kpi-val" id="comp-score-scale10-val" style="color:#15803d; border-color:#86efac;">0</span></div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <select id="comp-score-apply-mode" style="padding:4px 6px; font-size:11px; font-weight:800; border-radius:6px; border:1px solid #cbd5e1; outline:none;">
+                                        <option value="scale10">Lấy điểm thang 10</option>
+                                        <option value="raw">Lấy điểm tổng</option>
+                                    </select>
+                                    <button type="button" onclick="saveComponentScoresAction(event)" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:4px 10px; border-radius:6px; font-size:11.5px; font-weight:900; cursor:pointer; box-shadow:0 2px 6px rgba(16,185,129,0.3);">💾 Lưu ra bảng</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-close-lightbox" onclick="closeTuLuanLightbox(event)">✕</button>
+                </div>
+            </div>
+
+            <div class="tuluan-lightbox-img-box" id="lightbox-touch-area">
+                <img id="lightbox-full-img" src="" alt="Full size">
+            </div>
+
+            <button type="button" class="btn-lightbox-nav btn-nav-prev" id="btn-lightbox-prev" onclick="navigateLightbox(-1, event)">❮</button>
+            <button type="button" class="btn-lightbox-nav btn-nav-next" id="btn-lightbox-next" onclick="navigateLightbox(1, event)">❯</button>
+
+            <div class="lightbox-bottom-bar">
+                <span class="lightbox-hint-text">💡 Pinch (2 ngón tay) / Cuộn chuột để Zoom. Kéo thả để xem chi tiết. Vuốt / Phím mũi tên để chuyển trang.</span>
+                <div class="lightbox-dots-container" id="lightbox-dots-container"></div>
+                <div class="lightbox-zoom-tools">
+                    <button type="button" class="btn-zoom-tool" onclick="zoomLightboxStep(-0.25, event)">➖</button>
+                    <button type="button" class="btn-zoom-tool" id="btn-zoom-reset" onclick="resetLightboxZoom(true, event)">↺ 1x</button>
+                    <button type="button" class="btn-zoom-tool" onclick="zoomLightboxStep(0.25, event)">➕</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.appendChild(wrapper);
+    
+    // Khởi tạo tính năng zoom cho lightbox luôn
+    if (typeof setupLightboxTouchAndZoom === 'function') {
+        setupLightboxTouchAndZoom();
+    }
+}
+// EXPOSE GLOBALLY ĐỂ GỌI TỪ NƠI KHÁC
+window.ensureTuLuanModalDOM = ensureTuLuanModalDOM;
+
 let currentTuLuanModalData = {
     classId: "lop-11a",
     quizId: "",
@@ -1288,3 +1510,4 @@ function updateTuLuanAdminUI() {
     if (delDapanMini) delDapanMini.style.display = isAdmin ? "inline-flex" : "none";
     if (delDapanStrip) delDapanStrip.style.display = isAdmin ? "inline-flex" : "none";
 }
+--- START OF FILE text/javascript ---
