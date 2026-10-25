@@ -1508,27 +1508,8 @@
         font-size: 10.5px !important;
     }
 
-    /* ĐẶC BIỆT TRÊN MOBILE: GHIM CỘT "THAO TÁC / TẢI ẢNH" CỐ ĐỊNH Ở MÉP PHẢI ĐỂ HỌC SINH THẤY NGAY */
-    .tuluan-table thead th:last-child {
-        position: sticky;
-        right: 0;
-        background: #0f172a !important;
-        z-index: 15;
-        box-shadow: -3px 0 8px rgba(15, 23, 42, 0.25);
-    }
-    .tuluan-table tbody td:last-child {
-        position: sticky;
-        right: 0;
-        background: #ffffff !important;
-        z-index: 9;
-        box-shadow: -3px 0 8px rgba(15, 23, 42, 0.12);
-    }
-    .tuluan-table tbody tr:nth-child(even) td:last-child {
-        background: #f8fafc !important;
-    }
-    .tuluan-table tbody tr:hover td:last-child {
-        background: #f0f9ff !important;
-    }
+    /* ĐÃ SỬA: BỎ GHIM CỘT THAO TÁC TRÊN ĐIỆN THOẠI THEO YÊU CẦU */
+    /* Cột Thao tác (cuối cùng) giờ đây sẽ cuộn tự nhiên cùng bảng, không bị kẹt cố định nữa */
 
     /* NÚT TẢI ẢNH TO, NỔI BẬT DỄ BẤM VỚI NGÓN TAY TRÊN ĐIỆN THOẠI */
     .btn-tuluan-upload-row {
@@ -1544,11 +1525,21 @@
         min-height: 32px !important;
     }
 
-    .student-pass-popover {
-        right: 4px !important;
-        left: auto !important;
-        width: min(290px, calc(100vw - 20px)) !important;
-        max-width: calc(100vw - 20px) !important;
+    /* ĐÃ SỬA: Đưa các Popover đổi mật khẩu & nhận xét ra giữa màn hình để không bị che khuất */
+    .student-pass-popover, .student-feedback-popover, .dapan-schedule-popover, .component-score-popover {
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: auto !important;
+        transform: translate(-50%, -50%) !important;
+        width: min(360px, calc(100vw - 24px)) !important;
+        max-width: calc(100vw - 24px) !important;
+        max-height: 88vh !important;
+        border-radius: 16px !important;
+        z-index: 100000000 !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important;
+        padding: 16px !important;
     }
 
     /* FIX CHO IPHONE: Đảm bảo header không bị tràn lên trên và bị che bởi viền/tai thỏ */
@@ -1617,18 +1608,3 @@
         background: #ffffff !important;
         transform: translateZ(0);
     }
-}
-/* THÊM VÀO ĐỂ TẠO HIỆU ỨNG CHỚP SÁNG CHO NÚT SĨ SỐ ADMIN */
-.admin-live-count-badge {
-    background: #f1f5f9; color: #0284c7; border: 1.5px solid #bae6fd;
-    padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 800;
-    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
-    transition: all 0.15s ease; user-select: none; white-space: nowrap; margin-left: 6px;
-}
-.admin-live-count-badge:hover {
-    background: #e0f2fe; border-color: #38bdf8; transform: translateY(-1px);
-}
-.admin-live-count-badge:active { transform: scale(0.95); }
-.admin-live-count-badge.updated {
-    background: #dcfce7; color: #15803d; border-color: #86efac;
-}
