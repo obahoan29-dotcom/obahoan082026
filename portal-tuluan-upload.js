@@ -168,16 +168,16 @@ function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
     const sessionAuthKey = `tuluan_authed_${currentTuLuanModalData.quizId}_${cleanSbd}`;
     const input = document.getElementById(`tuluan-input-${cleanSbd}`);
 
-    // BẢO ĐẢM TRÊN IPHONE: Luôn gỡ bỏ display:none để WebKit cho phép kích hoạt tệp
+    // BẢO ĐẢM TRÊN IPHONE: Luôn cho phép pointerEvents="auto" để WebKit cho phép kích hoạt tệp
     if (input) {
         input.style.display = "inline-block";
-        input.style.position = "fixed";
+        input.style.position = "absolute";
         input.style.top = "-9999px";
         input.style.left = "-9999px";
         input.style.width = "1px";
         input.style.height = "1px";
         input.style.opacity = "0.01";
-        input.style.pointerEvents = "none";
+        input.style.pointerEvents = "auto"; // SỬA LỖI IPHONE Ở ĐÂY: KHÔNG DÙNG NONE
         input.style.zIndex = "-1";
     }
 
@@ -209,7 +209,7 @@ function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
 
         // Trên Safari iOS: Prompt chặn User Gesture, báo em chạm lại 1 lần là mở tức thì vì đã lưu phiên
         if (isIOS) {
-            alert(`✅ Mật khẩu chính xác!\n\n👉 Em hãy chạm lại nút [📷 Tải ảnh] của em để chọn ảnh bài làm nhé!`);
+            alert(`✅ Mật khẩu chính xác!\n\n👉 Em hãy chạm lại nút [📷 Tải ảnh] của em một lần nữa để chọn ảnh bài làm nhé!`);
         }
     } else { 
         alert("❌ Sai mật khẩu!"); 
@@ -332,14 +332,14 @@ async function triggerExamRoomDriveUpload(qId) {
         input.id = `drive-exam-input-${qId}`; 
         input.accept = "image/*"; 
         input.multiple = true; 
-        // ĐẢM BẢO KHÔNG DÙNG display:none CHO IPHONE
-        input.style.position = "fixed";
+        // ĐẢM BẢO KHÔNG DÙNG pointer-events: none CHO IPHONE
+        input.style.position = "absolute";
         input.style.top = "-9999px";
         input.style.left = "-9999px";
         input.style.width = "1px";
         input.style.height = "1px";
         input.style.opacity = "0.01";
-        input.style.pointerEvents = "none";
+        input.style.pointerEvents = "auto"; // SỬA LỖI IPHONE Ở ĐÂY
         input.style.zIndex = "-1";
         document.body.appendChild(input);
         
