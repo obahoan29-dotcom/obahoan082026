@@ -166,12 +166,32 @@ async function sendToGoogleDriveWithRetry(gasUrl, payload, maxRetries = 2, timeo
 function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
     const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
     const sessionAuthKey = `tuluan_authed_${currentTuLuanModalData.quizId}_${cleanSbd}`;
+    const input = document.getElementById(`tuluan-input-${cleanSbd}`);
 
-    if (checkCurrentIsAdmin() || safeSession.getItem(sessionAuthKey) === "true") {
-        document.getElementById(`tuluan-input-${cleanSbd}`).click();
+    // BẢO ĐẢM TRÊN IPHONE: Luôn gỡ bỏ display:none để WebKit cho phép kích hoạt tệp
+    if (input) {
+        input.style.display = "inline-block";
+        input.style.position = "fixed";
+        input.style.top = "-9999px";
+        input.style.left = "-9999px";
+        input.style.width = "1px";
+        input.style.height = "1px";
+        input.style.opacity = "0.01";
+        input.style.pointerEvents = "none";
+        input.style.zIndex = "-1";
+    }
+
+    // 1. Kiểm tra nếu học sinh này chính là em đang đăng nhập trong phòng thi hoặc Admin
+    const loggedStudentSbd = (safeLocal.getItem("saved_student_sbd") || "").trim().toLowerCase();
+    const isOwner = Boolean(loggedStudentSbd && (loggedStudentSbd === String(sbd).trim().toLowerCase() || loggedStudentSbd === cleanSbd.toLowerCase()));
+
+    // Nếu đã đăng nhập hoặc đã xác thực phiên: MỞ NGAY LẬP TỨC 0S KHÔNG CẦN HỎI MẬT KHẨU
+    if (checkCurrentIsAdmin() || isOwner || safeSession.getItem(sessionAuthKey) === "true") {
+        if (input) input.click();
         return;
     }
 
+    // 2. Nếu là học sinh khác hoặc chưa đăng nhập: Yêu cầu xác thực
     const effectivePass = getEffectiveStudentPassword(cleanSbd, sbd, defaultPass);
     const inputPass = prompt(`🔐 XÁC NHẬN NỘP BÀI:\n\nEm đang nộp bài cho: [${stt}] ${studentName} (SBD: ${sbd}).\nNhập Mật khẩu (mặc định: SBD):`);
     if (inputPass === null) return;
@@ -181,7 +201,16 @@ function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
 
     if (isPassOk) {
         safeSession.setItem(sessionAuthKey, "true");
-        document.getElementById(`tuluan-input-${cleanSbd}`).click();
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        
+        if (input) {
+            input.click();
+        }
+
+        // Trên Safari iOS: Prompt chặn User Gesture, báo em chạm lại 1 lần là mở tức thì vì đã lưu phiên
+        if (isIOS) {
+            alert(`✅ Mật khẩu chính xác!\n\n👉 Em hãy chạm lại nút [📷 Tải ảnh] của em để chọn ảnh bài làm nhé!`);
+        }
     } else { 
         alert("❌ Sai mật khẩu!"); 
     }
@@ -303,7 +332,15 @@ async function triggerExamRoomDriveUpload(qId) {
         input.id = `drive-exam-input-${qId}`; 
         input.accept = "image/*"; 
         input.multiple = true; 
-        input.style.display = "none";
+        // ĐẢM BẢO KHÔNG DÙNG display:none CHO IPHONE
+        input.style.position = "fixed";
+        input.style.top = "-9999px";
+        input.style.left = "-9999px";
+        input.style.width = "1px";
+        input.style.height = "1px";
+        input.style.opacity = "0.01";
+        input.style.pointerEvents = "none";
+        input.style.zIndex = "-1";
         document.body.appendChild(input);
         
         input.onchange = async function() {
