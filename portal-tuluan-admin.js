@@ -610,7 +610,7 @@ async function saveDapAnSchedule(event) {
         if(typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
         closeDapAnSchedulePopover();
         if (scheduleTimeISO) { 
-            alert(`⏰ ĐÃ THIẾT LẬP HẸN GIỜ MỞ ĐÁP ÁN!\n\n- Đề thi: ${currentTuLuanModalData.examTitle}\n- Tự động mở: ${new Date(scheduleTimeISO).toLocaleString("vi-VN")}`); 
+            alert(`⏰ ĐÃ THIẾT LẬP HẸN GIỜ M mở ĐÁP ÁN!\n\n- Đề thi: ${currentTuLuanModalData.examTitle}\n- Tự động mở: ${new Date(scheduleTimeISO).toLocaleString("vi-VN")}`); 
         } else { 
             alert("🔓 Đã mở đáp án tự do cho học sinh xem ngay lập tức!"); 
         }
