@@ -1,7 +1,57 @@
 // =========================================================
 // FILE: portal-tuluan-lightbox.js
-// QUẢN LÝ XEM ẢNH ZOOM 2 NGÓN TAY & CHẤM ĐIỂM THÀNH PHẦN (AUTO FOCUS)
+// QUẢN LÝ XEM ẢNH ZOOM 2 NGÓN TAY & CHẤM ĐIỂM THÀNH PHẦN (AUTO FOCUS, LIVE SYNC & ĐỔI MÀU XANH / ĐỎ)
 // =========================================================
+
+let _compScoreAutoSaveTimer = null;
+
+// TIÊM BỘ STYLE MÀU SẮC ĐẶC QUYỀN CHO Ô ĐIỂM BẢNG NGOÀI (CÓ ĐIỂM = XANH, CHƯA CHẤM = ĐỎ)
+(function injectScoreColorStyles() {
+    const styleId = "tuluan-cross-score-color-styles";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.innerHTML = `
+        /* Ô ĐÃ CÓ ĐIỂM: MÀU XANH LÁ MÁT MẮT, RÕ RÀNG */
+        .tuluan-score-input.score-has-val {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+            color: #15803d !important;
+            border: 1.5px solid #22c55e !important;
+            box-shadow: 0 2px 6px rgba(34, 197, 94, 0.28) !important;
+            font-weight: 900 !important;
+        }
+        /* Ô CHƯA CÓ ĐIỂM: MÀU ĐỎ NỔI BẬT DỄ NHẬN BIẾT */
+        .tuluan-score-input.score-no-val {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%) !important;
+            color: #b91c1c !important;
+            border: 1.5px solid #ef4444 !important;
+            box-shadow: 0 2px 6px rgba(239, 68, 68, 0.22) !important;
+            font-weight: 800 !important;
+        }
+        .tuluan-score-input.score-no-val::placeholder {
+            color: #dc2626 !important;
+            font-weight: 800 !important;
+            opacity: 0.85 !important;
+        }
+    `;
+    document.head.appendChild(style);
+})();
+
+// HÀM TỰ ĐỘNG QUÉT VÀ TÔ MÀU XANH / ĐỎ CHO TOÀN BỘ Ô ĐIỂM
+function updateCrossScoreInputStyles() {
+    const inputs = document.querySelectorAll('.tuluan-score-input');
+    inputs.forEach(inp => {
+        const val = (inp.value || "").trim();
+        if (val !== "" && val !== "---") {
+            inp.classList.remove('score-no-val');
+            inp.classList.add('score-has-val');
+        } else {
+            inp.classList.remove('score-has-val');
+            inp.classList.add('score-no-val');
+        }
+    });
+}
+window.updateCrossScoreInputStyles = updateCrossScoreInputStyles;
 
 function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -19,16 +69,33 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     currentLightboxGallery.currentIndex = Math.max(0, Math.min(imgIndex, record.images.length - 1));
     currentLightboxGallery.currentQuestionCount = record.questionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 40);
     
-    // ĐỌC BẢN NHÁP TỪ CACHE KHI VỪA MỞ LẠI HỌC SINH NÀY
+    // ĐỌC BẢN LƯU TỪ BỘ NHỚ KHI VỪA MỞ LẠI HỌC SINH NÀY
     const qId = currentTuLuanModalData.quizId;
-    const draftKey = `draft_comp_score_${qId}_${cleanSbd}`;
-    const draftRaw = sessionStorage.getItem(draftKey);
-    if (draftRaw) {
-        try { currentLightboxGallery.componentScores = JSON.parse(draftRaw); } 
-        catch(e) { currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {}; }
-    } else {
-        currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {};
+    let loadedScores = null;
+
+    try {
+        const localMapRaw = localStorage.getItem(`tuluan_scores_${qId}`);
+        if (localMapRaw) {
+            const localMap = JSON.parse(localMapRaw);
+            if (localMap && localMap[cleanSbd] && localMap[cleanSbd].detailScores) {
+                loadedScores = localMap[cleanSbd].detailScores;
+            }
+        }
+    } catch(e) {}
+
+    if (!loadedScores) {
+        const draftKey = `draft_comp_score_${qId}_${cleanSbd}`;
+        const draftRaw = sessionStorage.getItem(draftKey);
+        if (draftRaw) {
+            try { loadedScores = JSON.parse(draftRaw); } catch(e) {}
+        }
     }
+
+    if (!loadedScores && record.detailScores) {
+        loadedScores = { ...record.detailScores };
+    }
+
+    currentLightboxGallery.componentScores = loadedScores || {};
 
     resetLightboxZoom(false);
     updateLightboxView();
@@ -218,18 +285,34 @@ function onComponentQuestionCountChanged(val) {
 }
 
 function renderComponentScoreGrid() {
-    const container = document.getElementById("comp-score-grid-container"); const nameEl = document.getElementById("comp-score-st-name"); const qCountInput = document.getElementById("comp-score-q-count");
+    const container = document.getElementById("comp-score-grid-container"); 
+    const nameEl = document.getElementById("comp-score-st-name"); 
+    const qCountInput = document.getElementById("comp-score-q-count");
+    const modeSelect = document.getElementById("comp-score-apply-mode");
     if (!container) return;
 
     if (nameEl) nameEl.innerText = currentLightboxGallery.studentName || "Học sinh";
     const totalQ = currentLightboxGallery.currentQuestionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 40);
     if (qCountInput) qCountInput.value = totalQ;
 
-    const sbd = currentLightboxGallery.studentSbd; const qId = currentTuLuanModalData.quizId;
+    // Gắn sự kiện khi đổi cách quy đổi điểm thì tự nhảy ra bảng ngoài
+    if (modeSelect && !modeSelect.dataset.hasListener) {
+        modeSelect.dataset.hasListener = "true";
+        modeSelect.addEventListener("change", () => updateComponentScoreTotals());
+    }
+
+    const sbd = currentLightboxGallery.studentSbd; 
+    const qId = currentTuLuanModalData.quizId;
     const record = currentTuLuanModalData.submissionsMap[sbd] || {};
 
-    let savedDetails = {}; const draftKey = `draft_comp_score_${qId}_${sbd}`; const draftRaw = sessionStorage.getItem(draftKey);
-    if (draftRaw) { try { savedDetails = JSON.parse(draftRaw); } catch(e) {} } else { savedDetails = record.detailScores || currentLightboxGallery.componentScores || {}; }
+    let savedDetails = {}; 
+    const draftKey = `draft_comp_score_${qId}_${sbd}`; 
+    const draftRaw = sessionStorage.getItem(draftKey);
+    if (draftRaw) { 
+        try { savedDetails = JSON.parse(draftRaw); } catch(e) {} 
+    } else { 
+        savedDetails = record.detailScores || currentLightboxGallery.componentScores || {}; 
+    }
     currentLightboxGallery.componentScores = { ...savedDetails };
 
     let html = "";
@@ -237,7 +320,8 @@ function renderComponentScoreGrid() {
         const val = (savedDetails[i] !== undefined && savedDetails[i] !== null) ? savedDetails[i] : "";
         html += `<div class="comp-score-cell-box"><input type="text" class="comp-score-cell-input" id="comp-q-${i}" value="${val}" placeholder="C${i}" oninput="onComponentCellInput(${i}, this.value)" onkeydown="onComponentCellKeyDown(event, ${i}, ${totalQ})"></div>`;
     }
-    container.innerHTML = html; updateComponentScoreTotals();
+    container.innerHTML = html; 
+    updateComponentScoreTotals();
 
     // AUTO-FOCUS VÀO Ô TRỐNG ĐẦU TIÊN KHI MỞ BẢNG LÊN
     setTimeout(() => {
@@ -250,11 +334,19 @@ function renderComponentScoreGrid() {
 
 function onComponentCellInput(qIdx, val) {
     let cleanVal = String(val).trim().replace(',', '.');
-    if (cleanVal === "") { delete currentLightboxGallery.componentScores[qIdx]; } else { let num = parseFloat(cleanVal); if (!isNaN(num)) currentLightboxGallery.componentScores[qIdx] = num; }
+    if (cleanVal === "") { 
+        delete currentLightboxGallery.componentScores[qIdx]; 
+    } else { 
+        let num = parseFloat(cleanVal); 
+        if (!isNaN(num)) currentLightboxGallery.componentScores[qIdx] = num; 
+    }
+    
+    // TỰ ĐỘNG CẬP NHẬT TỔNG ĐIỂM VÀ ĐƯA RA BẢNG NGOÀI NGAY LẬP TỨC
     updateComponentScoreTotals();
 
-    // LƯU NHÁP TỰ ĐỘNG VÀO BỘ NHỚ TRÌNH DUYỆT (CHỐNG MẤT DỮ LIỆU KHI TẮT BẢNG)
-    const sbd = currentLightboxGallery.studentSbd; const qId = currentTuLuanModalData.quizId;
+    // Lưu nháp tức thì vào SessionStorage
+    const sbd = currentLightboxGallery.studentSbd; 
+    const qId = currentTuLuanModalData.quizId;
     if (sbd && qId) sessionStorage.setItem(`draft_comp_score_${qId}_${sbd}`, JSON.stringify(currentLightboxGallery.componentScores));
 }
 
@@ -265,75 +357,278 @@ function onComponentCellKeyDown(event, currentIdx, totalQ) {
     }
 }
 
+// CẬP NHẬT TỔNG ĐIỂM VÀ ĐỒNG THỜI CHO MỌC RA BẢNG NGOÀI TỨC THÌ
 function updateComponentScoreTotals() {
-    const scores = currentLightboxGallery.componentScores || {}; const totalQ = currentLightboxGallery.currentQuestionCount || 40;
-    let sum = 0; for (let k in scores) { const n = parseFloat(scores[k]); if (!isNaN(n)) sum += n; }
-    sum = Math.round(sum * 100) / 100; let scale10 = (totalQ > 0) ? Math.round(((sum / totalQ) * 10) * 100) / 100 : sum; if (scale10 > 10.0) scale10 = 10.0;
-    const totalEl = document.getElementById("comp-score-total-sum"); const scale10El = document.getElementById("comp-score-scale10-val");
-    if (totalEl) totalEl.innerText = sum; if (scale10El) scale10El.innerText = scale10;
+    const scores = currentLightboxGallery.componentScores || {}; 
+    const totalQ = currentLightboxGallery.currentQuestionCount || 40;
+    let sum = 0; 
+    let hasAnyScore = false;
+
+    for (let k in scores) { 
+        const n = parseFloat(scores[k]); 
+        if (!isNaN(n)) {
+            sum += n; 
+            hasAnyScore = true;
+        }
+    }
+    sum = Math.round(sum * 100) / 100; 
+    let scale10 = (totalQ > 0) ? Math.round(((sum / totalQ) * 10) * 100) / 100 : sum; 
+    if (scale10 > 10.0) scale10 = 10.0;
+
+    const totalEl = document.getElementById("comp-score-total-sum"); 
+    const scale10El = document.getElementById("comp-score-scale10-val");
+    if (totalEl) totalEl.innerText = sum; 
+    if (scale10El) scale10El.innerText = scale10;
+
+    // TỰ ĐỘNG MỌC RA BẢNG NGOÀI NGAY SAU KHI NHẬP:
+    const sbd = currentLightboxGallery.studentSbd;
+    const qId = currentTuLuanModalData.quizId;
+    const mode = document.getElementById("comp-score-apply-mode")?.value || "scale10";
+    const finalScore = (mode === "scale10") ? scale10 : sum;
+
+    if (sbd) {
+        const scoreInput = document.getElementById(`cross-score-${sbd}`);
+        if (scoreInput) {
+            scoreInput.value = hasAnyScore ? finalScore : "";
+            scoreInput.title = `🎯 Điểm TP: ${finalScore}đ\n(Đang tự động cập nhật)`;
+        }
+
+        if (!currentTuLuanModalData.submissionsMap[sbd]) {
+            const driveClassName = typeof getCleanDriveClassName === 'function' ? getCleanDriveClassName(currentTuLuanModalData.classId) : currentTuLuanModalData.classId;
+            currentTuLuanModalData.submissionsMap[sbd] = {
+                sbd: sbd,
+                studentName: currentLightboxGallery.studentName,
+                className: driveClassName,
+                count: 0,
+                images: [],
+                crossScore: hasAnyScore ? finalScore : "",
+                detailScores: { ...currentLightboxGallery.componentScores },
+                questionCount: totalQ
+            };
+        } else {
+            currentTuLuanModalData.submissionsMap[sbd].crossScore = hasAnyScore ? finalScore : "";
+            currentTuLuanModalData.submissionsMap[sbd].detailScores = { ...currentLightboxGallery.componentScores };
+            currentTuLuanModalData.submissionsMap[sbd].questionCount = totalQ;
+        }
+
+        // Cập nhật đổi màu Xanh / Đỏ tức thì cho các ô điểm
+        updateCrossScoreInputStyles();
+
+        // Tự động lưu ngầm ra máy chủ và LocalStorage sau 600ms (không cần đợi bấm Lưu)
+        if (qId && hasAnyScore) {
+            triggerAutoSaveComponentScore(sbd, qId, finalScore);
+        }
+    }
 }
 
+// HÀM TỰ ĐỘNG LƯU NGẦM (DEBOUNCE AUTO-SAVE)
+function triggerAutoSaveComponentScore(sbd, qId, finalScore) {
+    if (_compScoreAutoSaveTimer) clearTimeout(_compScoreAutoSaveTimer);
+    _compScoreAutoSaveTimer = setTimeout(async () => {
+        await persistComponentScoreData(sbd, qId, finalScore, false);
+    }, 600);
+}
+
+// BỘ LƯU DỮ LIỆU ĐA TẦNG (LOCALSTORAGE + SUPABASE) BẢO ĐẢM KHÔNG BAO GIỜ MẤT
+async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false) {
+    if (!sbd || !qId) return;
+
+    const driveClassName = typeof getCleanDriveClassName === 'function' ? getCleanDriveClassName(currentTuLuanModalData.classId) : currentTuLuanModalData.classId;
+    const graderInfo = typeof getCurrentGraderInfo === 'function' ? getCurrentGraderInfo() : { name: "Giáo viên", sbd: "ADMIN" };
+    const graderDisplay = graderInfo.sbd && graderInfo.sbd !== "ADMIN" ? `${graderInfo.name} (${graderInfo.sbd})` : graderInfo.name;
+    const now = new Date(); 
+    const pad = n => String(n).padStart(2, '0'); 
+    const scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+    // 1. Lưu lập tức vào LocalStorage của trình duyệt (BẢO VỆ 100% KHI TẮT ĐI BẬT LẠI)
+    try {
+        const localKey = `tuluan_scores_${qId}`;
+        const rawLocal = localStorage.getItem(localKey);
+        const map = rawLocal ? JSON.parse(rawLocal) : {};
+        map[sbd] = {
+            crossScore: finalScore,
+            detailScores: { ...currentLightboxGallery.componentScores },
+            questionCount: currentLightboxGallery.currentQuestionCount,
+            grader: graderDisplay,
+            time: scoreTimeStr,
+            studentName: currentLightboxGallery.studentName,
+            updatedAt: Date.now()
+        };
+        localStorage.setItem(localKey, JSON.stringify(map));
+    } catch(e) {}
+
+    // Cập nhật bộ nhớ ram hiện tại
+    if (currentTuLuanModalData.submissionsMap[sbd]) {
+        currentTuLuanModalData.submissionsMap[sbd].crossScore = finalScore;
+        currentTuLuanModalData.submissionsMap[sbd].crossScoreBy = graderDisplay;
+        currentTuLuanModalData.submissionsMap[sbd].crossScoreTime = scoreTimeStr;
+        currentTuLuanModalData.submissionsMap[sbd].detailScores = { ...currentLightboxGallery.componentScores };
+        currentTuLuanModalData.submissionsMap[sbd].questionCount = currentLightboxGallery.currentQuestionCount;
+    }
+
+    // 2. Lưu đồng bộ lên Supabase
+    try {
+        const client = typeof getDbClient === 'function' ? getDbClient() : null;
+        if (client) {
+            // Lưu vào app_key_values (luôn đảm bảo 100% không bị lỗi schema cột)
+            try {
+                const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single();
+                const allCompScores = (existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {};
+                allCompScores[sbd] = { 
+                    detailScores: currentLightboxGallery.componentScores, 
+                    questionCount: currentLightboxGallery.currentQuestionCount, 
+                    crossScore: finalScore, 
+                    crossScoreBy: graderDisplay, 
+                    crossScoreTime: scoreTimeStr, 
+                    studentName: currentLightboxGallery.studentName,
+                    updatedAt: Date.now() 
+                };
+                await client.from('app_key_values').upsert({ key: 'detail_scores_' + qId, value: allCompScores });
+            } catch(metaErr) {}
+
+            // Cập nhật vào tu_luan_submissions một cách an toàn
+            try {
+                const { data: updatedRows } = await client.from('tu_luan_submissions')
+                    .update({ 
+                        cross_score: String(finalScore), 
+                        cross_score_by: graderDisplay, 
+                        cross_score_time: scoreTimeStr 
+                    })
+                    .eq('quiz_id', qId)
+                    .eq('sbd', sbd)
+                    .select();
+
+                // Nếu học sinh chưa có dòng nộp nào trước đó thì tự tạo mới
+                if (!updatedRows || updatedRows.length === 0) {
+                    await client.from('tu_luan_submissions').insert([{
+                        quiz_id: qId,
+                        sbd: sbd,
+                        student_name: currentLightboxGallery.studentName,
+                        class_name: driveClassName,
+                        exam_title: currentTuLuanModalData.examTitle || "Tự luận",
+                        cross_score: String(finalScore),
+                        cross_score_by: graderDisplay,
+                        cross_score_time: scoreTimeStr,
+                        images: [],
+                        count: 0
+                    }]);
+                }
+            } catch(subErr) {}
+        }
+
+        const scoreInput = document.getElementById(`cross-score-${sbd}`);
+        if (scoreInput) { 
+            scoreInput.value = finalScore; 
+            scoreInput.title = `🎯 Điểm TP: ${finalScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`; 
+        }
+
+        // Đổi màu Xanh / Đỏ tức thì
+        updateCrossScoreInputStyles();
+
+        if (showAlert) {
+            closeComponentScorePopover();
+            alert(`✅ ĐÃ LƯU ĐIỂM THÀNH PHẦN THÀNH CÔNG!\n\n- Học sinh: ${currentLightboxGallery.studentName}\n- Điểm đưa ra bảng: ${finalScore} điểm\n- Người chấm: ${graderDisplay}`);
+        }
+    } catch(err) {
+        if (showAlert) alert("❌ Lỗi lưu điểm thành phần: " + err.message);
+    }
+}
+
+// SỰ KIỆN NÚT "LƯU & ĐƯA RA BẢNG" VẪN GIỮ NGUYÊN
 async function saveComponentScoresAction(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const sbd = currentLightboxGallery.studentSbd; const qId = currentTuLuanModalData.quizId;
+    const sbd = currentLightboxGallery.studentSbd; 
+    const qId = currentTuLuanModalData.quizId;
     if (!sbd || !qId) return;
 
     const mode = document.getElementById("comp-score-apply-mode")?.value || "scale10";
     const totalSum = parseFloat(document.getElementById("comp-score-total-sum")?.innerText || 0);
     const scale10 = parseFloat(document.getElementById("comp-score-scale10-val")?.innerText || 0);
     const finalScore = (mode === "scale10") ? scale10 : totalSum;
-    const driveClassName = typeof getCleanDriveClassName === 'function' ? getCleanDriveClassName(currentTuLuanModalData.classId) : currentTuLuanModalData.classId;
-    const graderInfo = typeof getCurrentGraderInfo === 'function' ? getCurrentGraderInfo() : { name: "Giáo viên", sbd: "ADMIN" };
-    const graderDisplay = graderInfo.sbd && graderInfo.sbd !== "ADMIN" ? `${graderInfo.name} (${graderInfo.sbd})` : graderInfo.name;
-    const now = new Date(); const pad = n => String(n).padStart(2, '0'); const scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
 
-    if (!currentTuLuanModalData.submissionsMap[sbd]) {
-        currentTuLuanModalData.submissionsMap[sbd] = { sbd: sbd, studentName: currentLightboxGallery.studentName, className: driveClassName, count: 0, images: [], crossScore: finalScore, crossScoreBy: graderDisplay, crossScoreTime: scoreTimeStr, detailScores: currentLightboxGallery.componentScores, questionCount: currentLightboxGallery.currentQuestionCount };
-    } else {
-        currentTuLuanModalData.submissionsMap[sbd].crossScore = finalScore; currentTuLuanModalData.submissionsMap[sbd].crossScoreBy = graderDisplay; currentTuLuanModalData.submissionsMap[sbd].crossScoreTime = scoreTimeStr; currentTuLuanModalData.submissionsMap[sbd].detailScores = currentLightboxGallery.componentScores; currentTuLuanModalData.submissionsMap[sbd].questionCount = currentLightboxGallery.currentQuestionCount;
-    }
-
-    try {
-        const client = typeof getDbClient === 'function' ? getDbClient() : null;
-        if (client) {
-            await client.from('tu_luan_submissions').upsert({ quiz_id: qId, sbd: sbd, student_name: currentLightboxGallery.studentName, class_name: driveClassName, exam_title: currentTuLuanModalData.examTitle || "Tự luận", cross_score: String(finalScore), cross_score_by: graderDisplay, cross_score_time: scoreTimeStr, detail_scores: currentLightboxGallery.componentScores }, { onConflict: 'quiz_id,sbd' });
-            try {
-                const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single();
-                const allCompScores = (existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {};
-                allCompScores[sbd] = { detailScores: currentLightboxGallery.componentScores, questionCount: currentLightboxGallery.currentQuestionCount, crossScore: finalScore, crossScoreBy: graderDisplay, crossScoreTime: scoreTimeStr, updatedAt: Date.now() };
-                await client.from('app_key_values').upsert({ key: 'detail_scores_' + qId, value: allCompScores });
-            } catch(metaErr) {}
-        }
-        const scoreInput = document.getElementById(`cross-score-${sbd}`);
-        if (scoreInput) { scoreInput.value = finalScore; scoreInput.title = `🎯 Điểm TP: ${finalScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`; scoreInput.style.borderColor = "#10b981"; setTimeout(() => { scoreInput.style.borderColor = "#cbd5e1"; }, 1500); }
-
-        // XOÁ CACHE NHÁP SAU KHI LƯU THÀNH CÔNG VÀO DB
-        sessionStorage.removeItem(`draft_comp_score_${qId}_${sbd}`);
-        closeComponentScorePopover();
-        alert(`✅ ĐÃ LƯU ĐIỂM THÀNH PHẦN THÀNH CÔNG!\n\n- Học sinh: ${currentLightboxGallery.studentName}\n- Điểm đưa ra bảng: ${finalScore} điểm\n- Người chấm: ${graderDisplay}`);
-    } catch(err) { alert("❌ Lỗi lưu điểm thành phần: " + err.message); }
+    await persistComponentScoreData(sbd, qId, finalScore, true);
 }
 
+// LƯU ĐIỂM TRỰC TIẾP TRÊN Ô BẢNG NGOÀI (CŨNG LƯU BẢO LƯU 100%)
 async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) {
     const qId = currentTuLuanModalData.quizId; if (!qId) return;
-    const trimmedScore = String(scoreVal || "").trim(); const driveClassName = typeof getCleanDriveClassName === 'function' ? getCleanDriveClassName(currentTuLuanModalData.classId) : currentTuLuanModalData.classId;
-    let graderDisplay = ""; let scoreTimeStr = "";
+    const trimmedScore = String(scoreVal || "").trim(); 
+    const driveClassName = typeof getCleanDriveClassName === 'function' ? getCleanDriveClassName(currentTuLuanModalData.classId) : currentTuLuanModalData.classId;
+    let graderDisplay = ""; 
+    let scoreTimeStr = "";
+
     if (trimmedScore !== "") {
         const graderInfo = typeof getCurrentGraderInfo === 'function' ? getCurrentGraderInfo() : { name: "Giáo viên", sbd: "ADMIN" };
         graderDisplay = graderInfo.sbd && graderInfo.sbd !== "ADMIN" ? `${graderInfo.name} (${graderInfo.sbd})` : graderInfo.name;
-        const now = new Date(); const pad = n => String(n).padStart(2, '0'); scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+        const now = new Date(); 
+        const pad = n => String(n).padStart(2, '0'); 
+        scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
     }
 
+    // 1. Lưu LocalStorage
+    try {
+        const localKey = `tuluan_scores_${qId}`;
+        const rawLocal = localStorage.getItem(localKey);
+        const map = rawLocal ? JSON.parse(rawLocal) : {};
+        if (!map[cleanSbd]) map[cleanSbd] = {};
+        map[cleanSbd].crossScore = trimmedScore;
+        map[cleanSbd].grader = graderDisplay;
+        map[cleanSbd].time = scoreTimeStr;
+        map[cleanSbd].studentName = studentName;
+        localStorage.setItem(localKey, JSON.stringify(map));
+    } catch(e) {}
+
+    // 2. Cập nhật ram
     if (!currentTuLuanModalData.submissionsMap[cleanSbd]) {
         currentTuLuanModalData.submissionsMap[cleanSbd] = { stt: stt, sbd: sbd, studentName: studentName, className: driveClassName, count: 0, images: [], crossScore: trimmedScore, crossScoreBy: graderDisplay, crossScoreTime: scoreTimeStr };
-    } else { currentTuLuanModalData.submissionsMap[cleanSbd].crossScore = trimmedScore; currentTuLuanModalData.submissionsMap[cleanSbd].crossScoreBy = graderDisplay; currentTuLuanModalData.submissionsMap[cleanSbd].crossScoreTime = scoreTimeStr; }
+    } else { 
+        currentTuLuanModalData.submissionsMap[cleanSbd].crossScore = trimmedScore; 
+        currentTuLuanModalData.submissionsMap[cleanSbd].crossScoreBy = graderDisplay; 
+        currentTuLuanModalData.submissionsMap[cleanSbd].crossScoreTime = scoreTimeStr; 
+    }
 
+    // 3. Lưu Supabase
     try {
         const client = typeof getDbClient === 'function' ? getDbClient() : null;
-        if (client) await client.from('tu_luan_submissions').upsert({ quiz_id: qId, sbd: cleanSbd, stt: String(stt || "00"), student_name: studentName, class_name: driveClassName, exam_title: currentTuLuanModalData.examTitle || "Tự luận", cross_score: trimmedScore, cross_score_by: graderDisplay, cross_score_time: scoreTimeStr }, { onConflict: 'quiz_id,sbd' });
+        if (client) {
+            const { data: upRows } = await client.from('tu_luan_submissions')
+                .update({ 
+                    cross_score: trimmedScore, 
+                    cross_score_by: graderDisplay, 
+                    cross_score_time: scoreTimeStr 
+                })
+                .eq('quiz_id', qId)
+                .eq('sbd', cleanSbd)
+                .select();
+
+            if (!upRows || upRows.length === 0) {
+                await client.from('tu_luan_submissions').insert([{
+                    quiz_id: qId,
+                    sbd: cleanSbd,
+                    stt: String(stt || "00"),
+                    student_name: studentName,
+                    class_name: driveClassName,
+                    exam_title: currentTuLuanModalData.examTitle || "Tự luận",
+                    cross_score: trimmedScore,
+                    cross_score_by: graderDisplay,
+                    cross_score_time: scoreTimeStr,
+                    images: [],
+                    count: 0
+                }]);
+            }
+        }
         const scoreInput = document.getElementById(`cross-score-${cleanSbd}`);
-        if (scoreInput) { scoreInput.style.borderColor = "#10b981"; if (trimmedScore !== "") { scoreInput.title = `🎯 Điểm: ${trimmedScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`; } else { scoreInput.title = "Nhập điểm chấm chéo"; } setTimeout(() => { scoreInput.style.borderColor = "#cbd5e1"; }, 1500); }
-    } catch(err) { console.error("Lỗi lưu điểm chấm chéo Supabase:", err); }
+        if (scoreInput) { 
+            if (trimmedScore !== "") { 
+                scoreInput.title = `🎯 Điểm: ${trimmedScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`; 
+            } else { 
+                scoreInput.title = "Nhập điểm chấm chéo"; 
+            } 
+        }
+        updateCrossScoreInputStyles();
+    } catch(err) { 
+        console.error("Lỗi lưu điểm chấm chéo Supabase:", err); 
+    }
 }
 
 window.onThumbnailItemClicked = onThumbnailItemClicked;
@@ -352,3 +647,5 @@ window.onComponentCellInput = onComponentCellInput;
 window.onComponentCellKeyDown = onComponentCellKeyDown;
 window.saveComponentScoresAction = saveComponentScoresAction;
 window.saveStudentCrossScore = saveStudentCrossScore;
+window.persistComponentScoreData = persistComponentScoreData;
+window.triggerAutoSaveComponentScore = triggerAutoSaveComponentScore;
