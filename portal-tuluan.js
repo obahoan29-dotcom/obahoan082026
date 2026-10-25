@@ -1,11 +1,10 @@
 // =========================================================
 // FILE: portal-tuluan.js
 // QUẢN LÝ NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB & ĐỒNG BỘ 100% QUA SUPABASE
-// NÂNG CẤP: BẢNG ĐIỂM TP CHUẨN MÀN HÌNH ĐIỆN THOẠI 100%, XUẤT EXCEL CHI TIẾT
-// TỪNG CÂU + TỔNG ĐIỂM, LIGHTBOX PINCH-ZOOM 2 NGÓN TAY & BẢO MẬT PHÂN QUYỀN
+// TỐI ƯU SIÊU GỌN - LIGHTBOX CHUYỂN TRANG & CẢM ỨNG PINCH-ZOOM 2 NGÓN TAY
 // =========================================================
 
-// TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ BẢNG ĐIỂM THÀNH PHẦN
+// TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ LIGHTBOX PINCH-ZOOM
 (function injectTuLuanButtonStyles() {
     const styleId = "tuluan-custom-delete-btn-styles";
     if (document.getElementById(styleId)) return;
@@ -17,14 +16,13 @@
         /* ============================================================ */
         .student-pass-popover,
         .student-feedback-popover,
-        .dapan-schedule-popover,
-        .component-score-popover {
+        .dapan-schedule-popover {
             display: none !important;
             position: absolute !important;
             background: #ffffff !important;
             border-radius: 12px !important;
-            padding: 10px !important;
-            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.38), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+            padding: 12px !important;
+            box-shadow: 0 16px 40px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
             z-index: 999999 !important;
             text-align: left !important;
             box-sizing: border-box !important;
@@ -33,8 +31,7 @@
 
         .student-pass-popover.show,
         .student-feedback-popover.show,
-        .dapan-schedule-popover.show,
-        .component-score-popover.show {
+        .dapan-schedule-popover.show {
             display: block !important;
         }
 
@@ -62,39 +59,6 @@
             top: auto !important;
             width: 280px !important;
             border: 1.5px solid #0284c7 !important;
-        }
-
-        /* POPOVER BẢNG ĐIỂM THÀNH PHẦN (DESKTOP) */
-        .component-score-popover {
-            top: calc(100% + 6px) !important;
-            right: 0 !important;
-            left: auto !important;
-            width: 420px !important;
-            max-width: 95vw !important;
-            max-height: 84vh !important;
-            overflow-y: auto !important;
-            border: 1.5px solid #0284c7 !important;
-            padding: 10px 12px !important;
-            background: #ffffff !important;
-        }
-
-        /* FIX CHUẨN 100% TRÊN MÀN HÌNH ĐIỆN THOẠI: GHIM CĂN GIỮA KHÔNG LỆCH LỀ */
-        @media (max-width: 640px) {
-            .component-score-popover {
-                position: fixed !important;
-                top: 50% !important;
-                left: 50% !important;
-                right: auto !important;
-                bottom: auto !important;
-                transform: translate(-50%, -50%) !important;
-                width: min(390px, calc(100vw - 16px)) !important;
-                max-width: calc(100vw - 16px) !important;
-                max-height: 88vh !important;
-                border-radius: 14px !important;
-                z-index: 100000000 !important;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important;
-                padding: 12px !important;
-            }
         }
 
         /* ============================================================ */
@@ -168,6 +132,7 @@
             text-overflow: ellipsis !important;
         }
 
+        /* HÀNG CHỌN LỚP, ĐỀ & NÚT CÔNG CỤ SIÊU GỌN */
         .tuluan-select-bar {
             display: flex !important;
             align-items: center !important;
@@ -325,6 +290,7 @@
             padding: 0 !important;
         }
 
+        /* DÒNG ĐÁP ÁN ĐẦY ĐỦ RÚT GỌN TỐI ĐA */
         .tuluan-dapan-full-strip {
             display: flex !important;
             align-items: center !important;
@@ -391,6 +357,7 @@
             font-weight: 800 !important;
         }
 
+        /* THANH TÌM KIẾM & BỘ LỌC RÚT GỌN */
         .tuluan-toolbar-bar {
             display: flex !important;
             align-items: center !important;
@@ -434,6 +401,7 @@
             border-color: #4f46e5 !important;
         }
 
+        /* BẢNG DANH SÁCH HỌC SINH MỞ RỘNG TỐI ĐA */
         .tuluan-table-wrap {
             flex: 1 !important;
             height: 100% !important;
@@ -540,10 +508,9 @@
         }
         .btn-del-single-thumb:hover { transform: scale(1.2) !important; background: #b91c1c !important; }
 
-        /* Ô NHẬP ĐIỂM CHẤM CHÉO NGOÀI BẢNG (KHÓA VỚI HỌC SINH) */
         .tuluan-score-input {
-            width: 68px !important;
-            padding: 4px 4px !important;
+            width: 70px !important;
+            padding: 4px 5px !important;
             border: 1.2px solid #cbd5e1 !important;
             border-radius: 7px !important;
             font-size: 12.5px !important;
@@ -552,12 +519,6 @@
             outline: none !important;
             color: #0284c7 !important;
             background: #ffffff !important;
-        }
-        .tuluan-score-input.is-locked-for-student {
-            background: #f8fafc !important;
-            color: #0369a1 !important;
-            border-color: #e2e8f0 !important;
-            cursor: not-allowed !important;
         }
 
         .btn-tuluan-comment {
@@ -615,6 +576,7 @@
             height: 28px !important;
         }
 
+        /* Styling chi tiết trong Popover */
         .pass-popover-header {
             display: flex !important;
             align-items: center !important;
@@ -634,6 +596,105 @@
             color: #94a3b8 !important;
             cursor: pointer !important;
         }
+        .pass-popover-hint {
+            font-size: 10.5px !important;
+            color: #475569 !important;
+            background: #f0f9ff !important;
+            border: 1px solid #bae6fd !important;
+            padding: 5px 7px !important;
+            border-radius: 6px !important;
+            margin-bottom: 7px !important;
+            line-height: 1.35 !important;
+        }
+        .pass-input-row { margin-bottom: 6px !important; }
+        .pass-input-row label {
+            display: block !important;
+            font-size: 10.5px !important;
+            font-weight: 800 !important;
+            color: #334155 !important;
+            margin-bottom: 2px !important;
+        }
+        .pass-input-row input {
+            width: 100% !important;
+            padding: 5px 7px !important;
+            border: 1.2px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            font-size: 12.5px !important;
+            font-weight: 700 !important;
+            outline: none !important;
+            box-sizing: border-box !important;
+        }
+        .pass-popover-actions {
+            display: flex !important;
+            gap: 5px !important;
+            margin-top: 8px !important;
+        }
+        .btn-pass-cancel {
+            flex: 1 !important;
+            padding: 5px !important;
+            background: #f1f5f9 !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            color: #475569 !important;
+            cursor: pointer !important;
+        }
+        .btn-pass-save {
+            flex: 1.5 !important;
+            padding: 5px !important;
+            background: linear-gradient(135deg, #16a34a, #15803d) !important;
+            border: none !important;
+            border-radius: 6px !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            color: #ffffff !important;
+            cursor: pointer !important;
+        }
+
+        .feedback-textarea {
+            width: 100% !important;
+            padding: 6px 8px !important;
+            border: 1.2px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            font-size: 12px !important;
+            font-family: inherit !important;
+            font-weight: 600 !important;
+            box-sizing: border-box !important;
+            margin-bottom: 5px !important;
+            outline: none !important;
+        }
+        .dapan-sched-radio-item {
+            display: flex !important;
+            align-items: flex-start !important;
+            gap: 6px !important;
+            margin-bottom: 6px !important;
+            cursor: pointer !important;
+            font-size: 11.5px !important;
+            font-weight: 700 !important;
+        }
+        .dapan-sched-input {
+            width: 100% !important;
+            padding: 5px 7px !important;
+            border: 1.2px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            font-size: 11.5px !important;
+            font-weight: 700 !important;
+            outline: none !important;
+            box-sizing: border-box !important;
+        }
+        .btn-quick-deadline {
+            display: inline-flex !important;
+            padding: 3px 6px !important;
+            background: #fffbeb !important;
+            border: 1px solid #fde68a !important;
+            border-radius: 5px !important;
+            font-size: 10.5px !important;
+            font-weight: 800 !important;
+            color: #b45309 !important;
+            cursor: pointer !important;
+            margin-top: 4px !important;
+        }
 
         .tuluan-modal-footer {
             padding: 3px 8px !important;
@@ -647,7 +708,7 @@
         }
 
         /* ============================================================ */
-        /* 3. LIGHTBOX XEM ẢNH, NÚT "ĐIỂM TP" VÀ CẢM ỨNG PINCH-ZOOM     */
+        /* 3. LIGHTBOX XEM ẢNH ĐA TRANG VỚI 2 NÚT TAM GIÁC & PINCH-ZOOM */
         /* ============================================================ */
         .tuluan-lightbox-overlay {
             position: fixed !important;
@@ -668,7 +729,7 @@
             background: #0f172a !important;
             border: 1.5px solid #334155 !important;
             border-radius: 16px !important;
-            max-width: 940px !important;
+            max-width: 920px !important;
             width: 100% !important;
             height: 94vh !important;
             max-height: 96vh !important;
@@ -682,7 +743,7 @@
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            padding: 6px 12px !important;
+            padding: 8px 12px !important;
             background: #1e293b !important;
             border-bottom: 1.5px solid #334155 !important;
             flex-shrink: 0 !important;
@@ -715,32 +776,17 @@
             flex-shrink: 0 !important;
             box-shadow: 0 2px 6px rgba(2, 132, 199, 0.4) !important;
         }
-
-        /* NÚT "ĐIỂM TP" THAY THẾ CHO NÚT DRIVE */
-        .btn-lightbox-component-score {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        .btn-lightbox-open-drive {
+            background: #0284c7 !important;
             color: #ffffff !important;
-            border: 1.2px solid #6ee7b7 !important;
             padding: 4px 10px !important;
             border-radius: 8px !important;
-            font-size: 11.5px !important;
-            font-weight: 900 !important;
-            cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important;
-            transition: all 0.15s ease !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            text-decoration: none !important;
+            transition: 0.15s !important;
             white-space: nowrap !important;
         }
-        .btn-lightbox-component-score:hover {
-            filter: brightness(1.1) !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-lightbox-component-score:active {
-            transform: scale(0.95) !important;
-        }
-
         .btn-close-lightbox {
             background: #334155 !important;
             border: none !important;
@@ -751,12 +797,14 @@
             font-size: 15px !important;
             font-weight: 900 !important;
             cursor: pointer !important;
-            display: flex !align-items: center !important;
+            display: flex !important;
+            align-items: center !important;
             justify-content: center !important;
             line-height: 1 !important;
         }
         .btn-close-lightbox:hover { background: #ef4444 !important; }
 
+        /* VÙNG CHỨA ẢNH ĐƯỢC CẤP QUYỀN PINCH-TO-ZOOM VÀ PAN */
         .tuluan-lightbox-img-box {
             flex: 1 !important;
             position: relative !important;
@@ -769,7 +817,9 @@
             user-select: none !important;
             cursor: grab !important;
         }
-        .tuluan-lightbox-img-box.is-zoomed { cursor: move !important; }
+        .tuluan-lightbox-img-box.is-zoomed {
+            cursor: move !important;
+        }
         #lightbox-full-img {
             max-width: 100% !important;
             max-height: 100% !important;
@@ -781,6 +831,7 @@
             pointer-events: auto !important;
         }
 
+        /* 2 NÚT TAM GIÁC LỚN BÊN TRÁI & PHẢI */
         .btn-lightbox-nav {
             position: absolute !important;
             top: 50% !important;
@@ -816,6 +867,7 @@
             pointer-events: none !important;
         }
 
+        /* BỘ CÔNG CỤ ZOOM TIỆN ÍCH DƯỚI ĐÁY */
         .lightbox-bottom-bar {
             display: flex !important;
             align-items: center !important;
@@ -849,8 +901,13 @@
             justify-content: center !important;
             transition: all 0.15s ease !important;
         }
-        .btn-zoom-tool:hover { background: #0284c7 !important; border-color: #38bdf8 !important; }
-        .btn-zoom-tool:active { transform: scale(0.92) !important; }
+        .btn-zoom-tool:hover {
+            background: #0284c7 !important;
+            border-color: #38bdf8 !important;
+        }
+        .btn-zoom-tool:active {
+            transform: scale(0.92) !important;
+        }
 
         .lightbox-dots-container {
             display: flex !important;
@@ -871,75 +928,6 @@
             border-radius: 8px !important;
         }
 
-        /* LƯỚI Ô NHẬP ĐIỂM THÀNH PHẦN (SIÊU GỌN 10 CỘT) */
-        .comp-score-grid-10 {
-            display: grid !important;
-            grid-template-columns: repeat(10, 1fr) !important;
-            gap: 4px !important;
-            background: #f8fafc !important;
-            padding: 6px !important;
-            border-radius: 8px !important;
-            border: 1px solid #e2e8f0 !important;
-            margin-bottom: 6px !important;
-        }
-        .comp-score-cell-box {
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-        }
-        .comp-score-cell-input {
-            width: 100% !important;
-            padding: 3px 1px !important;
-            text-align: center !important;
-            border: 1.2px solid #cbd5e1 !important;
-            border-radius: 5px !important;
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            color: #0f172a !important;
-            background: #ffffff !important;
-            outline: none !important;
-            box-sizing: border-box !important;
-        }
-        .comp-score-cell-input:focus {
-            border-color: #10b981 !important;
-            background: #ecfdf5 !important;
-            box-shadow: 0 0 0 1.5px rgba(16, 185, 129, 0.3) !important;
-        }
-        .comp-score-cell-input::placeholder {
-            color: #94a3b8 !important;
-            font-weight: 600 !important;
-            font-size: 9.5px !important;
-        }
-
-        .comp-score-footer-row {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            background: #f0fdf4 !important;
-            border: 1.2px solid #86efac !important;
-            border-radius: 8px !important;
-            padding: 6px 8px !important;
-            gap: 6px !important;
-            flex-wrap: wrap !important;
-        }
-        .comp-score-kpi-item {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-            font-size: 11.5px !important;
-            font-weight: 800 !important;
-            color: #166534 !important;
-        }
-        .comp-score-kpi-val {
-            background: #ffffff !important;
-            border: 1px solid #86efac !important;
-            padding: 2px 7px !important;
-            border-radius: 6px !important;
-            font-size: 13px !important;
-            font-weight: 900 !important;
-            color: #15803d !important;
-        }
-
         @media (max-width: 640px) {
             .btn-lightbox-nav {
                 width: 36px !important;
@@ -948,8 +936,9 @@
             }
             .btn-lightbox-nav.btn-nav-prev { left: 6px !important; }
             .btn-lightbox-nav.btn-nav-next { right: 6px !important; }
-            .lightbox-bottom-bar span.lightbox-hint-text { display: none !important; }
-            .comp-score-grid-10 { grid-template-columns: repeat(5, 1fr) !important; }
+            .lightbox-bottom-bar span.lightbox-hint-text {
+                display: none !important;
+            }
         }
     `;
     document.head.appendChild(style);
@@ -969,11 +958,8 @@ let currentTuLuanModalData = {
 // TRẠNG THÁI LIGHTBOX VÀ CƠ CHẾ ZOOM 2 NGÓN TAY + PAN
 let currentLightboxGallery = {
     studentName: "",
-    studentSbd: "",
     images: [],
-    currentIndex: 0,
-    currentQuestionCount: 40,
-    componentScores: {}
+    currentIndex: 0
 };
 
 let lightboxZoomState = {
@@ -1249,23 +1235,6 @@ async function sendToGoogleDriveWithRetry(gasUrl, payload, maxRetries = 2, timeo
     throw lastError;
 }
 
-// HÀM TRÍCH XUẤT SỐ LƯỢNG CÂU CỦA ĐỀ THI HIỆN TẠI
-function detectExamQuestionCount() {
-    const title = currentTuLuanModalData.examTitle || "";
-
-    const match = title.match(/(\d{1,3})\s*(?:câu|cau)/i);
-    if (match && match[1]) {
-        const count = parseInt(match[1], 10);
-        if (count >= 5 && count <= 120) return count;
-    }
-
-    if (typeof examData !== 'undefined' && examData && Array.isArray(examData.questions) && examData.questions.length > 0) {
-        return examData.questions.length;
-    }
-
-    return 40;
-}
-
 function ensureTuLuanModalDOM() {
     if (document.getElementById("modal-tuluan-submission")) return;
     const modalDiv = document.createElement("div");
@@ -1409,7 +1378,7 @@ function ensureTuLuanModalDOM() {
                             <th style="width: 130px;">Trạng thái / Ngày nộp</th>
                             <th style="width: 95px; text-align: center;">Phê duyệt</th>
                             <th style="min-width: 150px;">Ảnh bài làm đã nộp</th>
-                            <th style="width: 95px; text-align: center;" title="Điểm chấm chéo (Học sinh mở ảnh chấm Điểm thành phần)">Chấm chéo</th>
+                            <th style="width: 95px; text-align: center;" title="Nhập điểm chấm chéo bài tự luận">Chấm chéo</th>
                             <th style="width: 95px; text-align: center;" title="Nhận xét bài làm">Nhận xét</th>
                             <th style="min-width: 160px; text-align: center;">Thao tác</th>
                         </tr>
@@ -1420,13 +1389,13 @@ function ensureTuLuanModalDOM() {
 
             <div class="tuluan-modal-footer">
                 <span style="font-size:10.5px; color:#64748b; font-style:italic;">
-                    🔒 Ô điểm chấm chéo khóa với học sinh. Học sinh mở ảnh bấm "Điểm TP" để chấm từng câu công khai.
+                    🔒 Học sinh xem được ảnh bài làm sau khi Giáo viên duyệt. Rê chuột vào ô điểm để xem người chấm.
                 </span>
                 <button type="button" class="btn-admin btn-cancel" style="padding: 3px 12px; font-size:11.5px;" onclick="closeTuLuanModal(event)">Đóng</button>
             </div>
         </div>
 
-        <!-- LIGHTBOX XEM ẢNH, NÚT "ĐIỂM TP" VÀ PINCH-ZOOM 2 NGÓN TAY -->
+        <!-- LIGHTBOX XEM ẢNH ĐA TRANG VỚI 2 NÚT TAM GIÁC & PINCH-ZOOM 2 NGÓN TAY -->
         <div id="tuluan-lightbox" class="tuluan-lightbox-overlay" onclick="closeTuLuanLightbox(event)">
             <div class="tuluan-lightbox-content" onclick="event.stopPropagation()">
                 <div class="tuluan-lightbox-header">
@@ -1434,68 +1403,8 @@ function ensureTuLuanModalDOM() {
                         <span id="lightbox-student-title">Ảnh bài làm</span>
                         <span class="lightbox-page-badge" id="lightbox-page-indicator">Tr 1/1</span>
                     </div>
-
-                    <!-- NÚT ĐIỂM THÀNH PHẦN VÀ KHUNG POPOVER XÒE RA -->
-                    <div style="display:flex; gap:6px; align-items:center; position:relative;">
-                        <div style="position:relative; display:inline-block;">
-                            <button type="button" class="btn-lightbox-component-score" id="btn-open-component-score" onclick="toggleComponentScorePopover(event)" title="Chấm điểm từng câu chi tiết">
-                                📊 Điểm TP ▾
-                            </button>
-
-                            <!-- POPOVER BẢNG ĐIỂM THÀNH PHẦN NỔI LÊN (SIÊU NHỎ GỌN) -->
-                            <div class="component-score-popover" id="component-score-popover" onclick="event.stopPropagation()">
-                                <div class="pass-popover-header">
-                                    <span style="color:#059669;">📊 Chấm Điểm Từng Câu: <b id="comp-score-st-name">Học sinh</b></span>
-                                    <button type="button" class="btn-close-pass-pop" onclick="closeComponentScorePopover(event)">✕</button>
-                                </div>
-
-                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:4px; font-size:11px; flex-wrap:wrap;">
-                                    <div style="display:flex; align-items:center; gap:4px;">
-                                        <b style="color:#334155;">Số câu của đề:</b>
-                                        <input type="number" id="comp-score-q-count" min="1" max="120" value="40" 
-                                               style="width:48px; padding:2px 4px; border:1px solid #cbd5e1; border-radius:5px; font-weight:800; text-align:center;"
-                                               onchange="onComponentQuestionCountChanged(this.value)">
-                                    </div>
-                                    <div style="display:flex; gap:3px;">
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(30)">30</button>
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(36)">36</button>
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(40)">40</button>
-                                        <button type="button" class="btn-quick-deadline" style="margin:0; padding:2px 5px;" onclick="setQuickQuestionCount(50)">50</button>
-                                    </div>
-                                </div>
-
-                                <!-- LƯỚI Ô NHẬP ĐIỂM SÁT SẠT NHAU -->
-                                <div class="comp-score-grid-10" id="comp-score-grid-container"></div>
-
-                                <div style="font-size:10px; color:#64748b; font-style:italic; margin-bottom:6px;">
-                                    💡 Nhập dấu chấm (.) hoặc phẩy (,). Nhấn Enter để sang câu tiếp theo.
-                                </div>
-
-                                <!-- HÀNG THỨ 5: TỔNG ĐIỂM, THANG 10 VÀ LƯU -->
-                                <div class="comp-score-footer-row">
-                                    <div class="comp-score-kpi-item">
-                                        <span>Tổng:</span>
-                                        <span class="comp-score-kpi-val" id="comp-score-total-sum">0.0</span>
-                                    </div>
-
-                                    <div class="comp-score-kpi-item">
-                                        <span>Thang 10:</span>
-                                        <span class="comp-score-kpi-val" id="comp-score-scale10-val" style="color:#0284c7; border-color:#38bdf8;">0.0</span>
-                                    </div>
-
-                                    <div style="display:flex; gap:4px; margin-left:auto;">
-                                        <select id="comp-score-apply-mode" style="font-size:10.5px; font-weight:700; border-radius:6px; border:1px solid #86efac; padding:2px 4px; background:#fff;" title="Chọn điểm đưa ra bảng ngoài">
-                                            <option value="scale10">Điểm thang 10</option>
-                                            <option value="raw">Điểm cộng dồn</option>
-                                        </select>
-                                        <button type="button" class="btn-pass-save" onclick="saveComponentScoresAction(event)" style="padding:4px 8px; font-size:11px;">
-                                            💾 Lưu & Đưa ra bảng
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <a id="lightbox-drive-link" href="#" target="_blank" class="btn-lightbox-open-drive">🔗 Drive</a>
                         <button type="button" class="btn-close-lightbox" onclick="closeTuLuanLightbox(event)">✕</button>
                     </div>
                 </div>
@@ -1540,17 +1449,21 @@ function setupLightboxTouchAndZoom() {
         return Math.hypot(dx, dy);
     }
 
+    // Xử lý chạm cảm ứng (Mobile / Tablet)
     area.addEventListener("touchstart", function(e) {
         if (!e.touches) return;
 
         if (e.touches.length === 2) {
+            // Chạm bằng 2 ngón tay -> Bắt đầu Pinch-to-zoom
             lightboxZoomState.initialDistance = getDistance(e.touches[0], e.touches[1]);
             lightboxZoomState.initialScale = lightboxZoomState.scale;
             lightboxZoomState.isDragging = false;
         } else if (e.touches.length === 1) {
+            // Chạm bằng 1 ngón tay
             const touch = e.touches[0];
             const now = Date.now();
 
+            // Kiểm tra Double-tap (nhấp đúp phóng to 2.5x hoặc về 1x)
             if (now - lightboxZoomState.lastTapTime < 280) {
                 if (lightboxZoomState.scale > 1.1) {
                     resetLightboxZoom(true);
@@ -1566,10 +1479,12 @@ function setupLightboxTouchAndZoom() {
             lightboxZoomState.lastTapTime = now;
 
             if (lightboxZoomState.scale > 1.05) {
+                // Đang zoom to -> Chuẩn bị kéo rê bài làm (Pan/Drag)
                 lightboxZoomState.isDragging = true;
                 lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX;
                 lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY;
             } else {
+                // Ở mức 1x -> Chuẩn bị vuốt chuyển trang (Swipe)
                 lightboxZoomState.swipeStartX = touch.clientX;
                 lightboxZoomState.swipeStartY = touch.clientY;
                 lightboxZoomState.isDragging = false;
@@ -1585,7 +1500,7 @@ function setupLightboxTouchAndZoom() {
             const currentDist = getDistance(e.touches[0], e.touches[1]);
             const factor = currentDist / lightboxZoomState.initialDistance;
             let newScale = lightboxZoomState.initialScale * factor;
-            newScale = Math.min(Math.max(1, newScale), 5);
+            newScale = Math.min(Math.max(1, newScale), 5); // Cho phép zoom từ 1x đến 5x nét căng
 
             lightboxZoomState.scale = newScale;
             if (newScale === 1) {
@@ -1604,6 +1519,7 @@ function setupLightboxTouchAndZoom() {
 
     area.addEventListener("touchend", function(e) {
         if (e.touches && e.touches.length === 1) {
+            // Vừa thả 1 ngón tay trong khi còn 1 ngón
             const touch = e.touches[0];
             lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX;
             lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY;
@@ -1615,6 +1531,7 @@ function setupLightboxTouchAndZoom() {
             lightboxZoomState.isDragging = false;
             lightboxZoomState.initialDistance = 0;
 
+            // Nếu chỉ ở mức 1x, kiểm tra cử chỉ vuốt chuyển trang (Swipe)
             if (lightboxZoomState.scale <= 1.05 && e.changedTouches && e.changedTouches.length > 0) {
                 const endX = e.changedTouches[0].clientX;
                 const endY = e.changedTouches[0].clientY;
@@ -1623,21 +1540,23 @@ function setupLightboxTouchAndZoom() {
 
                 if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 38) {
                     if (diffX < 0) {
-                        navigateLightbox(1);
+                        navigateLightbox(1); // Vuốt từ phải sang trái -> Sang trang sau
                     } else {
-                        navigateLightbox(-1);
+                        navigateLightbox(-1); // Vuốt từ trái sang phải -> Về trang trước
                     }
                 }
             }
         }
     }, { passive: true });
 
+    // Hỗ trợ con lăn chuột (Mouse wheel zoom) trên máy tính/laptop
     area.addEventListener("wheel", function(e) {
         e.preventDefault();
         const delta = e.deltaY < 0 ? 0.25 : -0.25;
         zoomLightboxStep(delta);
     }, { passive: false });
 
+    // Kéo rê bằng chuột trên máy tính khi đang zoom
     let isMouseDown = false;
     area.addEventListener("mousedown", function(e) {
         if (lightboxZoomState.scale > 1.05) {
@@ -1655,8 +1574,11 @@ function setupLightboxTouchAndZoom() {
         }
     });
 
-    window.addEventListener("mouseup", function() { isMouseDown = false; });
+    window.addEventListener("mouseup", function() {
+        isMouseDown = false;
+    });
 
+    // Phím mũi tên máy tính
     document.addEventListener("keydown", function(e) {
         const lb = document.getElementById("tuluan-lightbox");
         if (lb && lb.style.display === "flex") {
@@ -1667,6 +1589,7 @@ function setupLightboxTouchAndZoom() {
     });
 }
 
+// ÁP DỤNG BIẾN ĐỔI TRANSFORM CHO ẢNH
 function applyImageTransform(smooth = false) {
     const img = document.getElementById("lightbox-full-img");
     const area = document.getElementById("lightbox-touch-area");
@@ -1691,6 +1614,7 @@ function applyImageTransform(smooth = false) {
     }
 }
 
+// RESET ZOOM VỀ BAN ĐẦU
 function resetLightboxZoom(smooth = false, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     lightboxZoomState.scale = 1;
@@ -1699,6 +1623,7 @@ function resetLightboxZoom(smooth = false, event) {
     applyImageTransform(smooth);
 }
 
+// PHÓNG TO / THU NHỎ TỪNG NẤC
 function zoomLightboxStep(step, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     let newScale = lightboxZoomState.scale + step;
@@ -1710,214 +1635,6 @@ function zoomLightboxStep(step, event) {
         lightboxZoomState.posY = 0;
     }
     applyImageTransform(true);
-}
-
-// =========================================================
-// LOGIC BẢNG ĐIỂM THÀNH PHẦN TỪNG CÂU
-// =========================================================
-function toggleComponentScorePopover(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById("component-score-popover");
-    if (!pop) return;
-    const isShown = pop.classList.contains("show");
-
-    if (!isShown) {
-        pop.classList.add("show");
-        renderComponentScoreGrid();
-    } else {
-        pop.classList.remove("show");
-    }
-}
-
-function closeComponentScorePopover(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById("component-score-popover");
-    if (pop) pop.classList.remove("show");
-}
-
-function setQuickQuestionCount(num) {
-    const input = document.getElementById("comp-score-q-count");
-    if (input) input.value = num;
-    onComponentQuestionCountChanged(num);
-}
-
-function onComponentQuestionCountChanged(val) {
-    let count = parseInt(val, 10);
-    if (isNaN(count) || count < 1) count = 40;
-    if (count > 120) count = 120;
-    currentLightboxGallery.currentQuestionCount = count;
-    renderComponentScoreGrid();
-}
-
-function renderComponentScoreGrid() {
-    const container = document.getElementById("comp-score-grid-container");
-    const nameEl = document.getElementById("comp-score-st-name");
-    const qCountInput = document.getElementById("comp-score-q-count");
-    if (!container) return;
-
-    if (nameEl) nameEl.innerText = currentLightboxGallery.studentName || "Học sinh";
-    const totalQ = currentLightboxGallery.currentQuestionCount || detectExamQuestionCount();
-    if (qCountInput) qCountInput.value = totalQ;
-
-    const sbd = currentLightboxGallery.studentSbd;
-    const record = currentTuLuanModalData.submissionsMap[sbd] || {};
-    const savedDetails = record.detailScores || currentLightboxGallery.componentScores || {};
-    currentLightboxGallery.componentScores = { ...savedDetails };
-
-    let html = "";
-    for (let i = 1; i <= totalQ; i++) {
-        const val = (savedDetails[i] !== undefined && savedDetails[i] !== null) ? savedDetails[i] : "";
-        html += `
-            <div class="comp-score-cell-box">
-                <input type="text" class="comp-score-cell-input" id="comp-q-${i}" 
-                       value="${val}" placeholder="C${i}" 
-                       oninput="onComponentCellInput(${i}, this.value)" 
-                       onkeydown="onComponentCellKeyDown(event, ${i}, ${totalQ})">
-            </div>
-        `;
-    }
-    container.innerHTML = html;
-    updateComponentScoreTotals();
-}
-
-function onComponentCellInput(qIdx, val) {
-    let cleanVal = String(val).trim().replace(',', '.');
-    if (cleanVal === "") {
-        delete currentLightboxGallery.componentScores[qIdx];
-    } else {
-        let num = parseFloat(cleanVal);
-        if (!isNaN(num)) {
-            currentLightboxGallery.componentScores[qIdx] = num;
-        }
-    }
-    updateComponentScoreTotals();
-}
-
-function onComponentCellKeyDown(event, currentIdx, totalQ) {
-    if (event.key === "Enter" || event.key === "Tab") {
-        event.preventDefault();
-        const nextIdx = currentIdx + 1;
-        if (nextIdx <= totalQ) {
-            const nextInput = document.getElementById(`comp-q-${nextIdx}`);
-            if (nextInput) nextInput.focus();
-        }
-    }
-}
-
-function updateComponentScoreTotals() {
-    const scores = currentLightboxGallery.componentScores || {};
-    const totalQ = currentLightboxGallery.currentQuestionCount || 40;
-
-    let sum = 0;
-    for (let k in scores) {
-        const n = parseFloat(scores[k]);
-        if (!isNaN(n)) sum += n;
-    }
-
-    sum = Math.round(sum * 100) / 100;
-    let scale10 = (totalQ > 0) ? Math.round(((sum / totalQ) * 10) * 100) / 100 : sum;
-    if (scale10 > 10.0) scale10 = 10.0;
-
-    const totalEl = document.getElementById("comp-score-total-sum");
-    const scale10El = document.getElementById("comp-score-scale10-val");
-
-    if (totalEl) totalEl.innerText = sum;
-    if (scale10El) scale10El.innerText = scale10;
-}
-
-// LƯU ĐIỂM THÀNH PHẦN VÀ TỰ ĐỘNG ĐƯA RA CỘT CHẤM CHÉO NGOÀI BẢNG
-async function saveComponentScoresAction(event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    const sbd = currentLightboxGallery.studentSbd;
-    const qId = currentTuLuanModalData.quizId;
-    if (!sbd || !qId) return;
-
-    const mode = document.getElementById("comp-score-apply-mode")?.value || "scale10";
-    const totalSum = parseFloat(document.getElementById("comp-score-total-sum")?.innerText || 0);
-    const scale10 = parseFloat(document.getElementById("comp-score-scale10-val")?.innerText || 0);
-    const finalScore = (mode === "scale10") ? scale10 : totalSum;
-
-    const driveClassName = getCleanDriveClassName(currentTuLuanModalData.classId);
-    const graderInfo = getCurrentGraderInfo();
-    const graderDisplay = graderInfo.sbd && graderInfo.sbd !== "ADMIN" 
-        ? `${graderInfo.name} (${graderInfo.sbd})` 
-        : graderInfo.name;
-
-    const now = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    const scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
-
-    // Cập nhật RAM
-    if (!currentTuLuanModalData.submissionsMap[sbd]) {
-        currentTuLuanModalData.submissionsMap[sbd] = {
-            sbd: sbd,
-            studentName: currentLightboxGallery.studentName,
-            className: driveClassName,
-            count: 0,
-            images: [],
-            crossScore: finalScore,
-            crossScoreBy: graderDisplay,
-            crossScoreTime: scoreTimeStr,
-            detailScores: currentLightboxGallery.componentScores,
-            questionCount: currentLightboxGallery.currentQuestionCount
-        };
-    } else {
-        currentTuLuanModalData.submissionsMap[sbd].crossScore = finalScore;
-        currentTuLuanModalData.submissionsMap[sbd].crossScoreBy = graderDisplay;
-        currentTuLuanModalData.submissionsMap[sbd].crossScoreTime = scoreTimeStr;
-        currentTuLuanModalData.submissionsMap[sbd].detailScores = currentLightboxGallery.componentScores;
-        currentTuLuanModalData.submissionsMap[sbd].questionCount = currentLightboxGallery.currentQuestionCount;
-    }
-
-    try {
-        const client = getDbClient();
-        if (client) {
-            // 1. Lưu điểm chấm chéo vào bảng tu_luan_submissions
-            await client.from('tu_luan_submissions').upsert({
-                quiz_id: qId,
-                sbd: sbd,
-                student_name: currentLightboxGallery.studentName,
-                class_name: driveClassName,
-                exam_title: currentTuLuanModalData.examTitle || "Tự luận",
-                cross_score: String(finalScore),
-                cross_score_by: graderDisplay,
-                cross_score_time: scoreTimeStr,
-                detail_scores: currentLightboxGallery.componentScores
-            }, { onConflict: 'quiz_id,sbd' });
-
-            // 2. Cơ chế lưu trữ kép an toàn 100% vào app_key_values (đảm bảo không bị thiếu cột database)
-            try {
-                const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single();
-                const allCompScores = (existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {};
-                allCompScores[sbd] = {
-                    detailScores: currentLightboxGallery.componentScores,
-                    questionCount: currentLightboxGallery.currentQuestionCount,
-                    crossScore: finalScore,
-                    crossScoreBy: graderDisplay,
-                    crossScoreTime: scoreTimeStr,
-                    updatedAt: Date.now()
-                };
-                await client.from('app_key_values').upsert({
-                    key: 'detail_scores_' + qId,
-                    value: allCompScores
-                });
-            } catch(metaErr) {}
-        }
-
-        // Cập nhật ngay ô input ngoài bảng
-        const scoreInput = document.getElementById(`cross-score-${sbd}`);
-        if (scoreInput) {
-            scoreInput.value = finalScore;
-            scoreInput.title = `🎯 Điểm TP: ${finalScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`;
-            scoreInput.style.borderColor = "#10b981";
-            setTimeout(() => { scoreInput.style.borderColor = "#cbd5e1"; }, 1500);
-        }
-
-        closeComponentScorePopover();
-        alert(`✅ ĐÃ LƯU ĐIỂM THÀNH PHẦN THÀNH CÔNG!\n\n- Học sinh: ${currentLightboxGallery.studentName}\n- Điểm đưa ra bảng: ${finalScore} điểm\n- Người chấm: ${graderDisplay}`);
-    } catch(err) {
-        alert("❌ Lỗi lưu điểm thành phần: " + err.message);
-    }
 }
 
 function updateTuLuanAdminUI() {
@@ -2150,8 +1867,7 @@ async function deleteCurrentTuLuanExam(event) {
                 client.from('custom_links').delete().eq('category_id', classId).eq('id', examId),
                 client.from('custom_links').delete().eq('category_id', classId).eq('title', examTitle),
                 client.from('tu_luan_submissions').delete().eq('quiz_id', examId),
-                client.from('app_key_values').delete().eq('key', 'dapan_' + examId),
-                client.from('app_key_values').delete().eq('key', 'detail_scores_' + examId)
+                client.from('app_key_values').delete().eq('key', 'dapan_' + examId)
             ]);
         }
 
@@ -2229,7 +1945,6 @@ async function promptAddNewTuLuanExam() {
     }
 }
 
-// ĐỌC BÀI NỘP, MẬT KHẨU & ĐIỂM THÀNH PHẦN TỪ SUPABASE
 async function loadTuLuanSubmissionsFromSupabase() {
     const qId = currentTuLuanModalData.quizId;
     if (!qId) return;
@@ -2242,31 +1957,16 @@ async function loadTuLuanSubmissionsFromSupabase() {
     }
 
     try {
-        const [subsRes, passRes, dapanRes, detailScoresRes] = await Promise.all([
+        const [subsRes, passRes, dapanRes] = await Promise.all([
             client.from('tu_luan_submissions').select('*').eq('quiz_id', qId),
             client.from('app_key_values').select('value').eq('key', 'student_custom_passwords').single(),
-            client.from('app_key_values').select('value').eq('key', 'dapan_' + qId).single(),
-            client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single()
+            client.from('app_key_values').select('value').eq('key', 'dapan_' + qId).single()
         ]);
-
-        const backupDetailsMap = (detailScoresRes && detailScoresRes.data && detailScoresRes.data.value && typeof detailScoresRes.data.value === 'object')
-            ? detailScoresRes.data.value 
-            : {};
 
         let combined = {};
         if (subsRes && Array.isArray(subsRes.data)) {
             subsRes.data.forEach(row => {
                 if (row && row.sbd) {
-                    let dScores = {};
-                    if (row.detail_scores) {
-                        try {
-                            dScores = (typeof row.detail_scores === 'object') ? row.detail_scores : JSON.parse(row.detail_scores);
-                        } catch(e) {}
-                    }
-                    if (Object.keys(dScores).length === 0 && backupDetailsMap[row.sbd] && backupDetailsMap[row.sbd].detailScores) {
-                        dScores = backupDetailsMap[row.sbd].detailScores;
-                    }
-
                     combined[row.sbd] = {
                         stt: row.stt,
                         sbd: row.sbd,
@@ -2282,9 +1982,7 @@ async function loadTuLuanSubmissionsFromSupabase() {
                         crossScoreTime: row.cross_score_time || "",
                         feedback: row.feedback || "",
                         feedbackTime: row.feedback_time || "",
-                        isApproved: !!row.is_approved,
-                        detailScores: dScores,
-                        questionCount: (backupDetailsMap[row.sbd] && backupDetailsMap[row.sbd].questionCount) || detectExamQuestionCount()
+                        isApproved: !!row.is_approved
                     };
                 }
             });
@@ -2502,7 +2200,6 @@ function toggleDapAnSchedulePopover(event) {
     document.querySelectorAll(".student-pass-popover.show").forEach(p => p.classList.remove("show"));
     document.querySelectorAll(".student-feedback-popover.show").forEach(p => p.classList.remove("show"));
     document.querySelectorAll(".dapan-schedule-popover.show").forEach(p => p.classList.remove("show"));
-    document.querySelectorAll(".component-score-popover.show").forEach(p => p.classList.remove("show"));
 
     if (!isShown) {
         pop.classList.add("show");
@@ -2887,7 +2584,7 @@ function renderTuLuanStudentsTable() {
                     ${record.images.map((im, idx) => `
                         <div class="tuluan-img-thumbnail-item ${!canViewDetailed ? 'locked-anti-cheat' : ''}" 
                              onclick="onThumbnailItemClicked('${cleanSbd}', ${idx}, ${canViewDetailed}, event)" 
-                             title="${canViewDetailed ? `Bấm để xem ảnh & chấm bài (Trang ${idx + 1}/${record.images.length})` : '🔒 Bài làm đang chờ Thầy phê duyệt!'}">
+                             title="${canViewDetailed ? `Bấm để xem ảnh phóng to (Trang ${idx + 1}/${record.images.length})` : '🔒 Bài làm đang chờ Thầy phê duyệt!'}">
                             <img src="${im.directUrl || im.fileUrl}" alt="Trang ${idx + 1}">
                             <span class="tuluan-thumb-page">Trang ${idx + 1}</span>
                             ${!canViewDetailed ? `<div class="lock-overlay-icon">🔒</div>` : ''}
@@ -2907,23 +2604,15 @@ function renderTuLuanStudentsTable() {
         const crossScoreBy = (record && record.crossScoreBy) ? record.crossScoreBy : '';
         const crossScoreTime = (record && record.crossScoreTime) ? record.crossScoreTime : '';
 
-        let scoreTooltip = "";
+        let scoreTooltip = "Nhập điểm chấm chéo";
         if (currentCrossScore !== "") {
-            scoreTooltip = `🎯 Điểm chấm: ${currentCrossScore}đ\n👤 Người chấm: ${crossScoreBy || "Chưa rõ"}${crossScoreTime ? `\n🕒 Lúc: ${crossScoreTime}` : ""}`;
-        } else {
-            scoreTooltip = isAdmin ? "Thầy có thể sửa trực tiếp hoặc mở ảnh bấm Điểm TP" : "🔒 Học sinh mở ảnh bấm Điểm TP để chấm từng câu";
+            scoreTooltip = `🎯 Điểm: ${currentCrossScore}đ\n👤 Người chấm: ${crossScoreBy || "Chưa rõ"}${crossScoreTime ? `\n🕒 Lúc: ${crossScoreTime}` : ""}`;
         }
 
-        // Ô CHẤM CHÉO: KHÓA VỚI HỌC SINH, CHỈ ADMIN MỚI ĐƯỢC GÕ TRỰC TIẾP
-        const crossScoreHtml = isAdmin ? `
+        const crossScoreHtml = `
             <input type="text" class="tuluan-score-input" id="cross-score-${cleanSbd}"
                    value="${currentCrossScore}" placeholder="VD: 8.5"
                    onchange="saveStudentCrossScore('${cleanSbd}', '${st.stt}', '${st.sbd}', '${st.name}', this.value)"
-                   title="${scoreTooltip}">
-        ` : `
-            <input type="text" class="tuluan-score-input is-locked-for-student" id="cross-score-${cleanSbd}"
-                   value="${currentCrossScore}" placeholder="---" readonly
-                   onclick="alert('🔒 Để đảm bảo tính công bằng, học sinh không sửa trực tiếp ô này! Em hãy bấm vào ẢNH BÀI LÀM của bạn rồi ấn nút [📊 Điểm TP] để chấm từng câu nhé!')"
                    title="${scoreTooltip}">
         `;
 
@@ -3018,11 +2707,8 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     if (!record || !Array.isArray(record.images) || record.images.length === 0) return;
 
     currentLightboxGallery.studentName = record.studentName || "Học sinh";
-    currentLightboxGallery.studentSbd = cleanSbd;
     currentLightboxGallery.images = record.images;
     currentLightboxGallery.currentIndex = Math.max(0, Math.min(imgIndex, record.images.length - 1));
-    currentLightboxGallery.currentQuestionCount = record.questionCount || detectExamQuestionCount();
-    currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {};
 
     resetLightboxZoom(false);
     updateLightboxView();
@@ -3031,6 +2717,7 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     if (lb) lb.style.display = "flex";
 }
 
+// CẬP NHẬT ẢNH & SỐ TRANG TRONG LIGHTBOX
 function updateLightboxView() {
     const gallery = currentLightboxGallery;
     const total = gallery.images.length;
@@ -3041,6 +2728,7 @@ function updateLightboxView() {
     const fullImg = document.getElementById("lightbox-full-img");
     const titleEl = document.getElementById("lightbox-student-title");
     const pageBadge = document.getElementById("lightbox-page-indicator");
+    const driveLink = document.getElementById("lightbox-drive-link");
     const btnPrev = document.getElementById("btn-lightbox-prev");
     const btnNext = document.getElementById("btn-lightbox-next");
     const dotsWrap = document.getElementById("lightbox-dots-container");
@@ -3054,10 +2742,17 @@ function updateLightboxView() {
 
     if (titleEl) titleEl.innerText = `${gallery.studentName} - Trang ${curIdx + 1}`;
     if (pageBadge) pageBadge.innerText = `Tr ${curIdx + 1}/${total}`;
+    if (driveLink) driveLink.href = curImg.fileUrl || "#";
 
-    if (btnPrev) btnPrev.classList.toggle("disabled", curIdx <= 0);
-    if (btnNext) btnNext.classList.toggle("disabled", curIdx >= total - 1);
+    // Cập nhật trạng thái hiển thị của 2 nút tam giác ◀ và ▶
+    if (btnPrev) {
+        btnPrev.classList.toggle("disabled", curIdx <= 0);
+    }
+    if (btnNext) {
+        btnNext.classList.toggle("disabled", curIdx >= total - 1);
+    }
 
+    // Vẽ các chấm điều hướng dưới đáy
     if (dotsWrap) {
         dotsWrap.innerHTML = gallery.images.map((_, i) => `
             <div class="lightbox-dot-item ${i === curIdx ? 'active' : ''}" onclick="jumpToLightboxPage(${i}, event)"></div>
@@ -3065,6 +2760,7 @@ function updateLightboxView() {
     }
 }
 
+// BẤM NÚT TAM GIÁC HOẶC VUỐT ĐỂ CHUYỂN TRANG
 function navigateLightbox(step, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const gallery = currentLightboxGallery;
@@ -3072,7 +2768,7 @@ function navigateLightbox(step, event) {
 
     if (newIdx >= 0 && newIdx < gallery.images.length) {
         gallery.currentIndex = newIdx;
-        resetLightboxZoom(false);
+        resetLightboxZoom(false); // Khi chuyển trang thì reset ảnh mới về chuẩn 1x
         updateLightboxView();
     }
 }
@@ -3089,11 +2785,8 @@ function jumpToLightboxPage(targetIndex, event) {
 function openTuLuanLightbox(imgSrc, driveUrl, title, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentLightboxGallery.studentName = title || "Ảnh bài làm";
-    currentLightboxGallery.studentSbd = "";
     currentLightboxGallery.images = [{ directUrl: imgSrc, fileUrl: driveUrl }];
     currentLightboxGallery.currentIndex = 0;
-    currentLightboxGallery.currentQuestionCount = detectExamQuestionCount();
-    currentLightboxGallery.componentScores = {};
 
     resetLightboxZoom(false);
     updateLightboxView();
@@ -3105,10 +2798,10 @@ function closeTuLuanLightbox(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const lb = document.getElementById("tuluan-lightbox");
     if (lb) lb.style.display = "none";
-    closeComponentScorePopover();
     resetLightboxZoom(false);
 }
 
+// LƯU ĐIỂM CHẤM CHÉO NHAU
 async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) {
     const qId = currentTuLuanModalData.quizId;
     if (!qId) return;
@@ -3186,7 +2879,6 @@ function toggleStudentFeedbackPopover(cleanSbd, event) {
     document.querySelectorAll(".student-pass-popover.show").forEach(p => p.classList.remove("show"));
     document.querySelectorAll(".student-feedback-popover.show").forEach(p => p.classList.remove("show"));
     document.querySelectorAll(".dapan-schedule-popover.show").forEach(p => p.classList.remove("show"));
-    document.querySelectorAll(".component-score-popover.show").forEach(p => p.classList.remove("show"));
 
     if (!isShown) {
         pop.classList.add("show");
@@ -3250,7 +2942,6 @@ async function saveStudentFeedback(cleanSbd, stt, sbd, studentName, event) {
     }
 }
 
-// XUẤT EXCEL CHI TIẾT ĐIỂM TỪNG CÂU + TỔNG ĐIỂM + ẢNH BÀI LÀM
 function exportTuLuanToExcel(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
 
@@ -3264,65 +2955,18 @@ function exportTuLuanToExcel(event) {
     const driveClassName = getCleanDriveClassName(currentTuLuanModalData.classId);
     const subMap = currentTuLuanModalData.submissionsMap || {};
 
-    // 1. Tự động xác định số lượng câu tối đa của đề để tạo các cột Câu 1 -> Câu N
-    let maxQ = detectExamQuestionCount() || 40;
-    students.forEach(st => {
-        const cleanSbd = String(st.sbd || "").trim().replace(/[^a-zA-Z0-9]/g, '_');
-        const record = subMap[cleanSbd];
-        if (record && record.questionCount) {
-            maxQ = Math.max(maxQ, record.questionCount);
-        }
-        if (record && record.detailScores) {
-            const keys = Object.keys(record.detailScores).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
-            if (keys.length > 0) {
-                maxQ = Math.max(maxQ, Math.max(...keys));
-            }
-        }
-    });
-
-    // 2. Tạo Header HTML cho các câu hỏi
-    let questionHeadersHtml = "";
-    for (let c = 1; c <= maxQ; c++) {
-        questionHeadersHtml += `<th style="width: 38px; background-color: #0369a1; border: 1px solid #94a3b8; text-align: center;">C${c}</th>`;
-    }
-
     let rowsHtml = "";
     students.forEach((st) => {
         const cleanSbd = String(st.sbd || "").trim().replace(/[^a-zA-Z0-9]/g, '_');
-        const record = subMap[cleanSbd] || {};
-        const detailScores = record.detailScores || {};
+        const record = subMap[cleanSbd];
 
-        // Tính toán các cột điểm thành phần
-        let qCellsHtml = "";
-        let sumRaw = 0;
-        let answeredCount = 0;
-
-        for (let c = 1; c <= maxQ; c++) {
-            if (detailScores[c] !== undefined && detailScores[c] !== null && detailScores[c] !== "") {
-                const score = parseFloat(detailScores[c]);
-                if (!isNaN(score)) {
-                    sumRaw += score;
-                    answeredCount++;
-                    qCellsHtml += `<td style="text-align: center; font-weight: bold; background-color: #f0fdf4;">${score}</td>`;
-                } else {
-                    qCellsHtml += `<td style="text-align: center; color: #94a3b8;">-</td>`;
-                }
-            } else {
-                qCellsHtml += `<td style="text-align: center; color: #cbd5e1;">-</td>`;
-            }
-        }
-
-        sumRaw = Math.round(sumRaw * 100) / 100;
-        let scale10 = (maxQ > 0) ? Math.round(((sumRaw / maxQ) * 10) * 100) / 100 : sumRaw;
-        if (scale10 > 10.0) scale10 = 10.0;
-
-        const hasSub = Boolean(record.images && record.images.length > 0);
+        const hasSub = Boolean(record && record.images && record.images.length > 0);
         const statusText = hasSub ? `Đã nộp (${record.images.length} ảnh) lúc ${record.lastSubmit || ''}` : "Chưa nộp";
-        const isApprovedText = (record.isApproved === true) ? "Đã duyệt" : "Chưa duyệt";
-        const scoreVal = (record.crossScore !== undefined && record.crossScore !== null) ? record.crossScore : (answeredCount > 0 ? scale10 : "");
-        const scoreBy = record.crossScoreBy || "";
-        const scoreTime = record.crossScoreTime || "";
-        const feedbackVal = record.feedback || "";
+        const isApprovedText = (record && record.isApproved === true) ? "Đã duyệt" : "Chưa duyệt";
+        const scoreVal = (record && record.crossScore !== undefined) ? record.crossScore : "";
+        const scoreBy = (record && record.crossScoreBy) ? record.crossScoreBy : "";
+        const scoreTime = (record && record.crossScoreTime) ? record.crossScoreTime : "";
+        const feedbackVal = (record && record.feedback) ? record.feedback : "";
 
         let imagesHtml = "Chưa có ảnh";
         if (hasSub && Array.isArray(record.images)) {
@@ -3341,22 +2985,14 @@ function exportTuLuanToExcel(event) {
         rowsHtml += `
             <tr>
                 <td style="text-align: center; font-weight: bold;">${st.stt}</td>
-                <td style="font-weight: bold; white-space: nowrap;">${st.name}</td>
+                <td style="font-weight: bold;">${st.name}</td>
                 <td style="text-align: center; font-family: monospace; font-weight: bold;">${st.sbd}</td>
-                <td style="text-align: center;">${driveClassName}</td>
-                
-                ${qCellsHtml}
-                
-                <td style="text-align: center; font-weight: bold; background-color: #fefce8; color: #854d0e;">${answeredCount > 0 ? sumRaw : '-'}</td>
-                <td style="text-align: center; font-weight: bold; background-color: #ecfdf5; color: #047857;">${answeredCount > 0 ? scale10 : '-'}</td>
-                <td style="text-align: center; font-weight: 900; color: #0284c7; font-size: 13pt; background-color: #eff6ff;">
-                    ${scoreVal}
-                </td>
-                <td style="font-size: 9.5pt; color: #475569;">
-                    ${scoreBy ? `${scoreBy}${scoreTime ? ` (${scoreTime})` : ''}` : ''}
-                </td>
                 <td>${statusText}</td>
                 <td style="text-align: center;">${isApprovedText}</td>
+                <td style="text-align: center; font-weight: bold; color: #0284c7; font-size: 13pt;">
+                    ${scoreVal}
+                    ${scoreBy ? `<br><span style="font-size:9pt; font-weight:normal; color:#64748b;">(Chấm bởi: ${scoreBy}${scoreTime ? ` - ${scoreTime}` : ''})</span>` : ''}
+                </td>
                 <td style="white-space: pre-wrap; word-break: break-word;">${feedbackVal}</td>
                 <td style="min-width: 250px;">${imagesHtml}</td>
             </tr>
@@ -3372,33 +3008,26 @@ function exportTuLuanToExcel(event) {
             body { font-family: 'Times New Roman', Arial, sans-serif; font-size: 11pt; color: #0f172a; }
             h2, h3 { margin: 4px 0; }
             table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-            th { background-color: #0284c7; color: #ffffff; font-weight: bold; padding: 6px 8px; border: 1px solid #94a3b8; text-align: center; font-size: 10pt; }
-            td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: middle; }
+            th { background-color: #0284c7; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #94a3b8; text-align: center; font-size: 11pt; }
+            td { border: 1px solid #cbd5e1; padding: 8px 10px; vertical-align: middle; }
             tr:nth-child(even) td { background-color: #f8fafc; }
         </style>
     </head>
     <body>
-        <h2>BẢNG ĐIỂM CHI TIẾT TỪNG CÂU & TỔNG ĐIỂM BÀI TẬP TỰ LUẬN</h2>
+        <h2>BẢNG ĐIỂM & NHẬN XÉT BÀI TẬP TỰ LUẬN</h2>
         <h3>Đề thi: ${examTitle}</h3>
-        <p><b>Lớp:</b> ${driveClassName} &nbsp;|&nbsp; <b>Số câu của đề:</b> ${maxQ} câu &nbsp;|&nbsp; <b>Thời gian xuất file:</b> ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')}</p>
+        <p><b>Lớp:</b> ${driveClassName} &nbsp;|&nbsp; <b>Thời gian xuất:</b> ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')}</p>
         <table>
             <thead>
                 <tr>
                     <th style="width: 45px;">STT</th>
                     <th style="width: 170px;">Họ và tên</th>
-                    <th style="width: 75px;">SBD</th>
-                    <th style="width: 65px;">Lớp</th>
-                    
-                    ${questionHeadersHtml}
-                    
-                    <th style="width: 85px; background-color: #d97706;">Tổng TP</th>
-                    <th style="width: 85px; background-color: #059669;">Thang 10</th>
-                    <th style="width: 95px; background-color: #2563eb;">Điểm chốt</th>
-                    <th style="width: 150px;">Người chấm</th>
-                    <th style="width: 150px;">Trạng thái nộp</th>
-                    <th style="width: 90px;">Phê duyệt</th>
-                    <th style="width: 200px;">Nhận xét bài làm</th>
-                    <th style="width: 360px;">Ảnh bài làm đã nộp</th>
+                    <th style="width: 80px;">SBD</th>
+                    <th style="width: 160px;">Trạng thái / Ngày nộp</th>
+                    <th style="width: 100px;">Phê duyệt</th>
+                    <th style="width: 140px;">Điểm chấm chéo (Người chấm)</th>
+                    <th style="width: 220px;">Nhận xét bài làm</th>
+                    <th style="width: 380px;">Ảnh bài làm đã nộp</th>
                 </tr>
             </thead>
             <tbody>
@@ -3414,7 +3043,7 @@ function exportTuLuanToExcel(event) {
     });
 
     const safeExam = examTitle.replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const fileName = `Diem_Chi_Tiet_Tu_Luan_${driveClassName}_${safeExam}_${Date.now()}.xls`;
+    const fileName = `Diem_Tu_Luan_${driveClassName}_${safeExam}_${Date.now()}.xls`;
 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -3434,7 +3063,6 @@ function toggleStudentPassPopover(cleanSbd, event) {
     document.querySelectorAll(".student-pass-popover.show").forEach(p => p.classList.remove("show"));
     document.querySelectorAll(".student-feedback-popover.show").forEach(p => p.classList.remove("show"));
     document.querySelectorAll(".dapan-schedule-popover.show").forEach(p => p.classList.remove("show"));
-    document.querySelectorAll(".component-score-popover.show").forEach(p => p.classList.remove("show"));
 
     if (!isShown) {
         pop.classList.add("show");
@@ -3970,15 +3598,12 @@ document.addEventListener("click", function(e) {
     if (!e.target.closest(".student-pass-popover") && 
         !e.target.closest(".student-feedback-popover") && 
         !e.target.closest(".dapan-schedule-popover") && 
-        !e.target.closest(".component-score-popover") &&
-        !e.target.closest("#btn-open-component-score") &&
         !e.target.closest(".btn-tuluan-change-pass") && 
         !e.target.closest(".btn-tuluan-comment") &&
         !e.target.closest("#btn-schedule-dapan")) {
         document.querySelectorAll(".student-pass-popover.show").forEach(p => p.classList.remove("show"));
         document.querySelectorAll(".student-feedback-popover.show").forEach(p => p.classList.remove("show"));
         document.querySelectorAll(".dapan-schedule-popover.show").forEach(p => p.classList.remove("show"));
-        document.querySelectorAll(".component-score-popover.show").forEach(p => p.classList.remove("show"));
     }
 });
 
@@ -4028,10 +3653,3 @@ window.onDapAnScheduleModeChanged = onDapAnScheduleModeChanged;
 window.setScheduleToExamDeadline = setScheduleToExamDeadline;
 window.saveDapAnSchedule = saveDapAnSchedule;
 window.isDapAnUnlocked = isDapAnUnlocked;
-window.toggleComponentScorePopover = toggleComponentScorePopover;
-window.closeComponentScorePopover = closeComponentScorePopover;
-window.setQuickQuestionCount = setQuickQuestionCount;
-window.onComponentQuestionCountChanged = onComponentQuestionCountChanged;
-window.onComponentCellInput = onComponentCellInput;
-window.onComponentCellKeyDown = onComponentCellKeyDown;
-window.saveComponentScoresAction = saveComponentScoresAction;
