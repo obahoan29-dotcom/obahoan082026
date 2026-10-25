@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: portal-tuluan-admin.js (BẢN HỖ TRỢ ĐA ĐÁP ÁN: SAU XẾP TRÊN - TRƯỚC XẾP DƯỚI)
 // QUẢN LÝ ĐỀ THI TỰ LUẬN, NHIỀU ĐÁP ÁN CHẤM, HẸN GIỜ & TỰ ĐỘNG PHỤC HỒI ĐIỂM XANH / ĐỎ
-// ĐÃ LOẠI BỎ MUTATIONOBSERVER GÂY GIẬT LAG KHI MỞ BẢNG
 // =========================================================
 
 // HÀM TIỆN ÍCH TRÍCH XUẤT DANH SÁCH ĐÁP ÁN (TƯƠNG THÍCH NGƯỢC CẢ DỮ LIỆU CŨ VÀ MỚI)
@@ -99,6 +98,8 @@ async function switchTuLuanExam(examId, examTitle) {
     await loadTuLuanSubmissionsFromSupabase();
     if (typeof renderDapAnChamUI === 'function') renderDapAnChamUI();
     if (typeof renderTuLuanStudentsTable === 'function') renderTuLuanStudentsTable();
+    
+    // Tự động quét màu xanh cho ô có điểm và màu đỏ cho ô chưa chấm
     if (typeof updateCrossScoreInputStyles === 'function') updateCrossScoreInputStyles();
 
     startTuLuanRealtimeListener(examId);
@@ -173,12 +174,13 @@ async function deleteCurrentTuLuanExam(event) {
     finally { if (btn) { btn.disabled = false; btn.innerText = "🗑️ Xóa đề"; } }
 }
 
-// BỘ ĐỌC VÀ KHÔI PHỤC ĐIỂM ĐA TẦNG
+// BỘ ĐỌC VÀ KHÔI PHỤC ĐIỂM ĐA TẦNG (BẢO ĐẢM TẮT ĐI MỞ LẠI VẪN NGUYÊN VẸN 100%)
 async function loadTuLuanSubmissionsFromSupabase() {
     const qId = currentTuLuanModalData.quizId; if (!qId) return;
     const client = getDbClient();
     const driveClassName = getCleanDriveClassName(currentTuLuanModalData.classId);
 
+    // Đọc dự phòng từ LocalStorage của máy
     let localSavedMap = {};
     try {
         const rawLocal = localStorage.getItem(`tuluan_scores_${qId}`);
@@ -211,6 +213,7 @@ async function loadTuLuanSubmissionsFromSupabase() {
                     const bDetail = backupDetailsMap[sbdKey] || {};
                     const lDetail = localSavedMap[sbdKey] || {};
 
+                    // KHÔI PHỤC ĐIỂM CHẤM CHÉO ĐA TẦNG:
                     let finalCrossScore = (row.cross_score !== null && row.cross_score !== undefined && String(row.cross_score).trim() !== "") 
                         ? String(row.cross_score).trim()
                         : (bDetail.crossScore !== undefined && bDetail.crossScore !== null && String(bDetail.crossScore).trim() !== ""
@@ -251,7 +254,7 @@ async function loadTuLuanSubmissionsFromSupabase() {
             });
         }
 
-        // 2. Quét bù những em đã chấm điểm nhưng chưa có dòng ảnh
+        // 2. Quét bù những em đã chấm điểm nhưng chưa có dòng ảnh trong tu_luan_submissions
         const allBackupSbds = new Set([...Object.keys(backupDetailsMap), ...Object.keys(localSavedMap)]);
         allBackupSbds.forEach(extraSbd => {
             if (!combined[extraSbd]) {
@@ -282,6 +285,7 @@ async function loadTuLuanSubmissionsFromSupabase() {
         currentTuLuanModalData.submissionsMap = combined;
         currentTuLuanModalData.customPasswords = (passRes && passRes.data && passRes.data.value) ? passRes.data.value : {};
 
+        // ĐỌC VÀ CHUẨN HÓA DANH SÁCH NHIỀU ĐÁP ÁN
         let rawDapan = (dapanRes && dapanRes.data && dapanRes.data.value) ? dapanRes.data.value : null;
         let parsedDapanList = [];
 
@@ -293,6 +297,7 @@ async function loadTuLuanSubmissionsFromSupabase() {
             parsedDapanList = [rawDapan];
         }
 
+        // SẮP XẾP CHUẨN: ĐĂNG SAU (MỚI HƠN) XẾP TRÊN, ĐĂNG TRƯỚC (CŨ HƠN) XẾP DƯỚI
         parsedDapanList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         currentTuLuanModalData.dapAnChamList = parsedDapanList;
@@ -765,6 +770,30 @@ function renderDapAnChamUI() {
 
     if (typeof updateTuLuanAdminUI === 'function') updateTuLuanAdminUI();
 }
+
+// BỘ TỰ ĐỘNG BẮT THAY ĐỔI CỦA BẢNG ĐỂ LUÔN PHỦ MÀU XANH / ĐỎ
+(function setupTableColorObserver() {
+    if (typeof window === "undefined" || !window.MutationObserver) return;
+    const observer = new MutationObserver(() => {
+        if (typeof updateCrossScoreInputStyles === 'function') {
+            updateCrossScoreInputStyles();
+        }
+    });
+
+    function tryAttachObserver() {
+        const tbody = document.getElementById("tuluan-students-tbody");
+        if (tbody) {
+            observer.observe(tbody, { childList: true, subtree: true });
+        } else {
+            setTimeout(tryAttachObserver, 500);
+        }
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", tryAttachObserver);
+    } else {
+        tryAttachObserver();
+    }
+})();
 
 window.refreshTuLuanExamList = refreshTuLuanExamList;
 window.switchTuLuanExam = switchTuLuanExam;

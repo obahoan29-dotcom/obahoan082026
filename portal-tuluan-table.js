@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: portal-tuluan-table.js
 // QUẢN LÝ BẢNG DANH SÁCH, PHÊ DUYỆT, NHẬN XÉT, MẬT KHẨU & EXCEL
-// SỬA DỨT ĐIỂM LỖI CHE KHUẤT NÚT ĐỔI MK & NHẬN XÉT
 // =========================================================
 
 function renderTuLuanStudentsTable() {
@@ -120,6 +119,7 @@ function renderTuLuanStudentsTable() {
             <td style="text-align: center;">${feedbackHtml}</td>
             <td style="text-align: center; position: relative;">
                 <div class="tuluan-action-btn-group">
+                    <!-- FIX DÀNH RIÊNG CHO IPHONE: BỎ DISPLAY:NONE ĐỂ SAFARI LUÔN MỞ ĐƯỢC CHỌN ẢNH -->
                     <input type="file" id="tuluan-input-${cleanSbd}" accept="image/*" multiple style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none; z-index:-1;" onchange="handleStudentEssayUploadPC('${st.stt}', '${st.sbd}', '${st.name}', this)">
                     <button type="button" class="btn-tuluan-upload-row" onclick="triggerStudentUpload('${st.stt}', '${st.sbd}', '${st.name}', '${st.pass}')" id="btn-up-${cleanSbd}" title="Tải ảnh bài làm">📷 Tải ảnh</button>
                     <button type="button" class="btn-tuluan-change-pass" onclick="toggleStudentPassPopover('${cleanSbd}', event)" title="Đổi mật khẩu nộp bài (4 số)">🔑 Đổi MK</button>
@@ -136,8 +136,7 @@ function renderTuLuanStudentsTable() {
         tbody.appendChild(tr);
     });
 
-    if (typeof updateTuLuanAdminUI === 'function') updateTuLuanAdminUI();
-    if (typeof updateCrossScoreInputStyles === 'function') updateCrossScoreInputStyles();
+    if(typeof updateTuLuanAdminUI === 'function') updateTuLuanAdminUI();
 }
 
 function filterTuLuanStudentTable() { renderTuLuanStudentsTable(); }
@@ -176,41 +175,31 @@ async function toggleApproveAllSubmissions(isApproved) {
 
 function toggleStudentPassPopover(cleanSbd, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById(`pass-popover-${cleanSbd}`); 
-    if (!pop) return;
+    const pop = document.getElementById(`pass-popover-${cleanSbd}`); if (!pop) return;
     const isShown = pop.classList.contains("show");
     document.querySelectorAll(".student-pass-popover.show, .student-feedback-popover.show, .dapan-schedule-popover.show, .component-score-popover.show").forEach(p => p.classList.remove("show"));
-    
     if (!isShown) {
         pop.classList.add("show");
-        const oldIn = document.getElementById(`old-pass-${cleanSbd}`); 
-        const newIn = document.getElementById(`new-pass-${cleanSbd}`);
-        if (oldIn) { oldIn.value = ""; setTimeout(() => oldIn.focus(), 80); }
+        const oldIn = document.getElementById(`old-pass-${cleanSbd}`); const newIn = document.getElementById(`new-pass-${cleanSbd}`);
+        if (oldIn) { oldIn.value = ""; oldIn.focus(); }
         if (newIn) newIn.value = "";
     }
 }
-
 function closeStudentPassPopover(cleanSbd, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById(`pass-popover-${cleanSbd}`); 
-    if (pop) pop.classList.remove("show");
+    const pop = document.getElementById(`pass-popover-${cleanSbd}`); if (pop) pop.classList.remove("show");
 }
 
 async function saveStudentPasswordChange(cleanSbd, defaultSbd, studentName, defaultPass, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const oldPassInput = document.getElementById(`old-pass-${cleanSbd}`); 
-    const newPassInput = document.getElementById(`new-pass-${cleanSbd}`);
+    const oldPassInput = document.getElementById(`old-pass-${cleanSbd}`); const newPassInput = document.getElementById(`new-pass-${cleanSbd}`);
     if (!oldPassInput || !newPassInput) return;
 
-    const oldVal = oldPassInput.value.trim(); 
-    const newVal = newPassInput.value.trim();
+    const oldVal = oldPassInput.value.trim(); const newVal = newPassInput.value.trim();
     const effectiveOldPass = getEffectiveStudentPassword(cleanSbd, defaultSbd, defaultPass);
 
     if (!oldVal) { alert("⚠️ Vui lòng nhập Mật khẩu cũ (hoặc SBD) của em!"); oldPassInput.focus(); return; }
-    const isOldOk = (oldVal.toLowerCase() === effectiveOldPass.toLowerCase()) || 
-                    (oldVal.toLowerCase() === String(defaultSbd).trim().toLowerCase()) || 
-                    (defaultPass && oldVal.toLowerCase() === String(defaultPass).trim().toLowerCase());
-    
+    const isOldOk = (oldVal.toLowerCase() === effectiveOldPass.toLowerCase()) || (oldVal.toLowerCase() === String(defaultSbd).trim().toLowerCase()) || (defaultPass && oldVal.toLowerCase() === String(defaultPass).trim().toLowerCase());
     if (!isOldOk) { alert("❌ Mật khẩu cũ không chính xác!"); oldPassInput.focus(); return; }
     if (!/^\d{4}$/.test(newVal)) { alert("⚠️ Mật khẩu mới phải gồm đúng 4 chữ số!"); newPassInput.focus(); return; }
     if (newVal === effectiveOldPass) { alert("⚠️ Mật khẩu mới không được trùng mật khẩu cũ!"); newPassInput.focus(); return; }
@@ -246,38 +235,27 @@ async function resetStudentPasswordToDefault(cleanSbd, defaultSbd, studentName, 
 
 function toggleStudentFeedbackPopover(cleanSbd, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById(`feedback-popover-${cleanSbd}`); 
-    if (!pop) return;
+    const pop = document.getElementById(`feedback-popover-${cleanSbd}`); if (!pop) return;
     const isShown = pop.classList.contains("show");
     document.querySelectorAll(".student-pass-popover.show, .student-feedback-popover.show, .dapan-schedule-popover.show, .component-score-popover.show").forEach(p => p.classList.remove("show"));
-    
-    if (!isShown) { 
-        pop.classList.add("show"); 
-        const textarea = document.getElementById(`feedback-textarea-${cleanSbd}`); 
-        if (textarea) setTimeout(() => textarea.focus(), 80); 
-    }
+    if (!isShown) { pop.classList.add("show"); const textarea = document.getElementById(`feedback-textarea-${cleanSbd}`); if (textarea) textarea.focus(); }
 }
 
 function closeStudentFeedbackPopover(cleanSbd, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const pop = document.getElementById(`feedback-popover-${cleanSbd}`); 
-    if (pop) pop.classList.remove("show");
+    const pop = document.getElementById(`feedback-popover-${cleanSbd}`); if (pop) pop.classList.remove("show");
 }
 
 async function saveStudentFeedback(cleanSbd, stt, sbd, studentName, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const textarea = document.getElementById(`feedback-textarea-${cleanSbd}`); 
-    if (!textarea) return;
-    const feedbackVal = textarea.value.trim(); 
-    const qId = currentTuLuanModalData.quizId; 
-    if (!qId) return;
+    const textarea = document.getElementById(`feedback-textarea-${cleanSbd}`); if (!textarea) return;
+    const feedbackVal = textarea.value.trim(); const qId = currentTuLuanModalData.quizId; if (!qId) return;
     const driveClassName = getCleanDriveClassName(currentTuLuanModalData.classId);
 
     if (!currentTuLuanModalData.submissionsMap[cleanSbd]) {
         currentTuLuanModalData.submissionsMap[cleanSbd] = { stt: stt, sbd: sbd, studentName: studentName, className: driveClassName, count: 0, images: [], feedback: feedbackVal, feedbackTime: new Date().toLocaleString("vi-VN") };
     } else {
-        currentTuLuanModalData.submissionsMap[cleanSbd].feedback = feedbackVal; 
-        currentTuLuanModalData.submissionsMap[cleanSbd].feedbackTime = new Date().toLocaleString("vi-VN");
+        currentTuLuanModalData.submissionsMap[cleanSbd].feedback = feedbackVal; currentTuLuanModalData.submissionsMap[cleanSbd].feedbackTime = new Date().toLocaleString("vi-VN");
     }
 
     try {
@@ -314,8 +292,7 @@ function exportTuLuanToExcel(event) {
     let rowsHtml = "";
     students.forEach((st) => {
         const cleanSbd = String(st.sbd || "").trim().replace(/[^a-zA-Z0-9]/g, '_');
-        const record = subMap[cleanSbd] || {}; 
-        const detailScores = record.detailScores || {};
+        const record = subMap[cleanSbd] || {}; const detailScores = record.detailScores || {};
         let qCellsHtml = ""; let sumRaw = 0; let answeredCount = 0;
 
         for (let c = 1; c <= maxQ; c++) {
