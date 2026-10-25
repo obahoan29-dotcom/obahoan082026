@@ -171,6 +171,28 @@ let tuLuanRealtimeChannel = null;
             .btn-tuluan-upload-row { padding: 7px 12px !important; font-size: 12px !important; font-weight: 800 !important; min-height: 32px !important; }
             .btn-tuluan-change-pass, .btn-tuluan-reset-pass { padding: 6px 8px !important; font-size: 10.5px !important; min-height: 32px !important; }
             .student-pass-popover { right: 4px !important; left: auto !important; width: min(290px, calc(100vw - 20px)) !important; max-width: calc(100vw - 20px) !important; }
+
+            /* FIX CHO IPHONE: Đảm bảo header không bị tràn lên trên và bị che bởi viền/tai thỏ */
+            .tuluan-lightbox-overlay {
+                padding: 0 !important; /* Tràn viền trên mobile */
+                align-items: flex-start !important; /* Không dùng center để tránh bị cắt phần đầu trên Safari */
+            }
+            .tuluan-lightbox-content {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                height: 100% !important; /* Dùng 100% thay vì 95vh */
+                max-height: -webkit-fill-available !important; /* Sửa lỗi thanh địa chỉ Safari */
+                border-radius: 0 !important;
+                border: none !important;
+            }
+            .tuluan-lightbox-header {
+                padding-top: max(8px, env(safe-area-inset-top)) !important; /* Cách tai thỏ/Dynamic Island */
+                padding-left: 8px !important;
+                padding-right: 8px !important;
+            }
+            .lightbox-bottom-bar {
+                padding-bottom: max(6px, env(safe-area-inset-bottom)) !important; /* Cách thanh Home ảo */
+            }
         }
     `;
     document.head.appendChild(style);
