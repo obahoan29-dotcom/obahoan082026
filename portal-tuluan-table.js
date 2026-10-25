@@ -119,7 +119,7 @@ function renderTuLuanStudentsTable() {
             <td style="text-align: center;">${feedbackHtml}</td>
             <td style="text-align: center; position: relative;">
                 <div class="tuluan-action-btn-group">
-                    <input type="file" id="tuluan-input-${cleanSbd}" accept="image/*" multiple style="position:fixed; top:-9999px; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none; z-index:-1;" onchange="handleStudentEssayUploadPC('${st.stt}', '${st.sbd}', '${st.name}', this)">
+                    <input type="file" id="tuluan-input-${cleanSbd}" accept="image/*" multiple style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:auto; z-index:-1;" onchange="handleStudentEssayUploadPC('${st.stt}', '${st.sbd}', '${st.name}', this)">
                     <button type="button" class="btn-tuluan-upload-row" onclick="triggerStudentUpload('${st.stt}', '${st.sbd}', '${st.name}', '${st.pass}')" id="btn-up-${cleanSbd}" title="Tải ảnh bài làm">📷 Tải ảnh</button>
                     <button type="button" class="btn-tuluan-change-pass" onclick="toggleStudentPassPopover('${cleanSbd}', event)" title="Đổi mật khẩu nộp bài (4 số)">🔑 Đổi MK</button>
                     ${isAdmin ? `<button type="button" class="btn-tuluan-reset-pass" onclick="resetStudentPasswordToDefault('${cleanSbd}', '${st.sbd}', '${st.name}', event)" title="[Admin] Reset mật khẩu (${st.sbd})">↺ Reset</button>` : ''}
