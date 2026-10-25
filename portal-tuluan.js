@@ -668,10 +668,10 @@
             background: #0f172a !important;
             border: 1.5px solid #334155 !important;
             border-radius: 16px !important;
-            max-width: 940px !important;
-            width: 100% !important;
-            height: 94vh !important;
-            max-height: 96vh !important;
+            max-width: 95vw !important; /* ĐÃ SỬA TỪ 940px THÀNH 95vw ĐỂ PHÓNG TO TRÊN LAPTOP */
+            width: 95vw !important; /* ĐÃ SỬA TỪ 100% THÀNH 95vw */
+            height: 95vh !important;
+            max-height: 95vh !important;
             display: flex !important;
             flex-direction: column !important;
             overflow: hidden !important;
@@ -1760,8 +1760,18 @@ function renderComponentScoreGrid() {
     if (qCountInput) qCountInput.value = totalQ;
 
     const sbd = currentLightboxGallery.studentSbd;
+    const qId = currentTuLuanModalData.quizId;
     const record = currentTuLuanModalData.submissionsMap[sbd] || {};
-    const savedDetails = record.detailScores || currentLightboxGallery.componentScores || {};
+
+    // [MỚI] TẢI TỪ CACHE NẾU CÓ BẢN NHÁP
+    let savedDetails = {};
+    const draftKey = `draft_comp_score_${qId}_${sbd}`;
+    const draftRaw = sessionStorage.getItem(draftKey);
+    if (draftRaw) {
+        try { savedDetails = JSON.parse(draftRaw); } catch(e) {}
+    } else {
+        savedDetails = record.detailScores || currentLightboxGallery.componentScores || {};
+    }
     currentLightboxGallery.componentScores = { ...savedDetails };
 
     let html = "";
@@ -1778,6 +1788,17 @@ function renderComponentScoreGrid() {
     }
     container.innerHTML = html;
     updateComponentScoreTotals();
+
+    // [BONUS] Auto-focus vào ô trống đầu tiên
+    setTimeout(() => {
+        for (let i = 1; i <= totalQ; i++) {
+            const input = document.getElementById(`comp-q-${i}`);
+            if (input && input.value === "") {
+                input.focus();
+                break;
+            }
+        }
+    }, 100);
 }
 
 function onComponentCellInput(qIdx, val) {
@@ -1791,6 +1812,13 @@ function onComponentCellInput(qIdx, val) {
         }
     }
     updateComponentScoreTotals();
+
+    // [MỚI] LƯU CACHE TẠM THỜI
+    const sbd = currentLightboxGallery.studentSbd;
+    const qId = currentTuLuanModalData.quizId;
+    if (sbd && qId) {
+        sessionStorage.setItem(`draft_comp_score_${qId}_${sbd}`, JSON.stringify(currentLightboxGallery.componentScores));
+    }
 }
 
 function onComponentCellKeyDown(event, currentIdx, totalQ) {
@@ -1913,6 +1941,8 @@ async function saveComponentScoresAction(event) {
             setTimeout(() => { scoreInput.style.borderColor = "#cbd5e1"; }, 1500);
         }
 
+        // Xóa cache nháp khi đã lưu thành công
+        sessionStorage.removeItem(`draft_comp_score_${qId}_${sbd}`);
         closeComponentScorePopover();
         alert(`✅ ĐÃ LƯU ĐIỂM THÀNH PHẦN THÀNH CÔNG!\n\n- Học sinh: ${currentLightboxGallery.studentName}\n- Điểm đưa ra bảng: ${finalScore} điểm\n- Người chấm: ${graderDisplay}`);
     } catch(err) {
@@ -3022,7 +3052,21 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     currentLightboxGallery.images = record.images;
     currentLightboxGallery.currentIndex = Math.max(0, Math.min(imgIndex, record.images.length - 1));
     currentLightboxGallery.currentQuestionCount = record.questionCount || detectExamQuestionCount();
-    currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {};
+    
+    // ĐỌC BẢN NHÁP TỪ CACHE KHI VỪA MỞ LẠI HỌC SINH NÀY
+    const qId = currentTuLuanModalData.quizId;
+    const draftKey = `draft_comp_score_${qId}_${cleanSbd}`;
+    const draftRaw = sessionStorage.getItem(draftKey);
+    if (draftRaw) {
+        try { 
+            currentLightboxGallery.componentScores = JSON.parse(draftRaw); 
+        } 
+        catch(e) { 
+            currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {}; 
+        }
+    } else {
+        currentLightboxGallery.componentScores = record.detailScores ? { ...record.detailScores } : {};
+    }
 
     resetLightboxZoom(false);
     updateLightboxView();
