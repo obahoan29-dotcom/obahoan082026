@@ -1,10 +1,10 @@
 // =========================================================
 // FILE: portal-tuluan.js
 // QUẢN LÝ NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB & ĐỒNG BỘ 100% QUA SUPABASE
-// ĐÃ FIX TRIỆT ĐỂ LỖI BUNG POPOVER, TỐI ƯU SIÊU GỌN VÀ LIGHTBOX ĐA TRANG
+// TỐI ƯU SIÊU GỌN - LIGHTBOX CHUYỂN TRANG & CẢM ỨNG PINCH-ZOOM 2 NGÓN TAY
 // =========================================================
 
-// TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ LIGHTBOX ĐA TRANG
+// TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ LIGHTBOX PINCH-ZOOM
 (function injectTuLuanButtonStyles() {
     const styleId = "tuluan-custom-delete-btn-styles";
     if (document.getElementById(styleId)) return;
@@ -708,7 +708,7 @@
         }
 
         /* ============================================================ */
-        /* 3. LIGHTBOX XEM ẢNH ĐA TRANG VỚI 2 NÚT TAM GIÁC & CẢM ỨNG VUỐT */
+        /* 3. LIGHTBOX XEM ẢNH ĐA TRANG VỚI 2 NÚT TAM GIÁC & PINCH-ZOOM */
         /* ============================================================ */
         .tuluan-lightbox-overlay {
             position: fixed !important;
@@ -804,6 +804,7 @@
         }
         .btn-close-lightbox:hover { background: #ef4444 !important; }
 
+        /* VÙNG CHỨA ẢNH ĐƯỢC CẤP QUYỀN PINCH-TO-ZOOM VÀ PAN */
         .tuluan-lightbox-img-box {
             flex: 1 !important;
             position: relative !important;
@@ -812,15 +813,22 @@
             align-items: center !important;
             justify-content: center !important;
             background: #070b14 !important;
-            touch-action: pan-y !important;
+            touch-action: none !important;
+            user-select: none !important;
+            cursor: grab !important;
+        }
+        .tuluan-lightbox-img-box.is-zoomed {
+            cursor: move !important;
         }
         #lightbox-full-img {
             max-width: 100% !important;
             max-height: 100% !important;
             object-fit: contain !important;
             border-radius: 6px !important;
-            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease !important;
+            transform-origin: center center !important;
+            will-change: transform !important;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+            pointer-events: auto !important;
         }
 
         /* 2 NÚT TAM GIÁC LỚN BÊN TRÁI & PHẢI */
@@ -859,22 +867,52 @@
             pointer-events: none !important;
         }
 
+        /* BỘ CÔNG CỤ ZOOM TIỆN ÍCH DƯỚI ĐÁY */
         .lightbox-bottom-bar {
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            padding: 6px 14px !important;
+            padding: 6px 12px !important;
             background: #1e293b !important;
             border-top: 1.5px solid #334155 !important;
-            font-size: 11.5px !important;
+            font-size: 11px !important;
             color: #94a3b8 !important;
             font-weight: 700 !important;
             flex-shrink: 0 !important;
+            gap: 8px !important;
         }
+        .lightbox-zoom-tools {
+            display: flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            flex-shrink: 0 !important;
+        }
+        .btn-zoom-tool {
+            background: #334155 !important;
+            color: #ffffff !important;
+            border: 1px solid #475569 !important;
+            border-radius: 6px !important;
+            padding: 3px 7px !important;
+            font-size: 11.5px !important;
+            font-weight: 900 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            transition: all 0.15s ease !important;
+        }
+        .btn-zoom-tool:hover {
+            background: #0284c7 !important;
+            border-color: #38bdf8 !important;
+        }
+        .btn-zoom-tool:active {
+            transform: scale(0.92) !important;
+        }
+
         .lightbox-dots-container {
             display: flex !important;
             align-items: center !important;
-            gap: 5px !important;
+            gap: 4px !important;
         }
         .lightbox-dot-item {
             width: 7px !important;
@@ -886,7 +924,7 @@
         }
         .lightbox-dot-item.active {
             background: #38bdf8 !important;
-            width: 18px !important;
+            width: 16px !important;
             border-radius: 8px !important;
         }
 
@@ -898,6 +936,9 @@
             }
             .btn-lightbox-nav.btn-nav-prev { left: 6px !important; }
             .btn-lightbox-nav.btn-nav-next { right: 6px !important; }
+            .lightbox-bottom-bar span.lightbox-hint-text {
+                display: none !important;
+            }
         }
     `;
     document.head.appendChild(style);
@@ -914,13 +955,25 @@ let currentTuLuanModalData = {
     dapAnCham: null
 };
 
-// TRẠNG THÁI TRÌNH XEM ẢNH LIGHTBOX
+// TRẠNG THÁI LIGHTBOX VÀ CƠ CHẾ ZOOM 2 NGÓN TAY + PAN
 let currentLightboxGallery = {
     studentName: "",
     images: [],
-    currentIndex: 0,
-    touchStartX: 0,
-    touchStartY: 0
+    currentIndex: 0
+};
+
+let lightboxZoomState = {
+    scale: 1,
+    posX: 0,
+    posY: 0,
+    startX: 0,
+    startY: 0,
+    isDragging: false,
+    initialDistance: 0,
+    initialScale: 1,
+    swipeStartX: 0,
+    swipeStartY: 0,
+    lastTapTime: 0
 };
 
 let tuLuanRealtimeChannel = null;
@@ -1342,7 +1395,7 @@ function ensureTuLuanModalDOM() {
             </div>
         </div>
 
-        <!-- LIGHTBOX XEM ẢNH ĐA TRANG VỚI 2 NÚT TAM GIÁC & CẢM ỨNG VUỐT -->
+        <!-- LIGHTBOX XEM ẢNH ĐA TRANG VỚI 2 NÚT TAM GIÁC & PINCH-ZOOM 2 NGÓN TAY -->
         <div id="tuluan-lightbox" class="tuluan-lightbox-overlay" onclick="closeTuLuanLightbox(event)">
             <div class="tuluan-lightbox-content" onclick="event.stopPropagation()">
                 <div class="tuluan-lightbox-header">
@@ -1356,7 +1409,7 @@ function ensureTuLuanModalDOM() {
                     </div>
                 </div>
 
-                <!-- VÙNG ẢNH & 2 NÚT TAM GIÁC CHUYỂN TRANG -->
+                <!-- VÙNG ẢNH HỖ TRỢ ZOOM 2 NGÓN TAY VÀ PAN -->
                 <div class="tuluan-lightbox-img-box" id="lightbox-touch-area">
                     <button type="button" class="btn-lightbox-nav btn-nav-prev" id="btn-lightbox-prev" onclick="navigateLightbox(-1, event)" title="Xem trang trước (hoặc vuốt sang phải)">
                         ◀
@@ -1367,45 +1420,165 @@ function ensureTuLuanModalDOM() {
                     </button>
                 </div>
 
-                <!-- THANH ĐIỀU HƯỚNG DƯỚI ĐÁY -->
+                <!-- THANH ĐIỀU HƯỚNG DƯỚI ĐÁY KÈM NÚT ZOOM TIỆN ÍCH -->
                 <div class="lightbox-bottom-bar">
+                    <div class="lightbox-zoom-tools">
+                        <button type="button" class="btn-zoom-tool" onclick="zoomLightboxStep(-0.35, event)" title="Thu nhỏ ảnh">🔍−</button>
+                        <button type="button" class="btn-zoom-tool" id="btn-zoom-reset" onclick="resetLightboxZoom(true, event)" title="Đưa về cỡ gốc">↺ 1x</button>
+                        <button type="button" class="btn-zoom-tool" onclick="zoomLightboxStep(0.35, event)" title="Phóng to ảnh">🔍+</button>
+                    </div>
+
                     <div class="lightbox-dots-container" id="lightbox-dots-container"></div>
-                    <span style="font-size:11px;">💡 Bấm ◀ / ▶ hoặc lấy tay vuốt màn hình để chuyển trang</span>
+                    <span class="lightbox-hint-text">💡 Dùng 2 ngón tay zoom to/nhỏ • Nhấp đúp phóng to • Kéo rê đọc bài</span>
                 </div>
             </div>
         </div>
     `;
     document.body.appendChild(modalDiv);
-    setupLightboxSwipeGestures();
+    setupLightboxTouchAndZoom();
 }
 
-function setupLightboxSwipeGestures() {
+// BỘ ĐIỀU HƯỚNG PINCH-TO-ZOOM 2 NGÓN TAY, PAN KÉO RÊ & VUỐT CHUYỂN TRANG
+function setupLightboxTouchAndZoom() {
     const area = document.getElementById("lightbox-touch-area");
     if (!area) return;
 
+    function getDistance(t1, t2) {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        return Math.hypot(dx, dy);
+    }
+
+    // Xử lý chạm cảm ứng (Mobile / Tablet)
     area.addEventListener("touchstart", function(e) {
-        if (!e.touches || e.touches.length === 0) return;
-        currentLightboxGallery.touchStartX = e.touches[0].clientX;
-        currentLightboxGallery.touchStartY = e.touches[0].clientY;
-    }, { passive: true });
+        if (!e.touches) return;
+
+        if (e.touches.length === 2) {
+            // Chạm bằng 2 ngón tay -> Bắt đầu Pinch-to-zoom
+            lightboxZoomState.initialDistance = getDistance(e.touches[0], e.touches[1]);
+            lightboxZoomState.initialScale = lightboxZoomState.scale;
+            lightboxZoomState.isDragging = false;
+        } else if (e.touches.length === 1) {
+            // Chạm bằng 1 ngón tay
+            const touch = e.touches[0];
+            const now = Date.now();
+
+            // Kiểm tra Double-tap (nhấp đúp phóng to 2.5x hoặc về 1x)
+            if (now - lightboxZoomState.lastTapTime < 280) {
+                if (lightboxZoomState.scale > 1.1) {
+                    resetLightboxZoom(true);
+                } else {
+                    lightboxZoomState.scale = 2.4;
+                    lightboxZoomState.posX = 0;
+                    lightboxZoomState.posY = 0;
+                    applyImageTransform(true);
+                }
+                lightboxZoomState.lastTapTime = 0;
+                return;
+            }
+            lightboxZoomState.lastTapTime = now;
+
+            if (lightboxZoomState.scale > 1.05) {
+                // Đang zoom to -> Chuẩn bị kéo rê bài làm (Pan/Drag)
+                lightboxZoomState.isDragging = true;
+                lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX;
+                lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY;
+            } else {
+                // Ở mức 1x -> Chuẩn bị vuốt chuyển trang (Swipe)
+                lightboxZoomState.swipeStartX = touch.clientX;
+                lightboxZoomState.swipeStartY = touch.clientY;
+                lightboxZoomState.isDragging = false;
+            }
+        }
+    }, { passive: false });
+
+    area.addEventListener("touchmove", function(e) {
+        if (!e.touches) return;
+
+        if (e.touches.length === 2 && lightboxZoomState.initialDistance > 0) {
+            e.preventDefault();
+            const currentDist = getDistance(e.touches[0], e.touches[1]);
+            const factor = currentDist / lightboxZoomState.initialDistance;
+            let newScale = lightboxZoomState.initialScale * factor;
+            newScale = Math.min(Math.max(1, newScale), 5); // Cho phép zoom từ 1x đến 5x nét căng
+
+            lightboxZoomState.scale = newScale;
+            if (newScale === 1) {
+                lightboxZoomState.posX = 0;
+                lightboxZoomState.posY = 0;
+            }
+            applyImageTransform(false);
+        } else if (e.touches.length === 1 && lightboxZoomState.isDragging && lightboxZoomState.scale > 1.05) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            lightboxZoomState.posX = touch.clientX - lightboxZoomState.startX;
+            lightboxZoomState.posY = touch.clientY - lightboxZoomState.startY;
+            applyImageTransform(false);
+        }
+    }, { passive: false });
 
     area.addEventListener("touchend", function(e) {
-        if (!e.changedTouches || e.changedTouches.length === 0) return;
-        const endX = e.changedTouches[0].clientX;
-        const endY = e.changedTouches[0].clientY;
+        if (e.touches && e.touches.length === 1) {
+            // Vừa thả 1 ngón tay trong khi còn 1 ngón
+            const touch = e.touches[0];
+            lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX;
+            lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY;
+            lightboxZoomState.isDragging = (lightboxZoomState.scale > 1.05);
+            return;
+        }
 
-        const diffX = endX - currentLightboxGallery.touchStartX;
-        const diffY = endY - currentLightboxGallery.touchStartY;
+        if (!e.touches || e.touches.length === 0) {
+            lightboxZoomState.isDragging = false;
+            lightboxZoomState.initialDistance = 0;
 
-        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 35) {
-            if (diffX < 0) {
-                navigateLightbox(1);
-            } else {
-                navigateLightbox(-1);
+            // Nếu chỉ ở mức 1x, kiểm tra cử chỉ vuốt chuyển trang (Swipe)
+            if (lightboxZoomState.scale <= 1.05 && e.changedTouches && e.changedTouches.length > 0) {
+                const endX = e.changedTouches[0].clientX;
+                const endY = e.changedTouches[0].clientY;
+                const diffX = endX - lightboxZoomState.swipeStartX;
+                const diffY = endY - lightboxZoomState.swipeStartY;
+
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 38) {
+                    if (diffX < 0) {
+                        navigateLightbox(1); // Vuốt từ phải sang trái -> Sang trang sau
+                    } else {
+                        navigateLightbox(-1); // Vuốt từ trái sang phải -> Về trang trước
+                    }
+                }
             }
         }
     }, { passive: true });
 
+    // Hỗ trợ con lăn chuột (Mouse wheel zoom) trên máy tính/laptop
+    area.addEventListener("wheel", function(e) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.25 : -0.25;
+        zoomLightboxStep(delta);
+    }, { passive: false });
+
+    // Kéo rê bằng chuột trên máy tính khi đang zoom
+    let isMouseDown = false;
+    area.addEventListener("mousedown", function(e) {
+        if (lightboxZoomState.scale > 1.05) {
+            isMouseDown = true;
+            lightboxZoomState.startX = e.clientX - lightboxZoomState.posX;
+            lightboxZoomState.startY = e.clientY - lightboxZoomState.posY;
+        }
+    });
+
+    window.addEventListener("mousemove", function(e) {
+        if (isMouseDown && lightboxZoomState.scale > 1.05) {
+            lightboxZoomState.posX = e.clientX - lightboxZoomState.startX;
+            lightboxZoomState.posY = e.clientY - lightboxZoomState.startY;
+            applyImageTransform(false);
+        }
+    });
+
+    window.addEventListener("mouseup", function() {
+        isMouseDown = false;
+    });
+
+    // Phím mũi tên máy tính
     document.addEventListener("keydown", function(e) {
         const lb = document.getElementById("tuluan-lightbox");
         if (lb && lb.style.display === "flex") {
@@ -1414,6 +1587,54 @@ function setupLightboxSwipeGestures() {
             else if (e.key === "Escape") closeTuLuanLightbox();
         }
     });
+}
+
+// ÁP DỤNG BIẾN ĐỔI TRANSFORM CHO ẢNH
+function applyImageTransform(smooth = false) {
+    const img = document.getElementById("lightbox-full-img");
+    const area = document.getElementById("lightbox-touch-area");
+    const resetBtn = document.getElementById("btn-zoom-reset");
+    if (!img) return;
+
+    if (smooth) {
+        img.style.transition = "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)";
+    } else {
+        img.style.transition = "none";
+    }
+
+    img.style.transform = `translate3d(${lightboxZoomState.posX}px, ${lightboxZoomState.posY}px, 0) scale(${lightboxZoomState.scale})`;
+
+    if (area) {
+        area.classList.toggle("is-zoomed", lightboxZoomState.scale > 1.05);
+    }
+    if (resetBtn) {
+        const roundScale = Math.round(lightboxZoomState.scale * 10) / 10;
+        resetBtn.innerText = roundScale > 1 ? `↺ ${roundScale}x` : `↺ 1x`;
+        resetBtn.style.color = roundScale > 1 ? "#38bdf8" : "#ffffff";
+    }
+}
+
+// RESET ZOOM VỀ BAN ĐẦU
+function resetLightboxZoom(smooth = false, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    lightboxZoomState.scale = 1;
+    lightboxZoomState.posX = 0;
+    lightboxZoomState.posY = 0;
+    applyImageTransform(smooth);
+}
+
+// PHÓNG TO / THU NHỎ TỪNG NẤC
+function zoomLightboxStep(step, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    let newScale = lightboxZoomState.scale + step;
+    newScale = Math.min(Math.max(1, newScale), 5);
+    lightboxZoomState.scale = Math.round(newScale * 100) / 100;
+    if (lightboxZoomState.scale <= 1.02) {
+        lightboxZoomState.scale = 1;
+        lightboxZoomState.posX = 0;
+        lightboxZoomState.posY = 0;
+    }
+    applyImageTransform(true);
 }
 
 function updateTuLuanAdminUI() {
@@ -2489,6 +2710,7 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     currentLightboxGallery.images = record.images;
     currentLightboxGallery.currentIndex = Math.max(0, Math.min(imgIndex, record.images.length - 1));
 
+    resetLightboxZoom(false);
     updateLightboxView();
 
     const lb = document.getElementById("tuluan-lightbox");
@@ -2546,6 +2768,7 @@ function navigateLightbox(step, event) {
 
     if (newIdx >= 0 && newIdx < gallery.images.length) {
         gallery.currentIndex = newIdx;
+        resetLightboxZoom(false); // Khi chuyển trang thì reset ảnh mới về chuẩn 1x
         updateLightboxView();
     }
 }
@@ -2554,6 +2777,7 @@ function jumpToLightboxPage(targetIndex, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (targetIndex >= 0 && targetIndex < currentLightboxGallery.images.length) {
         currentLightboxGallery.currentIndex = targetIndex;
+        resetLightboxZoom(false);
         updateLightboxView();
     }
 }
@@ -2564,6 +2788,7 @@ function openTuLuanLightbox(imgSrc, driveUrl, title, event) {
     currentLightboxGallery.images = [{ directUrl: imgSrc, fileUrl: driveUrl }];
     currentLightboxGallery.currentIndex = 0;
 
+    resetLightboxZoom(false);
     updateLightboxView();
     const lb = document.getElementById("tuluan-lightbox");
     if (lb) lb.style.display = "flex";
@@ -2573,6 +2798,7 @@ function closeTuLuanLightbox(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const lb = document.getElementById("tuluan-lightbox");
     if (lb) lb.style.display = "none";
+    resetLightboxZoom(false);
 }
 
 // LƯU ĐIỂM CHẤM CHÉO NHAU
@@ -3393,6 +3619,8 @@ window.closeTuLuanLightbox = closeTuLuanLightbox;
 window.navigateLightbox = navigateLightbox;
 window.jumpToLightboxPage = jumpToLightboxPage;
 window.onThumbnailItemClicked = onThumbnailItemClicked;
+window.resetLightboxZoom = resetLightboxZoom;
+window.zoomLightboxStep = zoomLightboxStep;
 window.triggerExamRoomDriveUpload = triggerExamRoomDriveUpload;
 window.onTuLuanClassChanged = onTuLuanClassChanged;
 window.onTuLuanExamChanged = onTuLuanExamChanged;
