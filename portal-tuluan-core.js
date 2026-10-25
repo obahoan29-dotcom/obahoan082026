@@ -937,4 +937,3 @@ window.getStudentFolderKey = getStudentFolderKey;
 window.getEffectiveStudentPassword = getEffectiveStudentPassword;
 window.getCurrentGraderInfo = getCurrentGraderInfo;
 window.detectExamQuestionCount = detectExamQuestionCount;
-}
