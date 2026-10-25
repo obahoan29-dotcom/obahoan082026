@@ -46,13 +46,13 @@ let tuLuanRealtimeChannel = null;
         }
         .student-pass-popover.show, .student-feedback-popover.show, .dapan-schedule-popover.show, .component-score-popover.show { display: block !important; }
         
-        /* ĐÃ SỬA: Cho Popover mở xuống dưới để không bị che khuất bởi mép trên của bảng */
+        /* CĂN CHỈNH POPOVER TRÊN LAPTOP */
         .dapan-schedule-popover { top: calc(100% + 6px) !important; left: 0 !important; width: 310px !important; border: 1.5px solid #f59e0b !important; }
         .student-feedback-popover { right: 0 !important; top: calc(100% + 8px) !important; bottom: auto !important; width: 320px !important; border: 1.5px solid #d97706 !important; }
         .student-pass-popover { right: 0 !important; top: calc(100% + 8px) !important; bottom: auto !important; width: 300px !important; border: 1.5px solid #0284c7 !important; }
         .component-score-popover { top: calc(100% + 6px) !important; right: 0 !important; left: auto !important; width: 420px !important; max-width: 95vw !important; max-height: 84vh !important; overflow-y: auto !important; border: 1.5px solid #0284c7 !important; padding: 10px 12px !important; background: #ffffff !important; }
         
-        /* LÀM ĐẸP GIAO DIỆN BẢNG ĐỔI MẬT KHẨU & NHẬN XÉT ĐỂ TRÔNG CHUYÊN NGHIỆP HƠN */
+        /* LÀM ĐẸP GIAO DIỆN BẢNG ĐỔI MẬT KHẨU & NHẬN XÉT */
         .pass-popover-hint { font-size: 11.5px !important; color: #334155 !important; background: #f0f9ff !important; padding: 8px 10px !important; border-radius: 8px !important; margin-bottom: 12px !important; border: 1px solid #bae6fd !important; line-height: 1.45 !important; }
         .pass-input-row { margin-bottom: 10px !important; text-align: left !important; }
         .pass-input-row label { display: block !important; font-size: 11px !important; font-weight: 800 !important; color: #0f172a !important; margin-bottom: 4px !important; }
@@ -67,7 +67,6 @@ let tuLuanRealtimeChannel = null;
         .feedback-textarea { width: 100% !important; padding: 10px !important; border: 1.5px solid #cbd5e1 !important; border-radius: 8px !important; font-size: 13px !important; font-weight: 600 !important; outline: none !important; resize: vertical !important; min-height: 90px !important; margin-bottom: 6px !important; font-family: inherit !important; box-sizing: border-box !important; color: #0f172a !important; }
         .feedback-textarea:focus { border-color: #d97706 !important; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15) !important; }
 
-        @media (max-width: 640px) { .component-score-popover { position: fixed !important; top: 50% !important; left: 50% !important; right: auto !important; bottom: auto !important; transform: translate(-50%, -50%) !important; width: min(390px, calc(100vw - 16px)) !important; max-width: calc(100vw - 16px) !important; max-height: 88vh !important; border-radius: 14px !important; z-index: 100000000 !important; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important; padding: 12px !important; } }
         .tuluan-modal-card { background: #ffffff !important; border-radius: 14px !important; width: 96vw !important; max-width: 98vw !important; height: 94vh !important; max-height: 95vh !important; overflow: hidden !important; box-shadow: 0 25px 65px rgba(15, 23, 42, 0.45) !important; border: 1.5px solid #cbd5e1 !important; display: flex !important; flex-direction: column !important; animation: popInModal 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important; box-sizing: border-box !important; padding: 0 !important; }
         .tuluan-modal-header { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 4px 8px !important; border-bottom: 1px solid #e2e8f0 !important; background: #ffffff !important; flex-shrink: 0 !important; min-height: 32px !important; gap: 4px !important; }
         .tuluan-header-title-box { display: flex !important; align-items: center !important; gap: 6px !important; min-width: 0 !important; flex: 1 !important; }
@@ -106,7 +105,6 @@ let tuLuanRealtimeChannel = null;
         .tuluan-tab-pill { padding: 3px 6px !important; font-size: 10.5px !important; border-radius: 6px !important; line-height: 1.2 !important; height: 27px !important; border: 1px solid #cbd5e1 !important; background: #ffffff !important; color: #475569 !important; cursor: pointer !important; font-weight: 800 !important; }
         .tuluan-tab-pill.active { background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important; color: #ffffff !important; border-color: #4f46e5 !important; }
         
-        /* ĐÃ SỬA: Thêm padding-bottom dư dả để bảng có không gian cuộn cho các Popover mở xuống dưới */
         .tuluan-table-wrap { flex: 1 !important; height: 100% !important; max-height: none !important; overflow-y: auto !important; overflow-x: auto !important; background: #ffffff !important; -webkit-overflow-scrolling: touch !important; padding-bottom: 180px !important; }
         .tuluan-table { width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; font-size: 12.5px !important; text-align: left !important; white-space: nowrap !important; }
         .tuluan-table thead th { padding: 6px 6px !important; font-size: 11px !important; position: sticky !important; top: 0 !important; z-index: 10 !important; background: #0f172a !important; color: #ffffff !important; font-weight: 800 !important; border-bottom: 2px solid #4f46e5 !important; }
@@ -170,6 +168,23 @@ let tuLuanRealtimeChannel = null;
         .comp-score-kpi-val { background: #ffffff !important; border: 1px solid #86efac !important; padding: 2px 7px !important; border-radius: 6px !important; font-size: 13px !important; font-weight: 900 !important; color: #15803d !important; }
 
         @media (max-width: 640px) {
+            /* Tối ưu Popover trên mobile: Đưa ra giữa màn hình như Modal để không bao giờ bị cắt xén bởi bảng */
+            .student-pass-popover, .student-feedback-popover, .dapan-schedule-popover, .component-score-popover {
+                position: fixed !important;
+                top: 50% !important;
+                left: 50% !important;
+                right: auto !important;
+                bottom: auto !important;
+                transform: translate(-50%, -50%) !important;
+                width: min(360px, calc(100vw - 24px)) !important;
+                max-width: calc(100vw - 24px) !important;
+                max-height: 88vh !important;
+                border-radius: 16px !important;
+                z-index: 100000000 !important;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important;
+                padding: 16px !important;
+            }
+            
             .btn-lightbox-nav { width: 36px !important; height: 36px !important; font-size: 17px !important; }
             .btn-lightbox-nav.btn-nav-prev { left: 6px !important; }
             .btn-lightbox-nav.btn-nav-next { right: 6px !important; }
@@ -185,13 +200,8 @@ let tuLuanRealtimeChannel = null;
             .tuluan-search-box { width: 100% !important; height: 32px !important; font-size: 12.5px !important; }
             .tuluan-filter-tabs { width: 100% !important; display: flex; gap: 4px; }
             .tuluan-tab-pill { flex: 1; text-align: center; padding: 5px 2px !important; font-size: 10.5px !important; }
-            .tuluan-table thead th:last-child { position: sticky; right: 0; background: #0f172a !important; z-index: 15; box-shadow: -3px 0 8px rgba(15, 23, 42, 0.25); }
-            .tuluan-table tbody td:last-child { position: sticky; right: 0; background: #ffffff !important; z-index: 9; box-shadow: -3px 0 8px rgba(15, 23, 42, 0.12); }
-            .tuluan-table tbody tr:nth-child(even) td:last-child { background: #f8fafc !important; }
-            .tuluan-table tbody tr:hover td:last-child { background: #f0f9ff !important; }
             .btn-tuluan-upload-row { padding: 7px 12px !important; font-size: 12px !important; font-weight: 800 !important; min-height: 32px !important; }
             .btn-tuluan-change-pass, .btn-tuluan-reset-pass { padding: 6px 8px !important; font-size: 10.5px !important; min-height: 32px !important; }
-            .student-pass-popover { right: 4px !important; left: auto !important; width: min(290px, calc(100vw - 20px)) !important; max-width: calc(100vw - 20px) !important; }
 
             /* FIX CHO IPHONE: Đảm bảo header không bị tràn lên trên và bị che bởi viền/tai thỏ */
             .tuluan-lightbox-overlay {
