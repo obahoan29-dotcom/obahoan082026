@@ -1,8 +1,8 @@
 // =========================================================
 // FILE: portal-tuluan.js
 // QUẢN LÝ NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB & ĐỒNG BỘ 100% QUA SUPABASE
-// NÂNG CẤP: BẢNG CHẤM ĐIỂM THÀNH PHẦN TỪNG CÂU, KHÓA SỬA ĐIỂM HỌC SINH,
-// TỐI ƯU SIÊU GỌN VÀ LIGHTBOX CẢM ỨNG PINCH-ZOOM 2 NGÓN TAY
+// NÂNG CẤP: BẢNG ĐIỂM TP CHUẨN MÀN HÌNH ĐIỆN THOẠI 100%, XUẤT EXCEL CHI TIẾT
+// TỪNG CÂU + TỔNG ĐIỂM, LIGHTBOX PINCH-ZOOM 2 NGÓN TAY & BẢO MẬT PHÂN QUYỀN
 // =========================================================
 
 // TỰ ĐỘNG NHÚNG CSS BẢNG TỰ LUẬN, KHÓA ẨN POPOVER VÀ BẢNG ĐIỂM THÀNH PHẦN
@@ -64,17 +64,37 @@
             border: 1.5px solid #0284c7 !important;
         }
 
-        /* POPOVER BẢNG ĐIỂM THÀNH PHẦN (SIÊU NHỎ GỌN TRONG LIGHTBOX) */
+        /* POPOVER BẢNG ĐIỂM THÀNH PHẦN (DESKTOP) */
         .component-score-popover {
             top: calc(100% + 6px) !important;
             right: 0 !important;
             left: auto !important;
-            width: min(440px, calc(100vw - 20px)) !important;
-            max-height: 82vh !important;
+            width: 420px !important;
+            max-width: 95vw !important;
+            max-height: 84vh !important;
             overflow-y: auto !important;
             border: 1.5px solid #0284c7 !important;
             padding: 10px 12px !important;
             background: #ffffff !important;
+        }
+
+        /* FIX CHUẨN 100% TRÊN MÀN HÌNH ĐIỆN THOẠI: GHIM CĂN GIỮA KHÔNG LỆCH LỀ */
+        @media (max-width: 640px) {
+            .component-score-popover {
+                position: fixed !important;
+                top: 50% !important;
+                left: 50% !important;
+                right: auto !important;
+                bottom: auto !important;
+                transform: translate(-50%, -50%) !important;
+                width: min(390px, calc(100vw - 16px)) !important;
+                max-width: calc(100vw - 16px) !important;
+                max-height: 88vh !important;
+                border-radius: 14px !important;
+                z-index: 100000000 !important;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important;
+                padding: 12px !important;
+            }
         }
 
         /* ============================================================ */
@@ -731,8 +751,7 @@
             font-size: 15px !important;
             font-weight: 900 !important;
             cursor: pointer !important;
-            display: flex !important;
-            align-items: center !important;
+            display: flex !align-items: center !important;
             justify-content: center !important;
             line-height: 1 !important;
         }
@@ -1232,22 +1251,19 @@ async function sendToGoogleDriveWithRetry(gasUrl, payload, maxRetries = 2, timeo
 
 // HÀM TRÍCH XUẤT SỐ LƯỢNG CÂU CỦA ĐỀ THI HIỆN TẠI
 function detectExamQuestionCount() {
-    const qId = currentTuLuanModalData.quizId;
     const title = currentTuLuanModalData.examTitle || "";
 
-    // 1. Quét từ tiêu đề đề thi (VD: "36 câu", "40 câu")
     const match = title.match(/(\d{1,3})\s*(?:câu|cau)/i);
     if (match && match[1]) {
         const count = parseInt(match[1], 10);
         if (count >= 5 && count <= 120) return count;
     }
 
-    // 2. Quét từ dữ liệu đề thi trên RAM nếu đang mở đề
     if (typeof examData !== 'undefined' && examData && Array.isArray(examData.questions) && examData.questions.length > 0) {
         return examData.questions.length;
     }
 
-    return 40; // Mặc định 40 câu
+    return 40;
 }
 
 function ensureTuLuanModalDOM() {
@@ -1419,7 +1435,7 @@ function ensureTuLuanModalDOM() {
                         <span class="lightbox-page-badge" id="lightbox-page-indicator">Tr 1/1</span>
                     </div>
 
-                    <!-- THAY MÓC XÍCH DRIVE BẰNG NÚT ĐIỂM THÀNH PHẦN VÀ KHUNG POPOVER XÒE RA -->
+                    <!-- NÚT ĐIỂM THÀNH PHẦN VÀ KHUNG POPOVER XÒE RA -->
                     <div style="display:flex; gap:6px; align-items:center; position:relative;">
                         <div style="position:relative; display:inline-block;">
                             <button type="button" class="btn-lightbox-component-score" id="btn-open-component-score" onclick="toggleComponentScorePopover(event)" title="Chấm điểm từng câu chi tiết">
@@ -1524,7 +1540,6 @@ function setupLightboxTouchAndZoom() {
         return Math.hypot(dx, dy);
     }
 
-    // Chạm cảm ứng
     area.addEventListener("touchstart", function(e) {
         if (!e.touches) return;
 
@@ -1617,7 +1632,6 @@ function setupLightboxTouchAndZoom() {
         }
     }, { passive: true });
 
-    // Con lăn chuột trên PC
     area.addEventListener("wheel", function(e) {
         e.preventDefault();
         const delta = e.deltaY < 0 ? 0.25 : -0.25;
@@ -1858,6 +1872,7 @@ async function saveComponentScoresAction(event) {
     try {
         const client = getDbClient();
         if (client) {
+            // 1. Lưu điểm chấm chéo vào bảng tu_luan_submissions
             await client.from('tu_luan_submissions').upsert({
                 quiz_id: qId,
                 sbd: sbd,
@@ -1866,15 +1881,34 @@ async function saveComponentScoresAction(event) {
                 exam_title: currentTuLuanModalData.examTitle || "Tự luận",
                 cross_score: String(finalScore),
                 cross_score_by: graderDisplay,
-                cross_score_time: scoreTimeStr
+                cross_score_time: scoreTimeStr,
+                detail_scores: currentLightboxGallery.componentScores
             }, { onConflict: 'quiz_id,sbd' });
+
+            // 2. Cơ chế lưu trữ kép an toàn 100% vào app_key_values (đảm bảo không bị thiếu cột database)
+            try {
+                const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single();
+                const allCompScores = (existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {};
+                allCompScores[sbd] = {
+                    detailScores: currentLightboxGallery.componentScores,
+                    questionCount: currentLightboxGallery.currentQuestionCount,
+                    crossScore: finalScore,
+                    crossScoreBy: graderDisplay,
+                    crossScoreTime: scoreTimeStr,
+                    updatedAt: Date.now()
+                };
+                await client.from('app_key_values').upsert({
+                    key: 'detail_scores_' + qId,
+                    value: allCompScores
+                });
+            } catch(metaErr) {}
         }
 
         // Cập nhật ngay ô input ngoài bảng
         const scoreInput = document.getElementById(`cross-score-${sbd}`);
         if (scoreInput) {
             scoreInput.value = finalScore;
-            scoreInput.title = `🎯 Điểm TP đã chấm: ${finalScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`;
+            scoreInput.title = `🎯 Điểm TP: ${finalScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`;
             scoreInput.style.borderColor = "#10b981";
             setTimeout(() => { scoreInput.style.borderColor = "#cbd5e1"; }, 1500);
         }
@@ -2099,7 +2133,7 @@ async function deleteCurrentTuLuanExam(event) {
     let examTitle = selectedOpt ? (selectedOpt.dataset.title || selectedOpt.innerText) : examId;
     examTitle = examTitle.replace(/^\d+\.\s*/, '').trim();
 
-    if (!confirm(`⚠️ XÁC NHẬN XÓA ĐỀ TỰ LUẬN (ADMIN):\n\nThầy có chắc chắn muốn XÓA đề:\n"${examTitle}"\nkhỏi danh sách nộp bài của lớp ${className} không?`)) {
+    if (!confirm(`⚠️ XÁC NHẬN XÓA ĐỀ TỰ LUẬN (ADMIN):\n\nThầy có chắc chắn muốn XÓA đề:\n"${examTitle}"\nkhỏi danh sách nộp bài của lớp ${className} không?\n\n(Hệ thống sẽ gỡ bỏ đề này khỏi lớp ${className} và cập nhật tức thì).`)) {
         return;
     }
 
@@ -2116,7 +2150,8 @@ async function deleteCurrentTuLuanExam(event) {
                 client.from('custom_links').delete().eq('category_id', classId).eq('id', examId),
                 client.from('custom_links').delete().eq('category_id', classId).eq('title', examTitle),
                 client.from('tu_luan_submissions').delete().eq('quiz_id', examId),
-                client.from('app_key_values').delete().eq('key', 'dapan_' + examId)
+                client.from('app_key_values').delete().eq('key', 'dapan_' + examId),
+                client.from('app_key_values').delete().eq('key', 'detail_scores_' + examId)
             ]);
         }
 
@@ -2194,6 +2229,7 @@ async function promptAddNewTuLuanExam() {
     }
 }
 
+// ĐỌC BÀI NỘP, MẬT KHẨU & ĐIỂM THÀNH PHẦN TỪ SUPABASE
 async function loadTuLuanSubmissionsFromSupabase() {
     const qId = currentTuLuanModalData.quizId;
     if (!qId) return;
@@ -2206,16 +2242,31 @@ async function loadTuLuanSubmissionsFromSupabase() {
     }
 
     try {
-        const [subsRes, passRes, dapanRes] = await Promise.all([
+        const [subsRes, passRes, dapanRes, detailScoresRes] = await Promise.all([
             client.from('tu_luan_submissions').select('*').eq('quiz_id', qId),
             client.from('app_key_values').select('value').eq('key', 'student_custom_passwords').single(),
-            client.from('app_key_values').select('value').eq('key', 'dapan_' + qId).single()
+            client.from('app_key_values').select('value').eq('key', 'dapan_' + qId).single(),
+            client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single()
         ]);
+
+        const backupDetailsMap = (detailScoresRes && detailScoresRes.data && detailScoresRes.data.value && typeof detailScoresRes.data.value === 'object')
+            ? detailScoresRes.data.value 
+            : {};
 
         let combined = {};
         if (subsRes && Array.isArray(subsRes.data)) {
             subsRes.data.forEach(row => {
                 if (row && row.sbd) {
+                    let dScores = {};
+                    if (row.detail_scores) {
+                        try {
+                            dScores = (typeof row.detail_scores === 'object') ? row.detail_scores : JSON.parse(row.detail_scores);
+                        } catch(e) {}
+                    }
+                    if (Object.keys(dScores).length === 0 && backupDetailsMap[row.sbd] && backupDetailsMap[row.sbd].detailScores) {
+                        dScores = backupDetailsMap[row.sbd].detailScores;
+                    }
+
                     combined[row.sbd] = {
                         stt: row.stt,
                         sbd: row.sbd,
@@ -2231,7 +2282,9 @@ async function loadTuLuanSubmissionsFromSupabase() {
                         crossScoreTime: row.cross_score_time || "",
                         feedback: row.feedback || "",
                         feedbackTime: row.feedback_time || "",
-                        isApproved: !!row.is_approved
+                        isApproved: !!row.is_approved,
+                        detailScores: dScores,
+                        questionCount: (backupDetailsMap[row.sbd] && backupDetailsMap[row.sbd].questionCount) || detectExamQuestionCount()
                     };
                 }
             });
@@ -3197,6 +3250,7 @@ async function saveStudentFeedback(cleanSbd, stt, sbd, studentName, event) {
     }
 }
 
+// XUẤT EXCEL CHI TIẾT ĐIỂM TỪNG CÂU + TỔNG ĐIỂM + ẢNH BÀI LÀM
 function exportTuLuanToExcel(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
 
@@ -3210,18 +3264,65 @@ function exportTuLuanToExcel(event) {
     const driveClassName = getCleanDriveClassName(currentTuLuanModalData.classId);
     const subMap = currentTuLuanModalData.submissionsMap || {};
 
+    // 1. Tự động xác định số lượng câu tối đa của đề để tạo các cột Câu 1 -> Câu N
+    let maxQ = detectExamQuestionCount() || 40;
+    students.forEach(st => {
+        const cleanSbd = String(st.sbd || "").trim().replace(/[^a-zA-Z0-9]/g, '_');
+        const record = subMap[cleanSbd];
+        if (record && record.questionCount) {
+            maxQ = Math.max(maxQ, record.questionCount);
+        }
+        if (record && record.detailScores) {
+            const keys = Object.keys(record.detailScores).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
+            if (keys.length > 0) {
+                maxQ = Math.max(maxQ, Math.max(...keys));
+            }
+        }
+    });
+
+    // 2. Tạo Header HTML cho các câu hỏi
+    let questionHeadersHtml = "";
+    for (let c = 1; c <= maxQ; c++) {
+        questionHeadersHtml += `<th style="width: 38px; background-color: #0369a1; border: 1px solid #94a3b8; text-align: center;">C${c}</th>`;
+    }
+
     let rowsHtml = "";
     students.forEach((st) => {
         const cleanSbd = String(st.sbd || "").trim().replace(/[^a-zA-Z0-9]/g, '_');
-        const record = subMap[cleanSbd];
+        const record = subMap[cleanSbd] || {};
+        const detailScores = record.detailScores || {};
 
-        const hasSub = Boolean(record && record.images && record.images.length > 0);
+        // Tính toán các cột điểm thành phần
+        let qCellsHtml = "";
+        let sumRaw = 0;
+        let answeredCount = 0;
+
+        for (let c = 1; c <= maxQ; c++) {
+            if (detailScores[c] !== undefined && detailScores[c] !== null && detailScores[c] !== "") {
+                const score = parseFloat(detailScores[c]);
+                if (!isNaN(score)) {
+                    sumRaw += score;
+                    answeredCount++;
+                    qCellsHtml += `<td style="text-align: center; font-weight: bold; background-color: #f0fdf4;">${score}</td>`;
+                } else {
+                    qCellsHtml += `<td style="text-align: center; color: #94a3b8;">-</td>`;
+                }
+            } else {
+                qCellsHtml += `<td style="text-align: center; color: #cbd5e1;">-</td>`;
+            }
+        }
+
+        sumRaw = Math.round(sumRaw * 100) / 100;
+        let scale10 = (maxQ > 0) ? Math.round(((sumRaw / maxQ) * 10) * 100) / 100 : sumRaw;
+        if (scale10 > 10.0) scale10 = 10.0;
+
+        const hasSub = Boolean(record.images && record.images.length > 0);
         const statusText = hasSub ? `Đã nộp (${record.images.length} ảnh) lúc ${record.lastSubmit || ''}` : "Chưa nộp";
-        const isApprovedText = (record && record.isApproved === true) ? "Đã duyệt" : "Chưa duyệt";
-        const scoreVal = (record && record.crossScore !== undefined) ? record.crossScore : "";
-        const scoreBy = (record && record.crossScoreBy) ? record.crossScoreBy : "";
-        const scoreTime = (record && record.crossScoreTime) ? record.crossScoreTime : "";
-        const feedbackVal = (record && record.feedback) ? record.feedback : "";
+        const isApprovedText = (record.isApproved === true) ? "Đã duyệt" : "Chưa duyệt";
+        const scoreVal = (record.crossScore !== undefined && record.crossScore !== null) ? record.crossScore : (answeredCount > 0 ? scale10 : "");
+        const scoreBy = record.crossScoreBy || "";
+        const scoreTime = record.crossScoreTime || "";
+        const feedbackVal = record.feedback || "";
 
         let imagesHtml = "Chưa có ảnh";
         if (hasSub && Array.isArray(record.images)) {
@@ -3240,14 +3341,22 @@ function exportTuLuanToExcel(event) {
         rowsHtml += `
             <tr>
                 <td style="text-align: center; font-weight: bold;">${st.stt}</td>
-                <td style="font-weight: bold;">${st.name}</td>
+                <td style="font-weight: bold; white-space: nowrap;">${st.name}</td>
                 <td style="text-align: center; font-family: monospace; font-weight: bold;">${st.sbd}</td>
+                <td style="text-align: center;">${driveClassName}</td>
+                
+                ${qCellsHtml}
+                
+                <td style="text-align: center; font-weight: bold; background-color: #fefce8; color: #854d0e;">${answeredCount > 0 ? sumRaw : '-'}</td>
+                <td style="text-align: center; font-weight: bold; background-color: #ecfdf5; color: #047857;">${answeredCount > 0 ? scale10 : '-'}</td>
+                <td style="text-align: center; font-weight: 900; color: #0284c7; font-size: 13pt; background-color: #eff6ff;">
+                    ${scoreVal}
+                </td>
+                <td style="font-size: 9.5pt; color: #475569;">
+                    ${scoreBy ? `${scoreBy}${scoreTime ? ` (${scoreTime})` : ''}` : ''}
+                </td>
                 <td>${statusText}</td>
                 <td style="text-align: center;">${isApprovedText}</td>
-                <td style="text-align: center; font-weight: bold; color: #0284c7; font-size: 13pt;">
-                    ${scoreVal}
-                    ${scoreBy ? `<br><span style="font-size:9pt; font-weight:normal; color:#64748b;">(Chấm bởi: ${scoreBy}${scoreTime ? ` - ${scoreTime}` : ''})</span>` : ''}
-                </td>
                 <td style="white-space: pre-wrap; word-break: break-word;">${feedbackVal}</td>
                 <td style="min-width: 250px;">${imagesHtml}</td>
             </tr>
@@ -3263,26 +3372,33 @@ function exportTuLuanToExcel(event) {
             body { font-family: 'Times New Roman', Arial, sans-serif; font-size: 11pt; color: #0f172a; }
             h2, h3 { margin: 4px 0; }
             table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-            th { background-color: #0284c7; color: #ffffff; font-weight: bold; padding: 8px 10px; border: 1px solid #94a3b8; text-align: center; font-size: 11pt; }
-            td { border: 1px solid #cbd5e1; padding: 8px 10px; vertical-align: middle; }
+            th { background-color: #0284c7; color: #ffffff; font-weight: bold; padding: 6px 8px; border: 1px solid #94a3b8; text-align: center; font-size: 10pt; }
+            td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: middle; }
             tr:nth-child(even) td { background-color: #f8fafc; }
         </style>
     </head>
     <body>
-        <h2>BẢNG ĐIỂM & NHẬN XÉT BÀI TẬP TỰ LUẬN</h2>
+        <h2>BẢNG ĐIỂM CHI TIẾT TỪNG CÂU & TỔNG ĐIỂM BÀI TẬP TỰ LUẬN</h2>
         <h3>Đề thi: ${examTitle}</h3>
-        <p><b>Lớp:</b> ${driveClassName} &nbsp;|&nbsp; <b>Thời gian xuất:</b> ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')}</p>
+        <p><b>Lớp:</b> ${driveClassName} &nbsp;|&nbsp; <b>Số câu của đề:</b> ${maxQ} câu &nbsp;|&nbsp; <b>Thời gian xuất file:</b> ${new Date().toLocaleTimeString('vi-VN')} ${new Date().toLocaleDateString('vi-VN')}</p>
         <table>
             <thead>
                 <tr>
                     <th style="width: 45px;">STT</th>
                     <th style="width: 170px;">Họ và tên</th>
-                    <th style="width: 80px;">SBD</th>
-                    <th style="width: 160px;">Trạng thái / Ngày nộp</th>
-                    <th style="width: 100px;">Phê duyệt</th>
-                    <th style="width: 140px;">Điểm chấm chéo (Người chấm)</th>
-                    <th style="width: 220px;">Nhận xét bài làm</th>
-                    <th style="width: 380px;">Ảnh bài làm đã nộp</th>
+                    <th style="width: 75px;">SBD</th>
+                    <th style="width: 65px;">Lớp</th>
+                    
+                    ${questionHeadersHtml}
+                    
+                    <th style="width: 85px; background-color: #d97706;">Tổng TP</th>
+                    <th style="width: 85px; background-color: #059669;">Thang 10</th>
+                    <th style="width: 95px; background-color: #2563eb;">Điểm chốt</th>
+                    <th style="width: 150px;">Người chấm</th>
+                    <th style="width: 150px;">Trạng thái nộp</th>
+                    <th style="width: 90px;">Phê duyệt</th>
+                    <th style="width: 200px;">Nhận xét bài làm</th>
+                    <th style="width: 360px;">Ảnh bài làm đã nộp</th>
                 </tr>
             </thead>
             <tbody>
@@ -3298,7 +3414,7 @@ function exportTuLuanToExcel(event) {
     });
 
     const safeExam = examTitle.replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const fileName = `Diem_Tu_Luan_${driveClassName}_${safeExam}_${Date.now()}.xls`;
+    const fileName = `Diem_Chi_Tiet_Tu_Luan_${driveClassName}_${safeExam}_${Date.now()}.xls`;
 
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
