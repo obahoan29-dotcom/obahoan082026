@@ -1,5 +1,6 @@
 // =========================================================
 // FILE: portal-admin.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
+// ĐÃ FIX LỖI ĐỌC FILE JS CÓ COMMENT Ở CUỐI
 // =========================================================
 
 let currentEditingTimeQuizId = null;
@@ -105,15 +106,27 @@ async function saveSiteRedirectUrl() {
     }
 }
 
+// HÀM ĐỌC FILE JS/JSON SIÊU BỀN BỈ (FIX LỖI COMMENT Ở CUỐI)
 function parseScriptOrJson(content) {
     if (!content) return null;
     let clean = String(content).trim();
-    clean = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, '').trim();
-    if (clean.endsWith(';')) clean = clean.slice(0, -1).trim();
-
+    
+    // 1. Thử parse chuẩn JSON trước (nếu upload file .json)
     try {
         return JSON.parse(clean);
+    } catch(e) {}
+
+    // 2. Môi trường giả lập JS: Biến khai báo const/let/var thành câu lệnh return
+    // Kỹ thuật này giúp lấy Object an toàn 100% bất chấp phía sau có comment gì
+    try {
+        let scriptText = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, 'return ');
+        return new Function(scriptText)();
     } catch(e) {
+        // Fallback (dự phòng): Nếu kỹ thuật trên fail, dùng cách cắt gọt mạnh tay
+        clean = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, '').trim();
+        // Xóa sạch comment /* ... */ và // ... cùng dấu ; ở đuôi
+        clean = clean.replace(/;?(\s*\/\*[\s\S]*?\*\/|\s*\/\/.*)*\s*$/, '').trim();
+        if (clean.endsWith(';')) clean = clean.slice(0, -1).trim();
         try {
             return new Function("return (" + clean + ");")();
         } catch(e2) {
@@ -573,7 +586,6 @@ async function confirmCopyItem() {
     }
 }
 
-// ĐÃ SỬA: Lưu lại cả itemId và quizId để cập nhật UI không cần Reload
 async function openEditMinutesModal(quizId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentEditingTimeQuizId = quizId;
@@ -595,7 +607,6 @@ async function openEditMinutesModal(quizId, itemId, event) {
     document.getElementById("exam-time-modal").style.display = "flex";
 }
 
-// ĐÃ SỬA: Lưu lại cả itemId và quizId để cập nhật UI không cần Reload
 async function openEditScheduleModal(quizId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentEditingTimeQuizId = quizId;
@@ -629,7 +640,6 @@ function closeExamTimeModal() {
     currentEditingTimeMode = null;
 }
 
-// ĐÃ SỬA: Cập nhật DOM ngay tại chỗ thay vì reload trang
 async function saveExamTimeConfig() {
     if (!currentEditingTimeQuizId || !currentEditingTimeItemId) return;
     const btn = document.getElementById("btn-save-exam-time");
