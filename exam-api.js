@@ -1,7 +1,5 @@
 // =========================================================
 // FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG SIÊU NHẠY)
-// Toàn bộ logic đăng nhập, bắt đầu thi và nộp bài đã được
-// chuyển giao an toàn sang student-exam-flow.js
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -30,7 +28,6 @@ let presenceInterval = null;
 let realtimeConfigChannel = null;
 let onlineRealtimeChannel = null;
 
-// Biến cục bộ để đếm sĩ số thông minh không cần gọi Database liên tục
 window.localOnlineCount = 1; 
 
 let wakeLockSentinel = null;
@@ -211,10 +208,11 @@ async function refreshOnlineCount() {
     try {
         const urlParams = new URLSearchParams(window.location.search); 
         const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? (examData.id || "") : "");
-        if (!currentQuizId || !supabaseClient) return;
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (!currentQuizId || !client) return;
 
-        const activeThreshold = Date.now() - (3 * 60 * 1000);
-        let { count, error } = await supabaseClient
+        const activeThreshold = Date.now() - (15 * 60 * 1000); // 15 phút
+        let { count, error } = await client
             .from('active_sessions')
             .select('*', { count: 'exact', head: true })
             .eq('quiz_id', currentQuizId)
@@ -259,13 +257,14 @@ async function handleOnlineCountClick() {
 }
 
 function startOnlineRealtimeWatcher(quizId) {
-    if (!quizId || !supabaseClient) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!quizId || !client) return;
     if (onlineRealtimeChannel) {
-        supabaseClient.removeChannel(onlineRealtimeChannel);
+        client.removeChannel(onlineRealtimeChannel);
         onlineRealtimeChannel = null;
     }
 
-    onlineRealtimeChannel = supabaseClient.channel(`online_count_${quizId}_${Date.now()}`)
+    onlineRealtimeChannel = client.channel(`online_count_${quizId}_${Date.now()}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'active_sessions', filter: `quiz_id=eq.${quizId}` }, () => {
             window.localOnlineCount++;
             const countEl = document.getElementById("nav-online-val");
@@ -293,31 +292,35 @@ function startPresenceSystem(sId) {
     if (presenceInterval) clearInterval(presenceInterval);
     presenceInterval = setInterval(() => { 
         updatePresence(cleanSbd); 
-    }, 45000);
+    }, 30000);
 }
 
 async function updatePresence(cleanSbd) {
     try {
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         const urlParams = new URLSearchParams(window.location.search); 
         const currentQuizId = urlParams.get('id') || "";
-        if (!currentQuizId || isSubmitted) return;
+        if (!currentQuizId || isSubmitted || !client) return;
 
-        await supabaseClient.from('active_sessions').update({ last_ping: Date.now() })
+        await client.from('active_sessions').update({ last_ping: Date.now() })
             .match({ quiz_id: currentQuizId, sbd: cleanSbd });
     } catch(e) {}
 }
 
 function clearPresence(sId) {
     if (presenceInterval) clearInterval(presenceInterval);
-    if (onlineRealtimeChannel && supabaseClient) {
-        supabaseClient.removeChannel(onlineRealtimeChannel);
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (onlineRealtimeChannel && client) {
+        client.removeChannel(onlineRealtimeChannel);
         onlineRealtimeChannel = null;
     }
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
 
-    supabaseClient.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
+    if (client && currentQuizId) {
+        client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
+    }
 }
 
 function showTimeChangeToast(message) {
@@ -330,10 +333,11 @@ function showTimeChangeToast(message) {
 }
 
 function startTimeWatcherRealtime(quizId) {
-    if (!quizId || !supabaseClient) return;
-    if (realtimeConfigChannel) { supabaseClient.removeChannel(realtimeConfigChannel); }
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!quizId || !client) return;
+    if (realtimeConfigChannel) { client.removeChannel(realtimeConfigChannel); }
 
-    realtimeConfigChannel = supabaseClient.channel(`exam_config_${quizId}`)
+    realtimeConfigChannel = client.channel(`exam_config_${quizId}`)
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'quizzes', filter: `id=eq.${quizId}` }, payload => {
             const freshData = payload.new;
             if (!freshData || isSubmitted || !examStartTime) return;
@@ -472,8 +476,10 @@ function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) {
     const currentCat = getExamCategory(); 
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
 
-    supabaseClient.from('cheating_logs').insert([{
+    client.from('cheating_logs').insert([{
         quiz_id: currentQuizId,
         sbd: (sId || "user").replace(/[^a-zA-Z0-9]/g, '_'),
         student_name: sName || "Chưa nhập",
