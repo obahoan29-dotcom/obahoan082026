@@ -161,7 +161,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     ].filter(Boolean)));
 
     try {
-        // TRUY VẤN ĐỦ 4 BẢNG: submissions, live_drafts, active_sessions, cheating_logs
         const [subRes, cheatRes, activeRes, draftRes] = await Promise.all([
             client.from('submissions').select('*').in('quiz_id', candidateIds),
             client.from('cheating_logs').select('*').in('quiz_id', candidateIds),
@@ -205,7 +204,8 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
                 className: a.class_name,
                 startTime: a.start_time,
                 lastPing: a.last_ping,
-                isFree: a.is_free
+                isFree: a.is_free,
+                categoryId: a.category_id
             };
         });
 
@@ -217,7 +217,8 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
                 name: d.student_name,
                 className: d.class_name,
                 userAnswers: d.user_answers || {},
-                lastUpdated: d.last_updated
+                lastUpdated: d.last_updated,
+                categoryId: d.category_id
             };
         });
 
@@ -234,7 +235,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     }
 }
 
-// BỘ DỰNG BẢNG THÔNG MINH: KHÔNG BAO GIỜ BỎ SÓT BÀI ĐANG LÀM HOẶC THÍ SINH TỰ DO
+// BỘ DỰNG BẢNG THÔNG MINH: LỌC CHUẨN XÁC THEO SBD ĐỂ KHÔNG BỊ TRỘN LỚP
 function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, activeSessionsMap, liveDraftsMap, examItem, examMeta = {}) {
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(categoryId) : [];
     const targetCatId = String(categoryId || "").trim();
@@ -271,12 +272,12 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     const submittedSbds = new Set(submissionsList.map(s => cleanSbdStandard(s.sbd || s.studentId)));
 
-    // 3. HỢP NHẤT TRẠNG THÁI "ĐANG LÀM BÀI" TỪ CẢ active_sessions VÀ live_drafts (GIẢI QUYẾT LỖI 1)
+    // 3. HỢP NHẤT TRẠNG THÁI "ĐANG LÀM BÀI"
     const inProgressUsersMap = {};
     const allPendingKeys = new Set([...Object.keys(activeSessionsMap), ...Object.keys(liveDraftsMap)]);
 
     allPendingKeys.forEach(sbdKey => {
-        if (submittedSbds.has(sbdKey)) return; // Đã nộp thì thôi
+        if (submittedSbds.has(sbdKey)) return;
 
         const sess = activeSessionsMap[sbdKey] || {};
         const draft = liveDraftsMap[sbdKey] || {};
@@ -289,7 +290,8 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             startTime: sess.startTime || (draft.lastUpdated ? new Date(draft.lastUpdated).getTime() : Date.now()),
             isFree: sess.isFree !== undefined ? sess.isFree : true,
             userAnswers: draft.userAnswers || {},
-            answeredCount: answeredCount
+            answeredCount: answeredCount,
+            categoryId: sess.categoryId || draft.categoryId || ""
         };
     });
 
@@ -297,7 +299,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     const usedSbdSet = new Set();
     const usedSubIds = new Set();
 
-    // 4. DUYỆT DANH SÁCH THÍ SINH THEO LỚP
+    // 4. DUYỆT DANH SÁCH THÍ SINH THEO LỚP ĐANG XEM
     classAccounts.forEach((acc, idx) => {
         const accSbdLower = String(acc.sbd || "").trim().toLowerCase();
         const accSbdClean = cleanSbdStandard(acc.sbd);
@@ -358,13 +360,23 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     let freeSttCounter = classAccounts.length + 1;
 
-    // 5. THÍ SINH TỰ DO ĐANG LÀM BÀI (ĐƯỢC BẢO LƯU TỪ IN_PROGRESS_USERS_MAP)
+    // 5. THÍ SINH TỰ DO ĐANG LÀM BÀI (CHỈ ĐƯA VÀO NẾU ĐÚNG LỚP ĐANG XEM)
     for (let sbdKey in inProgressUsersMap) {
         if (usedSbdSet.has(sbdKey)) continue;
         const prog = inProgressUsersMap[sbdKey];
 
         const isBelongToClass = classAccounts.some(acc => cleanSbdStandard(acc.sbd) === sbdKey);
         if (isBelongToClass) continue;
+
+        // KIỂM TRA ĐỊNH DẠNG SBD CỦA EM NÀY CÓ PHẢI THUỘC LỚP KHÁC KHÔNG
+        const autoCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(prog.sbd) : null;
+        if (autoCat && autoCat !== targetCatId) {
+            // Em này thuộc lớp khác (ví dụ 11C, 10P...), không đưa vào bảng của lớp đang xem
+            continue;
+        }
+        if (!autoCat && prog.categoryId && prog.categoryId !== targetCatId) {
+            continue;
+        }
 
         usedSbdSet.add(sbdKey);
 
@@ -390,11 +402,23 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         });
     }
 
-    // 6. THÍ SINH TỰ DO ĐÃ NỘP BÀI (KHÔNG BAO GIỜ BỊ LỌC MẤT - GIẢI QUYẾT TRIỆT ĐỂ LỖI 3)
+    // 6. THÍ SINH TỰ DO ĐÃ NỘP BÀI (LỌC THEO SBD ĐÚNG LỚP, KHÔNG BỊ TRỘN LỚP KHÁC)
     const freeSubmissionsBySbd = {};
     for (let sub of submissionsList) {
         if (usedSubIds.has(sub.id)) continue;
-        const sbdKey = cleanSbdStandard(sub.sbd || sub.studentId || "free");
+        const rawSbd = sub.sbd || sub.studentId || "free";
+        const sbdKey = cleanSbdStandard(rawSbd);
+
+        // KIỂM TRA ĐỊNH DẠNG SBD CỦA BÀI NỘP NÀY
+        const autoCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(rawSbd) : null;
+        if (autoCat && autoCat !== targetCatId) {
+            // Bài này thuộc lớp khác (ví dụ 11C, 11E, 10P...) -> KHÔNG ĐƯA VÀO BẢNG 11A!
+            continue;
+        }
+        if (!autoCat && sub.category_id && sub.category_id !== targetCatId) {
+            continue;
+        }
+
         if (!freeSubmissionsBySbd[sbdKey]) freeSubmissionsBySbd[sbdKey] = [];
         freeSubmissionsBySbd[sbdKey].push(sub);
     }
@@ -431,7 +455,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(finalRows);
 }
 
-// 7. BỘ THU BÀI TỰ ĐỘNG NÂNG CẤP (QUÉT CẢ LIVE_DRAFTS VÀ ACTIVE_SESSIONS)
+// 7. BỘ THU BÀI TỰ ĐỘNG NÂNG CẤP
 async function triggerAutoCollectDrafts(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
@@ -460,11 +484,8 @@ async function triggerAutoCollectDrafts(event) {
         if (!quizObj) throw new Error("Không tìm thấy dữ liệu đề thi trên máy chủ!");
 
         const submittedSbds = new Set((subsRes.data || []).map(s => cleanSbdStandard(s.sbd)));
-
-        // Hợp nhất danh sách tất cả các em cần thu bài
         const pendingToCollect = new Map();
 
-        // Nguồn 1: live_drafts
         drafts.forEach(d => {
             const key = cleanSbdStandard(d.sbd);
             if (!submittedSbds.has(key)) {
@@ -473,12 +494,11 @@ async function triggerAutoCollectDrafts(event) {
                     name: d.student_name || "Học sinh",
                     className: d.class_name || "Lớp",
                     userAnswers: d.user_answers || {},
-                    cat: d.category_id || "them-11"
+                    cat: d.category_id || (typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(d.sbd) : "them-11")
                 });
             }
         });
 
-        // Nguồn 2: active_sessions (Nếu học sinh vào thi mà bị gián đoạn trước khi chọn đáp án)
         activeList.forEach(a => {
             const key = cleanSbdStandard(a.sbd);
             if (!submittedSbds.has(key) && !pendingToCollect.has(key)) {
@@ -487,7 +507,7 @@ async function triggerAutoCollectDrafts(event) {
                     name: a.name || "Học sinh",
                     className: a.class_name || "Lớp",
                     userAnswers: {},
-                    cat: a.category_id || "them-11"
+                    cat: a.category_id || (typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(a.sbd) : "them-11")
                 });
             }
         });
@@ -497,7 +517,6 @@ async function triggerAutoCollectDrafts(event) {
             return;
         }
 
-        // Tạo bảng đáp án chuẩn từ đề gốc
         const answerVault = {};
         const letters = ["A", "B", "C", "D"];
         (quizObj.questions || []).forEach(q => {
@@ -542,7 +561,6 @@ async function triggerAutoCollectDrafts(event) {
                 created_at: new Date().toISOString()
             });
 
-            // Xóa dọn dẹp nháp và session sau khi đã thu bài thành công
             await client.from('live_drafts').delete().match({ quiz_id: quizId, sbd: student.sbd });
             await client.from('active_sessions').delete().match({ quiz_id: quizId, sbd: student.sbd });
 
