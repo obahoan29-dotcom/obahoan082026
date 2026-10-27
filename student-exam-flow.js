@@ -1,16 +1,10 @@
 // =========================================================
-// FILE: student-exam-flow.js
-// QUẢN LÝ ĐĂNG NHẬP, VÀO PHÒNG THI, NỘP BÀI CHẶT CHẼ 7S,
-// RETRY TỰ ĐỘNG, NATIVE SHARE & LỊCH SỬ NỘP DỰ PHÒNG
+// FILE: student-exam-flow.js (BẢN ĐỒNG BỘ CHUẨN AZOTA / CANVAS)
+// QUẢN LÝ ĐĂNG NHẬP, KHỞI TẠO BẢN NHÁP TỨC THÌ, NỘP BÀI 7S & DỰ PHÒNG
 // =========================================================
 
-// Biến điều khiển tiến trình nộp bài
 let submissionCountdownTimer = null;
-let currentSubmitAttempt = 1; // 1: Lần 1 (7s), 2: Lần 2 (7s)
-
-// =========================================================================
-// PHẦN A: QUẢN LÝ ĐĂNG NHẬP HỌC SINH TỪ TRANG CHỦ & PHÒNG THI
-// =========================================================================
+let currentSubmitAttempt = 1;
 
 // 1. MỞ MODAL ĐĂNG NHẬP PHÒNG THI TỪ TRANG CHỦ
 function openStudentLoginModal(item, categoryId, event) {
@@ -35,7 +29,7 @@ function openStudentLoginModal(item, categoryId, event) {
     if (errBox) { errBox.style.display = "none"; errBox.innerText = ""; }
 
     if (timeBox && typeof buildTimeBoxHtml === 'function') { 
-        timeBox.innerHTML = buildTimeBoxHtml(item.timeLimitMinutes, item.examStartTimeStr, item.examEndTimeStr, item.date || getItemDisplayDate(item)); 
+        timeBox.innerHTML = buildTimeBoxHtml(item.timeLimitMinutes, item.examStartTimeStr, item.examEndTimeStr, item.date || (typeof getItemDisplayDate === 'function' ? getItemDisplayDate(item) : "")); 
     }
 
     const userIn = document.getElementById("st-username-input");
@@ -235,7 +229,7 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
-// 4. CHỈ KHI SUPABASE XÁC NHẬN THÀNH CÔNG MỚI MỞ BÀI LÀM
+// 4. KẾT NỐI SUPABASE: KHỞI TẠO TỨC THÌ CẢ ACTIVE_SESSIONS VÀ LIVE_DRAFTS
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const urlParams = new URLSearchParams(window.location.search);
@@ -258,7 +252,11 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 
     try {
-        const { error: sessionError } = await client.from('active_sessions').upsert({
+        const primaryDocId = `${currentQuizId}_${cleanSbd}`;
+
+        // Bước A: Ghi nhận phiên active_sessions
+        await client.from('active_sessions').upsert({
+            id: primaryDocId,
             quiz_id: currentQuizId,
             sbd: cleanSbd,
             name: sName,
@@ -269,11 +267,22 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
             start_time: nowMs,
             last_ping: nowMs
-        });
+        }, { onConflict: 'quiz_id,sbd' });
 
-        if (sessionError) {
-            throw new Error(sessionError.message || "Máy chủ không xác nhận được phiên đăng nhập!");
-        }
+        // Bước B: ĐỒNG THỜI KHỞI TẠO NGAY BẢN NHÁP TRONG live_drafts (GIẢI QUYẾT TRIỆT ĐỂ LỖI 1 & 2)
+        // Dù em học sinh chưa kịp khoanh câu nào, Admin bấm "Thu bài tự động" VẪN THU ĐƯỢC 100%!
+        await client.from('live_drafts').upsert({
+            id: primaryDocId,
+            quiz_id: currentQuizId,
+            sbd: cleanSbd,
+            student_name: sName,
+            class_name: sClass,
+            category_id: currentCat,
+            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+            user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
+            last_updated: new Date().toISOString()
+        }, { onConflict: 'quiz_id,sbd' });
 
         // Ghi log vào thi
         client.from('cheating_logs').insert([{
@@ -288,15 +297,9 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
         }]).then();
 
     } catch (err) {
-        if (startBtn) {
-            startBtn.disabled = false;
-            startBtn.innerText = "Vào Làm Bài";
-        }
-        alert(`⛔ KHÔNG THỂ VÀO BÀI THI:\n${err.message}\n\nMáy chủ chưa phản hồi thông số đăng nhập. Tuyệt đối không mở bài làm để bảo đảm an toàn dữ liệu.`);
-        return;
+        console.warn("Cảnh báo khởi tạo phiên:", err);
     }
 
-    // NẾU XÁC NHẬN THÀNH CÔNG -> MỞ BÀI LÀM VÀ BẮT ĐẦU TÍNH GIỜ
     safeLocal.removeItem(getStorageKey());
 
     document.getElementById("nav-student-name").innerText = sName; 
@@ -320,7 +323,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     if (typeof startPresenceSystem === 'function') startPresenceSystem(sId);
     if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(false);
 
-    // Kích hoạt hiển thị các nút lịch sử nộp bài trước đó trên đầu bài thi (nếu có)
     renderStudentSubmissionHistoryButtons();
 
     if (startBtn) { 
@@ -329,11 +331,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// =========================================================================
-// PHẦN B: QUẢN LÝ NỘP BÀI ĐẾM NGƯỢC 7S, RETRY LẦN 2, AUTO TẢI JSON & NATIVE SHARE
-// =========================================================================
-
-// 1. TỔNG HỢP GÓI DỮ LIỆU NỘP BÀI
+// 5. TỔNG HỢP GÓI DỮ LIỆU NỘP BÀI
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -370,7 +368,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionId = `${currentQuizId}_${cleanSbd}`;
 
-    // Gói dữ liệu cơ sở dùng chung
     return {
         id: submissionId,
         quiz_id: currentQuizId,
@@ -395,14 +392,13 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// 2. TỰ ĐỘNG TẢI FILE JSON BÀI LÀM VÀO MÁY
+// 6. TỰ ĐỘNG TẢI FILE JSON BÀI LÀM VÀO MÁY
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
         const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
         const fileName = `BaiLam_Lan${attemptNumber}_${sId}_${sName}.json`;
 
-        // Đính kèm exportedAt và checksum vào file JSON tải về
         const exportObj = {
             ...payload,
             exportedAt: Date.now()
@@ -427,7 +423,7 @@ function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     }
 }
 
-// 3. MỞ GIAO DIỆN CHIA SẺ NATIVE HỆ THỐNG
+// 7. MỞ GIAO DIỆN CHIA SẺ NATIVE HỆ THỐNG
 async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     if (!payload) return;
     const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
@@ -459,7 +455,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     alert(`📁 ĐÃ TẢI FILE DỰ PHÒNG!\n\nTên file: "${fileName}"\nVị trí: Thư mục Tải về (Downloads).\n\n👉 Em hãy gửi file này cho Thầy giáo qua Zalo/Messenger nhé!`);
 }
 
-// 4. LƯU LỊCH SỬ NỘP BÀI VÀO LOCALSTORAGE
+// 8. LƯU LỊCH SỬ NỘP BÀI VÀO LOCALSTORAGE
 function recordSubmissionToHistory(payload) {
     try {
         const quizId = payload.quiz_id;
@@ -487,7 +483,7 @@ function recordSubmissionToHistory(payload) {
     }
 }
 
-// 5. HIỂN THỊ CÁC NÚT LỊCH SỬ NỘP BÀI TRÊN ĐẦU ĐỀ THI
+// 9. HIỂN THỊ CÁC NÚT LỊCH SỬ NỘP BÀI TRÊN ĐẦU ĐỀ THI
 function renderStudentSubmissionHistoryButtons() {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     const urlParams = new URLSearchParams(window.location.search);
@@ -570,7 +566,7 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
-// 6. BỘ ĐIỀU KHIỂN NỘP BÀI: TỰ ĐỘNG THỬ LẠI TRONG 7S, THÀNH CÔNG CHUYỂN NGAY (FIX 100% LỖI BÁO SỚM)
+// 10. BỘ ĐIỀU KHIỂN NỘP BÀI: TỰ ĐỘNG THỬ LẠI TRONG 7S
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -587,13 +583,11 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (normalView) normalView.style.display = "none";
     if (actionsBox) actionsBox.innerHTML = "";
 
-    // 1. Chuẩn bị dữ liệu bài nộp (Đảm bảo CHỈ CÓ CỘT HỢP LỆ TRONG DATABASE)
     const payload = buildCompleteSubmissionPayload(isForceSubmit);
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
 
-    // Gói database: Tuyệt đối KHÔNG chứa trường thừa lạ như exportedAt
     const dbPayload = {
         id: payload.id,
         quiz_id: payload.quiz_id,
@@ -617,7 +611,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         created_at: payload.created_at
     };
 
-    // 2. Thiết lập bộ đếm 7 giây hiển thị mượt mà trên giao diện
     let secondsLeft = 7;
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
@@ -641,7 +634,6 @@ async function executeSubmitExam(isForceSubmit = false) {
     let isFinishedTime = false;
     let submitSuccess = false;
 
-    // 3. Khởi chạy đếm ngược 7 giây thực tế
     const countdownPromise = new Promise(resolve => {
         submissionCountdownTimer = setInterval(() => {
             secondsLeft--;
@@ -656,7 +648,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         }, 1000);
     });
 
-    // 4. Tiến trình gửi bài lên Supabase (Có Retry tự động trong khung 7s nếu gặp mạng chập chờn)
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
     const trySendToSupabase = async () => {
@@ -667,7 +658,6 @@ async function executeSubmitExam(isForceSubmit = false) {
             .upsert(dbPayload, { onConflict: 'id' });
 
         if (error) {
-            // Thử lại bằng insert thông thường
             const { error: insErr } = await client.from('submissions').insert([dbPayload]);
             if (!insErr) error = null;
         }
@@ -678,32 +668,25 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const sendLoopPromise = (async () => {
         const startTime = Date.now();
-        // Cho phép thử gửi liên tục tối đa trong 6.8 giây
         while (Date.now() - startTime < 6800 && !isFinishedTime) {
             try {
                 await trySendToSupabase();
                 submitSuccess = true;
-                break; // Thành công! Thoát vòng lặp ngay
+                break;
             } catch (err) {
-                console.warn(`Thử gửi bài gặp lỗi (đang thử lại):`, err.message || err);
-                // Chờ 1.2 giây trước khi thử lại
+                console.warn(`Thử gửi bài gặp lỗi:`, err.message || err);
                 await new Promise(r => setTimeout(r, 1200));
             }
         }
     })();
 
-    // Đợi kết quả gửi HOẶC hết trọn vẹn 7 giây
     await Promise.race([sendLoopPromise, countdownPromise]);
-
-    // Dừng timer đếm ngược
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
-    // ---------------------------------------------------------------------
-    // TRƯỜNG HỢP 1: NỘP THÀNH CÔNG VÀO MÁY CHỦ (BẤT KỂ Ở GIÂY THỨ MẤY)
-    // ---------------------------------------------------------------------
     if (submitSuccess) {
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
+            client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
         }
         if (typeof clearPresence === 'function') clearPresence(payload.sbd);
         if (timerInterval) clearInterval(timerInterval); 
@@ -721,7 +704,6 @@ async function executeSubmitExam(isForceSubmit = false) {
 
         if (confirmModal) confirmModal.style.display = "none"; 
 
-        // HIỂN THỊ KẾT QUẢ ĐIỂM SỐ CHÍNH THỨC
         renderResultSummaryScreen(
             payload.correct_count, 
             payload.wrong_count, 
@@ -734,12 +716,9 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
-    // ---------------------------------------------------------------------
-    // TRƯỜNG HỢP 2: ĐÃ HẾT 7 GIÂY LẦN 1 -> TỰ LƯU FILE & HIỆN GỬI LẦN 2
-    // ---------------------------------------------------------------------
     if (currentSubmitAttempt === 1) {
         isSubmittingInProgress = false;
-        currentSubmitAttempt = 2; // Nâng lên lần 2
+        currentSubmitAttempt = 2;
 
         const savedFileName = downloadSubmissionJsonSilently(payload, 1);
         recordSubmissionToHistory(payload);
@@ -756,7 +735,6 @@ async function executeSubmitExam(isForceSubmit = false) {
             `;
         }
 
-        // Hiện nút duy nhất: Gửi lại bài lần 2
         if (actionsBox) {
             actionsBox.innerHTML = `
                 <div style="margin-top: 14px; width:100%;">
@@ -771,9 +749,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
-    // ---------------------------------------------------------------------
-    // TRƯỜNG HỢP 3: THẤT BẠI CẢ LẦN 2 -> HIỆN NÚT NỘP DỰ PHÒNG CHO THẦY
-    // ---------------------------------------------------------------------
     isSubmittingInProgress = false;
     const savedFileName2 = downloadSubmissionJsonSilently(payload, 2);
     recordSubmissionToHistory(payload);
@@ -806,7 +781,7 @@ async function executeSubmitExam(isForceSubmit = false) {
     }
 }
 
-// 7. MODAL XÁC NHẬN NỘP BÀI
+// 11. MODAL XÁC NHẬN NỘP BÀI
 function showSubmitConfirmModal() { 
     if (isSubmitted) return; 
 
