@@ -47,7 +47,6 @@ function generateSubmissionChecksum(payload) {
         const sName = String(payload.studentName || "");
         const sScore = String(payload.score10 !== undefined ? payload.score10 : "");
         
-        // Dấu nháy ngược (Backtick) chuẩn xác để nối chuỗi
         const rawKey = `${sId}_${sName}_${sScore}_OBAHOAN_SECURE_2026`;
         
         let hash = 0;
@@ -91,17 +90,15 @@ function downloadCompletedOrDraftSubmission() {
     const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
     const sId = (payload.studentId || payload.sbd || "sbd").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
     const sName = (payload.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    
-    // Tạo tên file chuẩn bằng nháy ngược
-    const fileName = `BaiLam_${sId}_${sName}.json`;
+    const attempt = payload.attemptNumber ? `_Lan${payload.attemptNumber}` : "";
+    const fileName = `BaiLam_${sId}_${sName}${attempt}.json`;
 
     executeBrowserFileDownload(blob, fileName);
     
-    // Popup thông báo sử dụng nháy ngược để hiện thông tin chuẩn xác
     alert(`✅ ĐÃ TẢI FILE DỰ PHÒNG THÀNH CÔNG!\n\n📁 Tên file: "${fileName}"\n📍 Vị trí: Đã lưu vào mục "Tải về" (Downloads) trên máy của bạn.\n\n👉 Bạn hãy gửi file đính kèm này cho Thầy giáo khi có sự cố mạng nhé!`);
 }
 
-// HÀM MỚI: TỰ ĐỘNG TẢI FILE VÀ ĐÁNH DẤU LẦN THI (GỌI KHI ẤN NỘP BÀI)
+// HÀM TỰ ĐỘNG TẢI FILE VÀ ĐÁNH DẤU LẦN THI (GỌI KHI ẤN NỘP BÀI)
 function triggerAutoDownloadJSON(payload) {
     if (!payload) return;
     
@@ -116,7 +113,6 @@ function triggerAutoDownloadJSON(payload) {
     const sId = (payload.studentId || payload.sbd || "sbd").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
     const sName = (payload.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
     
-    // Tự động kiểm tra số lần thi để đưa vào tên file (Dùng nháy ngược chuẩn)
     const attempt = payload.attemptNumber ? `_Lan${payload.attemptNumber}` : "";
     const fileName = `BaiLam_${sId}_${sName}${attempt}.json`;
 
@@ -125,6 +121,5 @@ function triggerAutoDownloadJSON(payload) {
     }
 }
 
-// Đăng ký toàn cục để các file khác có thể gọi được
 window.downloadCompletedOrDraftSubmission = downloadCompletedOrDraftSubmission;
 window.triggerAutoDownloadJSON = triggerAutoDownloadJSON;
