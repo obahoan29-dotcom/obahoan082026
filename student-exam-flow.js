@@ -38,11 +38,19 @@ function openStudentLoginModal(item, categoryId, event) {
     const fClassIn = document.getElementById("st-free-class-input");
     const fSbdIn = document.getElementById("st-free-sbd-input");
 
-    if (userIn) userIn.value = "";
+    // ĐỔI PLACEHOLDER CHỮ MỜ GỢI Ý CHUẨN THEO LỚP ĐANG CHỌN
+    const placeholderHint = typeof getSbdPlaceholderForCategory === 'function' ? getSbdPlaceholderForCategory(targetCatId) : "Nhập SBD...";
+    if (userIn) {
+        userIn.value = "";
+        userIn.placeholder = placeholderHint;
+    }
     if (passIn) { passIn.value = ""; passIn.type = "password"; }
     if (fNameIn) fNameIn.value = "";
     if (fClassIn) fClassIn.value = "";
-    if (fSbdIn) fSbdIn.value = "";
+    if (fSbdIn) {
+        fSbdIn.value = "";
+        fSbdIn.placeholder = placeholderHint;
+    }
 
     const eyeBtn = document.getElementById("st-eye-btn");
     if (eyeBtn) eyeBtn.innerText = "👁️";
@@ -127,13 +135,19 @@ function submitStudentLogin() {
     if (!targetUrl) { showErr("❌ Không tìm thấy đường dẫn đề thi!"); return; }
 
     let finalSbd = ""; let finalName = ""; let finalClass = "";
-    const activeCat = activeStudentLogin.categoryId || "them-11";
+    let activeCat = activeStudentLogin.categoryId || "them-11";
 
     if (activeStudentLogin.currentMode === "class") {
         const usernameVal = (document.getElementById("st-username-input").value || "").trim();
         const passVal = (document.getElementById("st-password-input").value || "").trim();
 
         if (!usernameVal || !passVal) { showErr("⚠️ Vui lòng nhập đầy đủ Tên đăng nhập (hoặc SBD) và Mật khẩu!"); return; }
+
+        // Tự động nhận diện lớp chuẩn từ SBD người dùng nhập
+        const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(usernameVal) : null;
+        if (detectedCat) {
+            activeCat = detectedCat;
+        }
 
         const accounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(activeCat) : [];
         const normUser = typeof normalizeName === 'function' ? normalizeName(usernameVal) : usernameVal.toLowerCase();
@@ -154,6 +168,11 @@ function submitStudentLogin() {
         finalClass = (document.getElementById("st-free-class-input").value || "").trim();
         finalSbd = (document.getElementById("st-free-sbd-input").value || "").trim();
         if (!finalName || !finalClass || !finalSbd) { showErr("⚠️ Vui lòng nhập đầy đủ Họ tên, Lớp và SBD tự do!"); return; }
+
+        const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
+        if (detectedCat) {
+            activeCat = detectedCat;
+        }
     }
 
     safeLocal.removeItem("last_submission_cleared"); 
@@ -214,7 +233,12 @@ async function startExamAction(isAutostart = false) {
         return;
     }
 
-    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
+    if (detected) {
+        currentCat = detected;
+    }
+
     const checkInClass = typeof findStudentFromDatabase === 'function' ? findStudentFromDatabase(sId, currentCat) : null;
     const isFree = !checkInClass;
 
@@ -231,7 +255,10 @@ async function startExamAction(isAutostart = false) {
 
 // 4. KẾT NỐI SUPABASE: KHỞI TẠO TỨC THÌ CẢ ACTIVE_SESSIONS VÀ LIVE_DRAFTS
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
-    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
+    if (detected) currentCat = detected;
+
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
     const startBtn = document.getElementById("btn-start-exam");
@@ -269,8 +296,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             last_ping: nowMs
         }, { onConflict: 'quiz_id,sbd' });
 
-        // Bước B: ĐỒNG THỜI KHỞI TẠO NGAY BẢN NHÁP TRONG live_drafts (GIẢI QUYẾT TRIỆT ĐỂ LỖI 1 & 2)
-        // Dù em học sinh chưa kịp khoanh câu nào, Admin bấm "Thu bài tự động" VẪN THU ĐƯỢC 100%!
+        // Bước B: ĐỒNG THỜI KHỞI TẠO BẢN NHÁP TRONG live_drafts
         await client.from('live_drafts').upsert({
             id: primaryDocId,
             quiz_id: currentQuizId,
@@ -336,7 +362,11 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
     const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
-    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    
+    let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
+    if (detected) currentCat = detected;
+
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
 
@@ -401,6 +431,7 @@ function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
 
         const exportObj = {
             ...payload,
+            attemptNumber: attemptNumber,
             exportedAt: Date.now()
         };
 
@@ -429,7 +460,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
     const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
     const fileName = `BaiLam_Lan${attemptNumber}_${sId}_${sName}.json`;
-    const exportObj = { ...payload, exportedAt: Date.now() };
+    const exportObj = { ...payload, attemptNumber, exportedAt: Date.now() };
     const jsonStr = JSON.stringify(exportObj, null, 2);
 
     try {
@@ -438,8 +469,8 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
-                title: `Bài làm: ${payload.student_name} (${payload.sbd})`,
-                text: `Kính gửi Thầy bài làm dự phòng của em [${payload.student_name} - SBD: ${payload.sbd} - Lớp: ${payload.class_name}]`
+                title: `Bài làm Lần ${attemptNumber}: ${payload.student_name} (${payload.sbd})`,
+                text: `Kính gửi Thầy bài làm dự phòng Lần ${attemptNumber} của em [${payload.student_name} - SBD: ${payload.sbd} - Lớp: ${payload.class_name}]`
             });
             return;
         }
@@ -452,10 +483,10 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     }
 
     downloadSubmissionJsonSilently(payload, attemptNumber);
-    alert(`📁 ĐÃ TẢI FILE DỰ PHÒNG!\n\nTên file: "${fileName}"\nVị trí: Thư mục Tải về (Downloads).\n\n👉 Em hãy gửi file này cho Thầy giáo qua Zalo/Messenger nhé!`);
+    alert(`📁 ĐÃ TẢI FILE DỰ PHÒNG LẦN ${attemptNumber}!\n\nTên file: "${fileName}"\nVị trí: Thư mục Tải về (Downloads).\n\n👉 Em hãy gửi file này cho Thầy giáo qua Zalo/Messenger nhé!`);
 }
 
-// 8. LƯU LỊCH SỬ NỘP BÀI VÀO LOCALSTORAGE
+// 8. LƯU LỊCH SỬ NỘP BÀI VÀO LOCALSTORAGE BẢO TOÀN VĨNH VIỄN
 function recordSubmissionToHistory(payload) {
     try {
         const quizId = payload.quiz_id;
@@ -478,12 +509,13 @@ function recordSubmissionToHistory(payload) {
         });
 
         safeLocal.setItem(storageKey, JSON.stringify(history));
+        renderStudentSubmissionHistoryButtons();
     } catch (e) {
         console.error("Lỗi lưu lịch sử nộp bài:", e);
     }
 }
 
-// 9. HIỂN THỊ CÁC NÚT LỊCH SỬ NỘP BÀI TRÊN ĐẦU ĐỀ THI
+// 9. HIỂN THỊ CHÍNH XÁC NÚT: "Hãy gửi file json lần 1 nếu cần", "Hãy gửi file json lần 2 nếu cần"
 function renderStudentSubmissionHistoryButtons() {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     const urlParams = new URLSearchParams(window.location.search);
@@ -506,9 +538,9 @@ function renderStudentSubmissionHistoryButtons() {
         container.id = "student-history-buttons-container";
         container.style.cssText = `
             margin: 10px 0 14px 0;
-            padding: 10px 14px;
-            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-            border: 1.5px solid #93c5fd;
+            padding: 12px 14px;
+            background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%);
+            border: 1.5px solid #38bdf8;
             border-radius: 14px;
             box-shadow: 0 4px 14px rgba(2, 132, 199, 0.12);
             display: flex;
@@ -518,15 +550,15 @@ function renderStudentSubmissionHistoryButtons() {
             z-index: 100;
         `;
 
-        const quizContent = document.getElementById("quiz-content");
-        if (quizContent && quizContent.parentNode) {
-            quizContent.parentNode.insertBefore(container, quizContent);
+        const targetAnchor = document.getElementById("student-card") || document.getElementById("quiz-content");
+        if (targetAnchor && targetAnchor.parentNode) {
+            targetAnchor.parentNode.insertBefore(container, targetAnchor);
         }
     }
 
     let buttonsHtml = `
-        <div style="font-size: 12.5px; font-weight: 800; color: #1e40af; display: flex; align-items: center; gap: 6px;">
-            <span>📋</span> <b>LỊCH SỬ BÀI LÀM ĐÃ LƯU TRƯỚC ĐÓ CỦA EM TRÊN ĐỀ NÀY:</b>
+        <div style="font-size: 13px; font-weight: 800; color: #0369a1; display: flex; align-items: center; gap: 6px;">
+            <span>💾</span> <b>BÀI LÀM ĐÃ LƯU TRÊN MÁY NÀY (BẢO LƯU 100%):</b>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
     `;
@@ -535,8 +567,8 @@ function renderStudentSubmissionHistoryButtons() {
         buttonsHtml += `
             <button type="button" class="btn-history-share-json" 
                     onclick="triggerShareFromHistory(${item.attempt})" 
-                    style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; border: none; padding: 7px 12px; border-radius: 9px; font-weight: 800; font-size: 11.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25); transition: transform 0.15s ease;">
-                📤 Lấy file JSON Lần ${item.attempt} (${item.dateStr.split(' ')[0]})
+                    style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: 1.2px solid #86efac; padding: 8px 14px; border-radius: 10px; font-weight: 900; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 3px 8px rgba(16, 185, 129, 0.28); transition: transform 0.15s ease;">
+                📤 Hãy gửi file json lần ${item.attempt} nếu cần (${item.dateStr.split(' ')[0]})
             </button>
         `;
     });
@@ -737,10 +769,14 @@ async function executeSubmitExam(isForceSubmit = false) {
 
         if (actionsBox) {
             actionsBox.innerHTML = `
-                <div style="margin-top: 14px; width:100%;">
+                <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
                     <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
                             style="width:100%; padding:13px; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(2, 132, 199, 0.35);">
                         🔄 Gửi lại bài lần 2
+                    </button>
+                    <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, 1)" 
+                            style="width:100%; padding:10px; background:#f0fdf4; color:#166534; border:1.5px solid #86efac; border-radius:10px; font-weight:900; font-size:0.92rem; cursor:pointer;">
+                        📤 Hãy gửi file json lần 1 nếu cần
                     </button>
                 </div>
             `;
@@ -769,7 +805,7 @@ async function executeSubmitExam(isForceSubmit = false) {
             <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
                 <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, 2)" 
                         style="width:100%; padding:13px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(234, 88, 12, 0.35); display:flex; align-items:center; justify-content:center; gap:6px;">
-                    📤 Nộp file dự phòng cho Thầy giáo
+                    📤 Hãy gửi file json lần 2 nếu cần
                 </button>
                 <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
                         style="width:100%; padding:10px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
