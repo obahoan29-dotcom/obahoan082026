@@ -123,6 +123,11 @@ function applyStudentToUI(student) {
     safeLocal.setItem("saved_student_name", sName); 
     safeLocal.setItem("saved_student_sbd", sId); 
     safeLocal.setItem("saved_student_class", sClass);
+
+    // KHI ÁP DỤNG THÔNG TIN HỌC SINH -> HIỂN THỊ NGAY NÚT GỬI FILE JSON LẦN 1 / LẦN 2 NẾU CÓ
+    if (typeof renderStudentSubmissionHistoryButtons === 'function') {
+        renderStudentSubmissionHistoryButtons();
+    }
 }
 
 function syncStudentFromParamsAndStorage() {
@@ -130,6 +135,13 @@ function syncStudentFromParamsAndStorage() {
     let sbd = urlParams.get('sbd'); 
     let name = urlParams.get('name'); 
     let className = urlParams.get('class');
+
+    // Cập nhật chữ mờ gợi ý theo lớp của đề thi
+    const cat = getExamCategory();
+    const idEl = document.getElementById("student-id");
+    if (idEl && typeof getSbdPlaceholderForCategory === 'function') {
+        idEl.placeholder = getSbdPlaceholderForCategory(cat);
+    }
 
     if (name && name.trim()) { 
         applyStudentToUI({ sbd: sbd ? sbd.trim() : "---", name: name.trim(), className: className ? className.trim() : "---" }); 
@@ -211,7 +223,7 @@ async function refreshOnlineCount() {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (!currentQuizId || !client) return;
 
-        const activeThreshold = Date.now() - (15 * 60 * 1000); // 15 phút
+        const activeThreshold = Date.now() - (15 * 60 * 1000);
         let { count, error } = await client
             .from('active_sessions')
             .select('*', { count: 'exact', head: true })
