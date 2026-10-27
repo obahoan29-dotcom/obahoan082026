@@ -123,7 +123,6 @@ function stripHtml(html) {
     return tmp.textContent || tmp.innerText || "";
 }
 
-// TRÍCH XUẤT CHUẨN XÁC MÃ ĐỀ: NHẬN DIỆN CẢ CÁC ĐỀ DẠNG TONG28_GHK1... VÀ QUIZ_...
 function extractQuizIdFromItem(item) {
     if (!item) return null;
     if (item.url && item.url.includes("?id=")) {
@@ -210,6 +209,48 @@ function getCategoryDisplayName(catId) {
         "tu-luan-padlet": "Tự luận Padlet"
     };
     return map[catId] || catId;
+}
+
+// BỘ NHẬN DIỆN LỚP CHUẨN XÁC 100% TỪ SỐ BÁO DANH ĐỂ PHÂN LOẠI KHÔNG BỊ TRỘN LỚP
+function detectCategoryFromSbd(rawSbd) {
+    if (!rawSbd) return null;
+    const s = String(rawSbd).trim().toLowerCase();
+    
+    if (s.startsWith("11a") || s.startsWith("11a_")) return "lop-11a";
+    if (s.startsWith("11c") || s.startsWith("11c_")) return "lop-11c";
+    if (s.startsWith("11e") || s.startsWith("11e_")) return "lop-11e";
+    if (s.startsWith("10p") || s.startsWith("10p_")) return "lop-10p";
+    if (s.startsWith("hsg")) return "hsg-toan-11";
+
+    if (/^10\d{2}$/.test(s)) return "them-10"; // 1001 đến 1099
+    if (/^11\d{2}$/.test(s)) return "them-11"; // 1101 đến 1199
+    if (/^12\d{2}$/.test(s)) return "them-12"; // 1201 đến 1299
+
+    // Đối chiếu trực tiếp với database STUDENT_ACCOUNTS nếu có
+    if (window.STUDENT_ACCOUNTS) {
+        for (let cat in window.STUDENT_ACCOUNTS) {
+            const list = window.STUDENT_ACCOUNTS[cat];
+            if (Array.isArray(list)) {
+                const found = list.find(acc => acc.sbd && String(acc.sbd).trim().toLowerCase() === s);
+                if (found) return cat;
+            }
+        }
+    }
+    return null;
+}
+
+// CHỮ MỜ GỢI Ý (PLACEHOLDER) THEO TỪNG LỚP ĐỂ HỌC SINH NHẬP ĐÚNG SBD
+function getSbdPlaceholderForCategory(catId) {
+    const c = String(catId || "").toLowerCase();
+    if (c.includes("11a") || c === "lop-11a") return "Ví dụ: 11A01, 11A28, 11A45...";
+    if (c.includes("11c") || c === "lop-11c") return "Ví dụ: 11C01, 11C14, 11C38...";
+    if (c.includes("11e") || c === "lop-11e") return "Ví dụ: 11E01, 11E05, 11E28...";
+    if (c.includes("10p") || c === "lop-10p") return "Ví dụ: 10p01, 10p14, 10p37...";
+    if (c.includes("hsg") || c === "hsg-toan-11") return "Ví dụ: HSG1, HSG2, HSG6...";
+    if (c.includes("them-10") || c === "them 10") return "Ví dụ: 1001, 1016, 1030...";
+    if (c.includes("them-11") || c === "them 11") return "Ví dụ: 1101, 1114, 1137...";
+    if (c.includes("them-12") || c === "them 12") return "Ví dụ: 1201, 1210, 1234...";
+    return "Nhập số báo danh theo lớp của bạn...";
 }
 
 async function sha256Hash(message) {
