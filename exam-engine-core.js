@@ -1,7 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js (BẢN SUPABASE TỐI ƯU BÀI THI)
-// Đã cắt lọc logic đăng nhập & nộp bài sang student-exam-flow.js
-// Giữ nguyên 100% cấu trúc làm bài, MathJax và xem lại đề gốc
+// FILE: exam-engine-core.js (BẢN TỐI ƯU ĐỒNG BỘ CLOUD VỚI SUPABASE)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -29,22 +27,28 @@ let isSubmittingInProgress = false;
     document.head.appendChild(style);
 })();
 
+// LƯU NHÁP LÊN SUPABASE NGAY KHI CHỌN HOẶC ĐIỀN ĐÁP ÁN
 async function autoSaveAnswerToCloud(qKey, answerVal) {
-    if (isSubmitted || isExamLocked || !supabaseClient) return;
-    const sId = document.getElementById("student-id")?.value.trim();
+    if (isSubmitted || isExamLocked) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
+
+    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     if (!sId) return;
 
     const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id');
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
     if (!quizId) return;
 
     const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
-    const sName = document.getElementById("student-name")?.value.trim() || "";
-    const sClass = document.getElementById("student-class")?.value.trim() || "";
+    const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "";
+    const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "";
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const primaryDocId = `${quizId}_${cleanSbd}`;
 
     try {
-        await supabaseClient.from('live_drafts').upsert({
+        await client.from('live_drafts').upsert({
+            id: primaryDocId,
             quiz_id: quizId,
             sbd: cleanSbd,
             student_name: sName,
@@ -54,8 +58,10 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
             exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
             user_answers: window.SECURE_VAULT.userAnswers || {},
             last_updated: new Date().toISOString()
-        });
-    } catch(e) {}
+        }, { onConflict: 'quiz_id,sbd' });
+    } catch(e) {
+        console.warn("Lỗi lưu nháp:", e);
+    }
 }
 
 window.addEventListener('online', function() {
@@ -123,7 +129,8 @@ async function initExamEngine() {
     }
 
     try {
-        const { data, error } = await supabaseClient.from('quizzes').select('*').eq('id', quizId).single();
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        const { data, error } = await client.from('quizzes').select('*').eq('id', quizId).single();
         if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
 
         examData = {
@@ -246,7 +253,6 @@ async function checkSessionStatus(isAutostart = false) {
         if (gl) gl.style.display = 'none';
     };
 
-    // Render các nút lấy file JSON của các lần nộp trước (nếu có)
     if (typeof renderStudentSubmissionHistoryButtons === 'function') {
         renderStudentSubmissionHistoryButtons();
     }
