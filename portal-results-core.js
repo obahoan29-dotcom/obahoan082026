@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-core.js (BẢN SUPABASE TỐI ƯU & QUÉT ĐA MÃ ĐỀ)
-// CẬP NHẬT: LẮNG NGHE REALTIME ACTIVE SESSIONS TỨC THÌ 0S & TIẾT KIỆM BĂNG THÔNG
+// CẬP NHẬT: FIX LỖI MẤT TÊN KHI NỘP BÀI, HIỂN THỊ ĐỦ THÍ SINH TỰ DO & THI THỬ
 // =========================================================
 
 let currentExamResultData = {
@@ -35,6 +35,7 @@ function normalizeCategoryKey(cat) {
 function identifyOfficialStudentCategory(sbd, name) {
     if (!window.STUDENT_ACCOUNTS) return null;
     const cleanSbd = String(sbd || "").trim().toLowerCase();
+    const cleanName = typeof normalizeName === 'function' ? normalizeName(name) : String(name || "").trim().toLowerCase();
 
     if (cleanSbd && cleanSbd.length >= 3 && cleanSbd !== "---" && cleanSbd !== "free" && cleanSbd !== "chuanhap") {
         for (let catId in window.STUDENT_ACCOUNTS) {
@@ -45,43 +46,68 @@ function identifyOfficialStudentCategory(sbd, name) {
             }
         }
     }
+
+    if (cleanName && cleanName.length >= 3) {
+        for (let catId in window.STUDENT_ACCOUNTS) {
+            const list = window.STUDENT_ACCOUNTS[catId];
+            if (!Array.isArray(list)) continue;
+            if (list.some(acc => (typeof normalizeName === 'function' ? normalizeName(acc.name) : String(acc.name || "").toLowerCase()) === cleanName)) {
+                return catId;
+            }
+        }
+    }
     return null;
 }
 
+// BỘ LỌC THÔNG MINH: GIỮ 100% BÀI NỘP HỢP LỆ, KHÔNG BAO GIỜ LÀM MẤT TÊN HỌC SINH TỰ DO HOẶC NICK THỬ NGHIỆM
 function isSubmissionMatchingCategory(sub, targetCatId) {
+    if (!sub) return false;
     if (!targetCatId) return true;
+
     const normTarget = normalizeCategoryKey(targetCatId);
     const subSbdClean = String(sub.sbd || sub.studentId || "").trim().toLowerCase();
-
-    const officialCat = identifyOfficialStudentCategory(sub.sbd || sub.studentId, sub.studentName || sub.name);
-    if (officialCat) return normalizeCategoryKey(officialCat) === normTarget;
-
-    const classAccounts = getAccountsForCategory(targetCatId);
-    if (classAccounts.some(acc => String(acc.sbd || "").trim().toLowerCase() === subSbdClean)) return true;
-
+    const subNameClean = String(sub.studentName || sub.student_name || sub.name || "").trim();
     const rawSubCat = normalizeCategoryKey(sub.categoryId || sub.category_id || sub.cat || "");
     const rawClass = normalizeCategoryKey(sub.studentClass || sub.class_name || "");
 
-    const isClass11C = rawClass.includes("11c") || subSbdClean.startsWith("11c");
-    const isClass11A = (rawClass.includes("11a") || subSbdClean.startsWith("11a")) && !subSbdClean.startsWith("hsg");
-    const isClass11E = rawClass.includes("11e") || subSbdClean.startsWith("11e");
-    const isClass10P = rawClass.includes("10p") || subSbdClean.startsWith("10p");
-    const isClassHSG = rawClass.includes("hsg") || subSbdClean.startsWith("hsg") || rawSubCat.includes("hsg");
+    // 1. Nếu thí sinh thuộc danh sách chính thức của lớp đang xem (theo SBD hoặc theo Họ tên) -> Luôn hiển thị
+    const classAccounts = getAccountsForCategory(targetCatId);
+    const isMatchingClass = classAccounts.some(acc => {
+        const accSbd = String(acc.sbd || "").trim().toLowerCase();
+        const accName = String(acc.name || "").trim();
+        return (accSbd && accSbd === subSbdClean) || 
+               (typeof normalizeName === 'function' && normalizeName(accName) === normalizeName(subNameClean));
+    });
+    if (isMatchingClass) return true;
 
-    if (isClassHSG && normTarget !== "hsgtoan11" && !normTarget.includes("hsg")) return false;
-    if (isClass11C && normTarget !== "lop11c") return false;
-    if (isClass11A && normTarget !== "lop11a") return false;
-    if (isClass11E && normTarget !== "lop11e") return false;
-    if (isClass10P && normTarget !== "lop10p") return false;
+    // 2. Nếu thí sinh thuộc danh sách chính thức của một lớp KHÁC -> Hiển thị bên lớp của họ
+    const officialCat = identifyOfficialStudentCategory(sub.sbd || sub.studentId, sub.studentName || sub.name);
+    if (officialCat) {
+        return normalizeCategoryKey(officialCat) === normTarget;
+    }
 
-    if (normTarget === "lop11c" && !isClass11C) return false;
-    if (normTarget === "lop11a" && !isClass11A) return false;
-    if (normTarget === "lop11e" && !isClass11E) return false;
-    if (normTarget === "lop10p" && !isClass10P) return false;
-    if ((normTarget === "hsgtoan11" || normTarget.includes("hsg")) && !isClassHSG) return false;
-
+    // 3. Nếu bài nộp có category_id khớp với lớp đang xem -> Luôn giữ lại 100%
     if (rawSubCat && rawSubCat === normTarget) return true;
-    return !normTarget.startsWith("lop") && !normTarget.includes("hsg");
+
+    // 4. Nếu thí sinh tự do nhập tên lớp khớp với lớp đang xem
+    if (normTarget === "lop11a" && (rawClass.includes("11a") || subSbdClean.startsWith("11a"))) return true;
+    if (normTarget === "lop11c" && (rawClass.includes("11c") || subSbdClean.startsWith("11c"))) return true;
+    if (normTarget === "lop11e" && (rawClass.includes("11e") || subSbdClean.startsWith("11e"))) return true;
+    if (normTarget === "lop10p" && (rawClass.includes("10p") || subSbdClean.startsWith("10p"))) return true;
+    if ((normTarget === "hsgtoan11" || normTarget.includes("hsg")) && (rawClass.includes("hsg") || subSbdClean.startsWith("hsg"))) return true;
+
+    // 5. Loại trừ nếu thí sinh rõ ràng thuộc lớp đặc thù khác
+    const isExplicitlyOtherClass = 
+        (normTarget !== "lop11a" && (rawClass.includes("11a") || subSbdClean.startsWith("11a")) && !subSbdClean.startsWith("hsg")) ||
+        (normTarget !== "lop11c" && (rawClass.includes("11c") || subSbdClean.startsWith("11c"))) ||
+        (normTarget !== "lop11e" && (rawClass.includes("11e") || subSbdClean.startsWith("11e"))) ||
+        (normTarget !== "lop10p" && (rawClass.includes("10p") || subSbdClean.startsWith("10p"))) ||
+        (!normTarget.includes("hsg") && (rawClass.includes("hsg") || subSbdClean.startsWith("hsg")));
+
+    if (isExplicitlyOtherClass) return false;
+
+    // 6. Thí sinh tự do, nick kiểm tra của giáo viên (Trying, Obahoan29...) nộp đề này -> GIỮ LẠI ĐẦY ĐỦ
+    return true;
 }
 
 function getExamPossibleQuizIds(examItem, examMeta) {
@@ -138,7 +164,7 @@ function getSubmissionTimestamp(sub) {
     return parseDateString(sub.timestamp) || 0;
 }
 
-// BỘ LẮNG NGHE REALTIME KẾT HỢP: NHẬN DIỆN CẢ HỌC SINH MỚI VÀO THI & BÀI NỘP
+// BỘ LẮNG NGHE REALTIME KẾT HỢP: TỰ ĐỘNG CẬP NHẬT TỨC THÌ 0S KHI CÓ EM NỘP BÀI
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -179,8 +205,6 @@ function startRealtimeSubmissionsListener(quizId) {
             table: 'active_sessions', 
             filter: `quiz_id=eq.${id}` 
         }, (payload) => {
-            // TỐI ƯU TIẾT KIỆM BĂNG THÔNG:
-            // Nếu là UPDATE và start_time không đổi (chỉ là ping 60s duy trì mạng) -> Bỏ qua không tải lại
             if (payload.eventType === 'UPDATE') {
                 const oldStartTime = payload.old ? payload.old.start_time : null;
                 const newStartTime = payload.new ? payload.new.start_time : null;
@@ -188,7 +212,6 @@ function startRealtimeSubmissionsListener(quizId) {
                     return; 
                 }
             }
-            // Ngược lại, nếu là INSERT (em mới vừa đăng nhập vào thi) hoặc DELETE (đã nộp/rời bài) -> Cập nhật tức thì!
             debouncedRefreshResults(200);
         });
     });
@@ -208,7 +231,7 @@ function stopRealtimeSubmissionsListener() {
     }
 }
 
-// TẢI KẾT QUẢ ĐÚNG ĐỀ ĐANG XEM (QUÉT TOÀN DIỆN DANH SÁCH MÃ ĐỀ LIÊN QUAN)
+// TẢI KẾT QUẢ TỪ SUPABASE
 async function fetchAndRenderExamResults(item, isSilent = false) {
     if (!item) return;
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -226,12 +249,18 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         }
     } catch(e) {}
 
+    const candidateCodes = (typeof getExamCandidateCodes === 'function') 
+        ? getExamCandidateCodes(examTitle || item.title, maDe, quizId)
+        : [];
+
     const candidateIds = Array.from(new Set([
         quizId,
+        item.id,
+        item.firebaseId,
         cleanExamCodeKey(maDe),
         cleanExamCodeKey(examTitle),
-        item.id,
-        item.firebaseId
+        cleanExamCodeKey(item.title),
+        ...candidateCodes
     ].filter(Boolean)));
 
     try {
@@ -243,8 +272,8 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
         const rawSubs = (subRes.data || []).map(r => ({
             ...r,
-            studentName: r.student_name,
-            studentClass: r.class_name,
+            studentName: r.student_name || r.name || "Thí sinh",
+            studentClass: r.class_name || r.className || "---",
             score10: r.score10,
             rawScore: r.raw_score,
             correctCount: r.correct_count,
@@ -326,16 +355,22 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     }
     submissionsList.sort((a, b) => getSubmissionTimestamp(a) - getSubmissionTimestamp(b));
 
+    // Tập hợp SBD của tất cả thí sinh đã nộp bài thành công
+    const submittedSbds = new Set(submissionsList.map(s => String(s.sbd || "").trim().toLowerCase()));
+
     const activeUsersMap = {};
     const nowMs = Date.now();
     for (let rawKey in activeSessionsMap) {
         let sess = activeSessionsMap[rawKey];
         if (!sess) continue;
         let lastPing = sess.lastPing || sess.startTime || 0;
-        // Cho phép khoảng thời gian 6 phút kể từ ping gần nhất
+        let sessSbd = String(sess.sbd || "").trim().toLowerCase();
+        let cleanSbdKey = sessSbd.replace(/[^a-zA-Z0-9]/g, '_');
+
+        // Nếu thí sinh đã nộp bài rồi thì không coi là đang làm dở
+        if (submittedSbds.has(sessSbd) || submittedSbds.has(cleanSbdKey)) continue;
+
         if (nowMs - lastPing < 360000) {
-            let sessSbd = String(sess.sbd || "").trim().toLowerCase();
-            let cleanSbdKey = sessSbd.replace(/[^a-zA-Z0-9]/g, '_');
             if (sessSbd) activeUsersMap[sessSbd] = sess;
             if (cleanSbdKey) activeUsersMap[cleanSbdKey] = sess;
         }
@@ -345,15 +380,23 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     const usedSbdSet = new Set();
     const usedSubIds = new Set();
 
+    // 1. DUYỆT DANH SÁCH THÍ SINH THEO LỚP
     classAccounts.forEach((acc, idx) => {
         const accSbdLower = String(acc.sbd || "").trim().toLowerCase();
         const accSbdClean = accSbdLower.replace(/[^a-zA-Z0-9]/g, '_');
+        const accNameNorm = typeof normalizeName === 'function' ? normalizeName(acc.name) : acc.name.toLowerCase();
 
         let matchedSubs = [];
         for (let sub of submissionsList) {
-            let subSbd = String(sub.sbd || "").trim().toLowerCase();
+            let subSbd = String(sub.sbd || sub.studentId || "").trim().toLowerCase();
             let subSbdClean = subSbd.replace(/[^a-zA-Z0-9]/g, '_');
-            if ((accSbdLower && subSbd && subSbd === accSbdLower) || (accSbdClean && subSbdClean && subSbdClean === accSbdClean)) {
+            let subNameNorm = typeof normalizeName === 'function' ? normalizeName(sub.studentName || sub.name) : "";
+
+            // Khớp chính xác theo SBD HOẶC theo Họ tên
+            let isSbdMatch = (accSbdLower && subSbd && (subSbd === accSbdLower || subSbdClean === accSbdClean));
+            let isNameMatch = (accNameNorm && subNameNorm && accNameNorm === subNameNorm);
+
+            if (isSbdMatch || isNameMatch) {
                 matchedSubs.push(sub);
                 usedSubIds.add(sub.id);
             }
@@ -393,7 +436,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     let freeSttCounter = classAccounts.length + 1;
 
-    // 1. Thí sinh tự do ĐANG LÀM BÀI (chưa nộp)
+    // 2. THÍ SINH TỰ DO ĐANG LÀM BÀI (CHƯA NỘP)
     for (let sessKey in activeUsersMap) {
         let sess = activeUsersMap[sessKey];
         if (!sess) continue;
@@ -429,21 +472,31 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         });
     }
 
-    // 2. Thí sinh tự do ĐÃ NỘP BÀI
+    // 3. THÍ SINH TỰ DO / NICK TEST ĐÃ NỘP BÀI (GOM NHÓM THEO SBD ĐỂ HIỂN THỊ ĐỦ ĐIỂM SỐ & TÊN)
+    const freeSubmissionsBySbd = {};
     for (let sub of submissionsList) {
         if (usedSubIds.has(sub.id)) continue;
+        const sbdKey = String(sub.sbd || sub.studentId || "free").trim().toLowerCase();
+        if (!freeSubmissionsBySbd[sbdKey]) freeSubmissionsBySbd[sbdKey] = [];
+        freeSubmissionsBySbd[sbdKey].push(sub);
+    }
+
+    for (let sbdKey in freeSubmissionsBySbd) {
+        let attempts = deduplicateAttempts(freeSubmissionsBySbd[sbdKey]);
+        if (attempts.length === 0) continue;
+        const latestSub = attempts[attempts.length - 1];
         const freeAcc = {
-            sbd: sub.sbd || "---",
-            name: sub.studentName || "Thí sinh tự do",
-            className: sub.studentClass || "Tự do"
+            sbd: latestSub.sbd || latestSub.studentId || "---",
+            name: latestSub.studentName || latestSub.student_name || "Thí sinh tự do",
+            className: latestSub.studentClass || latestSub.class_name || "Tự do"
         };
         finalRows.push({
-            _rowUid: 'row_free_' + sub.id + '_' + Math.random().toString(36).substring(2, 7),
+            _rowUid: 'row_free_' + sbdKey + '_' + Math.random().toString(36).substring(2, 7),
             stt: freeSttCounter++, 
             isClassStudent: false, 
             account: freeAcc, 
-            allAttempts: [sub],
-            selectedAttemptIndex: 0, 
+            allAttempts: attempts,
+            selectedAttemptIndex: attempts.length - 1, 
             isDoing: false, 
             doingStartTime: null,
             isFreeDoing: false, 
