@@ -73,7 +73,6 @@ function buildCardHtmlString(item, categoryId) {
     else if (badge === "CHÚ Ý" || badge === "WARNING") badgeClass = "b-warning";
     else if (badge === "BẮT ĐẦU") badgeClass = "b-start";
 
-    // THÊM ID CHO TIME BOX ĐỂ JS CẬP NHẬT TRỰC TIẾP KHÔNG CẦN RELOAD
     let timeBoxHtml = "";
     if (!isDoc && (categoryId.includes("them") || categoryId.includes("lop") || categoryId.includes("hsg"))) {
         timeBoxHtml = `
@@ -190,7 +189,6 @@ function buildCardHtmlString(item, categoryId) {
         `;
     }
 
-    // NÚT ĐẾM SĨ SỐ THÔNG MINH CHO ADMIN TRÊN TRANG CHỦ
     let liveCountBadgeHtml = "";
     if (!isDoc && isAdminLoggedIn) {
         liveCountBadgeHtml = `
@@ -364,7 +362,6 @@ function buildCardHtmlString(item, categoryId) {
     </div>`;
 }
 
-// HÀM FETCH ĐẾM SĨ SỐ (CHỈ DÀNH CHO ADMIN)
 async function fetchLiveCountForCard(quizId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const badge = document.getElementById(`live-count-${itemId}`);
@@ -432,7 +429,6 @@ function handleCardClick(categoryId, itemId, isDoc, rawUrl, stringifiedData, eve
     openStudentLoginModal(item, categoryId, event);
 }
 
-// BẬT / TẮT XUẤT ĐỀ THI
 async function handleAllowExportExamToggleChange(categoryId, itemId, quizId, isChecked, event) {
     if (event) event.stopPropagation();
 
@@ -458,7 +454,6 @@ async function handleAllowExportExamToggleChange(categoryId, itemId, quizId, isC
     }
 }
 
-// BẬT / TẮT SĨ SỐ PHÒNG THI
 async function handleShowOnlineCountToggleChange(categoryId, itemId, quizId, isChecked, event) {
     if (event) event.stopPropagation();
     
