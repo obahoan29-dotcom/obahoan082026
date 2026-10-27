@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js (BẢN SUPABASE - SỬA LỖI AUTO SUBMIT & ĐA DỰ PHÒNG)
-// ĐÃ KHẮC PHỤC LỖI CÚ PHÁP MẤT DẤU NHÁY NGƯỢC (BACKTICKS)
+// FILE: exam-engine-core.js (BẢN SUPABASE TỐI ƯU TIMEOUT 8S & CHUYỂN MESSENGER)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -15,6 +14,8 @@ let hasInitExamEngine = false;
 let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
+let submitFailCount = 0; // Đếm số lần nộp bài không thành công liên tiếp
+let submitCountdownInterval = null; // Timer đếm ngược 8 giây khi nộp bài
 
 (function injectLockStyles() {
     const styleId = "exam-engine-lock-styles";
@@ -24,6 +25,59 @@ let isSubmittingInProgress = false;
     style.innerHTML = `
         .quiz-content-locked { pointer-events: none !important; user-select: none !important; opacity: 0.88; }
         .quiz-content-locked input, .quiz-content-locked textarea, .quiz-content-locked select, .quiz-content-locked button { cursor: not-allowed !important; }
+        .submit-countdown-badge {
+            display: inline-block;
+            background: #e0f2fe;
+            color: #0284c7;
+            font-size: 1.4rem;
+            font-weight: 900;
+            padding: 4px 16px;
+            border-radius: 20px;
+            border: 2px solid #38bdf8;
+            margin: 8px 0;
+            font-family: 'Courier New', Courier, monospace;
+            animation: pulseSubmitSec 1s infinite alternate;
+        }
+        @keyframes pulseSubmitSec {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.08); }
+        }
+        .file-location-box {
+            background: #f8fafc;
+            border: 1.5px dashed #0284c7;
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin: 12px 0;
+            text-align: left;
+            font-size: 0.9rem;
+            color: #0f172a;
+            line-height: 1.45;
+        }
+        .file-location-box b { color: #0284c7; }
+        .btn-send-messenger-teacher {
+            background: linear-gradient(135deg, #0084ff 0%, #0062e0 100%);
+            color: #ffffff !important;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 900;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(0, 132, 255, 0.4);
+            transition: all 0.2s ease;
+            width: 100%;
+        }
+        .btn-send-messenger-teacher:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+        .btn-send-messenger-teacher:active {
+            transform: translateY(2px) scale(0.96);
+        }
     `;
     document.head.appendChild(style);
 })();
@@ -40,6 +94,7 @@ function getStudentHistoryKey() {
     return `exam_history_backups_${quizId}_${cleanSbd}`;
 }
 
+// BẢNG HIỂN THỊ CÁC NÚT LẦN 1, LẦN 2 TRÊN ĐẦU BÀI LÀM KHI ĐĂNG NHẬP LẠI
 function renderBackupHistoryBanners() {
     let container = document.getElementById("multi-backup-container");
     if (!container) {
@@ -73,26 +128,50 @@ function renderBackupHistoryBanners() {
         row.className = "backup-history-item";
         
         row.innerHTML = `
-            <button type="button" class="backup-history-btn" onclick="downloadSpecificBackup(${index})">
-                💾 Tải file JSON bài làm Lần ${attemptNum} (Điểm máy chấm: ${score}đ) - ${timeStr}
+            <button type="button" class="backup-history-btn" onclick="handleSendHistoryToTeacher(${index})" title="Bấm vào để lấy file JSON bài làm và mở Messenger gửi Thầy giáo">
+                💾 <b>Lần ${attemptNum}</b>: Lấy file JSON gửi Thầy giáo (${score}đ - lúc ${timeStr}) ➔
             </button>
-            <button type="button" class="backup-history-del" onclick="deleteSpecificBackup(${index})" title="Xóa file dự phòng này">✕</button>
+            <button type="button" class="backup-history-del" onclick="deleteSpecificBackup(${index})" title="Xóa file dự phòng lần này">✕</button>
         `;
         container.appendChild(row);
     });
 }
 
-function downloadSpecificBackup(index) {
+// HÀM XỬ LÝ LẤY FILE JSON VÀ CHUYỂN MESSENGER KHI BẤM NÚT LẦN 1, LẦN 2...
+function handleSendHistoryToTeacher(index) {
     const key = getStudentHistoryKey();
     let history = [];
     try { history = JSON.parse(safeLocal.getItem(key)) || []; } catch(e) {}
     
-    if (history[index]) {
-        if (typeof triggerAutoDownloadJSON === 'function') {
-            triggerAutoDownloadJSON(history[index]);
-            alert("✅ ĐÃ TẢI LẠI FILE DỰ PHÒNG THÀNH CÔNG!\n\nBạn có thể tìm thấy file này trong mục 'Tải về' (Downloads) trên máy tính/điện thoại.");
-        }
+    const payload = history[index];
+    if (!payload) {
+        alert("⚠️ Không tìm thấy bài làm của lần thi này!");
+        return;
     }
+
+    if (typeof triggerAutoDownloadJSON === 'function') {
+        triggerAutoDownloadJSON(payload);
+    }
+
+    const sId = (payload.studentId || payload.sbd || "sbd").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+    const sName = (payload.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+    const attempt = payload.attemptNumber ? `_Lan${payload.attemptNumber}` : `_Lan${index + 1}`;
+    const fileName = `BaiLam_${sId}_${sName}${attempt}.json`;
+
+    alert(`📁 THÔNG TIN FILE DỰ PHÒNG LẦN ${index + 1}:\n\n` +
+          `1. Tên file: "${fileName}"\n` +
+          `2. Vị trí lưu: Thư mục "Tải về" (Downloads) trên thiết bị của em.\n\n` +
+          `👉 Hệ thống sẽ chuyển ngay sang Messenger của Thầy. Em hãy chọn tệp "${fileName}" và gửi cho Thầy nhé!`);
+
+    const messengerUrl = (typeof TEACHER_MESSENGER_LINK !== 'undefined' && TEACHER_MESSENGER_LINK) 
+        ? TEACHER_MESSENGER_LINK 
+        : ((typeof TEACHER_ZALO_LINK !== 'undefined' && TEACHER_ZALO_LINK) ? TEACHER_ZALO_LINK : "https://m.me/");
+
+    window.open(messengerUrl, "_blank");
+}
+
+function downloadSpecificBackup(index) {
+    handleSendHistoryToTeacher(index);
 }
 
 function deleteSpecificBackup(index) {
@@ -382,7 +461,6 @@ async function checkSessionStatus(isAutostart = false) {
             return;
         }
 
-        // BẢO VỆ CHỐNG LỖI CACHE: Nếu timeRemaining <= 0 thì xử lý cẩn thận
         if (timeRemaining <= 0) {
             if (elapsedTimeSec > totalTimeSeconds + 3600) {
                 safeLocal.removeItem(getStorageKey());
@@ -689,11 +767,6 @@ function showSubmitConfirmModal() {
             <button type="button" class="btn-modal-cancel" onclick="closeSubmitConfirmModal()">Tiếp tục làm</button>
             <button type="button" class="btn-modal-confirm" onclick="executeSubmitExam()">✓ Nộp bài</button>
         </div>
-        <div style="margin-top: 10px; width: 100%;">
-            <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 10px; background: #f0f9ff; color: #0284c7; border: 1.5px solid #7dd3fc; border-radius: 11px; font-weight: 800; font-size: 0.92rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;">
-                💾 Tải file dự phòng bài làm (.json)
-            </button>
-        </div>
     `;
     document.getElementById("submit-confirm-modal").style.display = "flex"; 
 }
@@ -752,7 +825,6 @@ function restoreExamStateFromStorage() {
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
 
-            // KIỂM TRA LỌC RÁC: Nếu thời gian đã lố quá 1 TIẾNG mà chưa nộp, đây 100% là rác từ phiên cũ
             if (elapsed > limitSec + 3600 && !hasPending && !parsed.isExamLocked) {
                 safeLocal.removeItem(getStorageKey());
                 return false;
@@ -781,6 +853,7 @@ function restoreExamStateFromStorage() {
     return false; 
 }
 
+// BỘ ĐIỀU KHIỂN NỘP BÀI THI: TIMEOUT 8 GIÂY, ĐẾM LÙI TRÊN MÀN HÌNH & CHUYỂN MESSENGER
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -802,18 +875,7 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (normalView) normalView.style.display = "none";
     if (actionsBox) actionsBox.innerHTML = "";
 
-    const updateProgressStatus = (text) => {
-        if (progressView) {
-            progressView.innerHTML = `
-                <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
-                <div style="font-weight:900; color:#0284c7; font-size:1.1rem;">${text}</div>
-            `;
-            progressView.style.display = "block";
-        }
-    };
-
-    updateProgressStatus("⏳ Đang kết nối máy chủ nộp bài...");
-
+    // 1. Chuẩn bị dữ liệu bài làm trước
     const sId = document.getElementById("student-id").value.trim(); 
     const sName = document.getElementById("student-name").value.trim(); 
     const sClass = document.getElementById("student-class").value.trim(); 
@@ -875,7 +937,7 @@ async function executeSubmitExam(isForceSubmit = false) {
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
 
-    // LƯU VÀO MẢNG LỊCH SỬ NHIỀU LẦN THI ĐỂ HIỂN THỊ TRÊN ĐỈNH
+    // Lưu mảng lịch sử dự phòng
     const historyKey = getStudentHistoryKey();
     let history = [];
     try {
@@ -887,49 +949,129 @@ async function executeSubmitExam(isForceSubmit = false) {
     payload.timestamp_str = new Date().toLocaleString("vi-VN");
     history.push(payload);
     safeLocal.setItem(historyKey, JSON.stringify(history));
-
-    // Hiển thị nút tải file ngay trên đỉnh
     renderBackupHistoryBanners();
-    
-    // ÉP TRÌNH DUYỆT TẢI FILE DỰ PHÒNG XUỐNG NGAY LẬP TỨC
-    if (typeof triggerAutoDownloadJSON === 'function') {
-        triggerAutoDownloadJSON(payload);
-    }
 
-    alert("✅ BÀI LÀM ĐÃ ĐƯỢC LƯU AN TOÀN TRÊN MÁY!\n\nHệ thống đã TỰ ĐỘNG tải 1 file dự phòng (.json) vào thư mục 'Tải về' (Downloads) trên máy của em.\n\n👉 NẾU THẦY GIÁO BÁO CHƯA NHẬN ĐƯỢC BÀI, EM HÃY GỬI FILE NÀY CHO THẦY ĐỂ LẤY LẠI ĐIỂM TUYỆT ĐỐI NHÉ!");
+    // 2. KHỞI ĐỘNG BỘ ĐẾM NGƯỢC 8 GIÂY TRÊN MÀN HÌNH
+    let remainSec = 8;
+    if (submitCountdownInterval) clearInterval(submitCountdownInterval);
 
-    let submitOk = false;
-    try {
-        const { error } = await supabaseClient.from('submissions').upsert(payload);
-        if (!error) submitOk = true;
-    } catch(err) {
-        console.error("Lỗi nộp bài Supabase:", err);
-    }
-
-    if (!submitOk) {
-        isSubmittingInProgress = false;
-        updateTopBackupStatus(false);
+    const renderCountdownUI = (sec) => {
         if (progressView) {
             progressView.innerHTML = `
-                <div style="font-size:38px; margin-bottom:8px;">📶⚠️</div>
-                <div style="font-weight:900; color:#ef4444; font-size:1.15rem;">CHƯA THỂ NỘP LÊN MÁY CHỦ!</div>
-                <div style="font-size:0.92rem; color:#334155; margin-top:8px; font-weight:700;">
-                    Mạng Internet của em bị chập chờn. Bài làm đã được bảo lưu an toàn trên máy! Hãy gửi file JSON vừa được tải về máy cho thầy nhé!
+                <div class="spinner" style="width:38px; height:38px; margin:0 auto 10px auto; border-top-color:#0284c7;"></div>
+                <div style="font-weight:900; color:#0284c7; font-size:1.05rem;">
+                    Đang kết nối máy chủ nộp bài...
+                </div>
+                <div class="submit-countdown-badge">⏱ Chờ: ${sec}s</div>
+                <div style="font-size:0.85rem; color:#64748b; font-weight:600;">
+                    Hệ thống đang gửi và đồng bộ điểm số lên máy chủ.
+                </div>
+            `;
+            progressView.style.display = "block";
+        }
+    };
+
+    renderCountdownUI(remainSec);
+
+    submitCountdownInterval = setInterval(() => {
+        remainSec--;
+        if (remainSec >= 0) {
+            renderCountdownUI(remainSec);
+        }
+    }, 1000);
+
+    // 3. THỰC HIỆN GỬI SUPABASE VỚI GIỚI HẠN TIMEOUT 8 GIÂY
+    let submitOk = false;
+    try {
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Quá thời gian 8 giây phản hồi từ máy chủ")), 8000)
+        );
+
+        const supabaseSubmitPromise = (async () => {
+            const { error } = await supabaseClient.from('submissions').upsert(payload);
+            if (error) throw error;
+            return true;
+        })();
+
+        // Cuộc đua giữa việc gửi máy chủ và giới hạn 8 giây
+        submitOk = await Promise.race([supabaseSubmitPromise, timeoutPromise]);
+    } catch(err) {
+        submitOk = false;
+        console.warn("Lỗi nộp bài Supabase:", err);
+    } finally {
+        if (submitCountdownInterval) {
+            clearInterval(submitCountdownInterval);
+            submitCountdownInterval = null;
+        }
+    }
+
+    // 4. NẾU NỘP BÀI THẤT BẠI HOẶC QUÁ 8 GIÂY
+    if (!submitOk) {
+        submitFailCount++; // Tăng số lần nộp lỗi liên tiếp
+        isSubmittingInProgress = false;
+        updateTopBackupStatus(false);
+
+        // TỰ ĐỘNG TẢI FILE DỰ PHÒNG XUỐNG MÁY HỌC SINH
+        if (typeof triggerAutoDownloadJSON === 'function') {
+            triggerAutoDownloadJSON(payload);
+        }
+
+        const safeSbd = cleanSbd;
+        const safeName = (sName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+        const fileName = `BaiLam_${safeSbd}_${safeName}${payload.attemptNumber ? `_Lan${payload.attemptNumber}` : ''}.json`;
+
+        if (progressView) {
+            progressView.innerHTML = `
+                <div style="font-size:38px; margin-bottom:6px;">📶⚠️</div>
+                <div style="font-weight:900; color:#ef4444; font-size:1.15rem; text-transform:uppercase;">CHƯA THỂ NỘP LÊN MÁY CHỦ!</div>
+                <div style="font-size:0.92rem; color:#334155; margin-top:6px; font-weight:700; line-height:1.45;">
+                    Mạng Internet của em bị chập chờn (quá 8 giây chưa kết nối được máy chủ).
+                </div>
+                
+                <div class="file-location-box">
+                    <div>✅ <b>ĐÃ TỰ ĐỘNG LƯU FILE BÀI LÀM VÀO MÁY CỦA EM:</b></div>
+                    <div style="margin-top:4px;">📄 <b>Tên file:</b> <code>${fileName}</code></div>
+                    <div style="margin-top:2px;">📍 <b>Vị trí lưu:</b> Thư mục <b>Tải về (Downloads)</b> trên điện thoại/máy tính của em.</div>
                 </div>
             `;
         }
-        if (actionsBox) {
-            actionsBox.innerHTML = `
-                <div style="margin-top: 15px; display: flex; flex-direction:column; gap: 8px; width:100%;">
-                    <button type="button" onclick="executeSubmitExam(${isForceSubmit})" style="width:100%; padding:12px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; border:none; border-radius:10px; font-weight:900; font-size:1rem; cursor:pointer;">🔄 Bấm để nộp lại</button>
-                    <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width:100%; padding:10px; background:#f1f5f9; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">💾 Tải lại file dự phòng gửi Thầy</button>
-                </div>
-            `;
-            actionsBox.style.display = "block";
+
+        // LẦN 1: CHỈ CÓ 1 NÚT DUY NHẤT "BẤM ĐỂ NỘP LẠI", KHÔNG HIỆN NÚT TẢI DỰ PHÒNG
+        if (submitFailCount === 1) {
+            if (actionsBox) {
+                actionsBox.innerHTML = `
+                    <div style="margin-top: 10px; width: 100%;">
+                        <button type="button" onclick="executeSubmitExam(false)" style="width:100%; padding:13px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; border:none; border-radius:12px; font-weight:900; font-size:1.02rem; cursor:pointer; box-shadow:0 3px 10px rgba(2, 132, 199, 0.35);">
+                            🔄 Bấm để nộp lại (chờ tối đa 8s)
+                        </button>
+                    </div>
+                `;
+                actionsBox.style.display = "block";
+            }
+        } 
+        // LẦN 2 (HOẶC HƠN) KHÔNG NỘP ĐƯỢC: HIỆN NÚT "NỘP FILE DỰ PHÒNG CHO THẦY GIÁO" VÀ CHUYỂN SANG MESSENGER
+        else {
+            if (actionsBox) {
+                actionsBox.innerHTML = `
+                    <div style="margin-top: 12px; display: flex; flex-direction:column; gap: 9px; width:100%;">
+                        <button type="button" class="btn-send-messenger-teacher" onclick="openMessengerForTeacherSubmission('${encodeURIComponent(JSON.stringify(payload))}', '${fileName}')">
+                            <span style="font-size:18px;">📤</span> <span>Nộp file dự phòng cho Thầy giáo</span>
+                        </button>
+
+                        <button type="button" onclick="executeSubmitExam(false)" style="width:100%; padding:10px; background:#f8fafc; color:#0284c7; border:1.5px solid #7dd3fc; border-radius:11px; font-weight:800; font-size:0.9rem; cursor:pointer;">
+                            🔄 Thử nộp lại mạng lần nữa
+                        </button>
+                    </div>
+                `;
+                actionsBox.style.display = "block";
+            }
         }
+
         return; 
     }
 
+    // 5. NỘP BÀI THÀNH CÔNG
+    submitFailCount = 0; // Reset đếm lỗi
     supabaseClient.from('live_drafts').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
     if (typeof clearPresence === 'function') clearPresence(sId);
     if (timerInterval) clearInterval(timerInterval); 
@@ -945,6 +1087,31 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     if (confirmModal) confirmModal.style.display = "none"; 
     renderResultSummaryScreen(correctCount, wrongCount, spentMins, completionTimeStr, finalScore, maxScale, currentQuizId); 
+}
+
+// HÀM MỞ FILE DỰ PHÒNG VÀ CHUYỂN NGAY SANG MESSENGER CỦA THẦY
+function openMessengerForTeacherSubmission(encodedPayload, fileName) {
+    let payload = null;
+    try {
+        payload = JSON.parse(decodeURIComponent(encodedPayload));
+    } catch(e) {
+        payload = pendingSubmissionPayload || {};
+    }
+
+    if (typeof triggerAutoDownloadJSON === 'function' && payload) {
+        triggerAutoDownloadJSON(payload);
+    }
+
+    alert(`📁 THÔNG BÁO GỬI FILE DỰ PHÒNG CHO THẦY:\n\n` +
+          `1. File bài làm của em tên là: "${fileName}"\n` +
+          `2. File đang nằm ở: Thư mục "Tải về" (Downloads) trên máy của em.\n\n` +
+          `👉 Hệ thống sẽ mở Messenger của Thầy ngay bây giờ. Em chỉ cần đính kèm tệp "${fileName}" trong thư mục Downloads gửi cho Thầy là xong!`);
+
+    const messengerUrl = (typeof TEACHER_MESSENGER_LINK !== 'undefined' && TEACHER_MESSENGER_LINK) 
+        ? TEACHER_MESSENGER_LINK 
+        : ((typeof TEACHER_ZALO_LINK !== 'undefined' && TEACHER_ZALO_LINK) ? TEACHER_ZALO_LINK : "https://m.me/");
+
+    window.open(messengerUrl, "_blank");
 }
 
 function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, finalScore, maxScale = 10.0, quizId = "") { 
@@ -1128,3 +1295,5 @@ window.autoSaveAnswerToCloud = autoSaveAnswerToCloud;
 window.renderBackupHistoryBanners = renderBackupHistoryBanners;
 window.downloadSpecificBackup = downloadSpecificBackup;
 window.deleteSpecificBackup = deleteSpecificBackup;
+window.handleSendHistoryToTeacher = handleSendHistoryToTeacher;
+window.openMessengerForTeacherSubmission = openMessengerForTeacherSubmission;
