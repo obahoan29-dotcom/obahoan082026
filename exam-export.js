@@ -8,7 +8,7 @@ function getPendingOrLiveSubmissionPayload() {
         return pendingSubmissionPayload;
     }
     const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || "exam";
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
 
     try {
         const rawBackup = safeLocal.getItem(`exam_completed_backup_${quizId}`);
@@ -70,7 +70,7 @@ function executeBrowserFileDownload(blob, fileName) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-// NÚT LUÔN LUÔN CÓ MẶT Ở TRÊN CÙNG: BẤM VÀO LÀ TẢI FILE NGAY LẬP TỨC
+// NÚT LUÔN CÓ MẶT TRÊN CÙNG: BẤM VÀO LÀ TẢI FILE NGAY LẬP TỨC
 function downloadCompletedOrDraftSubmission() {
     const payload = getPendingOrLiveSubmissionPayload();
     if (!payload) {
