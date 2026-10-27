@@ -1,7 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js (BẢN SUPABASE TỐI ƯU BÀI THI)
-// Đã cắt lọc logic đăng nhập & nộp bài sang student-exam-flow.js
-// Giữ nguyên 100% cấu trúc làm bài, MathJax và xem lại đề gốc
+// FILE: exam-engine-core.js (BẢN SUPABASE - SỬA LỖI AUTO SUBMIT 0 ĐIỂM)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -63,7 +61,7 @@ window.addEventListener('online', function() {
         if (typeof showTimeChangeToast === 'function') {
             showTimeChangeToast("📶 Đã có kết nối Internet! Đang tự động gửi lại bài...");
         }
-        if (typeof executeSubmitExam === 'function') executeSubmitExam(false);
+        executeSubmitExam(false);
     }
 });
 
@@ -90,9 +88,7 @@ function lockExamInteractions() {
     if (topSubmitBtn) {
         topSubmitBtn.innerText = "⏳ Đang nộp";
         topSubmitBtn.style.background = "linear-gradient(135deg, #0284c7, #0369a1)";
-        topSubmitBtn.onclick = function() { 
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(false); 
-        };
+        topSubmitBtn.onclick = function() { executeSubmitExam(false); };
     }
 
     const timerBox = document.getElementById("nav-timer-box");
@@ -239,17 +235,39 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
+async function startExamAction(isAutostart = false) {
+    const sId = document.getElementById("student-id").value.trim();
+    const sName = document.getElementById("student-name").value.trim();
+    const sClass = document.getElementById("student-class").value.trim();
+
+    if (!sId || !sName || !sClass) {
+        if (!isAutostart) alert("⚠️ Vui lòng nhập đầy đủ Số báo danh, Họ và tên, Lớp!");
+        return;
+    }
+
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const checkInClass = typeof findStudentFromDatabase === 'function' ? findStudentFromDatabase(sId, currentCat) : null;
+    const isFree = !checkInClass;
+
+    if (isFree) {
+        const allowFree = typeof isCurrentExamAllowFree === 'function' ? isCurrentExamAllowFree() : true;
+        if (!allowFree) {
+            alert("⛔ Đề thi này không cho phép thí sinh tự do tham gia!\nVui lòng kiểm tra lại thông tin đăng nhập.");
+            return;
+        }
+    }
+
+    if (typeof executeStartExamAPI === 'function') {
+        await executeStartExamAPI(sId, sName, sClass, isFree);
+    }
+}
+
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
         const gl = document.getElementById('global-loading');
         if (gl) gl.style.display = 'none';
     };
-
-    // Render các nút lấy file JSON của các lần nộp trước (nếu có)
-    if (typeof renderStudentSubmissionHistoryButtons === 'function') {
-        renderStudentSubmissionHistoryButtons();
-    }
 
     if (restoreExamStateFromStorage()) { 
         const sName = document.getElementById("student-name").value.trim() || "Thí sinh"; 
@@ -278,11 +296,13 @@ async function checkSessionStatus(isAutostart = false) {
 
         if (isExamLocked) {
             lockExamInteractions();
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(true);
+            executeSubmitExam(true);
             return;
         }
 
+        // BẢO VỆ CHỐNG LỖI CACHE: Nếu timeRemaining <= 0 thì xử lý cẩn thận
         if (timeRemaining <= 0) {
+            // Nếu đã vượt thời gian quá 1 tiếng -> Rõ ràng là Cache rác cũ, dọn sạch và báo reload
             if (elapsedTimeSec > totalTimeSeconds + 3600) {
                 safeLocal.removeItem(getStorageKey());
                 alert("⚠️ Phát hiện phiên làm bài cũ đã hết hạn. Hệ thống đang tải lại phiên mới...");
@@ -290,7 +310,7 @@ async function checkSessionStatus(isAutostart = false) {
                 return;
             }
             lockExamInteractions();
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(true);
+            executeSubmitExam(true);
             return;
         }
 
@@ -306,7 +326,7 @@ async function checkSessionStatus(isAutostart = false) {
         if (sId && sName) {
             document.getElementById("login-box").style.display = "none";
             document.getElementById("student-card").style.display = "none";
-            if (typeof startExamAction === 'function') await startExamAction(true);
+            await startExamAction(true);
             hideLoading();
             return;
         }
@@ -388,6 +408,33 @@ function showError(title, msg) {
     document.getElementById("error-title").innerText = title; 
     document.getElementById("error-msg").innerHTML = msg; 
     errCard.style.display = "block"; 
+}
+
+function checkPassword() { 
+    const val = document.getElementById("exam-pass-input").value.trim(); 
+    if (!val) {
+        alert("⚠️ Vui lòng nhập mật khẩu hoặc mã học sinh!");
+        return;
+    }
+
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const matchedStudent = (typeof findStudentFromDatabase === 'function' ? findStudentFromDatabase(val, currentCat) : null) || 
+                           (typeof findStudentByPassword === 'function' ? findStudentByPassword(val, currentCat) : null);
+    
+    if (matchedStudent) {
+        if (typeof applyStudentToUI === 'function') applyStudentToUI(matchedStudent);
+        document.getElementById("login-box").style.display = "none";
+        startExamAction();
+        return;
+    }
+
+    if (EXAM_PASSWORD !== "" && val === EXAM_PASSWORD) { 
+        document.getElementById("login-box").style.display = "none"; 
+        document.getElementById("student-card").style.display = "block"; 
+        if (typeof syncStudentFromParamsAndStorage === 'function') syncStudentFromParamsAndStorage();
+    } else { 
+        alert("❌ Mật khẩu bài thi không đúng!"); 
+    } 
 }
 
 function selectOption(qId, letter) { 
@@ -518,7 +565,7 @@ function startCountdownTimer() {
             timerInterval = null;
             if (timerVal) timerVal.innerText = "00:00:00"; 
             lockExamInteractions();
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(true); 
+            executeSubmitExam(true); 
             return; 
         } 
 
@@ -526,6 +573,52 @@ function startCountdownTimer() {
         if (remainingSeconds <= 120 && timerBox) timerBox.classList.add("timer-warning"); 
         else if (timerBox) timerBox.classList.remove("timer-warning");
     }, 1000); 
+}
+
+function showSubmitConfirmModal() { 
+    if (isSubmitted) return; 
+
+    const topbar = document.getElementById("universal-backup-topbar");
+    if (topbar) topbar.style.display = "flex";
+    const topDownloadBtn = document.getElementById("btn-always-download-backup");
+    if (topDownloadBtn) topDownloadBtn.style.display = "inline-flex";
+
+    if (isExamLocked) {
+        executeSubmitExam(false);
+        return;
+    }
+
+    const answered = updateProgress(); 
+    const unanswered = totalQuestionsCount - answered; 
+    document.getElementById("modal-remain-time").innerText = formatHHMMSS(Math.max(0, remainingSeconds)); 
+    document.getElementById("modal-answered-count").innerText = `${answered}/${totalQuestionsCount}`; 
+    const warnBox = document.getElementById("modal-unanswered-warning"); 
+    if (unanswered > 0) { 
+        warnBox.style.display = "block"; 
+        warnBox.innerText = `⚠️ Còn ${unanswered} câu chưa làm!`; 
+    } else { 
+        warnBox.style.display = "none"; 
+    } 
+    document.getElementById("modal-normal-submit-view").style.display = "block";
+    document.getElementById("modal-submitting-progress-view").style.display = "none";
+    
+    document.getElementById("modal-actions-container").innerHTML = `
+        <div class="modal-btn-row">
+            <button type="button" class="btn-modal-cancel" onclick="closeSubmitConfirmModal()">Tiếp tục làm</button>
+            <button type="button" class="btn-modal-confirm" onclick="executeSubmitExam()">✓ Nộp bài</button>
+        </div>
+        <div style="margin-top: 10px; width: 100%;">
+            <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 10px; background: #f0f9ff; color: #0284c7; border: 1.5px solid #7dd3fc; border-radius: 11px; font-weight: 800; font-size: 0.92rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                💾 Tải file dự phòng bài làm (.json)
+            </button>
+        </div>
+    `;
+    document.getElementById("submit-confirm-modal").style.display = "flex"; 
+}
+
+function closeSubmitConfirmModal() { 
+    if (isSubmittingInProgress) return;
+    document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
 function saveExamStateToStorage() { 
@@ -577,6 +670,7 @@ function restoreExamStateFromStorage() {
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
 
+            // KIỂM TRA LỌC RÁC: Nếu thời gian đã lố quá 1 TIẾNG mà chưa nộp, đây 100% là rác từ phiên cũ
             if (elapsed > limitSec + 3600 && !hasPending && !parsed.isExamLocked) {
                 safeLocal.removeItem(getStorageKey());
                 return false;
@@ -603,6 +697,149 @@ function restoreExamStateFromStorage() {
         } 
     } catch(e) {} 
     return false; 
+}
+
+async function executeSubmitExam(isForceSubmit = false) { 
+    if (isSubmitted || isSubmittingInProgress) return; 
+
+    const topbar = document.getElementById("universal-backup-topbar");
+    if (topbar) topbar.style.display = "flex";
+    const topDownloadBtn = document.getElementById("btn-always-download-backup");
+    if (topDownloadBtn) topDownloadBtn.style.display = "inline-flex";
+
+    isSubmittingInProgress = true;
+    lockExamInteractions();
+    saveExamStateToStorage();
+    
+    const confirmModal = document.getElementById("submit-confirm-modal");
+    const normalView = document.getElementById("modal-normal-submit-view");
+    const progressView = document.getElementById("modal-submitting-progress-view");
+    const actionsBox = document.getElementById("modal-actions-container");
+
+    if (confirmModal) confirmModal.style.display = "flex";
+    if (normalView) normalView.style.display = "none";
+    if (actionsBox) actionsBox.innerHTML = "";
+
+    const updateProgressStatus = (text) => {
+        if (progressView) {
+            progressView.innerHTML = `
+                <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
+                <div style="font-weight:900; color:#0284c7; font-size:1.1rem;">${text}</div>
+            `;
+            progressView.style.display = "block";
+        }
+    };
+
+    updateProgressStatus("⏳ Đang kết nối máy chủ nộp bài...");
+
+    const sId = document.getElementById("student-id").value.trim(); 
+    const sName = document.getElementById("student-name").value.trim(); 
+    const sClass = document.getElementById("student-class").value.trim(); 
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentQuizId = urlParams.get('id') || (examData && examData.id) || "exam";
+
+    const isClassAcc = typeof findStudentFromDatabase === 'function' ? !!findStudentFromDatabase(sId, currentCat) : false;
+    const isFreeStudent = !isClassAcc;
+
+    const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
+    let actualElapsedSec = lockedDurationSec || (examStartTime ? Math.round((Date.now() - examStartTime) / 1000) : 0);
+    const durationSec = Math.min(Math.max(1, actualElapsedSec), maxAllowedSec);
+    const spentMins = Math.floor(durationSec / 60); 
+    const spentSecs = durationSec % 60; 
+    const completionTimeStr = `${spentMins} phút ${spentSecs} giây`; 
+    
+    let scoreResult = null;
+    if (typeof calculateExamScoreWithConfig === 'function') {
+        scoreResult = calculateExamScoreWithConfig(
+            examData.questions || [],
+            window.SECURE_VAULT.userAnswers || {},
+            window.SECURE_VAULT.answers || {},
+            examData.scoringConfig || { mode: 'option1' }
+        );
+    } else {
+        scoreResult = { correctCount: 0, wrongCount: 0, totalRawScore: 0, finalScore: 0, maxScale: 10.0, dataDetails: [] };
+    }
+
+    const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
+    dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
+
+    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
+    const submissionId = `${currentQuizId}_${cleanSbd}`;
+
+    const payload = { 
+        id: submissionId,
+        quiz_id: currentQuizId,
+        sbd: cleanSbd,
+        student_name: sName,
+        class_name: sClass,
+        score10: finalScore,
+        raw_score: Math.round(totalRawScore * 100) / 100,
+        max_scale: maxScale,
+        correct_count: correctCount,
+        wrong_count: wrongCount,
+        completion_time: completionTimeStr,
+        spent_mins: spentMins,
+        tab_switch_count: `${tabSwitchCount} lần`,
+        data_string: dataDetails.join(" | "),
+        user_answers: window.SECURE_VAULT.userAnswers || {},
+        category_id: currentCat,
+        is_free: isFreeStudent,
+        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+        exam_title: EXAM_NAME
+    }; 
+
+    safeLocal.setItem(`exam_completed_backup_${currentQuizId}`, JSON.stringify(payload));
+    safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
+    pendingSubmissionPayload = payload;
+
+    let submitOk = false;
+    try {
+        const { error } = await supabaseClient.from('submissions').upsert(payload);
+        if (!error) submitOk = true;
+    } catch(err) {
+        console.error("Lỗi nộp bài Supabase:", err);
+    }
+
+    if (!submitOk) {
+        isSubmittingInProgress = false;
+        updateTopBackupStatus(false);
+        if (progressView) {
+            progressView.innerHTML = `
+                <div style="font-size:38px; margin-bottom:8px;">📶⚠️</div>
+                <div style="font-weight:900; color:#ef4444; font-size:1.15rem;">CHƯA THỂ NỘP LÊN MÁY CHỦ!</div>
+                <div style="font-size:0.92rem; color:#334155; margin-top:8px; font-weight:700;">
+                    Mạng Internet của em bị chập chờn. Bài làm đã được bảo lưu an toàn trên máy!
+                </div>
+            `;
+        }
+        if (actionsBox) {
+            actionsBox.innerHTML = `
+                <div style="margin-top: 15px; display: flex; flex-direction:column; gap: 8px; width:100%;">
+                    <button type="button" onclick="executeSubmitExam(${isForceSubmit})" style="width:100%; padding:12px; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; border:none; border-radius:10px; font-weight:900; font-size:1rem; cursor:pointer;">🔄 Bấm để nộp lại</button>
+                    <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width:100%; padding:10px; background:#f1f5f9; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">💾 Tải file dự phòng gửi Thầy</button>
+                </div>
+            `;
+            actionsBox.style.display = "block";
+        }
+        return; 
+    }
+
+    supabaseClient.from('live_drafts').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
+    if (typeof clearPresence === 'function') clearPresence(sId);
+    if (timerInterval) clearInterval(timerInterval); 
+
+    safeLocal.removeItem("pending_exam_submission");
+    safeLocal.removeItem(getStorageKey()); 
+    safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
+    safeLocal.setItem("last_submission_cleared", "true");
+    
+    isSubmitted = true; 
+    isSubmittingInProgress = false;
+    updateTopBackupStatus(true);
+
+    if (confirmModal) confirmModal.style.display = "none"; 
+    renderResultSummaryScreen(correctCount, wrongCount, spentMins, completionTimeStr, finalScore, maxScale, currentQuizId); 
 }
 
 function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, finalScore, maxScale = 10.0, quizId = "") { 
@@ -771,11 +1008,15 @@ window.onStatementChange = onStatementChange;
 window.onShortInputChange = onShortInputChange;
 window.toggleSubPadlet = toggleSubPadlet;
 window.trackPadletClick = trackPadletClick;
+window.showSubmitConfirmModal = showSubmitConfirmModal;
+window.closeSubmitConfirmModal = closeSubmitConfirmModal;
+window.executeSubmitExam = executeSubmitExam;
 window.resetToFreshLoginScreen = resetToFreshLoginScreen;
+window.checkPassword = checkPassword;
+window.startExamAction = startExamAction;
 window.startCountdownTimer = startCountdownTimer;
 window.formatHHMMSS = formatHHMMSS;
 window.__saveExamState = saveExamStateToStorage;
 window.__updateProgress = updateProgress;
 window.lockExamInteractions = lockExamInteractions;
 window.autoSaveAnswerToCloud = autoSaveAnswerToCloud;
-window.renderResultSummaryScreen = renderResultSummaryScreen;
