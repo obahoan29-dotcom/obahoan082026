@@ -160,6 +160,10 @@
     <!-- MODULE BIỂU ĐIỂM ĐỀ THI MỚI TẠO -->
     <script src="portal-exam-scoring.js"></script>
     <script src="portal-analytics.js"></script>
+
+    <!-- FILE MỚI: QUẢN LÝ RIÊNG ĐĂNG NHẬP, VÀO THI, NỘP BÀI 7S & NATIVE SHARE -->
+    <script src="student-exam-flow.js"></script>
+
     <script src="portal-auth.js"></script>
     <script src="portal-admin.js"></script>
     <!-- MODULE DỌN DẸP DATABASE AN TOÀN -->
@@ -191,7 +195,7 @@
     <span class="mid-autumn-icon">🏮</span>
 </div>
 
-<!-- NÚT NỔI HIỂN THỊ SỐ LƯỢT TRUY CẬP HÔM NAY (ĐÃ SỬA HẾT ĐƠ) -->
+<!-- NÚT NỔI HIỂN THỊ SỐ LƯỢT TRUY CẬP HÔM NAY -->
 <div class="site-visit-badge" id="site-visit-badge" onclick="toggleVisitStatsModal(event)" title="Nhấn để xem chi tiết thống kê lượt truy cập">
     <div class="visit-pulse-dot"></div>
     <span class="visit-icon">👁️</span>
@@ -245,7 +249,7 @@
                     </div>
                 </div>
 
-                <!-- KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG (ĐÃ SỬA NHẠY 100%) -->
+                <!-- KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG -->
                 <div class="admin-redirect-control-box">
                     <div class="admin-redirect-toggle-row">
                         <span class="admin-redirect-title" onclick="document.getElementById('admin-redirect-toggle').click();" style="cursor: pointer;">
@@ -530,7 +534,7 @@
     </div>
 </div>
 
-<!-- MODAL THỐNG KÊ CHI TIẾT LƯỢT TRUY CẬP (ĐÃ KHẮC PHỤC 100%) -->
+<!-- MODAL THỐNG KÊ CHI TIẾT LƯỢT TRUY CẬP -->
 <div class="visit-stats-modal-overlay" id="visit-stats-modal" onclick="if(event.target===this) closeVisitStatsModal(event);">
     <div class="visit-stats-modal-box" onclick="event.stopPropagation();">
         <div class="visit-modal-header">

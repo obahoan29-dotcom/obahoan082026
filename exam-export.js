@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: exam-export.js
 // QUẢN LÝ DỰ PHÒNG BÀI LÀM: TẢI FILE JSON TRỰC TIẾP & BẢO LƯU 100%
-// ĐÃ SỬA LỖI CÚ PHÁP & BỔ SUNG HÀM TẢI TỰ ĐỘNG THEO LẦN THI
 // =========================================================
 
 function getPendingOrLiveSubmissionPayload() {
@@ -9,7 +8,7 @@ function getPendingOrLiveSubmissionPayload() {
         return pendingSubmissionPayload;
     }
     const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || "exam";
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
 
     try {
         const rawBackup = safeLocal.getItem(`exam_completed_backup_${quizId}`);
@@ -46,7 +45,6 @@ function generateSubmissionChecksum(payload) {
         const sId = String(payload.studentId || payload.sbd || "");
         const sName = String(payload.studentName || "");
         const sScore = String(payload.score10 !== undefined ? payload.score10 : "");
-        
         const rawKey = `${sId}_${sName}_${sScore}_OBAHOAN_SECURE_2026`;
         
         let hash = 0;
@@ -72,7 +70,7 @@ function executeBrowserFileDownload(blob, fileName) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-// NÚT LUÔN LUÔN CÓ MẶT Ở TRÊN CÙNG: BẤM VÀO LÀ TẢI FILE NGAY LẬP TỨC
+// NÚT LUÔN CÓ MẶT TRÊN CÙNG: BẤM VÀO LÀ TẢI FILE NGAY LẬP TỨC
 function downloadCompletedOrDraftSubmission() {
     const payload = getPendingOrLiveSubmissionPayload();
     if (!payload) {
@@ -90,36 +88,10 @@ function downloadCompletedOrDraftSubmission() {
     const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
     const sId = (payload.studentId || payload.sbd || "sbd").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
     const sName = (payload.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const attempt = payload.attemptNumber ? `_Lan${payload.attemptNumber}` : "";
-    const fileName = `BaiLam_${sId}_${sName}${attempt}.json`;
+    const fileName = `BaiLam_${sId}_${sName}.json`;
 
     executeBrowserFileDownload(blob, fileName);
-    
     alert(`✅ ĐÃ TẢI FILE DỰ PHÒNG THÀNH CÔNG!\n\n📁 Tên file: "${fileName}"\n📍 Vị trí: Đã lưu vào mục "Tải về" (Downloads) trên máy của bạn.\n\n👉 Bạn hãy gửi file đính kèm này cho Thầy giáo khi có sự cố mạng nhé!`);
 }
 
-// HÀM TỰ ĐỘNG TẢI FILE VÀ ĐÁNH DẤU LẦN THI (GỌI KHI ẤN NỘP BÀI)
-function triggerAutoDownloadJSON(payload) {
-    if (!payload) return;
-    
-    const securedPayload = {
-        ...payload,
-        _integrityChecksum: typeof generateSubmissionChecksum === 'function' ? generateSubmissionChecksum(payload) : "SEC_VALID",
-        exportedAt: Date.now()
-    };
-
-    const jsonStr = JSON.stringify(securedPayload, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
-    const sId = (payload.studentId || payload.sbd || "sbd").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const sName = (payload.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    
-    const attempt = payload.attemptNumber ? `_Lan${payload.attemptNumber}` : "";
-    const fileName = `BaiLam_${sId}_${sName}${attempt}.json`;
-
-    if (typeof executeBrowserFileDownload === 'function') {
-        executeBrowserFileDownload(blob, fileName);
-    }
-}
-
 window.downloadCompletedOrDraftSubmission = downloadCompletedOrDraftSubmission;
-window.triggerAutoDownloadJSON = triggerAutoDownloadJSON;

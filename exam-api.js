@@ -1,5 +1,7 @@
 // =========================================================
 // FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG SIÊU NHẠY)
+// Toàn bộ logic đăng nhập, bắt đầu thi và nộp bài đã được
+// chuyển giao an toàn sang student-exam-flow.js
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -28,7 +30,7 @@ let presenceInterval = null;
 let realtimeConfigChannel = null;
 let onlineRealtimeChannel = null;
 
-// Biến cục bộ để đếm sĩ số thông minh không cần gọi Database
+// Biến cục bộ để đếm sĩ số thông minh không cần gọi Database liên tục
 window.localOnlineCount = 1; 
 
 let wakeLockSentinel = null;
@@ -43,10 +45,14 @@ async function requestWakeLock() {
 
 function getExamCategory() {
     const urlParams = new URLSearchParams(window.location.search);
-    let cat = urlParams.get('cat'); if (cat) return cat;
+    let cat = urlParams.get('cat'); 
+    if (cat) return cat;
     try {
         const raw = safeLocal.getItem("current_exam_student");
-        if (raw) { const parsed = JSON.parse(raw); if (parsed && parsed.categoryId) return parsed.categoryId; }
+        if (raw) { 
+            const parsed = JSON.parse(raw); 
+            if (parsed && parsed.categoryId) return parsed.categoryId; 
+        }
     } catch(e) {}
     return "them-11";
 }
@@ -57,14 +63,22 @@ function findStudentFromDatabase(query, preferredCat = null) {
     
     if (preferredCat && window.STUDENT_ACCOUNTS[preferredCat]) {
         const list = window.STUDENT_ACCOUNTS[preferredCat];
-        const matched = list.find(acc => (acc.sbd && String(acc.sbd).trim().toLowerCase() === q) || (acc.username && String(acc.username).trim().toLowerCase() === q) || (acc.name && String(acc.name).trim().toLowerCase() === q));
+        const matched = list.find(acc => 
+            (acc.sbd && String(acc.sbd).trim().toLowerCase() === q) || 
+            (acc.username && String(acc.username).trim().toLowerCase() === q) || 
+            (acc.name && String(acc.name).trim().toLowerCase() === q)
+        );
         if (matched) return matched;
     }
     
     for (let c in window.STUDENT_ACCOUNTS) {
         const list = window.STUDENT_ACCOUNTS[c];
         if (Array.isArray(list)) {
-            const m = list.find(acc => (acc.sbd && String(acc.sbd).trim().toLowerCase() === q) || (acc.username && String(acc.username).trim().toLowerCase() === q) || (acc.name && String(acc.name).trim().toLowerCase() === q));
+            const m = list.find(acc => 
+                (acc.sbd && String(acc.sbd).trim().toLowerCase() === q) || 
+                (acc.username && String(acc.username).trim().toLowerCase() === q) || 
+                (acc.name && String(acc.name).trim().toLowerCase() === q)
+            );
             if (m) return m;
         }
     }
@@ -95,59 +109,86 @@ function applyStudentToUI(student) {
     const sId = student.sbd || student.id || "---";
     const sClass = student.className || student.lop || "---";
 
-    const nameEl = document.getElementById("student-name"); const idEl = document.getElementById("student-id"); const classEl = document.getElementById("student-class");
-    if (nameEl) nameEl.value = sName; if (idEl) idEl.value = sId; if (classEl) classEl.value = sClass;
+    const nameEl = document.getElementById("student-name"); 
+    const idEl = document.getElementById("student-id"); 
+    const classEl = document.getElementById("student-class");
+    if (nameEl) nameEl.value = sName; 
+    if (idEl) idEl.value = sId; 
+    if (classEl) classEl.value = sClass;
 
-    const navName = document.getElementById("nav-student-name"); const navId = document.getElementById("nav-student-id"); const navClass = document.getElementById("nav-student-class");
-    if (navName) navName.innerText = sName; if (navId) navId.innerText = sId; if (navClass) navClass.innerText = sClass;
+    const navName = document.getElementById("nav-student-name"); 
+    const navId = document.getElementById("nav-student-id"); 
+    const navClass = document.getElementById("nav-student-class");
+    if (navName) navName.innerText = sName; 
+    if (navId) navId.innerText = sId; 
+    if (navClass) navClass.innerText = sClass;
 
-    safeLocal.setItem("saved_student_name", sName); safeLocal.setItem("saved_student_sbd", sId); safeLocal.setItem("saved_student_class", sClass);
+    safeLocal.setItem("saved_student_name", sName); 
+    safeLocal.setItem("saved_student_sbd", sId); 
+    safeLocal.setItem("saved_student_class", sClass);
 }
 
 function syncStudentFromParamsAndStorage() {
     const urlParams = new URLSearchParams(window.location.search);
-    let sbd = urlParams.get('sbd'); let name = urlParams.get('name'); let className = urlParams.get('class');
+    let sbd = urlParams.get('sbd'); 
+    let name = urlParams.get('name'); 
+    let className = urlParams.get('class');
 
-    if (name && name.trim()) { applyStudentToUI({ sbd: sbd ? sbd.trim() : "---", name: name.trim(), className: className ? className.trim() : "---" }); return; }
+    if (name && name.trim()) { 
+        applyStudentToUI({ sbd: sbd ? sbd.trim() : "---", name: name.trim(), className: className ? className.trim() : "---" }); 
+        return; 
+    }
 
     try {
         const rawSaved = safeLocal.getItem("current_exam_student");
         if (rawSaved) {
             const parsed = JSON.parse(rawSaved);
-            if (parsed && parsed.name && parsed.name.trim()) { applyStudentToUI({ sbd: parsed.sbd ? parsed.sbd.trim() : "---", name: parsed.name.trim(), className: parsed.className ? parsed.className.trim() : "---" }); return; }
+            if (parsed && parsed.name && parsed.name.trim()) { 
+                applyStudentToUI({ sbd: parsed.sbd ? parsed.sbd.trim() : "---", name: parsed.name.trim(), className: parsed.className ? parsed.className.trim() : "---" }); 
+                return; 
+            }
         }
     } catch(e) {}
 
-    sbd = safeLocal.getItem("saved_student_sbd"); name = safeLocal.getItem("saved_student_name"); className = safeLocal.getItem("saved_student_class");
-    if (name && name.trim()) { applyStudentToUI({ sbd: sbd ? sbd.trim() : "---", name: name.trim(), className: className ? className.trim() : "---" }); }
+    sbd = safeLocal.getItem("saved_student_sbd"); 
+    name = safeLocal.getItem("saved_student_name"); 
+    className = safeLocal.getItem("saved_student_class");
+    if (name && name.trim()) { 
+        applyStudentToUI({ sbd: sbd ? sbd.trim() : "---", name: name.trim(), className: className ? className.trim() : "---" }); 
+    }
 }
 
 function isCurrentExamAllowFree() {
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id');
-    if (quizId) { const localVal = safeLocal.getItem(`exam_allow_free_${quizId}`); if (localVal !== null) { return (localVal === 'true'); } }
-    if (examData && examData.allow_free !== undefined) { return (examData.allow_free !== false); }
+    if (quizId) { 
+        const localVal = safeLocal.getItem(`exam_allow_free_${quizId}`); 
+        if (localVal !== null) { return (localVal === 'true'); } 
+    }
+    if (examData && examData.allow_free !== undefined) { 
+        return (examData.allow_free !== false); 
+    }
     return true;
 }
 
 function getMaDe() { 
-    const urlParams = new URLSearchParams(window.location.search); const urlMaDe = urlParams.get('made') || urlParams.get('maDe'); 
+    const urlParams = new URLSearchParams(window.location.search); 
+    const urlMaDe = urlParams.get('made') || urlParams.get('maDe'); 
     if (urlMaDe) return String(urlMaDe).trim(); 
     if (typeof examData !== 'undefined' && examData && examData.made) return String(examData.made).trim(); 
     return "101"; 
 }
 
 function getExamCode() { 
-    let code = getMaDe() || EXAM_NAME; return String(code).trim().replace(/\s+/g, '_'); 
+    let code = getMaDe() || EXAM_NAME; 
+    return String(code).trim().replace(/\s+/g, '_'); 
 }
 
-// Bổ sung SBD vào StorageKey để triệt tiêu lỗi trùng lặp Session giữa các học sinh trên cùng 1 máy
 function getStorageKey() { 
     const sbd = document.getElementById("student-id")?.value.trim() || "guest";
     return `exam_autosave_active_session_${EXAM_NAME}_${getMaDe()}_${sbd}`; 
 }
 
-// HÀM ĐIỀU KHIỂN ẨN / HIỆN HỘP SĨ SỐ
 function applyOnlineCountVisibility() {
     const onlineBox = document.getElementById("nav-online-box");
     if (!onlineBox) return;
@@ -157,7 +198,6 @@ function applyOnlineCountVisibility() {
     onlineBox.style.display = isShowOnlineCountEnabled ? "flex" : "none";
 }
 
-// SỰ KIỆN KÍCH HOẠT HIỆU ỨNG NHÁY CHỚP KHI SĨ SỐ THAY ĐỔI
 function triggerOnlineBoxAnimation() {
     const box = document.getElementById("nav-online-box");
     if (box) {
@@ -167,14 +207,12 @@ function triggerOnlineBoxAnimation() {
     }
 }
 
-// ĐẾM SĨ SỐ THÔNG MINH - SIÊU TIẾT KIỆM BĂNG THÔNG
 async function refreshOnlineCount() {
     try {
         const urlParams = new URLSearchParams(window.location.search); 
         const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? (examData.id || "") : "");
         if (!currentQuizId || !supabaseClient) return;
 
-        // Chỉ SELECT COUNT ĐÚNG 1 LẦN khi load trang (Hoặc khi Admin bấm nút)
         const activeThreshold = Date.now() - (3 * 60 * 1000);
         let { count, error } = await supabaseClient
             .from('active_sessions')
@@ -191,9 +229,7 @@ async function refreshOnlineCount() {
     } catch(e) {}
 }
 
-// BỘ CẬP NHẬT KHI THẦY (ADMIN) HOẶC HỌC SINH BẤM VÀO SĨ SỐ
 async function handleOnlineCountClick() {
-    // Kiểm tra quyền Admin (Thầy)
     let isAdmin = false;
     try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -208,12 +244,12 @@ async function handleOnlineCountClick() {
 
     if (isAdmin) {
         const box = document.getElementById("nav-online-box");
-        if(box) box.style.opacity = "0.5";
+        if (box) box.style.opacity = "0.5";
         await refreshOnlineCount();
-        if(box) box.style.opacity = "1";
+        if (box) box.style.opacity = "1";
         triggerOnlineBoxAnimation();
         if (typeof showTimeChangeToast === 'function') {
-            showTimeChangeToast(`🔄 Admin: Đã đồng bộ sĩ số thực tế (${window.localOnlineCount} em) !`);
+            showTimeChangeToast(`🔄 Admin: Đã đồng bộ sĩ số thực tế (${window.localOnlineCount} em)!`);
         }
     } else {
         if (typeof showTimeChangeToast === 'function') {
@@ -222,7 +258,6 @@ async function handleOnlineCountClick() {
     }
 }
 
-// LẮNG NGHE REALTIME: CHỈ CỘNG/TRỪ BIẾN CỤC BỘ ĐỂ HIỂN THỊ, KHÔNG TRUY VẤN DB LẠI
 function startOnlineRealtimeWatcher(quizId) {
     if (!quizId || !supabaseClient) return;
     if (onlineRealtimeChannel) {
@@ -244,55 +279,6 @@ function startOnlineRealtimeWatcher(quizId) {
             triggerOnlineBoxAnimation();
         })
         .subscribe();
-}
-
-async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
-    const currentCat = getExamCategory(); const urlParams = new URLSearchParams(window.location.search); const currentQuizId = urlParams.get('id') || "";
-    const startBtn = document.getElementById("btn-start-exam");
-
-    if (startBtn) { startBtn.disabled = true; startBtn.innerText = "⏳ Đang kết nối phòng thi..."; }
-
-    // Xóa sạch cache rác của phiên cũ nếu là chủ động nhấn "Vào Làm Bài"
-    safeLocal.removeItem(getStorageKey());
-
-    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-    const nowMs = Date.now();
-
-    try {
-        await supabaseClient.from('active_sessions').upsert({
-            quiz_id: currentQuizId, sbd: cleanSbd, name: sName, class_name: sClass,
-            category_id: currentCat, is_free: isFreeStudent, ma_de: getMaDe(),
-            exam_title: EXAM_NAME, start_time: nowMs, last_ping: nowMs
-        });
-        supabaseClient.from('cheating_logs').insert([{
-            quiz_id: currentQuizId, sbd: cleanSbd, student_name: sName,
-            student_class: sClass, category_id: currentCat, switch_count: 0,
-            duration_str: "Bắt đầu", duration_sec: 0
-        }]).then();
-    } catch(e) {}
-
-    document.getElementById("nav-student-name").innerText = sName; 
-    document.getElementById("nav-student-id").innerText = sId; 
-    document.getElementById("nav-student-class").innerText = sClass; 
-    document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
-    document.getElementById("student-card").style.display = "none"; 
-    
-    const waitingCard = document.getElementById("waiting-room-card"); 
-    if (waitingCard) waitingCard.style.display = "none"; 
-    
-    document.getElementById("top-navbar").style.display = "block"; 
-    document.getElementById("quiz-content").style.display = "block"; 
-    
-    examStartTime = Date.now(); 
-    if (typeof window.__saveExamState === 'function') window.__saveExamState();
-    if (typeof window.__updateProgress === 'function') window.__updateProgress(); 
-    
-    applyOnlineCountVisibility();
-    startCountdownTimer(); 
-    startPresenceSystem(sId);
-    updateTopBackupStatus(false);
-
-    if (startBtn) { startBtn.disabled = false; startBtn.innerText = "Vào Làm Bài"; }
 }
 
 function startPresenceSystem(sId) {
@@ -335,12 +321,14 @@ function clearPresence(sId) {
 }
 
 function showTimeChangeToast(message) {
-    const toast = document.getElementById("time-change-toast"); const msg = document.getElementById("time-change-toast-msg");
-    if (!toast || !msg) return; msg.innerText = message; toast.classList.add("show");
+    const toast = document.getElementById("time-change-toast"); 
+    const msg = document.getElementById("time-change-toast-msg");
+    if (!toast || !msg) return; 
+    msg.innerText = message; 
+    toast.classList.add("show");
     setTimeout(() => { toast.classList.remove("show"); }, 4500);
 }
 
-// CẬP NHẬT CẤU HÌNH REALTIME & NHẢY SỐ TEXT GIAO DIỆN
 function startTimeWatcherRealtime(quizId) {
     if (!quizId || !supabaseClient) return;
     if (realtimeConfigChannel) { supabaseClient.removeChannel(realtimeConfigChannel); }
@@ -383,10 +371,17 @@ function startTimeWatcherRealtime(quizId) {
 function setupBackPrevention() { 
     window.history.pushState({ page: 'quiz' }, "", ""); 
     window.addEventListener('popstate', function () { 
-        if (!isSubmitted && examStartTime) { window.history.pushState({ page: 'quiz' }, "", ""); confirm("⚠️ BẠN ĐANG TRONG BÀI THI!\nThoát hoặc quay lại sẽ làm gián đoạn bài làm của bạn."); } 
+        if (!isSubmitted && examStartTime) { 
+            window.history.pushState({ page: 'quiz' }, "", ""); 
+            confirm("⚠️ BẠN ĐANG TRONG BÀI THI!\nThoát hoặc quay lại sẽ làm gián đoạn bài làm của bạn."); 
+        } 
     }); 
     window.addEventListener('beforeunload', function (e) { 
-        if (!isSubmitted && examStartTime) { if (typeof window.__saveExamState === 'function') window.__saveExamState(); e.preventDefault(); e.returnValue = 'Bài làm của bạn chưa được nộp. Dữ liệu đã được lưu tạm an toàn.'; } 
+        if (!isSubmitted && examStartTime) { 
+            if (typeof window.__saveExamState === 'function') window.__saveExamState(); 
+            e.preventDefault(); 
+            e.returnValue = 'Bài làm của bạn chưa được nộp. Dữ liệu đã được lưu tạm an toàn.'; 
+        } 
     }); 
     window.addEventListener('online', function() { 
         document.getElementById("net-status-banner").style.display = "none"; 
@@ -494,3 +489,5 @@ window.updateTopBackupStatus = updateTopBackupStatus;
 window.refreshOnlineCount = refreshOnlineCount;
 window.applyOnlineCountVisibility = applyOnlineCountVisibility;
 window.handleOnlineCountClick = handleOnlineCountClick;
+window.startPresenceSystem = startPresenceSystem;
+window.clearPresence = clearPresence;

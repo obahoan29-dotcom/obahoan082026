@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>HỆ THỐNG THI TRẮC NGHIỆM ONLINE</title>
-    <!-- FAVICON: Chữ P nghệ thuật uốn lượn đa sắc long lanh lấp lánh -->
+    <!-- FAVICON: Chữ P nghệ thuật uốn lượn đa sắc -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='neonFlow' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%2300E5FF'/%3E%3Cstop offset='25%25' stop-color='%2310B981'/%3E%3Cstop offset='50%25' stop-color='%23FFEA00'/%3E%3Cstop offset='75%25' stop-color='%23FF007F'/%3E%3Cstop offset='100%25' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3Cfilter id='glow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeDropShadow dx='0' dy='2' stdDeviation='3' flood-color='%23FF007F' flood-opacity='0.6'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='%230f172a' stroke='%23334155' stroke-width='2'/%3E%3Cpath d='M28,82 C34,80 32,50 33,28 C33,18 48,12 66,16 C82,20 84,40 68,52 C52,61 32,54 32,54' fill='none' stroke='url(%23neonFlow)' stroke-width='13' stroke-linecap='round' stroke-linejoin='round' filter='url(%23glow)'/%3E%3Cpath d='M25,82 Q32,80 35,76' fill='none' stroke='%2300E5FF' stroke-width='8' stroke-linecap='round'/%3E%3Cpath d='M72,20 L74,25 L79,27 L74,29 L72,34 L70,29 L65,27 L70,25 Z' fill='%23FFFFFF' opacity='0.95'/%3E%3Cpath d='M30,34 L31,37 L34,38 L31,39 L30,42 L29,39 L26,38 L29,37 Z' fill='%23FFEA00' opacity='0.9'/%3E%3Ccircle cx='76' cy='46' r='2.5' fill='%23FFFFFF' opacity='0.8'/%3E%3C/svg%3E">
     
     <!-- BỘ BẢO VỆ PHÒNG THI: CHỐNG CHUỘT PHẢI, F12 & DEBUGGER -->
@@ -58,7 +58,6 @@
     <link rel="stylesheet" href="style-modals.css">
 
     <style>
-        /* THANH ĐIỀU KHIỂN SAO LƯU VÀ GỬI LẠI TRÊN CÙNG */
         .universal-backup-topbar {
             position: sticky;
             top: 0;
@@ -131,6 +130,14 @@
         }
         .drive-up-status.success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
         .drive-up-status.error { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+
+        .btn-history-share-json:hover {
+            filter: brightness(1.12);
+            transform: translateY(-1px);
+        }
+        .btn-history-share-json:active {
+            transform: translateY(2px) scale(0.96);
+        }
     </style>
 
     <!-- CSDL Danh sách tài khoản học sinh dùng chung -->
@@ -166,6 +173,9 @@
     <script src="exam-api.js"></script>
     <script src="exam-export.js"></script>
     
+    <!-- FILE QUẢN LÝ RIÊNG ĐĂNG NHẬP, VÀO THI, NỘP BÀI 7S & NATIVE SHARE -->
+    <script src="student-exam-flow.js"></script>
+
     <!-- MODULE ĐỘNG CƠ THI & NỘP TỰ LUẬN DRIVE -->
     <script src="portal-tuluan-core.js"></script>
     <script src="portal-tuluan-admin.js"></script>
@@ -183,7 +193,7 @@
         <h2 style="color: #0369a1; font-weight: 800; font-size: 1.2rem;">Đang tải dữ liệu đề thi...</h2>
     </div>
 
-    <!-- THANH ĐIỀU KHIỂN DỰ PHÒNG & NỘP LẠI -->
+    <!-- THANH ĐIỀU KHIỂN DỰ PHÒNG & NỘP LẠI TRÊN CÙNG -->
     <div class="universal-backup-topbar" id="universal-backup-topbar">
         <div class="backup-status-indicator" id="backup-status-indicator">
             <span id="backup-status-icon"></span>
@@ -234,7 +244,6 @@
                 <div class="exam-code-pill"><span style="font-size: 0.95rem;">📑</span> <span id="nav-exam-code-text">Đề: ---</span></div>
                 
                 <div style="display: flex; gap: 8px;">
-                    <!-- SỬA TẠI ĐÂY: Thêm onclick và thay đổi con trỏ chuột -->
                     <div class="progress-pill" id="nav-online-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); border-color: #1d4ed8; cursor: pointer;" title="Số học sinh đang làm bài (Admin bấm vào để cập nhật)" onclick="handleOnlineCountClick()">
                         <span class="progress-icon">👥</span>
                         <span class="progress-val" id="nav-online-val">1</span>
@@ -248,6 +257,9 @@
     </header>
 
     <div class="container">
+        <!-- VÙNG MỌC RA CÁC NÚT LỊCH SỬ NỘP BÀI LẦN 1, LẦN 2... CỦA HỌC SINH (YÊU CẦU 5) -->
+        <div id="student-history-buttons-container"></div>
+
         <div id="error-card" class="card-panel" style="display: none; border-left: 6px solid #ef4444; background: #fff5f5;">
             <h3 id="error-title" style="color: #dc2626; margin-bottom: 8px; font-size: 1.15rem; font-weight: 900;">⚠️ Lỗi nạp bài thi</h3>
             <p id="error-msg" style="color: #7f1d1d; line-height: 1.5; font-size: 1rem; font-weight: 600;"></p>
@@ -328,6 +340,7 @@
         </div>
     </div>
     
+    <!-- MODAL XÁC NHẬN VÀ TIẾN TRÌNH NỘP BÀI ĐẾM NGƯỢC 7S -->
     <div class="modal-overlay" id="submit-confirm-modal">
         <div class="modal-box">
             <div class="modal-icon" id="modal-submit-icon">📝</div>
