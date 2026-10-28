@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-results-stats.js
 // THỐNG KÊ KPI, VẼ BIỂU ĐỒ PHỔ ĐIỂM CHART.JS & XUẤT EXCEL
+// CẬP NHẬT ĐỒNG BỘ "ĐANG THI" CHUẨN XÁC VÀ ĐẸP MẮT
 // =========================================================
 
 function updateStatsAndRenderTable(rows) {
@@ -8,9 +9,12 @@ function updateStatsAndRenderTable(rows) {
     let classCount = rows.filter(r => r.isClassStudent).length;
     let freeCount = total - classCount;
 
-    let submittedCount = rows.filter(r => r.allAttempts.length > 0).length;
-    let doingCount = rows.filter(r => r.isDoing && r.allAttempts.length === 0).length;
-    let unsubmittedCount = total - submittedCount - doingCount;
+    // Số em đang thi: tính tất cả em có cờ isDoing = true
+    let doingCount = rows.filter(r => r.isDoing).length;
+    // Số em đã nộp bài ít nhất 1 lần
+    let submittedCount = rows.filter(r => r.allAttempts.length > 0 && !r.isDoing).length;
+    // Số em chưa hề thi và không đang trong phòng thi
+    let unsubmittedCount = rows.filter(r => r.allAttempts.length === 0 && !r.isDoing).length;
     
     let sumScore = 0; let scoredStudents = 0;
     let c_0_to_3 = 0, c_3_to_5 = 0, c_5_to_6 = 0, c_6_to_7 = 0, c_7_to_8 = 0, c_8_to_9 = 0, c_9_to_10 = 0;
@@ -36,7 +40,27 @@ function updateStatsAndRenderTable(rows) {
     if (classEl) classEl.innerText = classCount; if (freeEl) freeEl.innerText = freeCount;
     const subEl = document.getElementById("stat-submitted-students"); const doingEl = document.getElementById("stat-doing-students");
     const unsubEl = document.getElementById("stat-unsubmitted-students"); const avgEl = document.getElementById("stat-avg-score");
-    if (subEl) subEl.innerText = submittedCount; if (doingEl) doingEl.innerText = doingCount;
+    if (subEl) subEl.innerText = submittedCount; 
+    
+    // Cập nhật khối "Đang thi" với hiệu ứng nhịp tim trên thanh thống kê
+    if (doingEl) {
+        doingEl.innerText = doingCount;
+        const parentBadge = doingEl.closest('.stat-badge-item');
+        if (parentBadge) {
+            if (doingCount > 0) {
+                parentBadge.style.background = "#fff1f2";
+                parentBadge.style.borderColor = "#fecdd3";
+                parentBadge.style.color = "#be123c";
+                parentBadge.innerHTML = `💓 Đang thi: <b id="stat-doing-students" style="color:#e11d48; font-size:14px; margin-left:3px;">${doingCount}</b>`;
+            } else {
+                parentBadge.style.background = "#fff";
+                parentBadge.style.borderColor = "#e2e8f0";
+                parentBadge.style.color = "#475569";
+                parentBadge.innerHTML = `⚡ Đang làm: <b id="stat-doing-students" style="color:#f59e0b; margin-left:3px;">0</b>`;
+            }
+        }
+    }
+    
     if (unsubEl) unsubEl.innerText = unsubmittedCount; if (avgEl) avgEl.innerText = avg;
 
     const el_0_3 = document.getElementById("stat-score-0-to-3"); const el_3_5 = document.getElementById("stat-score-3-to-5");
@@ -186,11 +210,13 @@ function exportResultsToExcel() {
 
     currentExamResultData.rawRows.forEach(r => {
         const attCount = r.allAttempts.length; const sub = attCount > 0 ? r.allAttempts[r.selectedAttemptIndex] : null; const acc = r.account;
-        let stt = r.stt; let soLanThi = attCount > 0 ? `${attCount} lần (Đang xem lần ${r.selectedAttemptIndex + 1})` : "Chưa thi";
+        let stt = r.stt; 
+        let soLanThi = r.isDoing ? `Đang thi (${attCount + 1} lần)` : (attCount > 0 ? `${attCount} lần (Đang xem lần ${r.selectedAttemptIndex + 1})` : "Chưa thi");
         let inTime = sub ? (sub.timestamp || "") : (r.isDoing ? formatDateTimeFull(r.doingStartTime) : "Chưa thi");
         let spent = sub ? (sub.completionTime || "") : (r.isDoing ? formatElapsedDuration(r.doingStartTime) : "");
         let name = acc.name || ""; let lop = acc.className || (sub ? (sub.studentClass || sub.className) : "") || "";
-        let sbd = acc.sbd || ""; let tinhTrang = sub ? "Đã nộp bài" : (r.isFreeDoing ? "Đang thi-tự do" : (r.isDoing ? "Đang làm bài" : "Chưa thi"));
+        let sbd = acc.sbd || ""; 
+        let tinhTrang = r.isDoing ? (r.isFreeDoing ? "Đang thi-tự do" : "Đang thi") : (sub ? "Đã nộp bài" : "Chưa thi");
         let correct = sub ? (sub.calcMetrics ? sub.calcMetrics.correctCount : (sub.correctCount !== undefined ? sub.correctCount : 0)) : "";
         let score = sub ? (sub.score10 !== undefined ? sub.score10 : (sub.calcMetrics ? sub.calcMetrics.score10Scale : "")) : "";
         let rankStr = (r.rank !== null && r.rank !== undefined) ? `Hạng ${r.rank}` : "---";
