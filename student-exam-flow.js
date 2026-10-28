@@ -5,6 +5,23 @@
 let submissionCountdownTimer = null;
 let currentSubmitAttempt = 1;
 
+// HÀM ÁNH XẠ 1 TRONG 7 TÊN LỚP CHUẨN TUYỆT ĐỐI
+function getStrictStandardClassName(rawClass, rawSbd) {
+    const s = String(rawClass || "").toLowerCase().trim();
+    const sbd = String(rawSbd || "").toLowerCase().trim();
+
+    if (s.includes("11a") || sbd.includes("11a")) return "Lớp 11A";
+    if (s.includes("11c") || sbd.includes("11c")) return "Lớp 11C";
+    if (s.includes("11e") || sbd.includes("11e")) return "Lớp 11E";
+    if (s.includes("10p") || sbd.includes("10p")) return "Lớp 10P";
+
+    if (s.includes("them-10") || s.includes("thêm 10") || s.includes("them 10") || /^10\d{2}$/.test(sbd)) return "Thêm 10";
+    if (s.includes("them-11") || s.includes("thêm 11") || s.includes("them 11") || /^11\d{2}$/.test(sbd)) return "Thêm 11";
+    if (s.includes("them-12") || s.includes("thêm 12") || s.includes("them 12") || /^12\d{2}$/.test(sbd)) return "Thêm 12";
+
+    return "Thêm 11";
+}
+
 function openStudentLoginModal(item, categoryId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
 
@@ -365,6 +382,8 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
     if (detected) currentCat = detected;
 
+    const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
+
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
 
@@ -396,12 +415,17 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionId = `${currentQuizId}_${cleanSbd}`;
 
+    // LẤY CHÍNH XÁC TÊN ĐỀ THI ĐANG THI (KHÔNG VIẾT TẮT)
+    const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
+        ? EXAM_NAME 
+        : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
+
     return {
         id: submissionId,
         quiz_id: currentQuizId,
         sbd: cleanSbd,
         student_name: sName,
-        class_name: sClass,
+        class_name: strictClassName,
         score10: isNaN(finalScore) ? 0 : Number(finalScore),
         raw_score: isNaN(totalRawScore) ? 0 : Number(Math.round(totalRawScore * 100) / 100),
         max_scale: isNaN(maxScale) ? 10.0 : Number(maxScale),
@@ -415,7 +439,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         category_id: currentCat,
         is_free: isFreeStudent,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-        exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+        exam_title: exactExamTitle,
         created_at: new Date().toISOString()
     };
 }
@@ -427,10 +451,8 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
 
     if (!gasUrl || gasUrl.includes("DÁN_URL")) return false;
 
-    const driveClassName = typeof getCleanDriveClassName === 'function' ? getCleanDriveClassName(payload.class_name || payload.category_id) : (payload.class_name || "11A");
-    const folderKey = typeof getUnifiedExamFolderKey === 'function' 
-        ? getUnifiedExamFolderKey(payload.exam_title, payload.ma_de, payload.quiz_id) 
-        : (payload.quiz_id || "BAI_TAP");
+    const strictClassName = getStrictStandardClassName(payload.class_name, payload.sbd);
+    const exactExamTitle = payload.exam_title || "Đề thi";
 
     const sbd = payload.sbd || "sbd";
     const sName = payload.student_name || "hocsinh";
@@ -446,12 +468,11 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
 
     const drivePayload = {
         action: "saveSubmissionJsonFile",
-        rootFolder: "BAI_TAP_TU_LUAN",
-        className: driveClassName,
-        class: driveClassName,
-        lop: driveClassName,
-        examTitle: folderKey,
-        folderKey: folderKey,
+        rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
+        className: strictClassName,
+        class: strictClassName,
+        lop: strictClassName,
+        examTitle: exactExamTitle,
         filename: fileName,
         mimeType: "application/json",
         base64: base64Data,
@@ -705,6 +726,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
+    // GỬI LƯU FILE JSON VÀ SHEET ĐIỂM CHÍNH THỨC SANG GOOGLE DRIVE
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
@@ -955,6 +977,7 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
+window.getStrictStandardClassName = getStrictStandardClassName;
 window.openStudentLoginModal = openStudentLoginModal;
 window.closeStudentLoginModal = closeStudentLoginModal;
 window.switchStudentLoginMode = switchStudentLoginMode;
