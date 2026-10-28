@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: app-utils.js
-// CÁC HÀM TIỆN ÍCH DÙNG CHUNG CHO TOÀN BỘ WEBSITE
+// FILE: app-utils.js (BỔ SUNG INDEXEDDB CHỐNG MẤT BÀI 100%)
 // =========================================================
 
 const safeLocal = {
@@ -14,6 +13,111 @@ const safeSession = {
     setItem(k, v) { try { sessionStorage.setItem(k, v); } catch(e) {} },
     removeItem(k) { try { sessionStorage.removeItem(k); } catch(e) {} }
 };
+
+// =========================================================
+// MODULE: examIndexedDB (LƯU TRỮ VĨNH VIỄN HÀNG TRĂM MB CHO HỌC SINH)
+// =========================================================
+const examIndexedDB = {
+    dbName: 'ExamSecureOfflineDB',
+    dbVersion: 2,
+    _db: null,
+
+    async getDB() {
+        if (this._db) return this._db;
+        return new Promise((resolve, reject) => {
+            if (!('indexedDB' in window)) {
+                resolve(null);
+                return;
+            }
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('exam_states')) {
+                    db.createObjectStore('exam_states', { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains('pending_submissions')) {
+                    db.createObjectStore('pending_submissions', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('exam_history')) {
+                    db.createObjectStore('exam_history', { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains('live_drafts')) {
+                    db.createObjectStore('live_drafts', { keyPath: 'key' });
+                }
+            };
+            request.onsuccess = (e) => {
+                this._db = e.target.result;
+                resolve(this._db);
+            };
+            request.onerror = (e) => {
+                console.warn('Lỗi mở IndexedDB:', e);
+                resolve(null);
+            };
+        });
+    },
+
+    async setItem(storeName, data) {
+        try {
+            const db = await this.getDB();
+            if (!db) return false;
+            return new Promise((resolve) => {
+                const tx = db.transaction(storeName, 'readwrite');
+                tx.objectStore(storeName).put(data);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+            });
+        } catch (e) {
+            return false;
+        }
+    },
+
+    async getItem(storeName, key) {
+        try {
+            const db = await this.getDB();
+            if (!db) return null;
+            return new Promise((resolve) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const req = tx.objectStore(storeName).get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    },
+
+    async removeItem(storeName, key) {
+        try {
+            const db = await this.getDB();
+            if (!db) return false;
+            return new Promise((resolve) => {
+                const tx = db.transaction(storeName, 'readwrite');
+                tx.objectStore(storeName).delete(key);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+            });
+        } catch (e) {
+            return false;
+        }
+    },
+
+    async getAll(storeName) {
+        try {
+            const db = await this.getDB();
+            if (!db) return [];
+            return new Promise((resolve) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const req = tx.objectStore(storeName).getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
+            });
+        } catch (e) {
+            return [];
+        }
+    }
+};
+
+window.examIndexedDB = examIndexedDB;
 
 function normalizeName(str) {
     if (!str) return "";
@@ -211,7 +315,6 @@ function getCategoryDisplayName(catId) {
     return map[catId] || catId;
 }
 
-// BỘ NHẬN DIỆN LỚP CHUẨN XÁC 100% TỪ SỐ BÁO DANH ĐỂ PHÂN LOẠI KHÔNG BỊ TRỘN LỚP
 function detectCategoryFromSbd(rawSbd) {
     if (!rawSbd) return null;
     const s = String(rawSbd).trim().toLowerCase();
@@ -222,11 +325,10 @@ function detectCategoryFromSbd(rawSbd) {
     if (s.startsWith("10p") || s.startsWith("10p_")) return "lop-10p";
     if (s.startsWith("hsg")) return "hsg-toan-11";
 
-    if (/^10\d{2}$/.test(s)) return "them-10"; // 1001 đến 1099
-    if (/^11\d{2}$/.test(s)) return "them-11"; // 1101 đến 1199
-    if (/^12\d{2}$/.test(s)) return "them-12"; // 1201 đến 1299
+    if (/^10\d{2}$/.test(s)) return "them-10";
+    if (/^11\d{2}$/.test(s)) return "them-11";
+    if (/^12\d{2}$/.test(s)) return "them-12";
 
-    // Đối chiếu trực tiếp với database STUDENT_ACCOUNTS nếu có
     if (window.STUDENT_ACCOUNTS) {
         for (let cat in window.STUDENT_ACCOUNTS) {
             const list = window.STUDENT_ACCOUNTS[cat];
@@ -239,7 +341,6 @@ function detectCategoryFromSbd(rawSbd) {
     return null;
 }
 
-// CHỮ MỜ GỢI Ý (PLACEHOLDER) THEO TỪNG LỚP ĐỂ HỌC SINH NHẬP ĐÚNG SBD
 function getSbdPlaceholderForCategory(catId) {
     const c = String(catId || "").toLowerCase();
     if (c.includes("11a") || c === "lop-11a") return "Ví dụ: 11A01, 11A28, 11A45...";

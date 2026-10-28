@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG SIÊU NHẠY)
+// FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG SIÊU NHẠY & SERVICE WORKER)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -29,6 +29,17 @@ let realtimeConfigChannel = null;
 let onlineRealtimeChannel = null;
 
 window.localOnlineCount = 1; 
+
+// ĐĂNG KÝ SERVICE WORKER TỰ ĐỘNG KHI TẢI TRANG
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+            console.log('✅ Service Worker đã sẵn sàng bảo lưu bài thi:', reg.scope);
+        }).catch((err) => {
+            console.warn('Cảnh báo Service Worker:', err);
+        });
+    });
+}
 
 let wakeLockSentinel = null;
 async function requestWakeLock() {
@@ -124,7 +135,6 @@ function applyStudentToUI(student) {
     safeLocal.setItem("saved_student_sbd", sId); 
     safeLocal.setItem("saved_student_class", sClass);
 
-    // KHI ÁP DỤNG THÔNG TIN HỌC SINH -> HIỂN THỊ NGAY NÚT GỬI FILE JSON LẦN 1 / LẦN 2 NẾU CÓ
     if (typeof renderStudentSubmissionHistoryButtons === 'function') {
         renderStudentSubmissionHistoryButtons();
     }
@@ -136,7 +146,6 @@ function syncStudentFromParamsAndStorage() {
     let name = urlParams.get('name'); 
     let className = urlParams.get('class');
 
-    // Cập nhật chữ mờ gợi ý theo lớp của đề thi
     const cat = getExamCategory();
     const idEl = document.getElementById("student-id");
     if (idEl && typeof getSbdPlaceholderForCategory === 'function') {
@@ -423,7 +432,7 @@ function updateTopBackupStatus(isServerConfirmed = false) {
     } else {
         const hasPending = Boolean(safeLocal.getItem("pending_exam_submission"));
         if (hasPending) {
-            if (statusText) statusText.innerText = "⚠️ Chưa gửi thành công lên máy chủ (Đã bảo lưu trên máy)";
+            if (statusText) statusText.innerText = "⚠️ Chưa gửi thành công lên máy chủ (Đã bảo lưu trên máy & IndexedDB)";
             if (statusIcon) statusIcon.innerText = "🔴";
             if (indicator) indicator.className = "backup-status-indicator pending";
             if (resendBtn) resendBtn.style.display = "inline-flex";
@@ -436,12 +445,18 @@ function updateTopBackupStatus(isServerConfirmed = false) {
     }
 }
 
-function checkPendingSubmissionOnLoad() { 
+async function checkPendingSubmissionOnLoad() { 
     try { 
-        const raw = safeLocal.getItem("pending_exam_submission"); 
+        let raw = safeLocal.getItem("pending_exam_submission"); 
+        if (!raw && typeof examIndexedDB !== 'undefined') {
+            const list = await examIndexedDB.getAll('pending_submissions');
+            if (list && list.length > 0) {
+                raw = JSON.stringify(list[0].payload);
+            }
+        }
         if (raw) { 
             const parsed = JSON.parse(raw); 
-            if (parsed && (parsed.studentName || parsed.studentId)) { 
+            if (parsed && (parsed.studentName || parsed.studentId || parsed.student_name)) { 
                 pendingSubmissionPayload = parsed; 
                 updateTopBackupStatus(false);
                 return;
@@ -509,3 +524,4 @@ window.applyOnlineCountVisibility = applyOnlineCountVisibility;
 window.handleOnlineCountClick = handleOnlineCountClick;
 window.startPresenceSystem = startPresenceSystem;
 window.clearPresence = clearPresence;
+window.checkPendingSubmissionOnLoad = checkPendingSubmissionOnLoad;

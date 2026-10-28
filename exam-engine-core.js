@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js (BẢN TỐI ƯU ĐỒNG BỘ CLOUD VỚI SUPABASE)
+// FILE: exam-engine-core.js (BẢN TỐI ƯU ĐỒNG BỘ CLOUD VỚI SUPABASE & INDEXEDDB)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -27,11 +27,9 @@ let isSubmittingInProgress = false;
     document.head.appendChild(style);
 })();
 
-// LƯU NHÁP LÊN SUPABASE NGAY KHI CHỌN HOẶC ĐIỀN ĐÁP ÁN
+// LƯU NHÁP LÊN SUPABASE & INDEXEDDB NGAY KHI CHỌN HOẶC ĐIỀN ĐÁP ÁN
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (!client) return;
 
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     if (!sId) return;
@@ -46,21 +44,35 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const primaryDocId = `${quizId}_${cleanSbd}`;
 
+    const draftData = {
+        id: primaryDocId,
+        quiz_id: quizId,
+        sbd: cleanSbd,
+        student_name: sName,
+        class_name: sClass,
+        category_id: currentCat,
+        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+        exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+        user_answers: window.SECURE_VAULT.userAnswers || {},
+        last_updated: new Date().toISOString()
+    };
+
+    // 1. Lưu tức thì vào IndexedDB offline (không phụ thuộc mạng)
+    if (typeof examIndexedDB !== 'undefined') {
+        examIndexedDB.setItem('live_drafts', {
+            key: primaryDocId,
+            ...draftData
+        }).catch(() => {});
+    }
+
+    // 2. Lưu vào Supabase Cloud
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
+
     try {
-        await client.from('live_drafts').upsert({
-            id: primaryDocId,
-            quiz_id: quizId,
-            sbd: cleanSbd,
-            student_name: sName,
-            class_name: sClass,
-            category_id: currentCat,
-            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-            user_answers: window.SECURE_VAULT.userAnswers || {},
-            last_updated: new Date().toISOString()
-        }, { onConflict: 'quiz_id,sbd' });
+        await client.from('live_drafts').upsert(draftData, { onConflict: 'quiz_id,sbd' });
     } catch(e) {
-        console.warn("Lỗi lưu nháp:", e);
+        console.warn("Lỗi lưu nháp Supabase:", e);
     }
 }
 
@@ -237,6 +249,10 @@ function resetToFreshLoginScreen() {
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.setItem("last_submission_cleared", "true");
 
+    if (typeof examIndexedDB !== 'undefined') {
+        examIndexedDB.removeItem('exam_states', getStorageKey()).catch(() => {});
+    }
+
     const sName = document.getElementById("student-name");
     const sId = document.getElementById("student-id");
     const sClass = document.getElementById("student-class");
@@ -257,7 +273,19 @@ async function checkSessionStatus(isAutostart = false) {
         renderStudentSubmissionHistoryButtons();
     }
 
-    if (restoreExamStateFromStorage()) { 
+    let isRestored = restoreExamStateFromStorage();
+    if (!isRestored && typeof examIndexedDB !== 'undefined') {
+        // Thử phục hồi từ IndexedDB nếu LocalStorage bị xóa rỗng
+        try {
+            const idbState = await examIndexedDB.getItem('exam_states', getStorageKey());
+            if (idbState && idbState.data) {
+                safeLocal.setItem(getStorageKey(), JSON.stringify(idbState.data));
+                isRestored = restoreExamStateFromStorage();
+            }
+        } catch(e) {}
+    }
+
+    if (isRestored) { 
         const sName = document.getElementById("student-name").value.trim() || "Thí sinh"; 
         const sId = document.getElementById("student-id").value.trim() || "---"; 
         const sClass = document.getElementById("student-class").value.trim() || "---"; 
@@ -550,6 +578,15 @@ function saveExamStateToStorage() {
         lockedDurationSec: lockedDurationSec
     }; 
     safeLocal.setItem(getStorageKey(), JSON.stringify(dataToSave)); 
+
+    // Ghi đồng thời vào IndexedDB để chống tràn bộ nhớ và bảo toàn 100%
+    if (typeof examIndexedDB !== 'undefined') {
+        examIndexedDB.setItem('exam_states', {
+            key: getStorageKey(),
+            data: dataToSave,
+            updatedAt: Date.now()
+        }).catch(() => {});
+    }
 }
 
 function restoreExamStateFromStorage() { 
@@ -565,9 +602,9 @@ function restoreExamStateFromStorage() {
                 isStarted: true,
                 isExamLocked: true,
                 studentId: pend.studentId || pend.sbd,
-                studentName: pend.studentName,
-                studentClass: pend.studentClass || pend.className,
-                userAnswers: pend.userAnswers || {}
+                studentName: pend.studentName || pend.student_name,
+                studentClass: pend.studentClass || pend.class_name,
+                userAnswers: pend.userAnswers || pend.user_answers || {}
             };
         }
         

@@ -43,7 +43,7 @@ function getPendingOrLiveSubmissionPayload() {
 function generateSubmissionChecksum(payload) {
     try {
         const sId = String(payload.studentId || payload.sbd || "");
-        const sName = String(payload.studentName || "");
+        const sName = String(payload.studentName || payload.student_name || "");
         const sScore = String(payload.score10 !== undefined ? payload.score10 : "");
         const rawKey = `${sId}_${sName}_${sScore}_OBAHOAN_SECURE_2026`;
         
@@ -71,8 +71,23 @@ function executeBrowserFileDownload(blob, fileName) {
 }
 
 // NÚT LUÔN CÓ MẶT TRÊN CÙNG: BẤM VÀO LÀ TẢI FILE NGAY LẬP TỨC
-function downloadCompletedOrDraftSubmission() {
-    const payload = getPendingOrLiveSubmissionPayload();
+async function downloadCompletedOrDraftSubmission() {
+    let payload = getPendingOrLiveSubmissionPayload();
+
+    // Nếu localStorage không thấy, thử đọc từ IndexedDB
+    if (!payload && typeof examIndexedDB !== 'undefined') {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const quizId = urlParams.get('id') || "exam";
+            const sbd = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+            const backupId = `${quizId}_${sbd}`;
+            const idbItem = await examIndexedDB.getItem('pending_submissions', backupId);
+            if (idbItem && idbItem.payload) {
+                payload = idbItem.payload;
+            }
+        } catch(e) {}
+    }
+
     if (!payload) {
         alert("⚠️ Không tìm thấy bài làm trên máy này!");
         return;
@@ -87,7 +102,7 @@ function downloadCompletedOrDraftSubmission() {
     const jsonStr = JSON.stringify(securedPayload, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
     const sId = (payload.studentId || payload.sbd || "sbd").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const sName = (payload.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+    const sName = (payload.studentName || payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
     const fileName = `BaiLam_${sId}_${sName}.json`;
 
     executeBrowserFileDownload(blob, fileName);
