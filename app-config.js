@@ -148,9 +148,9 @@ async function initGlobalSiteRedirectWatcher() {
 
 initGlobalSiteRedirectWatcher();
 
-// CẤU HÌNH GOOGLE DRIVE & IMGBB (GIỮ NGUYÊN 100%)
-const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbxrNBRAAeTohrANj3w9_hd9FLBrxZCF0M0PmN290ul0Wrz4zon4-lqYdPOZ7liuePMCgw/exec";
-const GOOGLE_DRIVE_TULUAN_GAS_URL = "https://script.google.com/macros/s/AKfycbxj0Y9ZWOuW9jKBLQIdCCHafFv1sfycC4Ub1CIpVV0CfwtXbSmAwjTU3npoBCxME2yWiw/exec";
+// CẤU HÌNH GOOGLE DRIVE & IMGBB (ĐÃ CẬP NHẬT LINK GAS MỚI)
+const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
+const GOOGLE_DRIVE_TULUAN_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const IMGBB_API_KEY = "548b05b895acef8ad88e645fd274c574"; 
 
 const TEACHER_ZALO_LINK = "https://zalo.me/0972952128";
