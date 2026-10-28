@@ -1,13 +1,11 @@
 // =========================================================
-// FILE: portal-admin.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
-// ĐÃ FIX LỖI ĐỌC FILE JS CÓ COMMENT Ở CUỐI
+// FILE 2: portal-admin.js (FIX LƯU ĐẦY ĐỦ SỐ PHÚT VÀO CUSTOM_LINKS)
 // =========================================================
 
 let currentEditingTimeQuizId = null;
 let currentEditingTimeItemId = null;
 let currentEditingTimeMode = null;
 
-// HÀM ĐỒNG BỘ HIỂN THỊ CÔNG TẮC & ĐƯỜNG LINK WEB DỰ PHÒNG TRÊN GIAO DIỆN ADMIN
 function updateRedirectUIElements() {
     const toggle = document.getElementById("admin-redirect-toggle");
     const statusTxt = document.getElementById("admin-redirect-status-txt");
@@ -24,17 +22,14 @@ function updateRedirectUIElements() {
     }
 }
 
-// BẬT / TẮT CHUYỂN HƯỚNG WEB DỰ PHÒNG (PHẢN HỒI NGAY LẬP TỨC 100%)
 async function handleSiteRedirectToggle(isChecked) {
     const urlInput = document.getElementById("admin-redirect-url-input");
     const targetUrl = (urlInput && urlInput.value.trim()) ? urlInput.value.trim() : DEFAULT_BACKUP_WEB_URL;
 
-    // 1. Phản hồi giao diện ngay lập tức, không chờ mạng
     SITE_REDIRECT_CONFIG.enabled = isChecked;
     SITE_REDIRECT_CONFIG.targetUrl = targetUrl;
     updateRedirectUIElements();
 
-    // 2. Lưu tạm an toàn vào LocalStorage của Admin
     try {
         localStorage.setItem("site_redirect_config", JSON.stringify({
             enabled: isChecked,
@@ -43,7 +38,6 @@ async function handleSiteRedirectToggle(isChecked) {
         }));
     } catch(e) {}
 
-    // 3. Đồng bộ lên Supabase để toàn bộ học sinh nhận lệnh
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (client) {
@@ -63,11 +57,9 @@ async function handleSiteRedirectToggle(isChecked) {
         }
     } catch(err) {
         console.warn("Lỗi lưu Supabase:", err);
-        alert("⚠️ Đã đổi trạng thái trên máy này. Lưu ý kết nối mạng nếu Thầy muốn học sinh nhận lệnh ngay!");
     }
 }
 
-// LƯU ĐƯỜNG DẪN WEB DỰ PHÒNG MỚI
 async function saveSiteRedirectUrl() {
     const urlInput = document.getElementById("admin-redirect-url-input");
     if (!urlInput || !urlInput.value.trim()) return alert("Vui lòng nhập đường dẫn web dự phòng!");
@@ -106,25 +98,18 @@ async function saveSiteRedirectUrl() {
     }
 }
 
-// HÀM ĐỌC FILE JS/JSON SIÊU BỀN BỈ (FIX LỖI COMMENT Ở CUỐI)
 function parseScriptOrJson(content) {
     if (!content) return null;
     let clean = String(content).trim();
-    
-    // 1. Thử parse chuẩn JSON trước (nếu upload file .json)
     try {
         return JSON.parse(clean);
     } catch(e) {}
 
-    // 2. Môi trường giả lập JS: Biến khai báo const/let/var thành câu lệnh return
-    // Kỹ thuật này giúp lấy Object an toàn 100% bất chấp phía sau có comment gì
     try {
         let scriptText = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, 'return ');
         return new Function(scriptText)();
     } catch(e) {
-        // Fallback (dự phòng): Nếu kỹ thuật trên fail, dùng cách cắt gọt mạnh tay
         clean = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, '').trim();
-        // Xóa sạch comment /* ... */ và // ... cùng dấu ; ở đuôi
         clean = clean.replace(/;?(\s*\/\*[\s\S]*?\*\/|\s*\/\/.*)*\s*$/, '').trim();
         if (clean.endsWith(';')) clean = clean.slice(0, -1).trim();
         try {
@@ -222,7 +207,7 @@ function readFileAsTextAsync(file) {
     });
 }
 
-// ĐĂNG ĐỀ THI LÊN SUPABASE
+// FIX YÊU CẦU 4: LƯU ĐẦY ĐỦ SỐ PHÚT VÀO CẢ QUIZZES VÀ CUSTOM_LINKS
 async function processUpload() {
     const fileInput = document.getElementById("admin-file-upload");
     const answerFileInput = document.getElementById("admin-answer-file-upload");
@@ -256,18 +241,25 @@ async function processUpload() {
         const pad = n => String(n).padStart(2, '0');
         const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
+        // Lấy chính xác thời lượng thi từ file đề (VD: đề 110 là 90 phút)
+        const finalTimeLimitMinutes = parseInt(parsedExam.timeLimitMinutes, 10) || 90;
+        const examStartStr = parsedExam.examStartTimeStr || null;
+        const examEndStr = parsedExam.examEndTimeStr || null;
+
         // 1. Lưu vào bảng quizzes
         await supabaseClient.from('quizzes').insert([{
             id: quizId,
             title: parsedExam.title,
             made: parsedExam.maDe || "101",
-            time_limit_minutes: parseInt(parsedExam.timeLimitMinutes, 10) || 90,
+            time_limit_minutes: finalTimeLimitMinutes,
+            exam_start_time: examStartStr,
+            exam_end_time: examEndStr,
             scoring_config: parsedExam.scoringConfig || { mode: 'option1' },
             images: parsedExam.images || {},
             questions: parsedExam.questions
         }]);
 
-        // 2. Tạo liên kết cho từng lớp trong custom_links
+        // 2. Tạo liên kết cho từng lớp trong custom_links (ĐÃ BỔ SUNG time_limit_minutes)
         const linkRows = categories.map(cat => ({
             id: quizId,
             category_id: cat,
@@ -281,12 +273,15 @@ async function processUpload() {
             timestamp: Date.now(),
             is_shuffled: true,
             allow_free: true,
+            time_limit_minutes: finalTimeLimitMinutes,
+            exam_start_time_str: examStartStr,
+            exam_end_time_str: examEndStr,
             scoring_config: parsedExam.scoringConfig || { mode: 'option1' }
         }));
 
         await supabaseClient.from('custom_links').insert(linkRows);
 
-        alert(`✨ Tạo đề thi "${parsedExam.title}" thành công!`);
+        alert(`✨ Đăng đề thi "${parsedExam.title}" (${finalTimeLimitMinutes} phút) thành công!`);
         window.location.reload(); 
     } catch (err) { 
         alert("❌ Lỗi: " + err.message); 
@@ -295,7 +290,6 @@ async function processUpload() {
     }
 }
 
-// TẢI FILE PDF / WORD / ẢNH LÊN GOOGLE DRIVE
 async function processUploadToGoogleDrive() {
     const fileInput = document.getElementById("admin-drive-file");
     const titleInput = document.getElementById("admin-drive-title");
@@ -303,33 +297,18 @@ async function processUploadToGoogleDrive() {
     const btn = document.getElementById("btn-upload-drive");
     const statusBox = document.getElementById("drive-upload-status");
 
-    if (categories.length === 0) {
-        alert("⚠️ Vui lòng tích chọn ít nhất 1 lớp / chuyên mục để đăng tài liệu!");
-        return;
-    }
-    if (!fileInput || fileInput.files.length === 0) {
-        alert("⚠️ Vui lòng chọn file PDF, Word hoặc Ảnh trên máy tính!");
-        return;
-    }
+    if (categories.length === 0) { alert("⚠️ Vui lòng tích chọn ít nhất 1 lớp / chuyên mục để đăng tài liệu!"); return; }
+    if (!fileInput || fileInput.files.length === 0) { alert("⚠️ Vui lòng chọn file PDF, Word hoặc Ảnh trên máy tính!"); return; }
     if (!GOOGLE_DRIVE_UPLOAD_GAS_URL || GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
-        alert("⚠️ Bạn chưa cấu hình GOOGLE_DRIVE_UPLOAD_GAS_URL trong file app-config.js!");
-        return;
+        alert("⚠️ Bạn chưa cấu hình GOOGLE_DRIVE_UPLOAD_GAS_URL trong file app-config.js!"); return;
     }
 
     const file = fileInput.files[0];
-    if (file.size > 25 * 1024 * 1024) {
-        alert("⚠️ Dung lượng file quá lớn (> 25MB). Vui lòng nén file trước khi tải.");
-        return;
-    }
+    if (file.size > 25 * 1024 * 1024) { alert("⚠️ Dung lượng file quá lớn (> 25MB)!"); return; }
 
     let finalTitle = (titleInput && titleInput.value.trim()) ? titleInput.value.trim() : file.name;
-
-    btn.disabled = true;
-    btn.innerText = "⏳ Đang chuyển đổi...";
-    if (statusBox) {
-        statusBox.style.display = "block";
-        statusBox.innerText = `⏳ Đang đọc file "${file.name}"...`;
-    }
+    btn.disabled = true; btn.innerText = "⏳ Đang chuyển đổi...";
+    if (statusBox) { statusBox.style.display = "block"; statusBox.innerText = `⏳ Đang đọc file "${file.name}"...`; }
 
     try {
         const reader = new FileReader();
@@ -337,9 +316,7 @@ async function processUploadToGoogleDrive() {
             try {
                 let rawResult = e.target.result || "";
                 let base64Data = rawResult.includes("base64,") ? rawResult.split("base64,")[1] : rawResult.split(",")[1];
-
                 btn.innerText = "🚀 Đang tải lên Drive...";
-                if (statusBox) statusBox.innerText = "🚀 Đang gửi file lên Google Drive...";
 
                 let mimeType = file.type || "application/octet-stream";
                 const payload = { filename: file.name, mimeType: mimeType, base64: base64Data };
@@ -352,9 +329,6 @@ async function processUploadToGoogleDrive() {
 
                 const result = await res.json();
                 if (result.status === "success" && result.fileUrl) {
-                    btn.innerText = "💾 Đang lưu hệ thống...";
-                    if (statusBox) statusBox.innerText = "💾 Đang tạo mục liên kết trên website...";
-
                     const docId = "doc_" + Date.now();
                     const now = new Date();
                     const pad = n => String(n).padStart(2, '0');
@@ -377,10 +351,10 @@ async function processUploadToGoogleDrive() {
                     alert(`🎉 Tải file lên Google Drive thành công!\n📁 Tên: ${finalTitle}`);
                     window.location.reload();
                 } else {
-                    throw new Error(result.message || "Máy chủ Google Drive không phản hồi đường dẫn file!");
+                    throw new Error(result.message || "Máy chủ Drive không phản hồi!");
                 }
             } catch(uploadErr) {
-                alert("❌ Lỗi khi tải file lên Google Drive: " + uploadErr.message);
+                alert("❌ Lỗi khi tải file: " + uploadErr.message);
                 btn.disabled = false; btn.innerText = "📤 Tải lên Drive";
                 if (statusBox) statusBox.style.display = "none";
             }
@@ -393,7 +367,6 @@ async function processUploadToGoogleDrive() {
     }
 }
 
-// ĐĂNG LINK TÀI LIỆU
 async function processAddDocument() {
     const titleInput = document.getElementById("admin-doc-title").value.trim();
     const urlInput = document.getElementById("admin-doc-url").value.trim();
@@ -431,7 +404,6 @@ async function processAddDocument() {
     finally { btn.innerText = "🔗 Đăng tài liệu"; btn.disabled = false; }
 }
 
-// XÓA MỤC ĐỀ / TÀI LIỆU VĨNH VIỄN
 async function deleteItem(categoryId, itemId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA vĩnh viễn mục này không?")) return;
@@ -442,6 +414,7 @@ async function deleteItem(categoryId, itemId, event) {
             await supabaseClient.from('quizzes').delete().match({ id: itemId });
             await supabaseClient.from('submissions').delete().match({ quiz_id: itemId });
             await supabaseClient.from('live_drafts').delete().match({ quiz_id: itemId });
+            await supabaseClient.from('active_sessions').delete().match({ quiz_id: itemId });
         }
         window.location.reload();
     } catch(e) {
@@ -449,7 +422,6 @@ async function deleteItem(categoryId, itemId, event) {
     }
 }
 
-// ĐỔI TÊN TIÊU ĐỀ
 async function renameItem(categoryId, itemId, isDoc, currentTitle, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     let newTitle = prompt("✏️ Nhập tên mới:", currentTitle);
@@ -464,7 +436,6 @@ async function renameItem(categoryId, itemId, isDoc, currentTitle, event) {
     }
 }
 
-// THAY ĐỔI THỨ TỰ TRÊN DƯỚI
 async function moveItemOrder(categoryId, currentId, direction, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     try {
@@ -526,6 +497,7 @@ async function confirmMoveQuiz() {
             is_hot: !!currentMoveData.quizData.isHot,
             is_doc: !!currentMoveData.quizData.isDoc,
             avatar: currentMoveData.quizData.avatar,
+            time_limit_minutes: currentMoveData.quizData.timeLimitMinutes || 90,
             timestamp: Date.now()
         };
 
@@ -574,6 +546,7 @@ async function confirmCopyItem() {
             is_hot: !!currentCopyData.itemData.isHot,
             is_doc: !!isDoc,
             avatar: currentCopyData.itemData.avatar,
+            time_limit_minutes: currentCopyData.itemData.timeLimitMinutes || 90,
             timestamp: Date.now()
         }]);
 
@@ -660,33 +633,22 @@ async function saveExamTimeConfig() {
             payload.exam_end_time = document.getElementById("edit-end-time").value;
         }
 
-        // Cập nhật DB
         await supabaseClient.from('quizzes').update(payload).match({ id: currentEditingTimeQuizId });
         await supabaseClient.from('custom_links').update(payload).match({ id: currentEditingTimeQuizId });
 
         alert("✅ Đã cập nhật thời gian đề thi thành công!");
         closeExamTimeModal();
         
-        // CẬP NHẬT TRỰC TIẾP LÊN GIAO DIỆN KHÔNG CẦN TẢI LẠI TRANG
         const timeBox = document.getElementById(`time-box-${currentEditingTimeItemId}`);
         if (timeBox && typeof buildTimeBoxHtml === 'function') {
-            // Lấy lại dữ liệu mới nhất từ custom_links để render an toàn
             const { data } = await supabaseClient.from('custom_links').select('*').eq('id', currentEditingTimeItemId).single();
             if (data) {
                 timeBox.innerHTML = buildTimeBoxHtml(
-                    data.time_limit_minutes, 
+                    data.time_limit_minutes || payload.time_limit_minutes, 
                     data.exam_start_time_str || payload.exam_start_time, 
                     data.exam_end_time_str || payload.exam_end_time, 
                     data.date
                 );
-                // Hiệu ứng chớp xanh nhẹ báo thành công
-                timeBox.style.transition = "all 0.3s";
-                timeBox.style.backgroundColor = "#dcfce7";
-                timeBox.style.borderColor = "#22c55e";
-                setTimeout(() => {
-                    timeBox.style.backgroundColor = "";
-                    timeBox.style.borderColor = "";
-                }, 1200);
             }
         }
     } catch(e) {
@@ -696,7 +658,6 @@ async function saveExamTimeConfig() {
     }
 }
 
-// BẬT / TẮT THÍ SINH TỰ DO
 async function handleAllowFreeToggleChange(categoryId, itemId, isChecked, event) {
     if (event) event.stopPropagation();
     const txt = document.getElementById(`free-status-txt-${itemId}`);
@@ -713,7 +674,6 @@ async function handleAllowFreeToggleChange(categoryId, itemId, isChecked, event)
     }
 }
 
-// BẬT / TẮT ĐẢO ĐỀ
 async function toggleShuffle(categoryId, itemId, isChecked, event) {
     if (event) event.stopPropagation();
     try {
