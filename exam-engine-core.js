@@ -28,7 +28,7 @@ let _autoSaveDebounceTimer = null;
     document.head.appendChild(style);
 })();
 
-// FIX YÊU CẦU 1 & 5: ĐẢM BẢO PHIÊN ĐANG THI VÀ LƯU ĐỆM REALTIME VÀO SUPABASE
+// BẢO ĐẢM PHIÊN ĐANG THI VÀ BẢN NHÁP REALTIME LUÔN HIỆN DIỆN TRÊN SUPABASE CLOUD
 async function ensureActiveSessionAndDraft() {
     if (isSubmitted) return;
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
@@ -82,7 +82,7 @@ async function ensureActiveSessionAndDraft() {
     }
 }
 
-// FIX YÊU CẦU 5: LƯU TỨC THÌ TỪNG CÂU, TỪNG Ý CHỌN CỦA HỌC SINH VÀO SUPABASE & INDEXEDDB
+// LƯU TỨC THÌ TỪNG CÂU, TỪNG Ý CHỌN CỦA HỌC SINH VÀO SUPABASE & INDEXEDDB
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -112,7 +112,7 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         last_updated: new Date().toISOString()
     };
 
-    // 1. Lưu tức thì vào IndexedDB offline (không phụ thuộc mạng)
+    // 1. Lưu tức thì vào IndexedDB offline
     if (typeof examIndexedDB !== 'undefined') {
         examIndexedDB.setItem('live_drafts', {
             key: primaryDocId,
@@ -120,13 +120,13 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         }).catch(() => {});
     }
 
-    // 2. Lưu trực tiếp lên Supabase Cloud (Dùng Primary Key 'id' tránh lỗi constraint)
+    // 2. Lưu trực tiếp lên Supabase Cloud
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) return;
 
     try {
         await client.from('live_drafts').upsert(draftData, { onConflict: 'id' });
-        // Cập nhật luôn last_ping để bảng admin nhận diện đang hoạt động liên tục
+        // Cập nhật last_ping trong active_sessions
         await client.from('active_sessions').update({ last_ping: Date.now() }).match({ id: primaryDocId });
     } catch(e) {
         console.warn("Lỗi lưu nháp Supabase:", e);
@@ -422,7 +422,6 @@ function fetchExamQuestions(isAutostart = false) {
         document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
         if (examData.password !== undefined) EXAM_PASSWORD = String(examData.password).trim(); 
         
-        // FIX YÊU CẦU 4: LẤY ĐÚNG SỐ PHÚT TỪ DỮ LIỆU ĐỀ THI
         if (examData.timeLimitMinutes || examData.time_limit_minutes) { 
             TIME_LIMIT_MINUTES = parseInt(examData.timeLimitMinutes || examData.time_limit_minutes, 10); 
             totalTimeSeconds = TIME_LIMIT_MINUTES * 60; 
@@ -485,7 +484,6 @@ function showError(title, msg) {
     errCard.style.display = "block"; 
 }
 
-// FIX YÊU CẦU 5: LƯU TRỰC TIẾP NGAY KHI CHỌN PHẦN 1
 function selectOption(qId, letter) { 
     if (isSubmitted || isExamLocked) return; 
     const letters = ["A", "B", "C", "D"]; 
@@ -503,7 +501,6 @@ function selectOption(qId, letter) {
     autoSaveAnswerToCloud(`q${qId}`, letter);
 }
 
-// FIX YÊU CẦU 5: LƯU TRỰC TIẾP TỪNG Ý ĐÚNG / SAI PHẦN 2
 function onStatementChange(subKey) { 
     if (isSubmitted || isExamLocked) return; 
     const selected = document.querySelector(`input[name="${subKey}"]:checked`); 
@@ -515,7 +512,6 @@ function onStatementChange(subKey) {
     }
 }
 
-// FIX YÊU CẦU 5: LƯU TỨC THÌ ĐIỀN ĐÁP ÁN NGẮN PHẦN 3 & 4
 function onShortInputChange(qId) { 
     if (isSubmitted || isExamLocked) return; 
     const val = document.getElementById(`q${qId}-input`).value.trim(); 
