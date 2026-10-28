@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (FIX TỨC THÌ ĐANG THI & LƯU ĐỆM CLOUD)
+// FILE 3: exam-engine-core.js (FIX TỨC THÌ ĐANG THI & LƯU ĐỆM CLOUD + SHEET THU TẠM)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -15,6 +15,7 @@ let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
 let _autoSaveDebounceTimer = null;
+let _gasTempSheetDebounceTimer = null;
 
 (function injectLockStyles() {
     const styleId = "exam-engine-lock-styles";
@@ -49,7 +50,6 @@ async function ensureActiveSessionAndDraft() {
     if (!client) return;
 
     try {
-        // Ghi chắc chắn trạng thái Đang thi vào active_sessions
         await client.from('active_sessions').upsert({
             id: primaryDocId,
             quiz_id: quizId,
@@ -64,7 +64,6 @@ async function ensureActiveSessionAndDraft() {
             last_ping: nowMs
         }, { onConflict: 'id' });
 
-        // Khởi tạo ngay dòng nháp trong live_drafts nếu chưa có
         await client.from('live_drafts').upsert({
             id: primaryDocId,
             quiz_id: quizId,
@@ -82,7 +81,7 @@ async function ensureActiveSessionAndDraft() {
     }
 }
 
-// LƯU TỨC THÌ TỪNG CÂU, TỪNG Ý CHỌN CỦA HỌC SINH VÀO SUPABASE & INDEXEDDB
+// LƯU TỨC THÌ TỪNG CÂU VÀO SUPABASE + GỬI ĐỒNG BỘ ĐẾN SHEET THU TẠM CƯỠNG CHẾ TRÊN GOOGLE DRIVE
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -98,16 +97,22 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "";
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const primaryDocId = `${quizId}_${cleanSbd}`;
+    
+    // Lấy chính xác tên lớp (1 trong 7 lớp) và tên đề thi gốc
+    const strictClassName = typeof getStrictStandardClassName === 'function' ? getStrictStandardClassName(sClass || currentCat, sId) : sClass;
+    const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
+        ? EXAM_NAME 
+        : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
 
     const draftData = {
         id: primaryDocId,
         quiz_id: quizId,
         sbd: cleanSbd,
         student_name: sName,
-        class_name: sClass,
+        class_name: strictClassName,
         category_id: currentCat,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-        exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+        exam_title: exactExamTitle,
         user_answers: window.SECURE_VAULT.userAnswers || {},
         last_updated: new Date().toISOString()
     };
@@ -122,15 +127,46 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
 
     // 2. Lưu trực tiếp lên Supabase Cloud
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (!client) return;
+    if (client) {
+        try {
+            client.from('live_drafts').upsert(draftData, { onConflict: 'id' }).then();
+            client.from('active_sessions').update({ last_ping: Date.now() }).match({ id: primaryDocId }).then();
+        } catch(e) {}
+    }
+
+    // 3. TỰ ĐỘNG GỬI VỀ SHEET THU TẠM CƯỠNG CHẾ TRÊN GOOGLE DRIVE (YÊU CẦU 3)
+    // Dùng Debounce 15s để chống nghẽn đường truyền Google Drive nhưng luôn đảm bảo bài nháp mới nhất có trong Sheet thu tạm
+    if (_gasTempSheetDebounceTimer) clearTimeout(_gasTempSheetDebounceTimer);
+    _gasTempSheetDebounceTimer = setTimeout(() => {
+        sendDraftToGoogleSheetTemp(draftData);
+    }, 15000);
+}
+
+// HÀM GỬI NHÁP VỀ GOOGLE SHEET THU TẠM
+function sendDraftToGoogleSheetTemp(draftData) {
+    const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+        ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+        : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : "");
+
+    if (!gasUrl || gasUrl.includes("DÁN_URL")) return;
+
+    var payload = {
+        action: "saveLiveDraftToSheet",
+        className: draftData.class_name,
+        examTitle: draftData.exam_title,
+        sbd: draftData.sbd,
+        student_name: draftData.student_name,
+        draft: draftData
+    };
 
     try {
-        await client.from('live_drafts').upsert(draftData, { onConflict: 'id' });
-        // Cập nhật last_ping trong active_sessions
-        await client.from('active_sessions').update({ last_ping: Date.now() }).match({ id: primaryDocId });
-    } catch(e) {
-        console.warn("Lỗi lưu nháp Supabase:", e);
-    }
+        fetch(gasUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload),
+            keepalive: true
+        }).catch(() => null);
+    } catch(err) {}
 }
 
 window.addEventListener('online', function() {
@@ -388,7 +424,6 @@ async function checkSessionStatus(isAutostart = false) {
         startCountdownTimer(); 
         startPresenceSystem(sId);
 
-        // KHI PHỤC HỒI PHIÊN: BẬT NGAY ĐANG THI TRÊN SUPABASE CLOUD
         ensureActiveSessionAndDraft();
         return; 
     }
@@ -886,3 +921,4 @@ window.lockExamInteractions = lockExamInteractions;
 window.autoSaveAnswerToCloud = autoSaveAnswerToCloud;
 window.ensureActiveSessionAndDraft = ensureActiveSessionAndDraft;
 window.renderResultSummaryScreen = renderResultSummaryScreen;
+window.sendDraftToGoogleSheetTemp = sendDraftToGoogleSheetTemp;
