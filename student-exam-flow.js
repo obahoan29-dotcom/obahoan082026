@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (FIX UPSERT PHIÊN ĐANG THI & BẢN NHÁP KHỞI ĐẦU)
+// FILE 4: student-exam-flow.js (CHUẨN HÓA GHI ACTIVE_SESSIONS NHƯ CODE CŨ)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -165,7 +165,6 @@ function submitStudentLogin() {
         finalSbd = (document.getElementById("st-free-sbd-input").value || "").trim();
         if (!finalName || !finalClass || !finalSbd) { showErr("⚠️ Vui lòng nhập đầy đủ Họ tên, Lớp và SBD tự do!"); return; }
 
-        // Đối với thí sinh tự do, nếu SBD không bắt đầu bằng tiền tố lớp khác thì giữ nguyên categoryId của lớp đang thi
         const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
         if (detectedCat) {
             activeCat = detectedCat;
@@ -246,7 +245,7 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
-// FIX YÊU CẦU 1 & 5: DÙNG ONCONFLICT: 'id' TRÁNH LỖI CONSTRAINT
+// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC THEO SCHEMA DATABASE CŨ (ĐẢM BẢO KHÔNG BỊ LỖI CONSTRAINT)
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
@@ -258,80 +257,75 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     if (startBtn) { 
         startBtn.disabled = true; 
-        startBtn.innerText = "⏳ Đang kết nối máy chủ xác thực..."; 
+        startBtn.innerText = "⏳ Đang kết nối phòng thi..."; 
     }
+
+    safeLocal.removeItem(getStorageKey());
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const nowMs = Date.now();
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-    if (!client) {
-        if (startBtn) { startBtn.disabled = false; startBtn.innerText = "Vào Làm Bài"; }
-        alert("❌ Lỗi kết nối máy chủ Supabase. Vui lòng kiểm tra lại mạng!");
-        return;
-    }
+    if (client && currentQuizId) {
+        try {
+            // 1. Xóa các phiên cũ của SBD này trong đề hiện tại để chống trùng
+            await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-    try {
-        const primaryDocId = `${currentQuizId}_${cleanSbd}`;
+            // 2. Chèn trực tiếp phiên mới theo đúng schema chuẩn
+            await client.from('active_sessions').insert([{
+                quiz_id: currentQuizId,
+                sbd: cleanSbd,
+                name: sName,
+                class_name: sClass,
+                category_id: currentCat,
+                is_free: isFreeStudent,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                start_time: nowMs,
+                last_ping: nowMs
+            }]);
 
-        // Bước A: Ghi nhận phiên active_sessions
-        await client.from('active_sessions').upsert({
-            id: primaryDocId,
-            quiz_id: currentQuizId,
-            sbd: cleanSbd,
-            name: sName,
-            class_name: sClass,
-            category_id: currentCat,
-            is_free: isFreeStudent,
-            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-            start_time: nowMs,
-            last_ping: nowMs
-        }, { onConflict: 'id' });
-
-        // Bước B: ĐỒNG THỜI KHỞI TẠO BẢN NHÁP TRONG live_drafts
-        await client.from('live_drafts').upsert({
-            id: primaryDocId,
-            quiz_id: currentQuizId,
-            sbd: cleanSbd,
-            student_name: sName,
-            class_name: sClass,
-            category_id: currentCat,
-            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-            user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
-            last_updated: new Date().toISOString()
-        }, { onConflict: 'id' });
-
-        // Bước C: Ghi đồng thời vào IndexedDB
-        if (typeof examIndexedDB !== 'undefined') {
-            examIndexedDB.setItem('live_drafts', {
-                key: primaryDocId,
+            // 3. Khởi tạo song song vào live_drafts
+            await client.from('live_drafts').upsert({
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 student_name: sName,
+                class_name: sClass,
+                category_id: currentCat,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
                 user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
-                updatedAt: Date.now()
-            }).catch(() => {});
+                last_updated: new Date().toISOString()
+            });
+
+            // 4. Lưu offline vào IndexedDB
+            if (typeof examIndexedDB !== 'undefined') {
+                examIndexedDB.setItem('live_drafts', {
+                    key: `${currentQuizId}_${cleanSbd}`,
+                    quiz_id: currentQuizId,
+                    sbd: cleanSbd,
+                    student_name: sName,
+                    user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
+                    updatedAt: nowMs
+                }).catch(() => {});
+            }
+
+            // 5. Ghi log vào thi
+            client.from('cheating_logs').insert([{
+                quiz_id: currentQuizId,
+                sbd: cleanSbd,
+                student_name: sName,
+                student_class: sClass,
+                category_id: currentCat,
+                switch_count: 0,
+                duration_str: "Bắt đầu",
+                duration_sec: 0
+            }]).then();
+
+        } catch (err) {
+            console.warn("Cảnh báo ghi nhận phòng thi:", err);
         }
-
-        // Ghi log vào thi
-        client.from('cheating_logs').insert([{
-            quiz_id: currentQuizId,
-            sbd: cleanSbd,
-            student_name: sName,
-            student_class: sClass,
-            category_id: currentCat,
-            switch_count: 0,
-            duration_str: "Bắt đầu",
-            duration_sec: 0
-        }]).then();
-
-    } catch (err) {
-        console.warn("Cảnh báo khởi tạo phiên:", err);
     }
-
-    safeLocal.removeItem(getStorageKey());
 
     document.getElementById("nav-student-name").innerText = sName; 
     document.getElementById("nav-student-id").innerText = sId; 
@@ -810,8 +804,8 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     if (submitSuccess) {
         if (client) {
-            client.from('live_drafts').delete().match({ id: payload.id }).then();
-            client.from('active_sessions').delete().match({ id: payload.id }).then();
+            client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
+            client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
         }
         if (typeof clearPresence === 'function') clearPresence(payload.sbd);
         if (timerInterval) clearInterval(timerInterval); 
