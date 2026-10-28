@@ -1,9 +1,115 @@
 // =========================================================
 // FILE: portal-results-table.js
-// QUẢN LÝ BẢNG KẾT QUẢ THI, CÀI ĐẶT FONT, XẾP HẠNG & LẦN THI
+// QUẢN LÝ BẢNG KẾT QUẢ THI, CÀI ĐẶT FONT, XẾP HẠNG, LẦN THI
+// VÀ HIỆU ỨNG NHỊP TIM ĐẬP NHẢY GIỜ TRỰC TIẾP CHO EM ĐANG THI
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
+let _liveDoingTickerInterval = null;
+
+// TỰ ĐỘNG TIÊM BỘ STYLE NHỊP TIM MÀU VÀNG VÀO TRANG MÀ KHÔNG CẦN SỬA FILE CSS
+(function injectHeartbeatDoingStyles() {
+    const styleId = "status-doing-heartbeat-styles";
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.innerHTML = `
+        /* HIỆU ỨNG NHỊP TIM ĐẬP NHẸ NHÀNG CHO TRẠNG THÁI ĐANG LÀM BÀI */
+        @keyframes heartbeatDoing {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.45);
+            }
+            14% {
+                transform: scale(1.07);
+                box-shadow: 0 0 10px 2px rgba(234, 179, 8, 0.55);
+            }
+            28% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.35);
+            }
+            42% {
+                transform: scale(1.04);
+                box-shadow: 0 0 6px 1px rgba(234, 179, 8, 0.45);
+            }
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+            }
+        }
+
+        @keyframes heartIconRotate {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-8deg); }
+            75% { transform: rotate(8deg); }
+        }
+
+        /* NỀN VÀNG, VIỀN VÀNG KIM, CHỮ RÕ NÉT */
+        .status-doing-heartbeat {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 5px !important;
+            padding: 4px 10px !important;
+            border-radius: 20px !important;
+            background: linear-gradient(135deg, #fef08a 0%, #fde047 100%) !important;
+            color: #854d0e !important;
+            border: 1.5px solid #eab308 !important;
+            font-weight: 900 !important;
+            font-size: 0.92em !important;
+            animation: heartbeatDoing 1.6s infinite ease-in-out !important;
+            box-shadow: 0 2px 8px rgba(234, 179, 8, 0.3) !important;
+            white-space: nowrap !important;
+            user-select: none !important;
+            letter-spacing: -0.1px !important;
+        }
+
+        .status-doing-heartbeat.free-mode {
+            background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%) !important;
+            color: #9a3412 !important;
+            border-color: #f97316 !important;
+            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3) !important;
+        }
+
+        .status-doing-heartbeat .heartbeat-icon {
+            display: inline-block !important;
+            font-size: 13px !important;
+            line-height: 1 !important;
+            animation: heartIconRotate 1.6s infinite ease-in-out !important;
+        }
+
+        /* KHỐI HIỂN THỊ THỜI GIAN NHẢY TỪNG GIÂY */
+        .live-doing-timer-pill {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            color: #b45309 !important;
+            font-weight: 900 !important;
+            font-family: 'Courier New', Courier, monospace !important;
+            background: #fffbeb !important;
+            padding: 3px 8px !important;
+            border-radius: 8px !important;
+            border: 1.5px solid #fde68a !important;
+            box-shadow: 0 1px 4px rgba(245, 158, 11, 0.18) !important;
+            white-space: nowrap !important;
+        }
+
+        .live-doing-timer-pill .timer-clock-icon {
+            font-size: 12.5px !important;
+            line-height: 1 !important;
+            animation: heartIconRotate 2s infinite ease-in-out !important;
+        }
+
+        .live-doing-timer-val {
+            font-variant-numeric: tabular-nums !important;
+            letter-spacing: 0.2px !important;
+        }
+    `;
+    document.head.appendChild(style);
+})();
 
 function initTableSettings() {
     try {
@@ -330,6 +436,21 @@ function ensureDeleteColumnHeader() {
     }
 }
 
+// BỘ ĐỒNG HỒ TỰ ĐỘNG CẬP NHẬT TỪNG GIÂY CHO CÁC EM ĐANG THI TRÊN BẢNG
+function startLiveDoingTicker() {
+    if (_liveDoingTickerInterval) clearInterval(_liveDoingTickerInterval);
+    _liveDoingTickerInterval = setInterval(() => {
+        const timerEls = document.querySelectorAll(".live-doing-timer-val");
+        if (!timerEls || timerEls.length === 0) return;
+        timerEls.forEach(el => {
+            const startMs = parseInt(el.dataset.starttime, 10);
+            if (startMs && typeof formatElapsedDuration === "function") {
+                el.innerText = formatElapsedDuration(startMs);
+            }
+        });
+    }, 1000);
+}
+
 function renderFilteredResultTable(rows) {
     ensureDeleteColumnHeader();
     const tbody = document.getElementById("result-table-tbody"); if (!tbody) return; tbody.innerHTML = "";
@@ -378,10 +499,14 @@ function renderFilteredResultTable(rows) {
             col_attemptCount = `<div class="td-attempt-cell"><button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi khác">${attCount} lần ▾</button><div class="attempt-dropdown-menu" id="attempt-menu-${uid}"><div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">CHỌN LẦN THI:</div>${menuItemsHtml}</div></div>`;
         }
 
-        let col2_inTime = `<span class="status-not-submitted">---</span>`; let col3_spentTime = `<span class="status-not-submitted">---</span>`;
-        let col6_status = `<span class="status-pill status-pending">Chưa thi</span>`; let col7_correct = `<span class="status-not-submitted">---</span>`;
-        let col8_score = `<span class="status-not-submitted">---</span>`; let col_rank = `<span class="status-not-submitted">---</span>`;
-        let col9_tabs = `<span class="status-not-submitted">---</span>`; let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
+        let col2_inTime = `<span class="status-not-submitted">---</span>`; 
+        let col3_spentTime = `<span class="status-not-submitted">---</span>`;
+        let col6_status = `<span class="status-pill status-pending">Chưa thi</span>`; 
+        let col7_correct = `<span class="status-not-submitted">---</span>`;
+        let col8_score = `<span class="status-not-submitted">---</span>`; 
+        let col_rank = `<span class="status-not-submitted">---</span>`;
+        let col9_tabs = `<span class="status-not-submitted">---</span>`; 
+        let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
         let col11_details = `<span class="status-not-submitted">---</span>`;
 
         if (currentSub) {
@@ -420,14 +545,20 @@ function renderFilteredResultTable(rows) {
                 col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
             }
         } else if (row.isDoing) {
-            let formattedIn = formatDateTimeFull(row.doingStartTime);
-            let liveDuration = formatElapsedDuration(row.doingStartTime);
+            let startMs = row.doingStartTime || Date.now();
+            let formattedIn = formatDateTimeFull(startMs);
+            let liveDuration = formatElapsedDuration(startMs);
 
             col2_inTime = `<span style="color:#0284c7; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
-            col3_spentTime = `<span style="color:#ea580c; font-weight:800; background:#fff7ed; padding:3px 7px; border-radius:6px; border:1px solid #fdba74;">⏱ ${liveDuration}</span>`;
+            // CỘT THỜI GIAN THI: NHẢY GIỜ SỐ TỰ ĐỘNG TỪNG GIÂY THEO THỜI GIAN THẬT
+            col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang làm bài (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
             
-            if (row.isFreeDoing) { col6_status = `<span class="status-pill" style="background:#fff7ed; color:#c2410c; border:1.5px solid #fdba74; font-weight:800;">⚡ Đang thi-tự do</span>`; } 
-            else { col6_status = `<span class="status-pill status-doing">⏳ Đang làm bài</span>`; }
+            // CỘT TÌNH TRẠNG: MÀU VÀNG CÓ HIỆU ỨNG NHỊP TIM ĐẬP NHẸ NHÀNG CO GIÃN
+            if (row.isFreeDoing) { 
+                col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang làm bài"><span class="heartbeat-icon">⚡</span> Đang thi-tự do</span>`; 
+            } else { 
+                col6_status = `<span class="status-doing-heartbeat" title="Học sinh đang trong phòng thi làm bài"><span class="heartbeat-icon">⏳</span> Đang làm bài</span>`; 
+            }
             
             let doingTabs = row.cheatLogsTabCount || 0;
             col9_tabs = doingTabs > 0 ? `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
@@ -446,6 +577,9 @@ function renderFilteredResultTable(rows) {
         tr.innerHTML = `<td class="td-stt">${col1_stt}</td><td class="td-exam-col" title="${currentExamTitle}">${col_examName}</td><td class="td-attempt-cell-wrap">${col_attemptCount}</td><td class="td-truncate" title="${stripHtml(col2_inTime)}">${col2_inTime}</td><td class="td-truncate" title="${stripHtml(col3_spentTime)}">${col3_spentTime}</td><td class="td-truncate" title="${rawName}">${col4_name}</td><td class="td-class td-truncate" title="${rawClass}">${col_class}</td><td class="td-sbd td-truncate" title="${col5_sbd}">${col5_sbd}</td><td style="text-align:center;">${col6_status}</td><td style="text-align:center;">${col7_correct}</td><td class="td-score">${col8_score}</td><td style="text-align:center;">${col_rank}</td><td class="td-tabs">${col9_tabs}</td><td class="td-tab-times td-truncate" title="${safeTitleCol10}">${col10_cheatTime}</td><td class="td-truncate">${col11_details}</td><td style="text-align:center;">${col_action}</td>`;
         tbody.appendChild(tr);
     });
+
+    // KÍCH HOẠT ĐỒNG HỒ NHẢY GIỜ TRỰC TIẾP TỪNG GIÂY
+    startLiveDoingTicker();
 }
 
 function filterResultTable() {
