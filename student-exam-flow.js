@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (CHUẨN HÓA GHI ACTIVE_SESSIONS NHƯ CODE CŨ)
+// FILE 4: student-exam-flow.js (CHUẨN HÓA GHI ACTIVE_SESSIONS NHƯ CODE CŨ & GHI ĐÈ 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -506,11 +506,12 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     }
 }
 
+// Hàm tải file JSON về máy tính: Đồng bộ tên chuẩn, không chèn số đếm
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
         const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-        const fileName = `BaiLam_Lan${attemptNumber}_${sId}_${sName}.json`;
+        const fileName = `${sId}_${sName}.json`;
 
         const exportObj = {
             ...payload,
@@ -541,7 +542,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     if (!payload) return;
     const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
     const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const fileName = `BaiLam_Lan${attemptNumber}_${sId}_${sName}.json`;
+    const fileName = `${sId}_${sName}.json`;
     const exportObj = { ...payload, attemptNumber, exportedAt: Date.now() };
     const jsonStr = JSON.stringify(exportObj, null, 2);
 
@@ -551,8 +552,8 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
-                title: `Bài làm Lần ${attemptNumber}: ${payload.student_name} (${payload.sbd})`,
-                text: `Kính gửi Thầy bài làm dự phòng Lần ${attemptNumber} của em [${payload.student_name} - SBD: ${payload.sbd} - Lớp: ${payload.class_name}]`
+                title: `Bài làm: ${payload.student_name} (${payload.sbd})`,
+                text: `Kính gửi Thầy bài làm dự phòng của em [${payload.student_name} - SBD: ${payload.sbd} - Lớp: ${payload.class_name}]`
             });
             return;
         }
@@ -565,7 +566,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     }
 
     downloadSubmissionJsonSilently(payload, attemptNumber);
-    alert(`📁 ĐÃ TẢI FILE DỰ PHÒNG LẦN ${attemptNumber}!\n\nTên file: "${fileName}"\nVị trí: Thư mục Tải về (Downloads).\n\n👉 Em hãy gửi file này cho Thầy giáo qua Zalo/Messenger nhé!`);
+    alert(`📁 ĐÃ TẢI FILE DỰ PHÒNG!\n\nTên file: "${fileName}"\nVị trí: Thư mục Tải về (Downloads).\n\n👉 Em hãy gửi file này cho Thầy giáo qua Zalo/Messenger nhé!`);
 }
 
 function recordSubmissionToHistory(payload) {
@@ -726,7 +727,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // GỬI LƯU FILE JSON VÀ SHEET ĐIỂM CHÍNH THỨC SANG GOOGLE DRIVE
+    // GỬI LƯU FILE JSON VÀ SHEET ĐIỂM CHÍNH THỨC SANG GOOGLE DRIVE (GHI ĐÈ FILE CŨ)
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
