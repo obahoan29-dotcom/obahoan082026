@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-api.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG SIÊU NHẠY & SERVICE WORKER)
+// FILE 5: exam-api.js (FIX CẬP NHẬT TRẠNG THÁI PRESENCE UPSERT)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -30,7 +30,6 @@ let onlineRealtimeChannel = null;
 
 window.localOnlineCount = 1; 
 
-// ĐĂNG KÝ SERVICE WORKER TỰ ĐỘNG KHI TẢI TRANG
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -313,9 +312,10 @@ function startPresenceSystem(sId) {
     if (presenceInterval) clearInterval(presenceInterval);
     presenceInterval = setInterval(() => { 
         updatePresence(cleanSbd); 
-    }, 30000);
+    }, 25000);
 }
 
+// FIX YÊU CẦU 1: DÙNG UPSERT THAY VÌ UPDATE ĐỂ BẢO ĐẢM LUÔN CÓ DÒNG TRONG ACTIVE_SESSIONS
 async function updatePresence(cleanSbd) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -323,8 +323,21 @@ async function updatePresence(cleanSbd) {
         const currentQuizId = urlParams.get('id') || "";
         if (!currentQuizId || isSubmitted || !client) return;
 
-        await client.from('active_sessions').update({ last_ping: Date.now() })
-            .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+        const sId = document.getElementById("student-id")?.value.trim() || cleanSbd;
+        const sName = document.getElementById("student-name")?.value.trim() || "Thí sinh";
+        const sClass = document.getElementById("student-class")?.value.trim() || "Lớp";
+        const primaryDocId = `${currentQuizId}_${cleanSbd}`;
+        const nowMs = Date.now();
+
+        await client.from('active_sessions').upsert({
+            id: primaryDocId,
+            quiz_id: currentQuizId,
+            sbd: cleanSbd,
+            name: sName,
+            class_name: sClass,
+            category_id: typeof getExamCategory === 'function' ? getExamCategory() : "them-11",
+            last_ping: nowMs
+        }, { onConflict: 'id' });
     } catch(e) {}
 }
 
@@ -340,7 +353,8 @@ function clearPresence(sId) {
     const currentQuizId = urlParams.get('id') || "";
 
     if (client && currentQuizId) {
-        client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
+        const primaryDocId = `${currentQuizId}_${cleanSbd}`;
+        client.from('active_sessions').delete().match({ id: primaryDocId }).then();
     }
 }
 
