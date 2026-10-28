@@ -1,44 +1,44 @@
 // =========================================================
 // FILE: portal-results-table.js
 // QUẢN LÝ BẢNG KẾT QUẢ THI, CÀI ĐẶT FONT, XẾP HẠNG, LẦN THI
-// VÀ HIỆU ỨNG NHỊP TIM ĐẬP NHẢY GIỜ TRỰC TIẾP CHO EM ĐANG THI
+// VÀ HIỆU ỨNG TRÁI TIM TÍM NEON DẠ QUANG SÁNG RỰC ĐẬP THEO NHỊP
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
 let _liveDoingTickerInterval = null;
 
-// TỰ ĐỘNG TIÊM BỘ STYLE NHỊP TIM MÀU ĐẸP, PHÁT SÁNG & PHẬP PHỒNG NHƯ TRÁI TIM
+// TỰ ĐỘNG TIÊM BỘ STYLE TRÁI TIM TÍM NEON DẠ QUANG SÁNG RỰC (KHÁC ĐỎ VÀ XANH LÁ)
 (function injectHeartbeatDoingStyles() {
     const styleId = "status-doing-heartbeat-styles";
     if (document.getElementById(styleId)) return;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* NHỊP ĐẬP TRÁI TIM 2 PHA (LUB-DUB) CHUẨN SINH HỌC KÈM VẦNG TỎA SÁNG NEON */
+        /* NHỊP ĐẬP TRÁI TIM 2 PHA (LUB-DUB) KÈM VẦNG SÁNG TÍM NEON DẠ QUANG RỰC RỠ */
         @keyframes heartbeatDoing {
             0% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55), 0 0 8px rgba(244, 63, 94, 0.4);
+                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65), 0 0 10px rgba(192, 132, 252, 0.5);
             }
             14% {
-                transform: scale(1.12);
-                box-shadow: 0 0 16px 5px rgba(239, 68, 68, 0.75), 0 0 28px rgba(244, 63, 94, 0.6);
+                transform: scale(1.13);
+                box-shadow: 0 0 18px 5px rgba(168, 85, 247, 0.85), 0 0 30px rgba(147, 51, 234, 0.7);
             }
             28% {
                 transform: scale(1.02);
-                box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.45), 0 0 14px rgba(244, 63, 94, 0.35);
+                box-shadow: 0 0 8px 2px rgba(168, 85, 247, 0.5), 0 0 16px rgba(192, 132, 252, 0.4);
             }
             42% {
-                transform: scale(1.16);
-                box-shadow: 0 0 20px 6px rgba(239, 68, 68, 0.85), 0 0 35px rgba(225, 29, 72, 0.7);
+                transform: scale(1.18);
+                box-shadow: 0 0 22px 6px rgba(147, 51, 234, 0.95), 0 0 38px rgba(126, 34, 206, 0.8);
             }
             70% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 6px rgba(244, 63, 94, 0.2);
+                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25);
             }
             100% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 6px rgba(244, 63, 94, 0.2);
+                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25);
             }
         }
 
@@ -50,29 +50,30 @@ let _liveDoingTickerInterval = null;
             70% { transform: scale(1) rotate(0deg); }
         }
 
-        /* NỀN RUBY-ROSE SUNSET SANG TRỌNG, VIỀN PHÁT SÁNG, CHỮ NỔI RÕ NÉT */
+        /* NỀN TÍM NEON DẠ QUANG SÁNG RỰC, VIỀN PHÁT SÁNG CỰC KỲ NỔI BẬT */
         .status-doing-heartbeat {
             display: inline-flex !important;
             align-items: center !important;
             gap: 6px !important;
-            padding: 4px 12px !important;
+            padding: 4px 13px !important;
             border-radius: 20px !important;
-            background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 50%, #fecdd3 100%) !important;
-            color: #be123c !important;
-            border: 1.8px solid #f43f5e !important;
+            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 50%, #e9d5ff 100%) !important;
+            color: #6b21a8 !important;
+            border: 1.8px solid #a855f7 !important;
             font-weight: 900 !important;
             font-size: 0.95em !important;
             animation: heartbeatDoing 1.35s infinite ease-in-out !important;
             white-space: nowrap !important;
             user-select: none !important;
             letter-spacing: -0.2px !important;
-            text-shadow: 0 0 1px rgba(244, 63, 94, 0.3) !important;
+            text-shadow: 0 0 2px rgba(168, 85, 247, 0.4) !important;
         }
 
         .status-doing-heartbeat.free-mode {
-            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%) !important;
-            color: #9a3412 !important;
-            border-color: #f97316 !important;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%) !important;
+            color: #92400e !important;
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
         }
 
         .status-doing-heartbeat .heartbeat-icon {
@@ -80,19 +81,19 @@ let _liveDoingTickerInterval = null;
             font-size: 15px !important;
             line-height: 1 !important;
             animation: heartIconRotate 1.35s infinite ease-in-out !important;
-            filter: drop-shadow(0 0 4px rgba(225, 29, 72, 0.7)) !important;
+            filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.85)) !important;
         }
 
-        /* DÒNG HỌC SINH ĐANG THI ĐƯỢC TÔ NỀN TỎA SÁNG NHẸ NHÀNG */
+        /* DÒNG HỌC SINH ĐANG THI ĐƯỢC TÔ NỀN TÍM ÁNH KIM NHẸ NHÀNG */
         tr.row-student-is-doing td {
-            background-color: #fffbeb !important;
+            background-color: #faf5ff !important;
         }
         tr.row-student-is-doing:hover td {
-            background-color: #fef08a !important;
+            background-color: #f3e8ff !important;
         }
         tr.row-student-is-doing .td-stt {
-            background-color: #fde047 !important;
-            color: #854d0e !important;
+            background-color: #e9d5ff !important;
+            color: #581c87 !important;
             font-weight: 900 !important;
         }
 
@@ -101,14 +102,14 @@ let _liveDoingTickerInterval = null;
             display: inline-flex !important;
             align-items: center !important;
             gap: 4px !important;
-            color: #b45309 !important;
+            color: #7e22ce !important;
             font-weight: 900 !important;
             font-family: 'Courier New', Courier, monospace !important;
-            background: #fffbeb !important;
+            background: #faf5ff !important;
             padding: 3px 8px !important;
             border-radius: 8px !important;
-            border: 1.5px solid #fde68a !important;
-            box-shadow: 0 1px 4px rgba(245, 158, 11, 0.18) !important;
+            border: 1.5px solid #d8b4fe !important;
+            box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2) !important;
             white-space: nowrap !important;
         }
 
@@ -125,9 +126,9 @@ let _liveDoingTickerInterval = null;
 
         .attempt-badge-doing {
             display: inline-block !important;
-            background: #fff1f2 !important;
-            color: #be123c !important;
-            border: 1.2px solid #fda4af !important;
+            background: #faf5ff !important;
+            color: #6b21a8 !important;
+            border: 1.2px solid #c084fc !important;
             padding: 3px 8px !important;
             border-radius: 12px !important;
             font-size: 0.9em !important;
@@ -548,22 +549,22 @@ function renderFilteredResultTable(rows) {
 
         if (row.isDoing) {
             // ==========================================
-            // XỬ LÝ HỌC SINH ĐANG THI (HIỆN RÕ, NHỊP TIM, PHÁT SÁNG)
+            // XỬ LÝ HỌC SINH ĐANG THI (HIỆN RÕ, TRÁI TIM TÍM NEON DẠ QUANG)
             // ==========================================
             let startMs = row.doingStartTime || Date.now();
             let formattedIn = formatDateTimeFull(startMs);
             let liveDuration = formatElapsedDuration(startMs);
 
-            col2_inTime = `<span style="color:#0284c7; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
+            col2_inTime = `<span style="color:#7e22ce; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
             // CỘT THỜI GIAN THI: NHẢY TỪNG GIÂY
             col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
             
-            // CỘT TÌNH TRẠNG: GHI RÕ "ĐANG THI", CÓ NHỊP ĐẬP TRÁI TIM PHẬP PHỒNG TỎA SÁNG
+            // CỘT TÌNH TRẠNG: GHI RÕ "ĐANG THI", CÓ NHỊP ĐẬP TRÁI TIM TÍM NEON SÁNG RỰC
             const attemptText = (attCount > 0) ? ` (Lần ${attCount + 1})` : "";
             if (row.isFreeDoing) { 
-                col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang thi trực tuyến"><span class="heartbeat-icon">💓</span> Đang thi-tự do</span>`; 
+                col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang thi trực tuyến"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>`; 
             } else { 
-                col6_status = `<span class="status-doing-heartbeat" title="Học sinh đang trong phòng thi làm bài"><span class="heartbeat-icon">💓</span> Đang thi${attemptText}</span>`; 
+                col6_status = `<span class="status-doing-heartbeat" title="Học sinh đang trong phòng thi làm bài"><span class="heartbeat-icon">💜</span> Đang thi${attemptText}</span>`; 
             }
             
             let doingTabs = row.cheatLogsTabCount || 0;
