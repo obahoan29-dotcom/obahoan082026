@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (FIX TỨC THÌ ĐANG THI & LƯU ĐỆM CLOUD + SHEET THU TẠM)
+// FILE 3: exam-engine-core.js (BẢN TỰ ĐỘNG CHẤM TẠM TỨC THÌ TỪNG PHIÊN GỬI NHÁP)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -28,6 +28,26 @@ let _gasTempSheetDebounceTimer = null;
     `;
     document.head.appendChild(style);
 })();
+
+// HÀM CHẤM TẠM THỜI NGAY TRÊN TRÌNH DUYỆT HỌC SINH
+function calculateTemporaryDraftScore() {
+    if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData && Array.isArray(examData.questions)) {
+        return calculateExamScoreWithConfig(
+            examData.questions,
+            window.SECURE_VAULT.userAnswers || {},
+            window.SECURE_VAULT.answers || {},
+            examData.scoringConfig || { mode: 'option1' }
+        );
+    }
+    return {
+        correctCount: 0,
+        wrongCount: 0,
+        totalRawScore: 0,
+        finalScore: 0,
+        maxScale: 10.0,
+        dataDetails: []
+    };
+}
 
 // BẢO ĐẢM PHIÊN ĐANG THI VÀ BẢN NHÁP REALTIME LUÔN HIỆN DIỆN TRÊN SUPABASE CLOUD
 async function ensureActiveSessionAndDraft() {
@@ -81,7 +101,7 @@ async function ensureActiveSessionAndDraft() {
     }
 }
 
-// LƯU TỨC THÌ TỪNG CÂU VÀO SUPABASE + GỬI ĐỒNG BỘ ĐẾN SHEET THU TẠM CƯỠNG CHẾ TRÊN GOOGLE DRIVE
+// LƯU TỨC THÌ TỪNG CÂU VÀO SUPABASE + TỰ ĐỘNG CHẤM TẠM GỬI ĐẾN SHEET THU TẠM GOOGLE DRIVE
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -98,11 +118,18 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const primaryDocId = `${quizId}_${cleanSbd}`;
     
-    // Lấy chính xác tên lớp (1 trong 7 lớp) và tên đề thi gốc
+    // Lấy tên lớp chuẩn (1 trong 7 lớp) và tên đề thi gốc
     const strictClassName = typeof getStrictStandardClassName === 'function' ? getStrictStandardClassName(sClass || currentCat, sId) : sClass;
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
         : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
+
+    // THỰC HIỆN CHẤM TẠM TÍNH NGAY TRÊN MÁY HỌC SINH TẠI THỜI ĐIỂM NÀY
+    const tempScoreResult = calculateTemporaryDraftScore();
+    const elapsedSec = examStartTime ? Math.max(1, Math.round((Date.now() - examStartTime) / 1000)) : 0;
+    const spentMins = Math.floor(elapsedSec / 60);
+    const spentSecs = elapsedSec % 60;
+    const completionTimeStr = `${spentMins} phút ${spentSecs} giây`;
 
     const draftData = {
         id: primaryDocId,
@@ -114,6 +141,16 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
         exam_title: exactExamTitle,
         user_answers: window.SECURE_VAULT.userAnswers || {},
+        // CÁC THÔNG SỐ CHẤM TẠM REALTIME:
+        score10: tempScoreResult.finalScore,
+        raw_score: tempScoreResult.totalRawScore,
+        max_scale: tempScoreResult.maxScale,
+        correct_count: tempScoreResult.correctCount,
+        wrong_count: tempScoreResult.wrongCount,
+        completion_time: completionTimeStr,
+        spent_mins: spentMins,
+        tab_switch_count: `${tabSwitchCount} lần`,
+        data_string: tempScoreResult.dataDetails.join(" | "),
         last_updated: new Date().toISOString()
     };
 
@@ -134,15 +171,14 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         } catch(e) {}
     }
 
-    // 3. TỰ ĐỘNG GỬI VỀ SHEET THU TẠM CƯỠNG CHẾ TRÊN GOOGLE DRIVE (YÊU CẦU 3)
-    // Dùng Debounce 15s để chống nghẽn đường truyền Google Drive nhưng luôn đảm bảo bài nháp mới nhất có trong Sheet thu tạm
+    // 3. TỰ ĐỘNG GỬI VỀ SHEET THU TẠM (Debounce 10s để tối ưu tốc độ, đảm bảo điểm tạm luôn cập nhật liên tục)
     if (_gasTempSheetDebounceTimer) clearTimeout(_gasTempSheetDebounceTimer);
     _gasTempSheetDebounceTimer = setTimeout(() => {
         sendDraftToGoogleSheetTemp(draftData);
-    }, 15000);
+    }, 10000);
 }
 
-// HÀM GỬI NHÁP VỀ GOOGLE SHEET THU TẠM
+// HÀM GỬI BẢN NHÁP KÈM ĐIỂM TẠM TÍNH VỀ GOOGLE SHEET THU TẠM
 function sendDraftToGoogleSheetTemp(draftData) {
     const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
         ? GOOGLE_DRIVE_TULUAN_GAS_URL 
