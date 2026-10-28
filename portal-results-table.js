@@ -7,78 +7,93 @@
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
 let _liveDoingTickerInterval = null;
 
-// TỰ ĐỘNG TIÊM BỘ STYLE NHỊP TIM MÀU VÀNG VÀO TRANG MÀ KHÔNG CẦN SỬA FILE CSS
+// TỰ ĐỘNG TIÊM BỘ STYLE NHỊP TIM MÀU ĐẸP, PHÁT SÁNG & PHẬP PHỒNG NHƯ TRÁI TIM
 (function injectHeartbeatDoingStyles() {
     const styleId = "status-doing-heartbeat-styles";
     if (document.getElementById(styleId)) return;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* HIỆU ỨNG NHỊP TIM ĐẬP NHẸ NHÀNG CHO TRẠNG THÁI ĐANG LÀM BÀI */
+        /* NHỊP ĐẬP TRÁI TIM 2 PHA (LUB-DUB) CHUẨN SINH HỌC KÈM VẦNG TỎA SÁNG NEON */
         @keyframes heartbeatDoing {
             0% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.45);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55), 0 0 8px rgba(244, 63, 94, 0.4);
             }
             14% {
-                transform: scale(1.07);
-                box-shadow: 0 0 10px 2px rgba(234, 179, 8, 0.55);
+                transform: scale(1.12);
+                box-shadow: 0 0 16px 5px rgba(239, 68, 68, 0.75), 0 0 28px rgba(244, 63, 94, 0.6);
             }
             28% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.35);
+                transform: scale(1.02);
+                box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.45), 0 0 14px rgba(244, 63, 94, 0.35);
             }
             42% {
-                transform: scale(1.04);
-                box-shadow: 0 0 6px 1px rgba(234, 179, 8, 0.45);
+                transform: scale(1.16);
+                box-shadow: 0 0 20px 6px rgba(239, 68, 68, 0.85), 0 0 35px rgba(225, 29, 72, 0.7);
             }
             70% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 6px rgba(244, 63, 94, 0.2);
             }
             100% {
                 transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 0 6px rgba(244, 63, 94, 0.2);
             }
         }
 
         @keyframes heartIconRotate {
-            0%, 100% { transform: rotate(0deg); }
-            25% { transform: rotate(-8deg); }
-            75% { transform: rotate(8deg); }
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            14% { transform: scale(1.3) rotate(-12deg); }
+            28% { transform: scale(1.05) rotate(0deg); }
+            42% { transform: scale(1.35) rotate(12deg); }
+            70% { transform: scale(1) rotate(0deg); }
         }
 
-        /* NỀN VÀNG, VIỀN VÀNG KIM, CHỮ RÕ NÉT */
+        /* NỀN RUBY-ROSE SUNSET SANG TRỌNG, VIỀN PHÁT SÁNG, CHỮ NỔI RÕ NÉT */
         .status-doing-heartbeat {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 5px !important;
-            padding: 4px 10px !important;
+            gap: 6px !important;
+            padding: 4px 12px !important;
             border-radius: 20px !important;
-            background: linear-gradient(135deg, #fef08a 0%, #fde047 100%) !important;
-            color: #854d0e !important;
-            border: 1.5px solid #eab308 !important;
+            background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 50%, #fecdd3 100%) !important;
+            color: #be123c !important;
+            border: 1.8px solid #f43f5e !important;
             font-weight: 900 !important;
-            font-size: 0.92em !important;
-            animation: heartbeatDoing 1.6s infinite ease-in-out !important;
-            box-shadow: 0 2px 8px rgba(234, 179, 8, 0.3) !important;
+            font-size: 0.95em !important;
+            animation: heartbeatDoing 1.35s infinite ease-in-out !important;
             white-space: nowrap !important;
             user-select: none !important;
-            letter-spacing: -0.1px !important;
+            letter-spacing: -0.2px !important;
+            text-shadow: 0 0 1px rgba(244, 63, 94, 0.3) !important;
         }
 
         .status-doing-heartbeat.free-mode {
-            background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%) !important;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 50%, #fed7aa 100%) !important;
             color: #9a3412 !important;
             border-color: #f97316 !important;
-            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3) !important;
         }
 
         .status-doing-heartbeat .heartbeat-icon {
             display: inline-block !important;
-            font-size: 13px !important;
+            font-size: 15px !important;
             line-height: 1 !important;
-            animation: heartIconRotate 1.6s infinite ease-in-out !important;
+            animation: heartIconRotate 1.35s infinite ease-in-out !important;
+            filter: drop-shadow(0 0 4px rgba(225, 29, 72, 0.7)) !important;
+        }
+
+        /* DÒNG HỌC SINH ĐANG THI ĐƯỢC TÔ NỀN TỎA SÁNG NHẸ NHÀNG */
+        tr.row-student-is-doing td {
+            background-color: #fffbeb !important;
+        }
+        tr.row-student-is-doing:hover td {
+            background-color: #fef08a !important;
+        }
+        tr.row-student-is-doing .td-stt {
+            background-color: #fde047 !important;
+            color: #854d0e !important;
+            font-weight: 900 !important;
         }
 
         /* KHỐI HIỂN THỊ THỜI GIAN NHẢY TỪNG GIÂY */
@@ -106,6 +121,17 @@ let _liveDoingTickerInterval = null;
         .live-doing-timer-val {
             font-variant-numeric: tabular-nums !important;
             letter-spacing: 0.2px !important;
+        }
+
+        .attempt-badge-doing {
+            display: inline-block !important;
+            background: #fff1f2 !important;
+            color: #be123c !important;
+            border: 1.2px solid #fda4af !important;
+            padding: 3px 8px !important;
+            border-radius: 12px !important;
+            font-size: 0.9em !important;
+            font-weight: 800 !important;
         }
     `;
     document.head.appendChild(style);
@@ -354,9 +380,9 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     const cacheKey = `${catId}_${item.firebaseId || item.id || item.title}`;
     if (_examResultsCache[cacheKey]) {
         const cached = _examResultsCache[cacheKey];
-        renderExamResultTable(catId, cached.submissionsListRaw || cached.submissionsMap || [], cached.cheatingLogsData, cached.activeSessionsData, item, cached.examMeta);
+        renderExamResultTable(catId, cached.submissionsListRaw || cached.submissionsMap || [], cached.cheatingLogsData, cached.activeSessionsData, {}, item, cached.examMeta);
     } else {
-        renderExamResultTable(catId, [], {}, {}, item, { examTitle: item.title });
+        renderExamResultTable(catId, [], {}, {}, {}, item, { examTitle: item.title });
     }
 
     applyTableSettings();
@@ -483,12 +509,22 @@ function renderFilteredResultTable(rows) {
         const currentSub = attCount > 0 ? row.allAttempts[row.selectedAttemptIndex] : null;
         const uid = row._rowUid || `row_${rowIdx}`;
 
+        // Nếu học sinh đang thi -> tô màu viền & nền tỏa sáng nhẹ
+        if (row.isDoing) {
+            tr.classList.add("row-student-is-doing");
+        }
+
         let col1_stt = row.stt;
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
         let col_attemptCount = `<span class="status-not-submitted">---</span>`;
 
-        if (attCount === 1) { col_attemptCount = `<span class="attempt-badge-single">1 lần</span>`; } 
-        else if (attCount >= 2) {
+        if (attCount === 0 && row.isDoing) {
+            col_attemptCount = `<span class="attempt-badge-doing">Đang thi Lần 1</span>`;
+        } else if (attCount === 1) { 
+            col_attemptCount = row.isDoing 
+                ? `<span class="attempt-badge-doing">Đang thi Lần 2</span>` 
+                : `<span class="attempt-badge-single">1 lần</span>`; 
+        } else if (attCount >= 2) {
             let menuItemsHtml = "";
             row.allAttempts.forEach((at, aIdx) => {
                 let sc = at.score10 !== undefined ? at.score10 : (at.calcMetrics ? at.calcMetrics.score10Scale : "--");
@@ -496,7 +532,8 @@ function renderFilteredResultTable(rows) {
                 let isSel = aIdx === row.selectedAttemptIndex;
                 menuItemsHtml += `<div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)"><span>${isSel ? '✓ ' : ''}<b>Lần ${aIdx + 1}</b> (${tm})</span><span style="color:#0284c7; font-weight:800;">${sc}đ</span></div>`;
             });
-            col_attemptCount = `<div class="td-attempt-cell"><button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi khác">${attCount} lần ▾</button><div class="attempt-dropdown-menu" id="attempt-menu-${uid}"><div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">CHỌN LẦN THI:</div>${menuItemsHtml}</div></div>`;
+            const doingBadgeText = row.isDoing ? ` (Đang thi Lần ${attCount + 1})` : "";
+            col_attemptCount = `<div class="td-attempt-cell"><button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi khác">${attCount} lần${doingBadgeText} ▾</button><div class="attempt-dropdown-menu" id="attempt-menu-${uid}"><div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">CHỌN LẦN THI:</div>${menuItemsHtml}</div></div>`;
         }
 
         let col2_inTime = `<span class="status-not-submitted">---</span>`; 
@@ -509,7 +546,46 @@ function renderFilteredResultTable(rows) {
         let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
         let col11_details = `<span class="status-not-submitted">---</span>`;
 
-        if (currentSub) {
+        if (row.isDoing) {
+            // ==========================================
+            // XỬ LÝ HỌC SINH ĐANG THI (HIỆN RÕ, NHỊP TIM, PHÁT SÁNG)
+            // ==========================================
+            let startMs = row.doingStartTime || Date.now();
+            let formattedIn = formatDateTimeFull(startMs);
+            let liveDuration = formatElapsedDuration(startMs);
+
+            col2_inTime = `<span style="color:#0284c7; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
+            // CỘT THỜI GIAN THI: NHẢY TỪNG GIÂY
+            col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
+            
+            // CỘT TÌNH TRẠNG: GHI RÕ "ĐANG THI", CÓ NHỊP ĐẬP TRÁI TIM PHẬP PHỒNG TỎA SÁNG
+            const attemptText = (attCount > 0) ? ` (Lần ${attCount + 1})` : "";
+            if (row.isFreeDoing) { 
+                col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang thi trực tuyến"><span class="heartbeat-icon">💓</span> Đang thi-tự do</span>`; 
+            } else { 
+                col6_status = `<span class="status-doing-heartbeat" title="Học sinh đang trong phòng thi làm bài"><span class="heartbeat-icon">💓</span> Đang thi${attemptText}</span>`; 
+            }
+            
+            let doingTabs = row.cheatLogsTabCount || 0;
+            col9_tabs = doingTabs > 0 ? `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
+            col10_cheatTime = row.cheatTimeString !== "0s" ? row.cheatTimeString : `<span class="status-not-submitted">---</span>`;
+
+            // Nếu đã từng nộp bài lần trước, vẫn hiển thị điểm của lần trước để Thầy tiện theo dõi
+            if (currentSub) {
+                let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : 0);
+                col7_correct = `<span style="font-weight:900; color:#15803d;" title="Điểm lần trước">${cCount} câu</span>`;
+                let sc = currentSub.score10 !== undefined ? currentSub.score10 : (currentSub.calcMetrics ? currentSub.calcMetrics.score10Scale : 0);
+                let scNum = parseFloat(sc) || 0;
+                let pillClass = scNum >= 8.0 ? 'score-pill-high' : (scNum >= 5.0 ? 'score-pill-mid' : 'score-pill-low');
+                col8_score = `<span class="${pillClass}" title="Điểm lần thi trước">${scNum.toFixed(1)}</span>`;
+                if (currentSub.dataString) {
+                    let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
+                    col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM LẦN TRƯỚC:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
+                }
+            }
+
+        } else if (currentSub) {
+            // HỌC SINH ĐÃ NỘP BÀI
             let subDateMs = getSubmissionTimestamp(currentSub);
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
             col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || (currentSub.calcMetrics && currentSub.calcMetrics.completionTimeStr) || `${currentSub.spentMins||0} phút`}</span>`;
@@ -544,25 +620,6 @@ function renderFilteredResultTable(rows) {
                 let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
                 col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
             }
-        } else if (row.isDoing) {
-            let startMs = row.doingStartTime || Date.now();
-            let formattedIn = formatDateTimeFull(startMs);
-            let liveDuration = formatElapsedDuration(startMs);
-
-            col2_inTime = `<span style="color:#0284c7; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
-            // CỘT THỜI GIAN THI: NHẢY GIỜ SỐ TỰ ĐỘNG TỪNG GIÂY THEO THỜI GIAN THẬT
-            col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang làm bài (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
-            
-            // CỘT TÌNH TRẠNG: MÀU VÀNG CÓ HIỆU ỨNG NHỊP TIM ĐẬP NHẸ NHÀNG CO GIÃN
-            if (row.isFreeDoing) { 
-                col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang làm bài"><span class="heartbeat-icon">⚡</span> Đang thi-tự do</span>`; 
-            } else { 
-                col6_status = `<span class="status-doing-heartbeat" title="Học sinh đang trong phòng thi làm bài"><span class="heartbeat-icon">⏳</span> Đang làm bài</span>`; 
-            }
-            
-            let doingTabs = row.cheatLogsTabCount || 0;
-            col9_tabs = doingTabs > 0 ? `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
-            col10_cheatTime = row.cheatTimeString !== "0s" ? row.cheatTimeString : `<span class="status-not-submitted">---</span>`;
         }
 
         let rawName = acc.name || (currentSub ? currentSub.studentName : "---");
@@ -588,7 +645,7 @@ function filterResultTable() {
 
     const filtered = currentExamResultData.rawRows.filter(r => {
         let name = (r.account.name || "").toLowerCase(); let sbd = String(r.account.sbd || "").toLowerCase(); let cName = String(r.account.className || "").toLowerCase();
-        let statusText = r.allAttempts.length > 0 ? "đã nộp bài" : (r.isFreeDoing ? "đang thi tự do" : (r.isDoing ? "đang làm bài" : "chưa thi"));
+        let statusText = r.isDoing ? "đang thi" : (r.allAttempts.length > 0 ? "đã nộp bài" : (r.isFreeDoing ? "đang thi tự do" : "chưa thi"));
         let rankText = (r.rank !== null && r.rank !== undefined) ? `hạng ${r.rank}` : "";
         return name.includes(query) || sbd.includes(query) || cName.includes(query) || statusText.includes(query) || rankText.includes(query);
     });
