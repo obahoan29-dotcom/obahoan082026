@@ -1,12 +1,10 @@
 // =========================================================
-// FILE: student-exam-flow.js (BẢN ĐỒNG BỘ CHUẨN KÉP SUPABASE + GAS + DRIVE + INDEXEDDB)
-// QUẢN LÝ ĐĂNG NHẬP, KHỞI TẠO BẢN NHÁP TỨC THÌ, NỘP BÀI 7S & DỰ PHÒNG 200%
+// FILE 4: student-exam-flow.js (FIX UPSERT PHIÊN ĐANG THI & BẢN NHÁP KHỞI ĐẦU)
 // =========================================================
 
 let submissionCountdownTimer = null;
 let currentSubmitAttempt = 1;
 
-// 1. MỞ MODAL ĐĂNG NHẬP PHÒNG THI TỪ TRANG CHỦ
 function openStudentLoginModal(item, categoryId, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
 
@@ -167,6 +165,7 @@ function submitStudentLogin() {
         finalSbd = (document.getElementById("st-free-sbd-input").value || "").trim();
         if (!finalName || !finalClass || !finalSbd) { showErr("⚠️ Vui lòng nhập đầy đủ Họ tên, Lớp và SBD tự do!"); return; }
 
+        // Đối với thí sinh tự do, nếu SBD không bắt đầu bằng tiền tố lớp khác thì giữ nguyên categoryId của lớp đang thi
         const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
         if (detectedCat) {
             activeCat = detectedCat;
@@ -192,7 +191,6 @@ function submitStudentLogin() {
     }
 }
 
-// 2. XÁC THỰC MẬT KHẨU HOẶC SBD TRONG PHÒNG THI
 function checkPassword() { 
     const val = document.getElementById("exam-pass-input").value.trim(); 
     if (!val) {
@@ -220,7 +218,6 @@ function checkPassword() {
     } 
 }
 
-// 3. KHỞI CHẠY THI - KIỂM TRA THÔNG TIN HỌC SINH
 async function startExamAction(isAutostart = false) {
     const sId = document.getElementById("student-id").value.trim();
     const sName = document.getElementById("student-name").value.trim();
@@ -249,7 +246,7 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
-// 4. KẾT NỐI SUPABASE & INDEXEDDB: KHỞI TẠO TỨC THÌ
+// FIX YÊU CẦU 1 & 5: DÙNG ONCONFLICT: 'id' TRÁNH LỖI CONSTRAINT
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
@@ -290,7 +287,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
             start_time: nowMs,
             last_ping: nowMs
-        }, { onConflict: 'quiz_id,sbd' });
+        }, { onConflict: 'id' });
 
         // Bước B: ĐỒNG THỜI KHỞI TẠO BẢN NHÁP TRONG live_drafts
         await client.from('live_drafts').upsert({
@@ -304,7 +301,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
             user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
             last_updated: new Date().toISOString()
-        }, { onConflict: 'quiz_id,sbd' });
+        }, { onConflict: 'id' });
 
         // Bước C: Ghi đồng thời vào IndexedDB
         if (typeof examIndexedDB !== 'undefined') {
@@ -365,7 +362,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// 5. TỔNG HỢP GÓI DỮ LIỆU NỘP BÀI HOÀN CHỈNH
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -430,7 +426,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// 6. GỬI SONG SONG FILE JSON LÊN GOOGLE DRIVE THEO CẤU TRÚC FOLDER QUY ĐỊNH
 async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
         ? GOOGLE_DRIVE_TULUAN_GAS_URL 
@@ -447,7 +442,6 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     const sName = payload.student_name || "hocsinh";
     const fileName = `${sbd}_${sName}.json`.replace(/\s+/g, '_');
 
-    // Chuyển toàn bộ nội dung bài thi sang chuỗi Base64 để GAS lưu thành file .json
     const jsonStr = JSON.stringify(payload, null, 2);
     let base64Data = "";
     try {
@@ -472,7 +466,6 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
 
     const payloadText = JSON.stringify(drivePayload);
 
-    // Sử dụng fetch keepalive (hoặc sendBeacon) để dù học sinh đóng trình duyệt, file vẫn gửi tới Drive
     try {
         fetch(gasUrl, {
             method: "POST",
@@ -498,7 +491,6 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     }
 }
 
-// 7. TỰ ĐỘNG TẢI FILE JSON BÀI LÀM VÀO MÁY
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
@@ -530,7 +522,6 @@ function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     }
 }
 
-// 8. MỞ GIAO DIỆN CHIA SẺ NATIVE HỆ THỐNG
 async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     if (!payload) return;
     const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
@@ -562,7 +553,6 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     alert(`📁 ĐÃ TẢI FILE DỰ PHÒNG LẦN ${attemptNumber}!\n\nTên file: "${fileName}"\nVị trí: Thư mục Tải về (Downloads).\n\n👉 Em hãy gửi file này cho Thầy giáo qua Zalo/Messenger nhé!`);
 }
 
-// 9. LƯU LỊCH SỬ NỘP BÀI VÀO LOCALSTORAGE VÀ INDEXEDDB BẢO TOÀN VĨNH VIỄN
 function recordSubmissionToHistory(payload) {
     try {
         const quizId = payload.quiz_id;
@@ -588,7 +578,6 @@ function recordSubmissionToHistory(payload) {
 
         safeLocal.setItem(storageKey, JSON.stringify(history));
 
-        // Lưu bản ghi vào IndexedDB vĩnh viễn
         if (typeof examIndexedDB !== 'undefined') {
             examIndexedDB.setItem('exam_history', historyItem).catch(() => {});
         }
@@ -599,7 +588,6 @@ function recordSubmissionToHistory(payload) {
     }
 }
 
-// 10. HIỂN THỊ CHÍNH XÁC NÚT: "Hãy gửi file json lần 1 nếu cần", "Hãy gửi file json lần 2 nếu cần"
 function renderStudentSubmissionHistoryButtons() {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     const urlParams = new URLSearchParams(window.location.search);
@@ -682,7 +670,6 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
-// 11. BỘ ĐIỀU KHIỂN NỘP BÀI: 2 CỔNG SONG SONG (SUPABASE + GOOGLE DRIVE) & THỬ LẠI TRONG 7S
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -701,12 +688,10 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const payload = buildCompleteSubmissionPayload(isForceSubmit);
     
-    // Lưu vào LocalStorage
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
 
-    // LƯU TỨC THÌ VÀO INDEXEDDB
     if (typeof examIndexedDB !== 'undefined') {
         const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
             ? GOOGLE_DRIVE_TULUAN_GAS_URL 
@@ -720,14 +705,12 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // ĐĂNG KÝ BACKGROUND SYNC VỚI SERVICE WORKER (NẾU TRÌNH DUYỆT HỖ TRỢ)
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
         navigator.serviceWorker.ready.then(reg => {
             return reg.sync.register('sync-pending-submissions');
         }).catch(() => {});
     }
 
-    // CỔNG 2: GỬI SONG SONG NGAY LẬP TỨC FILE JSON LÊN GOOGLE DRIVE CỦA THẦY
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
@@ -792,7 +775,6 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-    // CỔNG 1: GỬI LÊN SUPABASE
     const trySendToSupabase = async () => {
         if (!client) throw new Error("Chưa kết nối Supabase Client");
         
@@ -828,8 +810,8 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     if (submitSuccess) {
         if (client) {
-            client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
-            client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
+            client.from('live_drafts').delete().match({ id: payload.id }).then();
+            client.from('active_sessions').delete().match({ id: payload.id }).then();
         }
         if (typeof clearPresence === 'function') clearPresence(payload.sbd);
         if (timerInterval) clearInterval(timerInterval); 
@@ -839,7 +821,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
         safeLocal.setItem("last_submission_cleared", "true");
 
-        // Gỡ khỏi hàng đợi pending trong IndexedDB
         if (typeof examIndexedDB !== 'undefined') {
             examIndexedDB.removeItem('pending_submissions', payload.id).catch(() => {});
         }
@@ -934,7 +915,6 @@ async function executeSubmitExam(isForceSubmit = false) {
     }
 }
 
-// 12. MODAL XÁC NHẬN NỘP BÀI
 function showSubmitConfirmModal() { 
     if (isSubmitted) return; 
 
@@ -981,7 +961,6 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
-// ĐĂNG KÝ CÁC HÀM TOÀN CỤC
 window.openStudentLoginModal = openStudentLoginModal;
 window.closeStudentLoginModal = closeStudentLoginModal;
 window.switchStudentLoginMode = switchStudentLoginMode;
