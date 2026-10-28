@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-engine-core.js (BẢN TỐI ƯU ĐỒNG BỘ CLOUD VỚI SUPABASE & INDEXEDDB)
+// FILE 3: exam-engine-core.js (FIX TỨC THÌ ĐANG THI & LƯU ĐỆM CLOUD)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -14,6 +14,7 @@ let hasInitExamEngine = false;
 let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
+let _autoSaveDebounceTimer = null;
 
 (function injectLockStyles() {
     const styleId = "exam-engine-lock-styles";
@@ -27,7 +28,61 @@ let isSubmittingInProgress = false;
     document.head.appendChild(style);
 })();
 
-// LƯU NHÁP LÊN SUPABASE & INDEXEDDB NGAY KHI CHỌN HOẶC ĐIỀN ĐÁP ÁN
+// FIX YÊU CẦU 1 & 5: ĐẢM BẢO PHIÊN ĐANG THI VÀ LƯU ĐỆM REALTIME VÀO SUPABASE
+async function ensureActiveSessionAndDraft() {
+    if (isSubmitted) return;
+    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
+    if (!sId) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
+    if (!quizId) return;
+
+    const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
+    const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
+    const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const primaryDocId = `${quizId}_${cleanSbd}`;
+    const nowMs = Date.now();
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
+
+    try {
+        // Ghi chắc chắn trạng thái Đang thi vào active_sessions
+        await client.from('active_sessions').upsert({
+            id: primaryDocId,
+            quiz_id: quizId,
+            sbd: cleanSbd,
+            name: sName,
+            class_name: sClass,
+            category_id: currentCat,
+            is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
+            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+            start_time: examStartTime || nowMs,
+            last_ping: nowMs
+        }, { onConflict: 'id' });
+
+        // Khởi tạo ngay dòng nháp trong live_drafts nếu chưa có
+        await client.from('live_drafts').upsert({
+            id: primaryDocId,
+            quiz_id: quizId,
+            sbd: cleanSbd,
+            student_name: sName,
+            class_name: sClass,
+            category_id: currentCat,
+            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+            user_answers: window.SECURE_VAULT.userAnswers || {},
+            last_updated: new Date().toISOString()
+        }, { onConflict: 'id' });
+    } catch(err) {
+        console.warn("Lỗi đồng bộ phiên đang thi:", err);
+    }
+}
+
+// FIX YÊU CẦU 5: LƯU TỨC THÌ TỪNG CÂU, TỪNG Ý CHỌN CỦA HỌC SINH VÀO SUPABASE & INDEXEDDB
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -65,12 +120,14 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         }).catch(() => {});
     }
 
-    // 2. Lưu vào Supabase Cloud
+    // 2. Lưu trực tiếp lên Supabase Cloud (Dùng Primary Key 'id' tránh lỗi constraint)
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) return;
 
     try {
-        await client.from('live_drafts').upsert(draftData, { onConflict: 'quiz_id,sbd' });
+        await client.from('live_drafts').upsert(draftData, { onConflict: 'id' });
+        // Cập nhật luôn last_ping để bảng admin nhận diện đang hoạt động liên tục
+        await client.from('active_sessions').update({ last_ping: Date.now() }).match({ id: primaryDocId });
     } catch(e) {
         console.warn("Lỗi lưu nháp Supabase:", e);
     }
@@ -275,7 +332,6 @@ async function checkSessionStatus(isAutostart = false) {
 
     let isRestored = restoreExamStateFromStorage();
     if (!isRestored && typeof examIndexedDB !== 'undefined') {
-        // Thử phục hồi từ IndexedDB nếu LocalStorage bị xóa rỗng
         try {
             const idbState = await examIndexedDB.getItem('exam_states', getStorageKey());
             if (idbState && idbState.data) {
@@ -331,6 +387,9 @@ async function checkSessionStatus(isAutostart = false) {
         remainingSeconds = timeRemaining; 
         startCountdownTimer(); 
         startPresenceSystem(sId);
+
+        // KHI PHỤC HỒI PHIÊN: BẬT NGAY ĐANG THI TRÊN SUPABASE CLOUD
+        ensureActiveSessionAndDraft();
         return; 
     }
 
@@ -362,8 +421,10 @@ function fetchExamQuestions(isAutostart = false) {
         } 
         document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
         if (examData.password !== undefined) EXAM_PASSWORD = String(examData.password).trim(); 
-        if (examData.timeLimitMinutes) { 
-            TIME_LIMIT_MINUTES = parseInt(examData.timeLimitMinutes, 10); 
+        
+        // FIX YÊU CẦU 4: LẤY ĐÚNG SỐ PHÚT TỪ DỮ LIỆU ĐỀ THI
+        if (examData.timeLimitMinutes || examData.time_limit_minutes) { 
+            TIME_LIMIT_MINUTES = parseInt(examData.timeLimitMinutes || examData.time_limit_minutes, 10); 
             totalTimeSeconds = TIME_LIMIT_MINUTES * 60; 
             remainingSeconds = totalTimeSeconds; 
         } 
@@ -424,6 +485,7 @@ function showError(title, msg) {
     errCard.style.display = "block"; 
 }
 
+// FIX YÊU CẦU 5: LƯU TRỰC TIẾP NGAY KHI CHỌN PHẦN 1
 function selectOption(qId, letter) { 
     if (isSubmitted || isExamLocked) return; 
     const letters = ["A", "B", "C", "D"]; 
@@ -441,28 +503,34 @@ function selectOption(qId, letter) {
     autoSaveAnswerToCloud(`q${qId}`, letter);
 }
 
+// FIX YÊU CẦU 5: LƯU TRỰC TIẾP TỪNG Ý ĐÚNG / SAI PHẦN 2
 function onStatementChange(subKey) { 
     if (isSubmitted || isExamLocked) return; 
     const selected = document.querySelector(`input[name="${subKey}"]:checked`); 
     if (selected) {
         window.SECURE_VAULT.userAnswers[subKey] = selected.value; 
+        updateProgress(); 
+        saveExamStateToStorage(); 
         autoSaveAnswerToCloud(subKey, selected.value);
     }
-    updateProgress(); 
-    saveExamStateToStorage(); 
 }
 
+// FIX YÊU CẦU 5: LƯU TỨC THÌ ĐIỀN ĐÁP ÁN NGẮN PHẦN 3 & 4
 function onShortInputChange(qId) { 
     if (isSubmitted || isExamLocked) return; 
     const val = document.getElementById(`q${qId}-input`).value.trim(); 
     if (val) {
         window.SECURE_VAULT.userAnswers[`q${qId}`] = val; 
-        autoSaveAnswerToCloud(`q${qId}`, val);
     } else {
         delete window.SECURE_VAULT.userAnswers[`q${qId}`]; 
     }
     updateProgress(); 
     saveExamStateToStorage(); 
+
+    if (_autoSaveDebounceTimer) clearTimeout(_autoSaveDebounceTimer);
+    _autoSaveDebounceTimer = setTimeout(() => {
+        autoSaveAnswerToCloud(`q${qId}`, val);
+    }, 300);
 }
 
 function updateProgress() { 
@@ -579,7 +647,6 @@ function saveExamStateToStorage() {
     }; 
     safeLocal.setItem(getStorageKey(), JSON.stringify(dataToSave)); 
 
-    // Ghi đồng thời vào IndexedDB để chống tràn bộ nhớ và bảo toàn 100%
     if (typeof examIndexedDB !== 'undefined') {
         examIndexedDB.setItem('exam_states', {
             key: getStorageKey(),
@@ -821,4 +888,5 @@ window.__saveExamState = saveExamStateToStorage;
 window.__updateProgress = updateProgress;
 window.lockExamInteractions = lockExamInteractions;
 window.autoSaveAnswerToCloud = autoSaveAnswerToCloud;
+window.ensureActiveSessionAndDraft = ensureActiveSessionAndDraft;
 window.renderResultSummaryScreen = renderResultSummaryScreen;
