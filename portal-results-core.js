@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: portal-results-core.js (BẢN FIX LỖI ĐỒNG BỘ SUPABASE 100%)
-// KHẮC PHỤC TRIỆT ĐỂ: HIỆN ĐÚNG "ĐANG LÀM BÀI" & "ĐÃ NỘP BÀI" 
-// LẤY DỮ LIỆU CHUẨN XÁC TỪ SUPABASE
+// KHẮC PHỤC TRIỆT ĐỂ: HIỆN ĐÚNG "ĐANG THI" & "ĐÃ NỘP BÀI"
+// QUÉT ĐA MÃ ĐỀ, CHUẨN HOÁ SBD VÀ BẮT TRỰC TIẾP HỌC SINH ĐANG THI
 // =========================================================
 
 let currentExamResultData = {
@@ -31,6 +31,36 @@ function debouncedRefreshResults(delayMs = 350) {
 function cleanSbdStandard(sbd) {
     if (!sbd) return "";
     return String(sbd).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Tạo tập các biến thể SBD (xử lý triệt để 11C04 <-> 11C4, 10P01 <-> 10P1)
+function getSbdVariations(sbd) {
+    if (!sbd) return [];
+    const raw = cleanSbdStandard(sbd);
+    const setVars = new Set([raw]);
+    // Dạng chữ/lớp + số: ví dụ 11c04 hoặc 11c4
+    const m = raw.match(/^([a-z]+|\d+[a-z]+)0*(\d+)$/i);
+    if (m) {
+        const prefix = m[1];
+        const num = parseInt(m[2], 10);
+        setVars.add(`${prefix}${num}`);
+        setVars.add(`${prefix}${String(num).padStart(2, '0')}`);
+    }
+    // Dạng thuần số: ví dụ 1001, 1101
+    const mNum = raw.match(/^(\d+)$/);
+    if (mNum) {
+        const num = parseInt(mNum[1], 10);
+        setVars.add(String(num));
+    }
+    return Array.from(setVars);
+}
+
+// Kiểm tra 2 SBD có trùng khớp nhau không (bất chấp 04 hay 4)
+function isSbdMatchedFlexibly(sbd1, sbd2) {
+    if (!sbd1 || !sbd2) return false;
+    const v1 = getSbdVariations(sbd1);
+    const v2 = getSbdVariations(sbd2);
+    return v1.some(x => v2.includes(x));
 }
 
 function sortDataString(str) {
@@ -110,7 +140,7 @@ function startRealtimeSubmissionsListener(quizId) {
     }
 }
 
-// BỘ TRUY VẤN VÀ ĐỒNG BỘ KẾT QUẢ TỪ 4 BẢNG SUPABASE (ĐÃ TỐI ƯU HÓA HOÀN TOÀN)
+// BỘ TRUY VẤN VÀ ĐỒNG BỘ KẾT QUẢ TỪ 4 BẢNG SUPABASE (ĐÃ TỐI ƯU HOÀN TOÀN)
 async function fetchAndRenderExamResults(item, isSilent = false) {
     if (!item) return;
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
@@ -137,16 +167,25 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
     if (!isSilent) {
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
     }
 
     try {
-        // Truy vấn dữ liệu: Ưu tiên tìm chính xác bằng quiz_id
+        // Thu thập toàn bộ các mã ứng viên hợp lệ của đề thi
+        let candidateCodes = [];
+        if (typeof getExamCandidateCodes === 'function') {
+            candidateCodes = getExamCandidateCodes(examTitle, maDe, quizId);
+        }
+        if (quizId && !candidateCodes.includes(String(quizId).trim())) {
+            candidateCodes.push(String(quizId).trim());
+        }
+
+        // 1. Truy vấn đồng thời theo mã đề
         let [subRes, cheatRes, activeRes, draftRes] = await Promise.all([
-            client.from('submissions').select('*').eq('quiz_id', quizId),
-            client.from('cheating_logs').select('*').eq('quiz_id', quizId),
-            client.from('active_sessions').select('*').eq('quiz_id', quizId),
-            client.from('live_drafts').select('*').eq('quiz_id', quizId)
+            client.from('submissions').select('*').in('quiz_id', candidateCodes),
+            client.from('cheating_logs').select('*').in('quiz_id', candidateCodes),
+            client.from('active_sessions').select('*').in('quiz_id', candidateCodes),
+            client.from('live_drafts').select('*').in('quiz_id', candidateCodes)
         ]);
 
         let rawSubsData = subRes.data || [];
@@ -154,21 +193,42 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         let draftsData = draftRes.data || [];
         let cheatData = cheatRes.data || [];
 
-        // NẾU TÌM THEO ID KHÔNG CÓ (do dữ liệu cũ lưu bằng ID khác), QUÉT THÊM BẰNG TIÊU ĐỀ ĐỀ THI
-        if (rawSubsData.length === 0 && examTitle) {
-            const { data: fallbackSubs } = await client.from('submissions').select('*').ilike('exam_title', `%${examTitle.trim()}%`);
-            if (fallbackSubs && fallbackSubs.length > 0) rawSubsData = fallbackSubs;
-            
-            const { data: fallbackActive } = await client.from('active_sessions').select('*').ilike('exam_title', `%${examTitle.trim()}%`);
-            if (fallbackActive && fallbackActive.length > 0) activeData = fallbackActive;
-            
-            const { data: fallbackDrafts } = await client.from('live_drafts').select('*').ilike('exam_title', `%${examTitle.trim()}%`);
-            if (fallbackDrafts && fallbackDrafts.length > 0) draftsData = fallbackDrafts;
+        // 2. Quét bổ sung theo tiêu đề đề thi (ilike) để không bao giờ bỏ sót phiên thi
+        if (examTitle && examTitle.trim() !== "") {
+            const cleanTitle = examTitle.trim();
+            const [extraActiveRes, extraDraftRes, extraSubRes] = await Promise.all([
+                client.from('active_sessions').select('*').ilike('exam_title', `%${cleanTitle}%`),
+                client.from('live_drafts').select('*').ilike('exam_title', `%${cleanTitle}%`),
+                rawSubsData.length === 0 ? client.from('submissions').select('*').ilike('exam_title', `%${cleanTitle}%`) : Promise.resolve({ data: [] })
+            ]);
+
+            if (extraSubRes.data && extraSubRes.data.length > 0) {
+                const existingSubIds = new Set(rawSubsData.map(s => s.id));
+                extraSubRes.data.forEach(s => {
+                    if (!existingSubIds.has(s.id)) rawSubsData.push(s);
+                });
+            }
+
+            if (extraActiveRes.data && extraActiveRes.data.length > 0) {
+                const existingActIds = new Set(activeData.map(a => a.id || `${a.quiz_id}_${a.sbd}`));
+                extraActiveRes.data.forEach(a => {
+                    const uid = a.id || `${a.quiz_id}_${a.sbd}`;
+                    if (!existingActIds.has(uid)) activeData.push(a);
+                });
+            }
+
+            if (extraDraftRes.data && extraDraftRes.data.length > 0) {
+                const existingDraftIds = new Set(draftsData.map(d => d.id || `${d.quiz_id}_${d.sbd}`));
+                extraDraftRes.data.forEach(d => {
+                    const uid = d.id || `${d.quiz_id}_${d.sbd}`;
+                    if (!existingDraftIds.has(uid)) draftsData.push(d);
+                });
+            }
         }
 
-        console.log(`📊 Tìm thấy: ${rawSubsData.length} bài nộp, ${activeData.length} đang làm, ${draftsData.length} bản nháp.`);
+        console.log(`📊 Kết quả: ${rawSubsData.length} bài nộp, ${activeData.length} active_sessions, ${draftsData.length} live_drafts.`);
 
-        // Ánh xạ dữ liệu snake_case của Supabase sang camelCase cho Frontend
+        // Ánh xạ dữ liệu snake_case sang camelCase
         const rawSubs = rawSubsData.map(r => ({
             id: r.id,
             quizId: r.quiz_id,
@@ -200,9 +260,11 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             };
         });
 
+        // Xây dựng danh sách phiên đang làm bài
         const activeSessionsMap = {};
         activeData.forEach(a => {
             const key = cleanSbdStandard(a.sbd);
+            if (!key) return;
             activeSessionsMap[key] = {
                 sbd: a.sbd,
                 name: a.name || a.student_name,
@@ -217,6 +279,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         const liveDraftsMap = {};
         draftsData.forEach(d => {
             const key = cleanSbdStandard(d.sbd);
+            if (!key) return;
             liveDraftsMap[key] = {
                 sbd: d.sbd,
                 name: d.student_name,
@@ -230,7 +293,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         const targetCatId = item.categoryId || currentExamResultData.categoryId || "them-11";
         const examMeta = { quizId, maDe, examTitle, quizObj };
 
-        // Lưu Cache
         _examResultsCache[`${targetCatId}_${quizId}`] = {
             submissionsListRaw: rawSubs,
             cheatingLogsData: cheatingLogsMap,
@@ -246,14 +308,13 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     } catch(err) {
         console.error("❌ Lỗi nạp bảng điểm Supabase:", err);
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
     }
 }
 
-// BỘ DỰNG BẢNG THÔNG MINH: GHÉP SBD CHUẨN XÁC GIỮA DANH SÁCH LỚP VÀ BÀI THI
+// BỘ DỰNG BẢNG THÔNG MINH: GHÉP SBD LINH HOẠT VÀ HIỆN CHUẨN XÁC HỌC SINH ĐANG THI
 function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, activeSessionsMap, liveDraftsMap, examItem, examMeta = {}) {
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(categoryId) : [];
-    const targetCatId = String(categoryId || "").trim();
 
     // 1. Tổng hợp nhật ký chuyển tab
     const cheatHistoryBySbd = {};
@@ -285,24 +346,23 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     }
     submissionsList.sort((a, b) => getSubmissionTimestamp(a) - getSubmissionTimestamp(b));
 
-    const submittedSbds = new Set(submissionsList.map(s => cleanSbdStandard(s.sbd || s.studentId)));
-
-    // 3. Hợp nhất trạng thái "Đang làm bài"
+    // 3. HỢP NHẤT TOÀN BỘ PHIÊN ĐANG THI (active_sessions + live_drafts)
     const inProgressUsersMap = {};
     const allPendingKeys = new Set([...Object.keys(activeSessionsMap), ...Object.keys(liveDraftsMap)]);
 
     allPendingKeys.forEach(sbdKey => {
-        if (submittedSbds.has(sbdKey)) return;
-
         const sess = activeSessionsMap[sbdKey] || {};
         const draft = liveDraftsMap[sbdKey] || {};
 
         const answeredCount = draft.userAnswers ? Object.keys(draft.userAnswers).length : 0;
+        const lastActivityMs = Number(sess.lastPing || sess.startTime || (draft.lastUpdated ? new Date(draft.lastUpdated).getTime() : 0)) || Date.now();
+
         inProgressUsersMap[sbdKey] = {
             sbd: sess.sbd || draft.sbd || sbdKey,
             name: sess.name || draft.name || "Thí sinh",
             className: sess.className || draft.className || "Lớp",
-            startTime: sess.startTime || (draft.lastUpdated ? new Date(draft.lastUpdated).getTime() : Date.now()),
+            startTime: sess.startTime || lastActivityMs,
+            lastPing: sess.lastPing || lastActivityMs,
             isFree: sess.isFree !== undefined ? sess.isFree : true,
             userAnswers: draft.userAnswers || {},
             answeredCount: answeredCount,
@@ -311,20 +371,21 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     });
 
     const finalRows = [];
-    const usedSbdSet = new Set();
+    const usedPendingKeys = new Set();
     const usedSubIds = new Set();
 
-    // 4. DUYỆT DANH SÁCH HỌC SINH CHÍNH KHÓA CỦA LỚP ĐANG XEM
+    // 4. DUYỆT DANH SÁCH HỌC SINH CHÍNH KHÓA CỦA LỚP
     classAccounts.forEach((acc, idx) => {
         const accSbdClean = cleanSbdStandard(acc.sbd);
         const accNameNorm = typeof normalizeName === 'function' ? normalizeName(acc.name) : acc.name.toLowerCase();
 
+        // Tìm các bài nộp đã nộp trước đó của em này
         let matchedSubs = [];
         for (let sub of submissionsList) {
             let subSbdClean = cleanSbdStandard(sub.sbd || sub.studentId);
             let subNameNorm = typeof normalizeName === 'function' ? normalizeName(sub.studentName || sub.name) : "";
 
-            let isSbdMatch = (accSbdClean && subSbdClean && (accSbdClean === subSbdClean));
+            let isSbdMatch = isSbdMatchedFlexibly(acc.sbd, sub.sbd || sub.studentId);
             let isNameMatch = (accNameNorm && subNameNorm && accNameNorm === subNameNorm);
 
             if (isSbdMatch || isNameMatch) {
@@ -335,20 +396,48 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
         matchedSubs = deduplicateAttempts(matchedSubs);
 
+        // TÌM PHIÊN ĐANG THI CỦA HỌC SINH NÀY
         let isDoing = false; 
         let doingStartTime = null;
         let doingDraftInfo = null;
 
-        // Khớp học sinh đang thi theo SBD chuẩn
-        let activeSess = inProgressUsersMap[accSbdClean];
-        if (matchedSubs.length === 0 && activeSess) {
-            isDoing = true; 
-            doingStartTime = activeSess.startTime || Date.now();
-            doingDraftInfo = activeSess;
+        // Quét khớp mềm theo SBD hoặc Tên học sinh
+        let matchedPendingKey = null;
+        for (let pKey of allPendingKeys) {
+            const prog = inProgressUsersMap[pKey];
+            if (!prog) continue;
+            const isMatchSbd = isSbdMatchedFlexibly(acc.sbd, prog.sbd || pKey);
+            const isMatchName = accNameNorm && (normalizeName(prog.name) === accNameNorm);
+
+            if (isMatchSbd || isMatchName) {
+                matchedPendingKey = pKey;
+                break;
+            }
         }
 
-        if (matchedSubs.length > 0) {
-            usedSbdSet.add(accSbdClean);
+        if (matchedPendingKey) {
+            const activeSess = inProgressUsersMap[matchedPendingKey];
+            const sessTime = Number(activeSess.lastPing || activeSess.startTime || 0);
+
+            if (matchedSubs.length === 0) {
+                // Chưa nộp bài lần nào -> Đang thi lần 1!
+                isDoing = true;
+                doingStartTime = activeSess.startTime || sessTime || Date.now();
+                doingDraftInfo = activeSess;
+                usedPendingKeys.add(matchedPendingKey);
+            } else {
+                // Đã có bài nộp trước đó -> kiểm tra có đang thi lượt mới không
+                const latestSubTime = getSubmissionTimestamp(matchedSubs[matchedSubs.length - 1]);
+                const isPingRecent = activeSess.lastPing && (Date.now() - activeSess.lastPing < 35 * 60 * 1000);
+                const isAfterSubmit = sessTime > (latestSubTime + 10000);
+
+                if (isPingRecent || isAfterSubmit) {
+                    isDoing = true;
+                    doingStartTime = activeSess.startTime || sessTime || Date.now();
+                    doingDraftInfo = activeSess;
+                    usedPendingKeys.add(matchedPendingKey);
+                }
+            }
         }
 
         let cheatDurations = cheatHistoryBySbd[accSbdClean] || [];
@@ -374,18 +463,20 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     let freeSttCounter = classAccounts.length + 1;
 
-    // 5. THÍ SINH TỰ DO ĐANG LÀM BÀI
-    for (let sbdKey in inProgressUsersMap) {
-        if (usedSbdSet.has(sbdKey)) continue;
+    // 5. THÍ SINH TỰ DO ĐANG THI
+    for (let sbdKey of allPendingKeys) {
+        if (usedPendingKeys.has(sbdKey)) continue;
         const prog = inProgressUsersMap[sbdKey];
+        if (!prog) continue;
 
-        const isBelongToClass = classAccounts.some(acc => cleanSbdStandard(acc.sbd) === sbdKey);
+        // Nếu thuộc danh sách lớp thì bỏ qua (đã duyệt ở trên)
+        const isBelongToClass = classAccounts.some(acc => isSbdMatchedFlexibly(acc.sbd, prog.sbd || sbdKey));
         if (isBelongToClass) continue;
 
-        usedSbdSet.add(sbdKey);
+        usedPendingKeys.add(sbdKey);
 
         const freeAcc = {
-            sbd: prog.sbd || "---",
+            sbd: prog.sbd || sbdKey || "---",
             name: prog.name || "Thí sinh tự do",
             className: prog.className || "Tự do"
         };
@@ -413,7 +504,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         const rawSbd = sub.sbd || sub.studentId || "free";
         const sbdKey = cleanSbdStandard(rawSbd);
 
-        const isBelongToClass = classAccounts.some(acc => cleanSbdStandard(acc.sbd) === sbdKey);
+        const isBelongToClass = classAccounts.some(acc => isSbdMatchedFlexibly(acc.sbd, rawSbd));
         if (isBelongToClass) continue;
 
         if (!freeSubmissionsBySbd[sbdKey]) freeSubmissionsBySbd[sbdKey] = [];
@@ -452,7 +543,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(finalRows);
 }
 
-// 7. BỘ THU BÀI TỰ ĐỘNG NÂNG CẤP TỪ LIVE DRAFTS
+// 7. BỘ THU BÀI TỰ ĐỘNG TỪ BẢN LƯU NHÁP LIVE DRAFTS
 async function triggerAutoCollectDrafts(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
