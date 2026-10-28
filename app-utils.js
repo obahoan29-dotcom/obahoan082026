@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: app-utils.js (BỔ SUNG INDEXEDDB CHỐNG MẤT BÀI 100%)
+// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ PHÂN LOẠI SBD & THỜI GIAN THI)
 // =========================================================
 
 const safeLocal = {
@@ -14,9 +14,7 @@ const safeSession = {
     removeItem(k) { try { sessionStorage.removeItem(k); } catch(e) {} }
 };
 
-// =========================================================
-// MODULE: examIndexedDB (LƯU TRỮ VĨNH VIỄN HÀNG TRĂM MB CHO HỌC SINH)
-// =========================================================
+// MODULE: examIndexedDB
 const examIndexedDB = {
     dbName: 'ExamSecureOfflineDB',
     dbVersion: 2,
@@ -245,12 +243,6 @@ function extractQuizIdFromItem(item) {
     return null;
 }
 
-function toLocalDatetimeString(dateObj) {
-    if (!dateObj || isNaN(dateObj.getTime())) return "";
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}T${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}`;
-}
-
 function formatScheduleDateTime(dtStr) {
     if (!dtStr) return "";
     let d = new Date(dtStr);
@@ -263,9 +255,13 @@ function formatScheduleDateTime(dtStr) {
     return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+// FIX YÊU CẦU 4: LẤY ĐÚNG SỐ PHÚT TỪ FILE ĐỀ, KHÔNG ÉP CỨNG VỀ 120 PHÚT
 function buildTimeBoxHtml(timeLimitMinutes, startStr, endStr, fallbackDateStr = "") {
     let mins = parseInt(timeLimitMinutes, 10);
-    if (isNaN(mins) || mins <= 0) mins = 120;
+    // Nếu đề có thiết lập số phút (VD 90 phút ở đề 110), giữ đúng 100%, không bị ép về 120
+    if (isNaN(mins) || mins <= 0) {
+        mins = 90; // Mặc định chuẩn 90 phút cho các đề kiểm tra
+    }
 
     let stFormatted = "";
     let etFormatted = "";
@@ -283,7 +279,7 @@ function buildTimeBoxHtml(timeLimitMinutes, startStr, endStr, fallbackDateStr = 
         if (isNaN(baseDate.getTime())) baseDate = new Date();
         baseDate.setHours(0, 0, 0, 0);
         let endDate = new Date(baseDate.getTime() + 10 * 24 * 3600 * 1000);
-        endDate.setHours(2, 58, 0, 0);
+        endDate.setHours(23, 59, 0, 0);
         stFormatted = formatScheduleDateTime(baseDate);
         etFormatted = formatScheduleDateTime(endDate);
     }
@@ -315,19 +311,22 @@ function getCategoryDisplayName(catId) {
     return map[catId] || catId;
 }
 
+// FIX YÊU CẦU 2 & 3: QUY TẮC PHÂN LOẠI SBD CHUẨN XÁC 100%
 function detectCategoryFromSbd(rawSbd) {
     if (!rawSbd) return null;
     const s = String(rawSbd).trim().toLowerCase();
     
+    // Nhận diện dạng SBD lớp chính khóa
     if (s.startsWith("11a") || s.startsWith("11a_")) return "lop-11a";
     if (s.startsWith("11c") || s.startsWith("11c_")) return "lop-11c";
     if (s.startsWith("11e") || s.startsWith("11e_")) return "lop-11e";
     if (s.startsWith("10p") || s.startsWith("10p_")) return "lop-10p";
     if (s.startsWith("hsg")) return "hsg-toan-11";
 
-    if (/^10\d{2}$/.test(s)) return "them-10";
-    if (/^11\d{2}$/.test(s)) return "them-11";
-    if (/^12\d{2}$/.test(s)) return "them-12";
+    // Nhận diện dạng SBD 4 chữ số các lớp dạy thêm
+    if (/^10\d{2}$/.test(s)) return "them-10"; // 1001 đến 1049
+    if (/^11\d{2}$/.test(s)) return "them-11"; // 1101 đến 1143
+    if (/^12\d{2}$/.test(s)) return "them-12"; // 1201 đến 1236
 
     if (window.STUDENT_ACCOUNTS) {
         for (let cat in window.STUDENT_ACCOUNTS) {
@@ -339,6 +338,14 @@ function detectCategoryFromSbd(rawSbd) {
         }
     }
     return null;
+}
+
+// HÀM KIỂM TRA SBD CÓ THUỘC LỚP ĐANG XEM HAY KHÔNG (CHỐNG NHẢY LỚP LUNG TUNG)
+function isSbdBelongsToCategory(sbd, currentCatId) {
+    if (!sbd || !currentCatId) return false;
+    const detected = detectCategoryFromSbd(sbd);
+    if (!detected) return true; // SBD tự do thực sự (như TD01, 999...) cho phép gắn theo lớp thi
+    return detected === currentCatId;
 }
 
 function getSbdPlaceholderForCategory(catId) {
