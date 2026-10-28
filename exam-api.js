@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 5: exam-api.js (FIX CẬP NHẬT TRẠNG THÁI PRESENCE UPSERT)
+// FILE 5: exam-api.js (BẢN TƯƠNG THÍCH SUPABASE ACTIVE_SESSIONS 100%)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -312,10 +312,10 @@ function startPresenceSystem(sId) {
     if (presenceInterval) clearInterval(presenceInterval);
     presenceInterval = setInterval(() => { 
         updatePresence(cleanSbd); 
-    }, 25000);
+    }, 30000);
 }
 
-// FIX YÊU CẦU 1: DÙNG UPSERT THAY VÌ UPDATE ĐỂ BẢO ĐẢM LUÔN CÓ DÒNG TRONG ACTIVE_SESSIONS
+// CẬP NHẬT TRẠNG THÁI ACTIVE_SESSIONS CHUẨN XÁC, AN TOÀN TUYỆT ĐỐI
 async function updatePresence(cleanSbd) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -326,18 +326,29 @@ async function updatePresence(cleanSbd) {
         const sId = document.getElementById("student-id")?.value.trim() || cleanSbd;
         const sName = document.getElementById("student-name")?.value.trim() || "Thí sinh";
         const sClass = document.getElementById("student-class")?.value.trim() || "Lớp";
-        const primaryDocId = `${currentQuizId}_${cleanSbd}`;
         const nowMs = Date.now();
 
-        await client.from('active_sessions').upsert({
-            id: primaryDocId,
-            quiz_id: currentQuizId,
-            sbd: cleanSbd,
-            name: sName,
-            class_name: sClass,
-            category_id: typeof getExamCategory === 'function' ? getExamCategory() : "them-11",
-            last_ping: nowMs
-        }, { onConflict: 'id' });
+        // 1. Thử update dòng hiện tại
+        const { data: updated } = await client.from('active_sessions')
+            .update({ last_ping: nowMs })
+            .match({ quiz_id: currentQuizId, sbd: cleanSbd })
+            .select();
+
+        // 2. Nếu chưa có (hoặc vừa mở lại trình duyệt), chèn mới trực tiếp
+        if (!updated || updated.length === 0) {
+            await client.from('active_sessions').insert([{
+                quiz_id: currentQuizId,
+                sbd: cleanSbd,
+                name: sName,
+                class_name: sClass,
+                category_id: typeof getExamCategory === 'function' ? getExamCategory() : "them-11",
+                is_free: false,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                start_time: examStartTime || nowMs,
+                last_ping: nowMs
+            }]);
+        }
     } catch(e) {}
 }
 
@@ -353,8 +364,7 @@ function clearPresence(sId) {
     const currentQuizId = urlParams.get('id') || "";
 
     if (client && currentQuizId) {
-        const primaryDocId = `${currentQuizId}_${cleanSbd}`;
-        client.from('active_sessions').delete().match({ id: primaryDocId }).then();
+        client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd }).then();
     }
 }
 
