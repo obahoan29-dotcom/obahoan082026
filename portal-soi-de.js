@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-soi-de.js
+// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ LỖI ĐƠ KHI MỞ TRÊN ADMIN)
 // CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
 // =========================================================
 
@@ -19,8 +19,16 @@ let soiDeState = {
     validationErrors: []
 };
 
-// 1. TIÊM TOÀN BỘ GIAO DIỆN VÀ CSS ĐẶC QUYỀN CỦA MODAL SOI ĐỀ
-(function injectSoiDeStylesAndModal() {
+// HÀM ĐỊNH DẠNG TEXT CÂU HỎI AN TOÀN TRÊN INDEX.HTML
+function formatQuestionText(text) {
+    if (!text) return "";
+    return text.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
+        return prefix + '<span style="color: #78350f; font-weight: 800;">// ' + content.trim() + '</span>';
+    });
+}
+
+// 1. TIÊM CSS VÀO HEAD NGAY LẬP TỨC
+function injectSoiDeStyles() {
     const styleId = "soi-de-modal-custom-styles";
     if (document.getElementById(styleId)) return;
 
@@ -29,9 +37,9 @@ let soiDeState = {
     style.innerHTML = `
         /* MODAL OVERLAY 98% */
         .soide-modal-overlay {
-            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.82);
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            z-index: 9999999; display: none; align-items: center; justify-content: center;
+            z-index: 10000005 !important; display: none; align-items: center; justify-content: center;
             padding: 1vh 1vw; box-sizing: border-box; font-family: 'Be Vietnam Pro', 'Inter', sans-serif;
             animation: fadeInSoiDe 0.22s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -41,7 +49,7 @@ let soiDeState = {
             width: 98vw !important; height: 98vh !important;
             max-width: 98vw !important; max-height: 98vh !important;
             background: #ffffff; border-radius: 18px; border: 1.5px solid #cbd5e1;
-            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.45);
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.5);
             display: flex; flex-direction: column; overflow: hidden; position: relative;
         }
 
@@ -172,6 +180,14 @@ let soiDeState = {
         }
     `;
     document.head.appendChild(style);
+}
+
+// 2. KHỞI TẠO VÀ BẢO ĐẢM MODAL LUÔN CÓ MẶT TRONG BODY
+function ensureSoiDeModalInDOM() {
+    injectSoiDeStyles();
+
+    if (document.getElementById("modal-soi-de")) return document.getElementById("modal-soi-de");
+    if (!document.body) return null;
 
     const modalDiv = document.createElement("div");
     modalDiv.className = "soide-modal-overlay";
@@ -266,14 +282,25 @@ let soiDeState = {
         </div>
     `;
     document.body.appendChild(modalDiv);
-
     setupSoiDeDragAndResize();
-})();
+    return modalDiv;
+}
 
-// 2. MỞ VÀ ĐÓNG MODAL SOI ĐỀ
+// Tự động bảo đảm tạo khi DOMContentLoaded
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ensureSoiDeModalInDOM);
+} else {
+    ensureSoiDeModalInDOM();
+}
+
+// 3. MỞ VÀ ĐÓNG MODAL SOI ĐỀ
 function openSoiDeModal(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const modal = document.getElementById("modal-soi-de");
+    
+    let modal = document.getElementById("modal-soi-de");
+    if (!modal) {
+        modal = ensureSoiDeModalInDOM();
+    }
     if (!modal) return;
 
     modal.style.display = "flex";
@@ -291,7 +318,7 @@ function closeSoiDeModal() {
     if (modal) modal.style.display = "none";
 }
 
-// 3. THIẾT LẬP KÉO THẢ VẠCH CHIA ĐÔI & KÉO THẢ TỆP
+// 4. THIẾT LẬP KÉO THẢ VẠCH CHIA ĐÔI & KÉO THẢ TỆP
 function setupSoiDeDragAndResize() {
     const resizer = document.getElementById("soide-resizer");
     const container = document.getElementById("soide-split-body");
@@ -299,7 +326,8 @@ function setupSoiDeDragAndResize() {
     const rightPane = document.getElementById("soide-right-pane");
     const dropZone = document.getElementById("soide-drop-zone");
 
-    // Kéo vạch chia độ rộng
+    if (!resizer || !container || !leftPane || !rightPane) return;
+
     let isDragging = false;
 
     resizer.addEventListener("mousedown", (e) => {
@@ -313,7 +341,7 @@ function setupSoiDeDragAndResize() {
         const rect = container.getBoundingClientRect();
         let offsetX = e.clientX - rect.left;
         let percent = (offsetX / rect.width) * 100;
-        percent = Math.min(Math.max(15, percent), 85); // Giới hạn từ 15% đến 85%
+        percent = Math.min(Math.max(15, percent), 85);
         soiDeState.splitRatio = percent;
         leftPane.style.width = `${percent}%`;
         rightPane.style.width = `${100 - percent}%`;
@@ -326,7 +354,6 @@ function setupSoiDeDragAndResize() {
         }
     });
 
-    // Kéo thả tệp JSON / JS vào khu vực drop
     if (dropZone) {
         dropZone.addEventListener("dragover", (e) => {
             e.preventDefault();
@@ -344,7 +371,6 @@ function setupSoiDeDragAndResize() {
         });
     }
 
-    // Cho phép kéo thả trực tiếp lên toàn bộ nửa phải
     if (rightPane) {
         rightPane.addEventListener("dragover", (e) => e.preventDefault());
         rightPane.addEventListener("drop", (e) => {
@@ -356,7 +382,7 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-// 4. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
+// 5. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
 function initDefaultSoiDeExam() {
     soiDeState.examData = {
         title: "ĐỀ KIỂM TRA ĐỊNH KỲ TOÁN 11",
@@ -394,7 +420,7 @@ function initDefaultSoiDeExam() {
     renderSoiDeBothSides();
 }
 
-// 5. UPLOAD VÀ ĐỌC FILE JSON / JS / TXT
+// 6. UPLOAD VÀ ĐỌC FILE JSON / JS / TXT
 function triggerSoiDeUpload() {
     const input = document.getElementById("soide-file-input");
     if (input) {
@@ -409,29 +435,40 @@ function handleSoiDeFileSelected(input) {
     }
 }
 
+function robustParseExamScriptOrJson(text) {
+    if (!text) return null;
+    let clean = String(text).trim();
+
+    // 1. Thử parse dạng JSON thuần
+    try {
+        return JSON.parse(clean);
+    } catch(e) {}
+
+    // 2. Thử parse dạng script (const examData = { ... }; /* ... */)
+    try {
+        let scriptText = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, 'return ');
+        return new Function(scriptText)();
+    } catch(e) {
+        clean = clean.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, '').trim();
+        clean = clean.replace(/;?(\s*\/\*[\s\S]*?\*\/|\s*\/\/.*)*\s*$/, '').trim();
+        if (clean.endsWith(';')) clean = clean.slice(0, -1).trim();
+        try {
+            return new Function("return (" + clean + ");")();
+        } catch(e2) {
+            return null;
+        }
+    }
+}
+
 function readAndParseSoiDeFile(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
         const text = e.target.result;
         try {
-            let parsed = null;
-            // 1. Thử parse dạng JSON chuẩn
-            try {
-                parsed = JSON.parse(text);
-            } catch(jsonErr) {
-                // 2. Thử parse dạng file JavaScript (const examData = {...})
-                let clean = text.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, 'return ');
-                clean = clean.replace(/;?\s*$/, '');
-                try {
-                    parsed = new Function(clean)();
-                } catch(funcErr) {
-                    throw new Error("Không thể phân tích cấu trúc file! Vui lòng đảm bảo file JSON hoặc JS đúng cú pháp.");
-                }
-            }
+            let parsed = robustParseExamScriptOrJson(text);
 
-            if (!parsed) throw new Error("File rỗng hoặc không có dữ liệu!");
+            if (!parsed) throw new Error("File rỗng hoặc không đúng cấu trúc (JSON / JS object)!");
 
-            // Chuẩn hóa cấu trúc
             if (Array.isArray(parsed)) {
                 soiDeState.examData = {
                     title: file.name.replace(/\.[^/.]+$/, ""),
@@ -459,13 +496,13 @@ function readAndParseSoiDeFile(file) {
     reader.readAsText(file);
 }
 
-// 6. RENDER ĐỒNG THỜI CẢ 2 NỬA (TRÁI VÀ PHẢI)
+// 7. RENDER ĐỒNG THỜI CẢ 2 NỬA (TRÁI VÀ PHẢI)
 function renderSoiDeBothSides() {
     renderSoiDeRightEditor();
     renderSoiDeLeftLivePreview();
 }
 
-// 7. CẬP NHẬT THÔNG TIN METADATA (TÊN ĐỀ, MÃ ĐỀ, PHÚT)
+// 8. CẬP NHẬT THÔNG TIN METADATA (TÊN ĐỀ, MÃ ĐỀ, PHÚT)
 function updateSoiDeMeta() {
     const titleIn = document.getElementById("soide-meta-title");
     const madeIn = document.getElementById("soide-meta-made");
@@ -480,7 +517,7 @@ function updateSoiDeMeta() {
     debouncedLivePreview();
 }
 
-// 8. RENDER NỬA PHẢI: TRÌNH SOẠN THẢO (DẠNG CARDS HOẶC RAW)
+// 9. RENDER NỬA PHẢI: TRÌNH SOẠN THẢO (DẠNG CARDS HOẶC RAW)
 function renderSoiDeRightEditor() {
     const metaTitle = document.getElementById("soide-meta-title");
     const metaMade = document.getElementById("soide-meta-made");
@@ -590,11 +627,10 @@ function renderSoiDeRightEditor() {
         cardsContainer.appendChild(card);
     });
 
-    // Cập nhật Raw Editor
     updateRawTextFromState();
 }
 
-// 9. CÁC HÀM CẬP NHẬT TRƯỜNG CÂU HỎI
+// 10. CÁC HÀM CẬP NHẬT TRƯỜNG CÂU HỎI
 function updateSoiDeQuestionText(idx, val) {
     if (soiDeState.examData.questions[idx]) {
         soiDeState.examData.questions[idx].question = val;
@@ -705,9 +741,8 @@ function addNewQuestionToSoiDe() {
     }, 100);
 }
 
-// 10. HÀM XÓA CÂU HỎI (DÙNG ĐƯỢC TỪ CẢ GÓC PHẢI TRÊN Ở NỬA TRÁI LẪN NỬA PHẢI)
+// 11. HÀM XÓA CÂU HỎI
 function deleteQuestionFromSoiDe(qIdx) {
-    const q = soiDeState.examData.questions[qIdx];
     const qNum = qIdx + 1;
     if (!confirm(`⚠️ Bạn có chắc chắn muốn XÓA Câu ${qNum} không?`)) return;
 
@@ -722,7 +757,7 @@ function deleteQuestionFromLeftPreview(qId) {
     }
 }
 
-// 11. ĐIỀU KHIỂN CHẾ ĐỘ BIÊN SOẠN (KHỐI CARDS / RAW CODE)
+// 12. ĐIỀU KHIỂN CHẾ ĐỘ BIÊN SOẠN (KHỐI CARDS / RAW CODE)
 function setSoiDeEditorMode(mode) {
     soiDeState.editorMode = mode;
     const btnCards = document.getElementById("btn-mode-cards");
@@ -781,7 +816,7 @@ function debouncedFunction(fn, delay = 250) {
     soiDeState.debounceTimer = setTimeout(fn, delay);
 }
 
-// 12. KIỂM TRA LỖI CÚ PHÁP VÀ ĐỒNG BỘ HIỂN THỊ CẢNH BÁO
+// 13. KIỂM TRA LỖI CÚ PHÁP VÀ ĐỒNG BỘ HIỂN THỊ CẢNH BÁO
 function validateExamSyntax(questions) {
     const errors = [];
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -794,7 +829,6 @@ function validateExamSyntax(questions) {
         if (!q.question || !q.question.trim()) {
             errors.push(`Câu ${qNum}: Nội dung câu hỏi đang để trống!`);
         } else {
-            // Kiểm tra cân bằng dấu $
             const dollarMatches = q.question.match(/(^|[^\\])\$/g);
             if (dollarMatches && dollarMatches.length % 2 !== 0) {
                 errors.push(`Câu ${qNum}: Dấu công thức toán '$' chưa đóng mở cân bằng!`);
@@ -827,7 +861,7 @@ function setValidationStatus(isValid, msg) {
     }
 }
 
-// 13. RENDER NỬA TRÁI: LIVE RENDER CHI TIẾT TỪNG CÂU & KÈM NÚT XÓA CÂU
+// 14. RENDER NỬA TRÁI: LIVE RENDER CHI TIẾT TỪNG CÂU & KÈM NÚT XÓA CÂU
 function renderSoiDeLeftLivePreview() {
     const previewContainer = document.getElementById("soide-live-preview-content");
     const countEl = document.getElementById("soide-live-qcount");
@@ -836,7 +870,6 @@ function renderSoiDeLeftLivePreview() {
     const questions = soiDeState.examData.questions || [];
     if (countEl) countEl.innerText = questions.length;
 
-    // Kiểm tra lỗi
     const errors = validateExamSyntax(questions);
     if (errors.length > 0) {
         setValidationStatus(false, `⚠️ Có ${errors.length} cảnh báo: ${errors[0]}`);
@@ -857,7 +890,6 @@ function renderSoiDeLeftLivePreview() {
         const displayIndex = idx + 1;
         const qId = q.id;
 
-        // Trích xuất ảnh hiệu quả
         let imgUrl = "";
         if (q.imageUrl && q.imageUrl.trim()) imgUrl = q.imageUrl.trim();
         else if (q.imageKey && imageMap[q.imageKey]) imgUrl = imageMap[q.imageKey].trim();
@@ -870,7 +902,6 @@ function renderSoiDeLeftLivePreview() {
                 </div>
             </div>` : `<div class="quiz-img-container" id="soide-img-box-${qId}" style="display:none;"></div>`;
 
-        // Khối Dán ảnh Snipping Tool (Ctrl+V) & Tải tệp ảnh trực tiếp
         const imgKey = q.imageKey || `img_q_${qId}`;
         const uploaderHtml = `
             <div class="admin-img-uploader-zone" id="zone-soide-${qId}" tabindex="0" title="Click vào đây và bấm Ctrl+V để dán ảnh chụp màn hình Snipping Tool" style="margin: 6px 0 10px 0; padding: 6px 10px;">
@@ -967,16 +998,14 @@ function renderSoiDeLeftLivePreview() {
 
     previewContainer.innerHTML = html;
 
-    // Gắn lắng nghe paste clipboard Snipping Tool cho nửa trái
     setupSoiDePasteListeners();
 
-    // Render công thức LaTeX MathJax
     if (window.MathJax && MathJax.typesetPromise) {
         MathJax.typesetPromise([previewContainer]).catch(() => {});
     }
 }
 
-// 14. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V) TRỰC TIẾP TRONG BẢNG SOI ĐỀ
+// 15. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V) TRỰC TIẾP TRONG BẢNG SOI ĐỀ
 function setupSoiDePasteListeners() {
     document.querySelectorAll('.soide-left-pane .question-card').forEach(card => {
         card.addEventListener('paste', function(e) {
@@ -1020,7 +1049,6 @@ async function uploadSoiDeImage(file, qId, imgKey) {
     }
 
     try {
-        // Tận dụng hàm upload có sẵn trong exam-img-uploader.js nếu có, hoặc tải ImgBB
         let directUrl = "";
         const reader = new FileReader();
         const base64Promise = new Promise((resolve, reject) => {
@@ -1031,7 +1059,6 @@ async function uploadSoiDeImage(file, qId, imgKey) {
 
         const b64 = await base64Promise;
 
-        // Nếu có ImgBB Key
         if (typeof IMGBB_API_KEY !== "undefined" && IMGBB_API_KEY && !IMGBB_API_KEY.includes("THAY_API_KEY")) {
             const formData = new FormData();
             formData.append("image", b64);
@@ -1042,7 +1069,6 @@ async function uploadSoiDeImage(file, qId, imgKey) {
             }
         }
 
-        // Nếu không có hoặc lỗi, dùng Google Drive GAS
         if (!directUrl && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL) {
             const driveRes = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
                 method: "POST",
@@ -1055,11 +1081,9 @@ async function uploadSoiDeImage(file, qId, imgKey) {
         }
 
         if (!directUrl) {
-            // Fallback lưu Data URI trực tiếp để xem được ngay
             directUrl = `data:${file.type || "image/png"};base64,${b64}`;
         }
 
-        // Cập nhật vào cấu trúc đề
         if (!soiDeState.examData.images) soiDeState.examData.images = {};
         soiDeState.examData.images[imgKey] = directUrl;
         const targetQ = soiDeState.examData.questions.find(item => String(item.id) === String(qId));
@@ -1093,7 +1117,7 @@ function deleteSoiDeQuestionImage(qId, imgKey) {
     renderSoiDeBothSides();
 }
 
-// 15. XUẤT FILE JSON ĐỀ THI
+// 16. XUẤT FILE JSON ĐỀ THI
 function downloadSoiDeJson() {
     try {
         const jsonStr = JSON.stringify(soiDeState.examData, null, 2);
@@ -1135,6 +1159,7 @@ function escapeHtmlForAttr(text) {
 // ĐĂNG KÝ TOÀN CỤC CÁC HÀM
 window.openSoiDeModal = openSoiDeModal;
 window.closeSoiDeModal = closeSoiDeModal;
+window.ensureSoiDeModalInDOM = ensureSoiDeModalInDOM;
 window.triggerSoiDeUpload = triggerSoiDeUpload;
 window.handleSoiDeFileSelected = handleSoiDeFileSelected;
 window.addNewQuestionToSoiDe = addNewQuestionToSoiDe;
