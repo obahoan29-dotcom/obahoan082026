@@ -1,6 +1,5 @@
 /* ========================================================= */
-/* FILE: thi-exam.css                                        */
-/* GIAO DIỆN CÂU HỎI, ĐIỀN ĐÁP ÁN, BẢNG ĐÚNG SAI & MODAL NỘP */
+/* FILE: thi-exam.css (BẢN ĐẦY ĐỦ 100% CÓ BỘ STYLE PHẦN I-IV)*/
 /* ========================================================= */
 
 .container { 
@@ -438,205 +437,120 @@
 @keyframes spin { 100% { transform: rotate(360deg); } }
 @keyframes pulseWait { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: 0.8; } 100% { transform: scale(1); opacity: 1; } }
 
-.share-export-modal-card {
-    max-width: 420px !important;
-    padding: 20px 18px !important;
-    text-align: left !important;
+/* ========================================================= */
+/* BỘ STYLE MỚI: PHÂN ĐOẠN PHẦN I, II, III, IV & PHÂN MÀU 4 PHẦN */
+/* ========================================================= */
+
+/* 1. NÚT PHÂN ĐOẠN PHẦN I, II, III, IV (MÀU VÀNG KIM SANG TRỌNG) */
+.q-part-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: linear-gradient(135deg, #fef08a 0%, #facc15 50%, #eab308 100%) !important;
+    color: #854d0e !important;
+    border: 1.5px solid #ca8a04 !important;
+    border-radius: 14px !important;
+    padding: 2px 9px !important;
+    font-size: 0.76rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.3px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    box-shadow: 0 2px 6px rgba(234, 179, 8, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    margin: 0 2px !important;
+}
+.q-part-badge:hover {
+    transform: translateY(-1px) scale(1.06) !important;
+    filter: brightness(1.08) !important;
+    box-shadow: 0 4px 10px rgba(234, 179, 8, 0.45) !important;
+}
+.q-part-badge:active {
+    transform: translateY(1px) scale(0.96) !important;
 }
 
-.share-modal-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-    border-bottom: 1.5px solid #f1f5f9;
-    padding-bottom: 12px;
+/* 2. MÀU Ô SỐ CÂU PHẦN 1: XANH DƯƠNG (BLUE) */
+.q-circle.part-1 {
+    background: #f0f9ff !important;
+    border-color: #38bdf8 !important;
+    color: #0369a1 !important;
 }
-.share-modal-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #0284c7, #0369a1);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+.q-circle.part-1:hover {
+    border-color: #0284c7 !important;
+    background: #e0f2fe !important;
 }
-.share-modal-title {
-    font-size: 1.15rem;
-    font-weight: 900;
-    color: #0f172a;
-    line-height: 1.25;
-}
-.share-modal-subtitle {
-    font-size: 0.85rem;
-    color: #64748b;
-    font-weight: 600;
-    margin-top: 3px;
-    line-height: 1.35;
+.q-circle.part-1.answered {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+    border-color: #0284c7 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.38) !important;
 }
 
-.share-options-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+/* 3. MÀU Ô SỐ CÂU PHẦN 2: TÍM HOÀNG GIA (PURPLE / INDIGO) */
+.q-circle.part-2 {
+    background: #faf5ff !important;
+    border-color: #c084fc !important;
+    color: #6b21a8 !important;
+}
+.q-circle.part-2:hover {
+    border-color: #9333ea !important;
+    background: #f3e8ff !important;
+}
+.q-circle.part-2.partial {
+    background: #f5d0fe !important;
+    border-color: #d946ef !important;
+    color: #86198f !important;
+}
+.q-circle.part-2.answered {
+    background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%) !important;
+    border-color: #7c3aed !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.38) !important;
 }
 
-.btn-share-option {
-    width: 100%;
-    padding: 12px 14px;
-    border-radius: 13px;
-    border: 1.5px solid #cbd5e1;
-    background: #ffffff;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+/* 4. MÀU Ô SỐ CÂU PHẦN 3: XANH NGỌC LỤC BẢO (TEAL / EMERALD) */
+.q-circle.part-3 {
+    background: #f0fdfa !important;
+    border-color: #2dd4bf !important;
+    color: #0f766e !important;
 }
-.btn-share-option:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+.q-circle.part-3:hover {
+    border-color: #0d9488 !important;
+    background: #ccfbf1 !important;
 }
-.btn-share-option:active {
-    transform: translateY(1.5px) scale(0.98);
+.q-circle.part-3.answered {
+    background: linear-gradient(135deg, #0d9488 0%, #059669 100%) !important;
+    border-color: #0d9488 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(13, 148, 136, 0.38) !important;
 }
 
-.btn-opt-download {
-    border-color: #93c5fd;
-    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+/* 5. MÀU Ô SỐ CÂU PHẦN 4: CAM RỰC RỠ (ORANGE / AMBER) */
+.q-circle.part-4 {
+    background: #fff7ed !important;
+    border-color: #fb923c !important;
+    color: #c2410c !important;
 }
-.btn-opt-download:hover {
-    border-color: #0284c7;
+.q-circle.part-4:hover {
+    border-color: #ea580c !important;
+    background: #ffedd5 !important;
 }
-
-.btn-opt-native-share {
-    border-color: #86efac;
-    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-}
-.btn-opt-native-share:hover {
-    border-color: #16a34a;
-}
-
-.share-opt-icon {
-    font-size: 26px;
-    flex-shrink: 0;
-    line-height: 1;
-}
-.share-opt-text {
-    flex: 1;
-    min-width: 0;
-}
-.share-opt-text b {
-    display: block;
-    font-size: 0.98rem;
-    color: #0f172a;
-    font-weight: 800;
-    margin-bottom: 2px;
-}
-.share-opt-text span {
-    display: block;
-    font-size: 0.8rem;
-    color: #64748b;
-    font-weight: 600;
-    line-height: 1.3;
-}
-.share-opt-arrow {
-    font-size: 1.1rem;
-    font-weight: 900;
-    color: #94a3b8;
-    flex-shrink: 0;
+.q-circle.part-4.answered {
+    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+    border-color: #ea580c !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(234, 88, 12, 0.38) !important;
 }
 
-.share-direct-channels {
-    background: #f8fafc;
-    border-radius: 13px;
-    border: 1px solid #e2e8f0;
-    padding: 12px;
-    margin-top: 4px;
-}
-.share-channel-label {
-    font-size: 0.84rem;
-    font-weight: 800;
-    color: #334155;
-    margin-bottom: 8px;
-}
-.share-channel-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
-.btn-channel-btn {
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: none;
-    cursor: pointer;
-    font-weight: 800;
-    font-size: 0.92rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    color: #ffffff;
-    transition: all 0.15s ease;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-}
-.btn-channel-btn:hover {
-    filter: brightness(1.08);
-    transform: translateY(-1px);
-}
-.btn-channel-btn:active {
-    transform: translateY(2px) scale(0.96);
-}
-
-.btn-chan-zalo {
-    background: linear-gradient(135deg, #0068ff 0%, #004ecc 100%);
-    box-shadow: 0 3px 10px rgba(0, 104, 255, 0.35);
-}
-.btn-chan-messenger {
-    background: linear-gradient(135deg, #0084ff 0%, #b038ff 100%);
-    box-shadow: 0 3px 10px rgba(176, 56, 255, 0.35);
-}
-.chan-icon {
-    font-size: 1.1rem;
-    line-height: 1;
-}
-
-.share-channel-tip {
-    font-size: 0.78rem;
-    color: #64748b;
-    margin-top: 8px;
-    line-height: 1.4;
-    text-align: center;
-}
-
-.share-modal-footer {
-    margin-top: 14px;
-    border-top: 1.5px solid #f1f5f9;
-    padding-top: 10px;
-}
-.btn-close-share-modal {
-    width: 100%;
-    padding: 10px;
-    border: 1.5px solid #cbd5e1;
-    background: #f1f5f9;
-    border-radius: 10px;
-    font-weight: 800;
-    font-size: 0.92rem;
-    color: #475569;
-    cursor: pointer;
-    transition: 0.15s;
-    text-align: center;
-}
-.btn-close-share-modal:hover {
-    background: #e2e8f0;
-    color: #0f172a;
+/* TRẠNG THÁI ACTIVE TRÙNG KHỚP CÂU ĐANG XEM */
+.q-circle.active {
+    outline: 2px solid #ef4444 !important;
+    outline-offset: 1px !important;
+    transform: scale(1.18) !important;
+    font-weight: 900 !important;
+    z-index: 5 !important;
 }
 
 @media(max-width: 640px) { 
@@ -699,15 +613,12 @@
     .progress-pill { padding: 2px 8px; }
     .progress-val { font-size: 0.75rem; }
     .q-circle { width: 22px; height: 22px; font-size: 0.72rem; }
+    .q-part-badge { font-size: 0.7rem !important; padding: 1px 7px !important; }
 
     .result-summary-card { padding: 16px 12px; }
     .result-exam-title-badge { font-size: 0.85rem; padding: 5px 12px; }
     .result-summary-title { font-size: 1.2rem; }
     .stat-num { font-size: 1.6rem; }
-
-    .share-export-modal-card { padding: 16px 14px !important; }
-    .share-opt-text b { font-size: 0.9rem; }
-    .share-opt-text span { font-size: 0.75rem; }
 }
 
 #global-loading { 
