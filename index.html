@@ -148,6 +148,26 @@
     <!-- Thư viện Chart.js vẽ biểu đồ hình cột thống kê điểm -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- Cấu hình hiển thị công thức Toán MathJax SVG -->
+    <script>
+        window.MathJax = { 
+            tex: { 
+                inlineMath: [['$', '$'], ['\\(', '\\)']], 
+                displayMath: [['$$', '$$'], ['\\[', '\\]']], 
+                processEscapes: true 
+            },
+            svg: {
+                scale: 1.05,
+                displayAlign: 'center',
+                fontCache: 'global'
+            },
+            options: { 
+                enableMenu: false 
+            } 
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
     <!-- TẬP TIN DỮ LIỆU TÀI KHOẢN HỌC SINH -->
     <script src="accounts-data.js"></script>
 
@@ -185,6 +205,9 @@
     <script src="portal-ui-cards.js"></script>
     <script src="portal-ui-article.js"></script>
     <script src="portal-exam-printer.js"></script>
+
+    <!-- MODULE MỚI: CÔNG CỤ SOI ĐỀ THI & BIÊN TẬP THỜI GIAN THỰC -->
+    <script src="portal-soi-de.js"></script>
 </head>
 <body>
 
@@ -282,9 +305,13 @@
                 <div class="admin-input-group">
                     <div class="cat-quick-actions">
                         <label style="margin-bottom:0;">Lớp / Chuyên mục đăng vào:</label>
-                        <div style="display:flex; gap:6px;">
+                        <div style="display:flex; gap:6px; align-items:center;">
                             <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(true)">Tất cả</button>
                             <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(false)">Bỏ chọn</button>
+                            <!-- NÚT SOI ĐỀ MÀU XANH LÁ CÂY VÔ CÙNG THÚ VỊ Ở BÊN PHẢI CÙNG HÀNG -->
+                            <button type="button" class="btn-cat-quick btn-soi-de" onclick="openSoiDeModal(event)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: 1px solid #34d399; font-weight: 900; margin-left: 4px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);">
+                                🔍 Soi đề
+                            </button>
                         </div>
                     </div>
                     <div class="category-checkbox-grid" id="admin-category-checkbox-list">
