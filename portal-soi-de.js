@@ -1,6 +1,7 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN TÍCH HỢP 2 VÙNG PASTE VÀ CUỘN ĐỒNG BỘ 2 CỘT)
+// FILE: portal-soi-de.js (BẢN NÂNG CẤP TOÀN DIỆN 4 YÊU CẦU)
 // CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
+// TÍCH HỢP RAW BOX TỪNG CÂU, PHÂN TÁCH //----------- & ĐĂNG ĐỀ 8 LỚP
 // =========================================================
 
 let soiDeState = {
@@ -16,8 +17,21 @@ let soiDeState = {
     splitRatio: 50,      // % độ rộng nửa trái
     isDraggingSplit: false,
     debounceTimer: null,
-    validationErrors: []
+    validationErrors: [],
+    rawEditingCardIds: new Set() // Lưu danh sách các câu đang bật khung mã thô
 };
+
+// DANH SÁCH 8 LỚP CHUẨN ĐỂ ĐĂNG ĐỀ
+const SOI_DE_AVAILABLE_CLASSES = [
+    { id: "lop-11a", name: "🏫 Lớp 11A" },
+    { id: "lop-11c", name: "🏫 Lớp 11C" },
+    { id: "lop-10p", name: "🏫 Lớp 10P" },
+    { id: "lop-11e", name: "🏫 Lớp 11E" },
+    { id: "them-10", name: "📐 Thêm 10" },
+    { id: "them-11", name: "✍️ Thêm 11" },
+    { id: "them-12", name: "🎓 Thêm 12" },
+    { id: "hsg-toan-11", name: "🏆 HSG Toán 11" }
+];
 
 // BẢNG MÀU DỊU MẮT LUÂN PHIÊN (PASTEL THEME PALETTES) ĐỒNG BỘ CHO CẢ 2 CỘT
 const SOI_DE_THEME_PALETTES = [
@@ -29,7 +43,7 @@ const SOI_DE_THEME_PALETTES = [
     { border: '#eab308', bg: '#fefce8', badgeBg: 'linear-gradient(135deg, #ca8a04, #a16207)', text: '#854d0e', lightBorder: '#fef08a' }  // Vàng mơ
 ];
 
-// HÀM ĐỊNH DẠNG TEXT CÂU HỎI AN TOÀN TRÊN MỌI TRANG
+// HÀM ĐỊNH DẠNG TEXT CÂU HỎI AN TOÀN
 function formatQuestionText(text) {
     if (!text) return "";
     return text.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
@@ -37,7 +51,7 @@ function formatQuestionText(text) {
     });
 }
 
-// HÀM TỰ ĐỘNG GIÃN CHIỀU CAO TEXTAREA ĐỂ HIỂN THỊ ĐỦ 100% NỘI DUNG KHÔNG BỊ CẮT CHỮ
+// TỰ ĐỘNG GIÃN CHIỀU CAO TEXTAREA
 function autoResizeTextarea(el) {
     if (!el) return;
     el.style.height = 'auto';
@@ -45,7 +59,7 @@ function autoResizeTextarea(el) {
 }
 
 function autoResizeAllTextareas() {
-    const textareas = document.querySelectorAll('#soide-cards-container textarea.soide-latex-input');
+    const textareas = document.querySelectorAll('#soide-cards-container textarea.soide-latex-input, #soide-cards-container textarea.soide-card-raw-textarea');
     textareas.forEach(t => autoResizeTextarea(t));
 }
 
@@ -57,9 +71,9 @@ function injectSoiDeStyles() {
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* MODAL OVERLAY 98% */
+        /* MODAL OVERLAY */
         .soide-modal-overlay {
-            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.86);
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88);
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             z-index: 10000005 !important; display: none; align-items: center; justify-content: center;
             padding: 1vh 1vw; box-sizing: border-box; font-family: 'Be Vietnam Pro', 'Inter', sans-serif;
@@ -82,17 +96,22 @@ function injectSoiDeStyles() {
             color: #ffffff; border-bottom: 2px solid #10b981; flex-shrink: 0; gap: 8px;
         }
         .soide-header-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-        .soide-header-title { font-size: 14.5px; font-weight: 900; color: #34d399; display: flex; align-items: center; gap: 6px; }
-        .soide-header-tools { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+        .soide-header-title { font-size: 14px; font-weight: 900; color: #34d399; display: flex; align-items: center; gap: 6px; }
+        .soide-header-tools { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; position: relative; }
 
         .btn-soide-tool {
             padding: 4px 10px; border-radius: 7px; font-size: 11.5px; font-weight: 800;
             border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;
-            transition: all 0.15s ease; user-select: none; white-space: nowrap;
+            transition: all 0.15s ease; user-select: none; white-space: nowrap; font-family: inherit;
         }
         .btn-soide-tool:hover { filter: brightness(1.12); transform: translateY(-1px); }
         .btn-soide-tool:active { transform: translateY(1.5px) scale(0.96); }
 
+        .btn-soide-upload-class {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: #ffffff !important; box-shadow: 0 2px 7px rgba(14, 165, 233, 0.4);
+            border: 1px solid #7dd3fc !important;
+        }
         .btn-soide-upload { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35); }
         .btn-soide-download { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; }
         .btn-soide-add { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #fff; }
@@ -100,6 +119,26 @@ function injectSoiDeStyles() {
         .btn-soide-switch.active { background: #0284c7; color: #ffffff; border-color: #38bdf8; }
         .btn-soide-close { background: #334155; color: #f87171; border-radius: 50%; width: 28px; height: 28px; padding: 0; justify-content: center; font-size: 14px; font-weight: 900; }
         .btn-soide-close:hover { background: #ef4444; color: #ffffff; }
+
+        /* DROPDOWN CHỌN 8 LỚP ĐĂNG ĐỀ */
+        .soide-class-dropdown {
+            position: absolute; top: calc(100% + 8px); right: 120px; width: 260px;
+            background: #ffffff; border-radius: 14px; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.45);
+            border: 1.5px solid #0284c7; padding: 10px 12px; z-index: 9999999;
+            display: none; flex-direction: column; gap: 8px; animation: popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .soide-class-dropdown.show { display: flex; }
+        .soide-class-list-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 220px; overflow-y: auto; padding: 4px 2px;
+        }
+        .soide-class-chk-item {
+            display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700;
+            color: #1e293b; background: #f8fafc; border: 1.2px solid #cbd5e1; border-radius: 7px;
+            padding: 5px 6px; cursor: pointer; user-select: none; transition: 0.15s;
+        }
+        .soide-class-chk-item:hover { border-color: #0284c7; background: #f0f9ff; }
+        .soide-class-chk-item.checked { border-color: #0284c7; background: #e0f2fe; color: #0369a1; }
+        .soide-class-chk-item input { margin: 0; accent-color: #0284c7; cursor: pointer; }
 
         /* BODY SPLIT */
         .soide-split-body {
@@ -157,67 +196,60 @@ function injectSoiDeStyles() {
             display: flex; background: #f0fdf4; border: 1.2px solid #bbf7d0; color: #16a34a;
         }
 
-        /* KHỐI SOẠN THẢO BÊN PHẢI (CHỮ TO, DÒNG SÁT NHAU, NỔI KHỐI MÀU NHẸ) */
+        /* KHỐI SOẠN THẢO BÊN PHẢI */
         .soide-editor-qcard {
-            border-radius: 12px;
-            padding: 8px 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
+            border-radius: 12px; padding: 8px 10px;
+            display: flex; flex-direction: column; gap: 5px;
             box-shadow: 0 2px 7px rgba(0, 0, 0, 0.04);
-            transition: all 0.15s ease;
-            position: relative;
+            transition: all 0.15s ease; position: relative;
         }
         .soide-editor-qcard:focus-within {
             box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.3) !important;
         }
 
-        /* 2 VÙNG PASTE MỜ MỜ TRÊN ĐẦU MỖI CÂU */
+        /* 2 VÙNG PASTE */
         .soide-paste-zones-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            margin-bottom: 5px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px;
         }
         .soide-paste-box {
-            border: 1.5px dashed #94a3b8;
-            background: rgba(255, 255, 255, 0.55);
-            border-radius: 7px;
-            padding: 4px 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            font-size: 11.5px;
-            font-weight: 700;
-            color: #64748b;
-            cursor: pointer;
-            user-select: none;
-            transition: all 0.18s ease;
-            outline: none;
-            opacity: 0.76;
-            line-height: 1.3;
+            border: 1.5px dashed #94a3b8; background: rgba(255, 255, 255, 0.65);
+            border-radius: 7px; padding: 5px 8px; display: flex; align-items: center;
+            justify-content: center; gap: 5px; font-size: 11.5px; font-weight: 700;
+            color: #475569; cursor: pointer; user-select: none; transition: all 0.18s ease;
+            outline: none; line-height: 1.3;
         }
         .soide-paste-box:hover {
-            opacity: 1;
-            background: #ffffff;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-        }
-        .soide-paste-box:focus {
-            opacity: 1;
-            border-style: solid;
+            opacity: 1; background: #ffffff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
         }
         .soide-paste-box.zone-overwrite:hover, .soide-paste-box.zone-overwrite:focus {
-            border-color: #0284c7;
-            color: #0369a1;
-            background: #e0f2fe;
+            border-color: #0284c7; color: #0369a1; background: #e0f2fe;
             box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25);
         }
         .soide-paste-box.zone-insert:hover, .soide-paste-box.zone-insert:focus {
-            border-color: #10b981;
-            color: #047857;
-            background: #dcfce7;
+            border-color: #10b981; color: #047857; background: #dcfce7;
             box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+        }
+
+        /* KHUNG NHẬP MÃ NGUỒN THÔ TẠI TỪNG CÂU (YÊU CẦU 1 & 2) */
+        .soide-card-raw-box {
+            background: #0f172a; border-radius: 9px; padding: 8px;
+            display: flex; flex-direction: column; gap: 6px; border: 1.5px solid #38bdf8;
+            margin-top: 4px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+        }
+        .soide-card-raw-header {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 11.5px; font-weight: 800; color: #38bdf8;
+        }
+        .soide-card-raw-textarea {
+            width: 100%; min-height: 110px; padding: 7px;
+            font-family: 'Consolas', 'Courier New', monospace; font-size: 13.5px !important;
+            font-weight: 600; line-height: 1.4; color: #f8fafc; background: #1e293b;
+            border: 1px solid #475569; border-radius: 7px; outline: none; box-sizing: border-box;
+            resize: vertical;
+        }
+        .soide-card-raw-textarea:focus { border-color: #38bdf8; }
+        .soide-card-raw-btn-row {
+            display: flex; align-items: center; justify-content: flex-end; gap: 6px;
         }
 
         .soide-qcard-head {
@@ -228,24 +260,22 @@ function injectSoiDeStyles() {
             font-weight: 900; font-size: 13.5px; display: flex; align-items: center; gap: 5px;
         }
 
-        /* NÚT VÀ CỤM THAO TÁC TRÊN ĐẦU CÂU (CẢ 2 CỘT) */
         .soide-head-actions {
             display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
         }
         .btn-soide-mini {
             padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 800;
             cursor: pointer; display: inline-flex; align-items: center; gap: 2px;
-            border: none; transition: 0.15s; user-select: none; line-height: 1.2;
+            border: none; transition: 0.15s; user-select: none; line-height: 1.2; font-family: inherit;
         }
         .btn-soide-mini:hover { filter: brightness(1.12); transform: translateY(-1px); }
         .btn-soide-mini:active { transform: translateY(1px) scale(0.96); }
 
-        .btn-soide-add-inline {
-            background: #e0f2fe; color: #0284c7; border: 1px solid #7dd3fc;
-        }
-        .btn-soide-del-inline {
-            background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;
-        }
+        .btn-soide-raw-toggle { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-soide-raw-toggle:hover { background: #0284c7; color: #fff; border-color: #0284c7; }
+        .btn-soide-add-inline { background: #e0f2fe; color: #0284c7; border: 1px solid #7dd3fc; }
+        .btn-soide-del-inline { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+        
         .soide-part-select-mini {
             padding: 2px 5px; border-radius: 6px; font-size: 11px; font-weight: 900;
             background: #ffffff; color: #1e293b; border: 1.2px solid #cbd5e1; outline: none;
@@ -257,18 +287,12 @@ function injectSoiDeStyles() {
             display: flex; justify-content: space-between; line-height: 1.25;
         }
 
-        /* Ô NHẬP LATEX: CHỮ TO, TỰ ĐỘNG GIÃN CHIỀU CAO 100% THEO NỘI DUNG */
         .soide-latex-input {
             width: 100%; padding: 6px 9px; border: 1.5px solid #cbd5e1; border-radius: 7px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 15px !important; /* CHỮ TO RÕ RÀNG */
-            font-weight: 600; line-height: 1.45;
-            outline: none; box-sizing: border-box; resize: vertical;
-            color: #0f172a; background: #ffffff;
-            field-sizing: content; /* CHUẨN CSS HIỆN ĐẠI: TỰ ĐỘNG CAO ĐỦ 100% NỘI DUNG */
-            min-height: 38px;
-            overflow-y: hidden; /* LOẠI BỎ THANH CUỘN LÀM CẮT ĐÔI DÒNG CHỮ */
-            transition: border-color 0.15s, background-color 0.15s;
+            font-family: 'Consolas', 'Courier New', monospace; font-size: 15px !important;
+            font-weight: 600; line-height: 1.45; outline: none; box-sizing: border-box; resize: vertical;
+            color: #0f172a; background: #ffffff; field-sizing: content; min-height: 38px;
+            overflow-y: hidden; transition: border-color 0.15s, background-color 0.15s;
         }
         .soide-latex-input:focus { border-color: #0284c7; background: #f8fafc; }
 
@@ -278,30 +302,14 @@ function injectSoiDeStyles() {
         .soide-tf-editor-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .soide-tf-editor-table td { padding: 3px 4px; border: 1px solid #e2e8f0; vertical-align: middle; }
 
-        /* CỘT TRÁI: ĐỊNH DẠNG ĐÁP ÁN CHUẨN BỘ GIÁO DỤC */
-        .options-list.opt-grid-4 {
-            display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 8px;
-        }
-        .options-list.opt-grid-2 {
-            display: grid; grid-template-columns: repeat(2, 1fr) !important; gap: 7px;
-        }
-        .options-list.opt-grid-1 {
-            display: grid; grid-template-columns: 1fr !important; gap: 5px;
-        }
-        @media (max-width: 900px) {
-            .options-list.opt-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 600px) {
-            .options-list.opt-grid-4, .options-list.opt-grid-2 { grid-template-columns: 1fr !important; }
-        }
+        /* PREVIEW CỘT TRÁI */
+        .options-list.opt-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 8px; }
+        .options-list.opt-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr) !important; gap: 7px; }
+        .options-list.opt-grid-1 { display: grid; grid-template-columns: 1fr !important; gap: 5px; }
 
         .soide-preview-card {
-            border-radius: 14px;
-            padding: 10px 14px;
-            margin-bottom: 11px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-            position: relative;
-            transition: all 0.25s ease;
+            border-radius: 14px; padding: 10px 14px; margin-bottom: 11px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); position: relative; transition: all 0.25s ease;
         }
         .soide-preview-card.is-synced-active {
             box-shadow: 0 0 0 3px #0284c7, 0 6px 18px rgba(2, 132, 199, 0.28) !important;
@@ -312,22 +320,20 @@ function injectSoiDeStyles() {
             gap: 8px; margin-bottom: 6px; padding-bottom: 4px;
             border-bottom: 1px dashed rgba(100, 116, 139, 0.25);
         }
-        .soide-preview-title-badge {
-            font-size: 13.5px; font-weight: 900; line-height: 1.3;
-        }
+        .soide-preview-title-badge { font-size: 13.5px; font-weight: 900; line-height: 1.3; }
 
-        /* MÃ NGUỒN THÔ */
+        /* MÃ NGUỒN THÔ TOÀN BỘ ĐỀ (YÊU CẦU 3) */
         .soide-raw-textarea {
-            width: 100%; flex: 1; min-height: 480px; padding: 10px;
+            width: 100%; flex: 1; min-height: 480px; padding: 12px;
             font-family: 'Consolas', 'Courier New', monospace; font-size: 13.5px;
-            line-height: 1.45; border: 1.5px solid #cbd5e1; border-radius: 10px;
+            line-height: 1.5; border: 1.5px solid #cbd5e1; border-radius: 10px;
             outline: none; background: #0f172a; color: #f8fafc; box-sizing: border-box;
         }
     `;
     document.head.appendChild(style);
 }
 
-// 2. KHỞI TẠO VÀ BẢO ĐẢM MODAL TRONG BODY
+// 2. KHỞI TẠO DOM CHO MODAL SOI ĐỀ
 function ensureSoiDeModalInDOM() {
     injectSoiDeStyles();
 
@@ -349,8 +355,35 @@ function ensureSoiDeModalInDOM() {
                     </div>
                 </div>
                 <div class="soide-header-tools">
+                    <!-- NÚT TẢI ĐỀ LÊN LỚP (YÊU CẦU 4) -->
+                    <button type="button" class="btn-soide-tool btn-soide-upload-class" id="btn-soide-class-picker" onclick="toggleSoiDeClassDropdown(event)">
+                        🚀 Tải đề lên lớp ▾
+                    </button>
+
+                    <!-- DROPDOWN 8 LỚP -->
+                    <div class="soide-class-dropdown" id="soide-class-dropdown" onclick="event.stopPropagation()">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:5px;">
+                            <b style="font-size:12px; color:#0284c7;">🎯 Chọn lớp đăng đề:</b>
+                            <div style="display:flex; gap:4px;">
+                                <button type="button" class="btn-soide-mini" onclick="toggleAllSoiDeClasses(true)">Tất cả</button>
+                                <button type="button" class="btn-soide-mini" onclick="toggleAllSoiDeClasses(false)">Bỏ</button>
+                            </div>
+                        </div>
+                        <div class="soide-class-list-grid" id="soide-class-list-container">
+                            ${SOI_DE_AVAILABLE_CLASSES.map(c => `
+                                <label class="soide-class-chk-item checked" id="chk-label-${c.id}">
+                                    <input type="checkbox" name="soide-target-class" value="${c.id}" checked onchange="handleSoiDeClassCheckChange(this)">
+                                    <span>${c.name}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                        <button type="button" class="btn-soide-tool btn-soide-upload-class" id="btn-submit-upload-classes" onclick="submitExamToSelectedClasses()" style="width:100%; justify-content:center; padding:7px;">
+                            🚀 Xác nhận đăng đề
+                        </button>
+                    </div>
+
                     <button type="button" class="btn-soide-tool btn-soide-upload" onclick="triggerSoiDeUpload()">
-                        📂 Upload Đề JSON/JS
+                        📂 Upload Đề
                     </button>
                     <input type="file" id="soide-file-input" accept=".json,.js,.txt" style="display:none;" onchange="handleSoiDeFileSelected(this)">
                     
@@ -429,6 +462,18 @@ function ensureSoiDeModalInDOM() {
     document.body.appendChild(modalDiv);
     setupSoiDeDragAndResize();
     setupRightToLeftScrollSync();
+
+    // Click ra ngoài tự đóng Dropdown chọn lớp
+    document.addEventListener("click", function(e) {
+        const drop = document.getElementById("soide-class-dropdown");
+        const btn = document.getElementById("btn-soide-class-picker");
+        if (drop && drop.classList.contains("show")) {
+            if (!drop.contains(e.target) && e.target !== btn) {
+                drop.classList.remove("show");
+            }
+        }
+    });
+
     return modalDiv;
 }
 
@@ -525,7 +570,7 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-// 5. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI (FEATURE 2)
+// 5. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI
 let lastSyncedQId = null;
 
 function setupRightToLeftScrollSync() {
@@ -598,7 +643,6 @@ function scrollToLeftPreviewQuestion(qId, triggerSmooth = true) {
     leftCard.classList.add('is-synced-active');
 }
 
-// 6. THÔNG BÁO TOAST NHANH TRONG MODAL
 function showSoiDeToast(msg) {
     let toast = document.getElementById("soide-mini-toast");
     if (!toast) {
@@ -623,7 +667,7 @@ function showSoiDeToast(msg) {
     }, 2200);
 }
 
-// 7. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI VỪA DÁN (FEATURE 1)
+// 6. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI VỪA DÁN
 function parseSmartQuestionText(text) {
     if (!text || typeof text !== 'string') return null;
     let cleanText = text.trim();
@@ -739,7 +783,6 @@ function parseSmartQuestionText(text) {
         };
     }
 
-    // Mặc định trả về nội dung câu hỏi
     return {
         type: "multiple_choice",
         question: cleanText,
@@ -749,17 +792,149 @@ function parseSmartQuestionText(text) {
     };
 }
 
-// XỬ LÝ DÁN ĐÈ HOẶC DÁN THÊM MỚI TỪ CLIPBOARD
-function processPastedTextForQuestion(rawText, qIdx, mode) {
-    const qObj = parseSmartQuestionText(rawText);
-    if (!qObj) {
-        alert("⚠️ Không nhận diện được nội dung câu hỏi từ đoạn vừa dán!");
-        return;
+// =========================================================================
+// XỬ LÝ MỞ KHUNG MÃ NGUỒN THÔ TẠI TỪNG CÂU (YÊU CẦU 1 & 2)
+// =========================================================================
+
+function toggleCardRawBox(qId) {
+    if (soiDeState.rawEditingCardIds.has(qId)) {
+        soiDeState.rawEditingCardIds.delete(qId);
+    } else {
+        soiDeState.rawEditingCardIds.add(qId);
+    }
+    renderSoiDeRightEditor();
+    setTimeout(() => {
+        autoResizeAllTextareas();
+        const box = document.getElementById(`soide-card-raw-box-${qId}`);
+        if (box) {
+            box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const ta = document.getElementById(`soide-card-raw-text-${qId}`);
+            if (ta) ta.focus();
+        }
+    }, 40);
+}
+
+// Khi click vào vùng dán: Mở ngay khung mã nguồn thô của câu đó (hoặc câu mới chèn vào)
+async function handlePasteZoneClick(qIdx, mode) {
+    let clipboardText = "";
+    if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+            clipboardText = await navigator.clipboard.readText();
+        } catch (e) {}
     }
 
     if (mode === 'overwrite') {
         const targetQ = soiDeState.examData.questions[qIdx];
         if (!targetQ) return;
+        soiDeState.rawEditingCardIds.add(targetQ.id);
+
+        renderSoiDeRightEditor();
+        setTimeout(() => {
+            const ta = document.getElementById(`soide-card-raw-text-${targetQ.id}`);
+            if (ta) {
+                if (clipboardText && clipboardText.trim()) {
+                    ta.value = clipboardText.trim();
+                    showSoiDeToast(`📋 Đã nạp nội dung dán vào mã thô Câu ${qIdx + 1}!`);
+                }
+                ta.focus();
+            }
+            scrollToLeftPreviewQuestion(targetQ.id, true);
+        }, 50);
+
+    } else if (mode === 'insert') {
+        const questions = soiDeState.examData.questions || [];
+        const maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
+        const newId = maxId + 1;
+
+        let initialQuestionObj = {
+            id: newId,
+            type: "multiple_choice",
+            question: "Câu hỏi mới: ...",
+            options: ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
+            correct: 0,
+            explanation: ""
+        };
+
+        if (clipboardText && clipboardText.trim()) {
+            const parsed = parseSmartQuestionText(clipboardText);
+            if (parsed) initialQuestionObj = { id: newId, ...parsed };
+        }
+
+        questions.splice(qIdx + 1, 0, initialQuestionObj);
+        soiDeState.rawEditingCardIds.add(newId);
+
+        renderSoiDeBothSides();
+        setTimeout(() => {
+            const ta = document.getElementById(`soide-card-raw-text-${newId}`);
+            if (ta) {
+                if (clipboardText && clipboardText.trim()) ta.value = clipboardText.trim();
+                ta.focus();
+            }
+            scrollToLeftPreviewQuestion(newId, true);
+            const card = document.getElementById(`soide-qcard-${newId}`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showSoiDeToast(`➕ Đã tạo khối câu mới (dạng mã thô) sau Câu ${qIdx + 1}!`);
+        }, 60);
+    }
+}
+
+// Bắt sự kiện Ctrl+V trực tiếp trên vùng dán
+function handlePasteOnQuestion(event, qIdx, mode) {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = (event.clipboardData || window.clipboardData)?.getData('text');
+
+    if (mode === 'overwrite') {
+        const targetQ = soiDeState.examData.questions[qIdx];
+        if (!targetQ) return;
+        soiDeState.rawEditingCardIds.add(targetQ.id);
+        renderSoiDeRightEditor();
+        setTimeout(() => {
+            const ta = document.getElementById(`soide-card-raw-text-${targetQ.id}`);
+            if (ta) {
+                if (text) ta.value = text.trim();
+                ta.focus();
+            }
+            showSoiDeToast(`📋 Đã dán vào mã thô Câu ${qIdx + 1}!`);
+        }, 40);
+
+    } else if (mode === 'insert') {
+        const questions = soiDeState.examData.questions || [];
+        const maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
+        const newId = maxId + 1;
+        const newQ = { id: newId, type: "multiple_choice", question: text || "Câu hỏi mới...", options: ["A", "B", "C", "D"], correct: 0, explanation: "" };
+        questions.splice(qIdx + 1, 0, newQ);
+        soiDeState.rawEditingCardIds.add(newId);
+        renderSoiDeBothSides();
+        setTimeout(() => {
+            const ta = document.getElementById(`soide-card-raw-text-${newId}`);
+            if (ta) {
+                if (text) ta.value = text.trim();
+                ta.focus();
+            }
+            showSoiDeToast(`➕ Đã tạo câu mới (dạng mã thô) sau Câu ${qIdx + 1}!`);
+        }, 50);
+    }
+}
+
+// Áp dụng nội dung từ khung mã nguồn thô của câu vào State
+function applyCardRawInput(qIdx, qId) {
+    const ta = document.getElementById(`soide-card-raw-text-${qId}`);
+    if (!ta) return;
+    const rawVal = ta.value.trim();
+    if (!rawVal) {
+        alert("⚠️ Vui lòng nhập nội dung câu hỏi!");
+        return;
+    }
+
+    const qObj = parseSmartQuestionText(rawVal);
+    if (!qObj) {
+        alert("⚠️ Không nhận diện được cấu trúc câu hỏi!");
+        return;
+    }
+
+    const targetQ = soiDeState.examData.questions[qIdx];
+    if (targetQ) {
         targetQ.type = qObj.type;
         targetQ.question = qObj.question;
         if (qObj.options) targetQ.options = qObj.options;
@@ -768,57 +943,20 @@ function processPastedTextForQuestion(rawText, qIdx, mode) {
         if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
         if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
         if (qObj.part) targetQ.part = qObj.part;
-
-        renderSoiDeBothSides();
-        setTimeout(() => {
-            autoResizeAllTextareas();
-            scrollToLeftPreviewQuestion(targetQ.id, true);
-            const card = document.getElementById(`soide-qcard-${targetQ.id}`);
-            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 40);
-        showSoiDeToast(`📋 Đã dán đè thành công Câu ${qIdx + 1}!`);
-    } else if (mode === 'insert') {
-        const questions = soiDeState.examData.questions || [];
-        const maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
-        const newId = maxId + 1;
-        const newQ = { id: newId, ...qObj };
-        questions.splice(qIdx + 1, 0, newQ);
-
-        renderSoiDeBothSides();
-        setTimeout(() => {
-            autoResizeAllTextareas();
-            scrollToLeftPreviewQuestion(newId, true);
-            const card = document.getElementById(`soide-qcard-${newId}`);
-            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 40);
-        showSoiDeToast(`➕ Đã tạo thêm câu mới ngay sau Câu ${qIdx + 1}!`);
     }
+
+    soiDeState.rawEditingCardIds.delete(qId);
+    renderSoiDeBothSides();
+
+    setTimeout(() => {
+        autoResizeAllTextareas();
+        scrollToLeftPreviewQuestion(qId, true);
+    }, 40);
+
+    showSoiDeToast(`✅ Đã nhận diện và cập nhật thành công Câu ${qIdx + 1}!`);
 }
 
-async function handlePasteZoneClick(qIdx, mode) {
-    const zoneEl = document.getElementById(`paste-zone-${mode}-${qIdx}`);
-    if (zoneEl) zoneEl.focus();
-
-    if (navigator.clipboard && navigator.clipboard.readText) {
-        try {
-            const text = await navigator.clipboard.readText();
-            if (text && text.trim()) {
-                processPastedTextForQuestion(text, qIdx, mode);
-            }
-        } catch (e) {}
-    }
-}
-
-function handlePasteOnQuestion(event, qIdx, mode) {
-    event.preventDefault();
-    event.stopPropagation();
-    const text = (event.clipboardData || window.clipboardData)?.getData('text');
-    if (text && text.trim()) {
-        processPastedTextForQuestion(text, qIdx, mode);
-    }
-}
-
-// 8. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
+// 7. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
 function initDefaultSoiDeExam() {
     soiDeState.examData = {
         title: "ĐỀ KIỂM TRA ĐỊNH KỲ TOÁN 12",
@@ -858,7 +996,7 @@ function initDefaultSoiDeExam() {
     renderSoiDeBothSides();
 }
 
-// 9. UPLOAD & PHÂN TÍCH ĐỀ
+// 8. UPLOAD & PHÂN TÍCH ĐỀ
 function triggerSoiDeUpload() {
     const input = document.getElementById("soide-file-input");
     if (input) { input.value = ""; input.click(); }
@@ -922,7 +1060,7 @@ function readAndParseSoiDeFile(file) {
     reader.readAsText(file);
 }
 
-// 10. RENDER ĐỒNG THỜI CẢ 2 NỬA
+// 9. RENDER ĐỒNG THỜI CẢ 2 NỬA
 function renderSoiDeBothSides() {
     renderSoiDeRightEditor();
     renderSoiDeLeftLivePreview();
@@ -942,7 +1080,7 @@ function updateSoiDeMeta() {
     debouncedLivePreview();
 }
 
-// 11. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CÓ 2 VÙNG PASTE VÀ AUTO-RESIZE)
+// 10. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CÓ HỖ TRỢ KHUNG MÃ NGUỒN THÔ TỪNG CÂU)
 function renderSoiDeRightEditor() {
     const metaTitle = document.getElementById("soide-meta-title");
     const metaMade = document.getElementById("soide-meta-made");
@@ -968,7 +1106,6 @@ function renderSoiDeRightEditor() {
         card.style.background = palette.bg;
         card.style.border = `1.8px solid ${palette.border}`;
 
-        // Khi con trỏ chuột bấm vào câu này ở cột phải, cột trái lập tức cuộn theo
         card.addEventListener("focusin", function() {
             scrollToLeftPreviewQuestion(q.id, true);
         });
@@ -978,73 +1115,112 @@ function renderSoiDeRightEditor() {
         else if (q.type === 'true_false') currentPartType = "true_false";
         else if (q.type === 'short_answer') currentPartType = "short_answer";
 
-        let specificHtml = "";
-        if (q.type === "multiple_choice" && !q.part) {
-            const letters = ["A", "B", "C", "D"];
-            const currentCorrect = (typeof q.correct === "number") ? letters[q.correct] : String(q.correct || "A").toUpperCase();
+        const isRawEditing = soiDeState.rawEditingCardIds.has(q.id);
 
-            specificHtml = `
-                <div class="soide-textarea-label">Các phương án lựa chọn (A, B, C, D):</div>
-                <div class="soide-options-editor-grid">
-                    ${(q.options || ["", "", "", ""]).map((opt, oIdx) => `
-                        <div>
-                            <span style="font-weight:900; font-size:11px; color:${palette.text};">${letters[oIdx]}:</span>
-                            <textarea class="soide-latex-input" rows="1" style="min-height:36px;" oninput="autoResizeTextarea(this); updateSoiDeOption(${qIdx}, ${oIdx}, this.value)">${escapeHtml(opt)}</textarea>
-                        </div>
-                    `).join('')}
+        let cardBodyHtml = "";
+
+        if (isRawEditing) {
+            // HIỂN THỊ KHUNG MÃ NGUỒN THÔ CHO CÂU NÀY (YÊU CẦU 1 & 2)
+            const jsonTextOfQ = JSON.stringify(q, null, 2);
+            cardBodyHtml = `
+                <div class="soide-card-raw-box" id="soide-card-raw-box-${q.id}">
+                    <div class="soide-card-raw-header">
+                        <span>💻 Mã nguồn thô / Văn bản câu hỏi ${qIdx + 1}:</span>
+                        <span>(Có thể dán JSON hoặc text Word thường)</span>
+                    </div>
+                    <textarea class="soide-card-raw-textarea" id="soide-card-raw-text-${q.id}" spellcheck="false">${escapeHtml(jsonTextOfQ)}</textarea>
+                    <div class="soide-card-raw-btn-row">
+                        <button type="button" class="btn-soide-mini" onclick="toggleCardRawBox(${q.id})" style="background:#475569; color:#fff;">✕ Thu gọn</button>
+                        <button type="button" class="btn-soide-mini" onclick="applyCardRawInput(${qIdx}, ${q.id})" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900;">⚡ Nhận diện & Áp dụng</button>
+                    </div>
                 </div>
-                <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
-                    <b style="font-size:11.5px; color:#15803d;">Đáp án đúng:</b>
-                    <select class="soide-latex-input" style="width:65px; padding:2px 4px; font-size:13.5px !important; min-height:30px;" onchange="updateSoiDeCorrectMC(${qIdx}, this.value)">
-                        ${letters.map(L => `<option value="${L}" ${L === currentCorrect ? 'selected' : ''}>${L}</option>`).join('')}
-                    </select>
-                </div>
-            `;
-        } else if (q.type === "true_false") {
-            specificHtml = `
-                <div class="soide-textarea-label">Các mệnh đề Đúng / Sai (a, b, c, d):</div>
-                <table class="soide-tf-editor-table">
-                    ${(q.statements || []).map((st, sIdx) => {
-                        const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng");
-                        return `
-                        <tr>
-                            <td width="25" align="center"><b>${st.id})</b></td>
-                            <td><textarea class="soide-latex-input" rows="1" style="padding:3px 6px; font-size:14px !important; min-height:32px;" oninput="autoResizeTextarea(this); updateSoiDeStatementText(${qIdx}, ${sIdx}, this.value)">${escapeHtml(st.statement)}</textarea></td>
-                            <td width="90" align="center">
-                                <select class="soide-latex-input" style="padding:2px 4px; font-size:13px !important; min-height:30px;" onchange="updateSoiDeStatementCorrect(${qIdx}, ${sIdx}, this.value)">
-                                    <option value="Đúng" ${isTrue ? 'selected' : ''}>🟢 Đúng</option>
-                                    <option value="Sai" ${!isTrue ? 'selected' : ''}>🔴 Sai</option>
-                                </select>
-                            </td>
-                        </tr>`;
-                    }).join('')}
-                </table>
             `;
         } else {
-            specificHtml = `
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <b style="font-size:12px; color:#0d9488;">Đáp số chính xác:</b>
-                    <input type="text" class="soide-latex-input" style="width:180px; padding:3px 6px; min-height:32px;" value="${escapeHtmlForAttr(q.correctAnswer || '')}" oninput="updateSoiDeShortAnswer(${qIdx}, this.value)">
+            // HIỂN THỊ DẠNG THẺ (CARDS) BÌNH THƯỜNG
+            let specificHtml = "";
+            if (q.type === "multiple_choice" && !q.part) {
+                const letters = ["A", "B", "C", "D"];
+                const currentCorrect = (typeof q.correct === "number") ? letters[q.correct] : String(q.correct || "A").toUpperCase();
+
+                specificHtml = `
+                    <div class="soide-textarea-label">Các phương án lựa chọn (A, B, C, D):</div>
+                    <div class="soide-options-editor-grid">
+                        ${(q.options || ["", "", "", ""]).map((opt, oIdx) => `
+                            <div>
+                                <span style="font-weight:900; font-size:11px; color:${palette.text};">${letters[oIdx]}:</span>
+                                <textarea class="soide-latex-input" rows="1" style="min-height:36px;" oninput="autoResizeTextarea(this); updateSoiDeOption(${qIdx}, ${oIdx}, this.value)">${escapeHtml(opt)}</textarea>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
+                        <b style="font-size:11.5px; color:#15803d;">Đáp án đúng:</b>
+                        <select class="soide-latex-input" style="width:65px; padding:2px 4px; font-size:13.5px !important; min-height:30px;" onchange="updateSoiDeCorrectMC(${qIdx}, this.value)">
+                            ${letters.map(L => `<option value="${L}" ${L === currentCorrect ? 'selected' : ''}>${L}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            } else if (q.type === "true_false") {
+                specificHtml = `
+                    <div class="soide-textarea-label">Các mệnh đề Đúng / Sai (a, b, c, d):</div>
+                    <table class="soide-tf-editor-table">
+                        ${(q.statements || []).map((st, sIdx) => {
+                            const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng");
+                            return `
+                            <tr>
+                                <td width="25" align="center"><b>${st.id})</b></td>
+                                <td><textarea class="soide-latex-input" rows="1" style="padding:3px 6px; font-size:14px !important; min-height:32px;" oninput="autoResizeTextarea(this); updateSoiDeStatementText(${qIdx}, ${sIdx}, this.value)">${escapeHtml(st.statement)}</textarea></td>
+                                <td width="90" align="center">
+                                    <select class="soide-latex-input" style="padding:2px 4px; font-size:13px !important; min-height:30px;" onchange="updateSoiDeStatementCorrect(${qIdx}, ${sIdx}, this.value)">
+                                        <option value="Đúng" ${isTrue ? 'selected' : ''}>🟢 Đúng</option>
+                                        <option value="Sai" ${!isTrue ? 'selected' : ''}>🔴 Sai</option>
+                                    </select>
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </table>
+                `;
+            } else {
+                specificHtml = `
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <b style="font-size:12px; color:#0d9488;">Đáp số chính xác:</b>
+                        <input type="text" class="soide-latex-input" style="width:180px; padding:3px 6px; min-height:32px;" value="${escapeHtmlForAttr(q.correctAnswer || '')}" oninput="updateSoiDeShortAnswer(${qIdx}, this.value)">
+                    </div>
+                `;
+            }
+
+            cardBodyHtml = `
+                <div>
+                    <div class="soide-textarea-label">
+                        <span>Nội dung câu hỏi (LaTeX $...$):</span>
+                    </div>
+                    <textarea class="soide-latex-input" rows="1" oninput="autoResizeTextarea(this); updateSoiDeQuestionText(${qIdx}, this.value)">${escapeHtml(q.question || "")}</textarea>
+                </div>
+
+                ${specificHtml}
+
+                <div>
+                    <div class="soide-textarea-label">Lời giải chi tiết:</div>
+                    <textarea class="soide-latex-input" rows="1" oninput="autoResizeTextarea(this); updateSoiDeExplanation(${qIdx}, this.value)">${escapeHtml(q.explanation || "")}</textarea>
                 </div>
             `;
         }
 
         card.innerHTML = `
-            <!-- 2 VÙNG PASTE MỜ MỜ TRÊN ĐẦU MỖI CÂU (FEATURE 1) -->
+            <!-- 2 VÙNG PASTE (YÊU CẦU 1 & 2) -->
             <div class="soide-paste-zones-row">
                 <div class="soide-paste-box zone-overwrite" id="paste-zone-overwrite-${qIdx}" tabindex="0"
                      onclick="handlePasteZoneClick(${qIdx}, 'overwrite')"
                      onpaste="handlePasteOnQuestion(event, ${qIdx}, 'overwrite')"
-                     title="Click vào đây rồi ấn Ctrl+V để dán đè câu này">
+                     title="Click vào đây rồi ấn Ctrl+V để mở mã thô và dán đè câu này">
                     <span>📋</span>
-                    <span>Click & ấn <b>Ctrl+V</b> để <b>paste đè</b> câu này</span>
+                    <span>Click & ấn <b>Ctrl+V</b> để <b>paste đè</b></span>
                 </div>
                 <div class="soide-paste-box zone-insert" id="paste-zone-insert-${qIdx}" tabindex="0"
                      onclick="handlePasteZoneClick(${qIdx}, 'insert')"
                      onpaste="handlePasteOnQuestion(event, ${qIdx}, 'insert')"
-                     title="Click vào đây rồi ấn Ctrl+V để dán tạo thêm câu hỏi mới">
+                     title="Click vào đây rồi ấn Ctrl+V để mở mã thô và tạo câu mới">
                     <span>➕</span>
-                    <span>Click & ấn <b>Ctrl+V</b> để <b>paste thêm mới</b> câu hỏi</span>
+                    <span>Click & ấn <b>Ctrl+V</b> để <b>paste thêm mới</b></span>
                 </div>
             </div>
 
@@ -1052,9 +1228,13 @@ function renderSoiDeRightEditor() {
             <div class="soide-qcard-head">
                 <div class="soide-qcard-num" style="color:${palette.text};">
                     <span>Câu ${qIdx + 1}</span>
-                    <span style="font-size:11px; opacity:0.85; font-weight:700;">(ID: ${q.id} đề gốc)</span>
+                    <span style="font-size:11px; opacity:0.85; font-weight:700;">(ID: ${q.id})</span>
                 </div>
                 <div class="soide-head-actions">
+                    <button type="button" class="btn-soide-mini btn-soide-raw-toggle" onclick="toggleCardRawBox(${q.id})" title="Chuyển đổi giữa chế độ Form thẻ và Mã nguồn thô của câu này">
+                        ${isRawEditing ? '👁️ Xem Form' : '💻 Mã thô'}
+                    </button>
+
                     <select class="soide-part-select-mini" onchange="changeSoiDeQuestionType(${qIdx}, this.value)" title="Chuyển câu này sang phần khác">
                         <option value="multiple_choice" ${currentPartType === 'multiple_choice' ? 'selected' : ''}>Phần I (Trắc nghiệm)</option>
                         <option value="true_false" ${currentPartType === 'true_false' ? 'selected' : ''}>Phần II (Đúng/Sai)</option>
@@ -1063,7 +1243,7 @@ function renderSoiDeRightEditor() {
                     </select>
 
                     <button type="button" class="btn-soide-mini btn-soide-add-inline" onclick="insertQuestionAfter(${qIdx})" title="Thêm ngay 1 câu hỏi mới bên dưới câu này">
-                        ➕ Thêm câu
+                        ➕ Thêm
                     </button>
                     <button type="button" class="btn-soide-mini btn-soide-del-inline" onclick="deleteQuestionFromSoiDe(${qIdx})" title="Xóa câu hỏi này">
                         🗑️ Xóa
@@ -1071,19 +1251,7 @@ function renderSoiDeRightEditor() {
                 </div>
             </div>
 
-            <div>
-                <div class="soide-textarea-label">
-                    <span>Nội dung câu hỏi (LaTeX $...$):</span>
-                </div>
-                <textarea class="soide-latex-input" rows="1" oninput="autoResizeTextarea(this); updateSoiDeQuestionText(${qIdx}, this.value)">${escapeHtml(q.question || "")}</textarea>
-            </div>
-
-            ${specificHtml}
-
-            <div>
-                <div class="soide-textarea-label">Lời giải chi tiết:</div>
-                <textarea class="soide-latex-input" rows="1" oninput="autoResizeTextarea(this); updateSoiDeExplanation(${qIdx}, this.value)">${escapeHtml(q.explanation || "")}</textarea>
-            </div>
+            ${cardBodyHtml}
         `;
 
         cardsContainer.appendChild(card);
@@ -1094,7 +1262,7 @@ function renderSoiDeRightEditor() {
     setupRightToLeftScrollSync();
 }
 
-// 12. CÁC HÀM CẬP NHẬT DỮ LIỆU
+// 11. CÁC HÀM CẬP NHẬT DỮ LIỆU
 function updateSoiDeQuestionText(idx, val) {
     if (soiDeState.examData.questions[idx]) {
         soiDeState.examData.questions[idx].question = val;
@@ -1227,7 +1395,7 @@ function deleteQuestionFromLeftPreview(qId) {
     if (qIdx !== -1) deleteQuestionFromSoiDe(qIdx);
 }
 
-// 13. CHUYỂN CHẾ ĐỘ BIÊN SOẠN
+// 12. CHUYỂN CHẾ ĐỘ BIÊN SOẠN & ĐỊNH DẠNG MÃ NGUỒN THÔ NGĂN CÁCH //----------- (YÊU CẦU 3)
 function setSoiDeEditorMode(mode) {
     soiDeState.editorMode = mode;
     const btnCards = document.getElementById("btn-mode-cards");
@@ -1250,24 +1418,52 @@ function setSoiDeEditorMode(mode) {
     }
 }
 
+// TẠO CHUỖI MÃ NGUỒN THÔ VỚI CÁC DẢI //----------- NGĂN CÁCH TỪNG CÂU
 function updateRawTextFromState() {
     const rawEditor = document.getElementById("soide-raw-editor");
-    if (rawEditor) rawEditor.value = JSON.stringify(soiDeState.examData, null, 2);
+    if (!rawEditor) return;
+
+    const data = soiDeState.examData;
+    const questions = data.questions || [];
+
+    // Tạo mã nguồn đẹp mắt, có phân cách //-----------
+    let scriptOutput = `const examData = {\n`;
+    scriptOutput += `  title: ${JSON.stringify(data.title || "ĐỀ THI")},\n`;
+    scriptOutput += `  maDe: ${JSON.stringify(data.maDe || "101")},\n`;
+    scriptOutput += `  timeLimitMinutes: ${parseInt(data.timeLimitMinutes, 10) || 90},\n`;
+    scriptOutput += `  images: ${JSON.stringify(data.images || {}, null, 4)},\n`;
+    scriptOutput += `  questions: [\n`;
+
+    questions.forEach((q, idx) => {
+        const qJson = JSON.stringify(q, null, 4);
+        const indentedQJson = qJson.split('\n').map(line => '    ' + line).join('\n');
+        scriptOutput += `    //---------------------------------------- Câu ${idx + 1}\n`;
+        scriptOutput += `${indentedQJson}${idx < questions.length - 1 ? ',' : ''}\n`;
+    });
+
+    scriptOutput += `    //---------------------------------------- HẾT ĐỀ\n`;
+    scriptOutput += `  ]\n};`;
+
+    rawEditor.value = scriptOutput;
 }
 
 function handleSoiDeRawInput(text) {
     debouncedFunction(() => {
         try {
-            const parsed = JSON.parse(text);
+            const parsed = robustParseExamScriptOrJson(text);
             if (parsed && Array.isArray(parsed.questions)) {
                 soiDeState.examData = parsed;
-                setValidationStatus(true, "✅ Cú pháp JSON hợp lệ!");
+                setValidationStatus(true, "✅ Cú pháp mã nguồn hợp lệ!");
+                renderSoiDeLeftLivePreview();
+            } else if (Array.isArray(parsed)) {
+                soiDeState.examData.questions = parsed;
+                setValidationStatus(true, "✅ Cú pháp mảng câu hỏi hợp lệ!");
                 renderSoiDeLeftLivePreview();
             } else {
-                setValidationStatus(false, "⚠️ Cú pháp JSON cần có trường questions dạng mảng!");
+                setValidationStatus(false, "⚠️ Cần có biến examData chứa trường questions!");
             }
         } catch(e) {
-            setValidationStatus(false, "❌ Lỗi cú pháp JSON: " + e.message);
+            setValidationStatus(false, "❌ Lỗi cú pháp: " + e.message);
         }
     }, 400);
 }
@@ -1284,7 +1480,7 @@ function debouncedFunction(fn, delay = 250) {
     soiDeState.debounceTimer = setTimeout(fn, delay);
 }
 
-// 14. KIỂM TRA LỖI CÚ PHÁP
+// 13. KIỂM TRA LỖI CÚ PHÁP
 function validateExamSyntax(questions) {
     const errors = [];
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -1329,7 +1525,7 @@ function setValidationStatus(isValid, msg) {
     }
 }
 
-// 15. RENDER CỘT TRÁI: LIVE PREVIEW CHUẨN BỘ GD&ĐT, IN ĐẬM TIÊU ĐỀ, NỔI KHỐI MÀU & ĐỒNG BỘ CUỘN
+// 14. RENDER CỘT TRÁI: LIVE PREVIEW
 function renderSoiDeLeftLivePreview() {
     const previewContainer = document.getElementById("soide-live-preview-content");
     const countEl = document.getElementById("soide-live-qcount");
@@ -1459,10 +1655,9 @@ function renderSoiDeLeftLivePreview() {
 
         html += `
             <div class="soide-preview-card" id="soide-preview-card-${qId}" data-qid="${qId}" style="background:${palette.bg}; border:1.8px solid ${palette.border};">
-                <!-- HEADER CÂU TRÊN CÙNG: IN ĐẬM TIÊU ĐỀ + NÚT THAO TÁC -->
                 <div class="soide-preview-head-row">
                     <div class="soide-preview-title-badge" style="color:${palette.text};">
-                        <b>Câu ${displayIndex}</b> <span style="font-size:11.5px; opacity:0.85; font-weight:700;">(ID: ${q.id} đề gốc)</span>
+                        <b>Câu ${displayIndex}</b> <span style="font-size:11.5px; opacity:0.85; font-weight:700;">(ID: ${q.id})</span>
                     </div>
 
                     <div class="soide-head-actions">
@@ -1474,10 +1669,10 @@ function renderSoiDeLeftLivePreview() {
                         </select>
 
                         <button type="button" class="btn-soide-mini btn-soide-add-inline" onclick="insertQuestionAfter(${qIdx})" title="Thêm câu hỏi mới liền kề">
-                            ➕ Thêm câu
+                            ➕ Thêm
                         </button>
-                        <button type="button" class="btn-soide-mini btn-soide-del-inline" onclick="deleteQuestionFromLeftPreview(${qId})" title="Xóa câu ${displayIndex} này ngay lập tức">
-                            🗑️ Xóa câu
+                        <button type="button" class="btn-soide-mini btn-soide-del-inline" onclick="deleteQuestionFromLeftPreview(${qId})" title="Xóa câu ${displayIndex}">
+                            🗑️ Xóa
                         </button>
                     </div>
                 </div>
@@ -1501,7 +1696,7 @@ function renderSoiDeLeftLivePreview() {
     }
 }
 
-// 16. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V)
+// 15. DÁN ẢNH SNIPPING TOOL
 function setupSoiDePasteListeners() {
     document.querySelectorAll('.soide-left-pane .soide-preview-card').forEach(card => {
         card.addEventListener('paste', function(e) {
@@ -1609,7 +1804,7 @@ function deleteSoiDeQuestionImage(qId, imgKey) {
     renderSoiDeBothSides();
 }
 
-// 17. XUẤT FILE JSON ĐỀ THI
+// 16. XUẤT FILE JSON ĐỀ THI
 function downloadSoiDeJson() {
     try {
         const jsonStr = JSON.stringify(soiDeState.examData, null, 2);
@@ -1626,6 +1821,122 @@ function downloadSoiDeJson() {
         setTimeout(() => URL.revokeObjectURL(a.href), 1500);
     } catch(e) {
         alert("❌ Lỗi xuất file JSON: " + e.message);
+    }
+}
+
+// =========================================================================
+// 17. CHỨC NĂNG TẢI ĐỀ LÊN 8 LỚP (YÊU CẦU 4)
+// =========================================================================
+
+function toggleSoiDeClassDropdown(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const drop = document.getElementById("soide-class-dropdown");
+    if (!drop) return;
+    drop.classList.toggle("show");
+}
+
+function toggleAllSoiDeClasses(checkAll) {
+    document.querySelectorAll('input[name="soide-target-class"]').forEach(cb => {
+        cb.checked = checkAll;
+        const parent = cb.closest('.soide-class-chk-item');
+        if (parent) parent.classList.toggle('checked', checkAll);
+    });
+}
+
+function handleSoiDeClassCheckChange(cb) {
+    const parent = cb.closest('.soide-class-chk-item');
+    if (parent) parent.classList.toggle('checked', cb.checked);
+}
+
+async function submitExamToSelectedClasses() {
+    const checkedBoxes = Array.from(document.querySelectorAll('input[name="soide-target-class"]:checked'));
+    const selectedClasses = checkedBoxes.map(cb => cb.value);
+
+    if (selectedClasses.length === 0) {
+        alert("⚠️ Vui lòng tích chọn ít nhất 1 lớp để tải đề lên!");
+        return;
+    }
+
+    const examData = soiDeState.examData;
+    if (!examData || !Array.isArray(examData.questions) || examData.questions.length === 0) {
+        alert("⚠️ Đề thi hiện chưa có câu hỏi nào để tải lên!");
+        return;
+    }
+
+    const btn = document.getElementById("btn-submit-upload-classes");
+    if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang tải lên Supabase..."; }
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+    if (!client) {
+        alert("❌ Không tìm thấy Supabase Client kết nối máy chủ!");
+        if (btn) { btn.disabled = false; btn.innerText = "🚀 Xác nhận đăng đề"; }
+        return;
+    }
+
+    try {
+        const quizId = "quiz_" + Date.now();
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        const finalTimeLimit = parseInt(examData.timeLimitMinutes, 10) || 90;
+        const examTitle = examData.title || `ĐỀ THI ${dateStr}`;
+        const maDe = examData.maDe || "101";
+
+        // 1. Lưu vào bảng quizzes
+        const { error: qErr } = await client.from('quizzes').insert([{
+            id: quizId,
+            title: examTitle,
+            made: maDe,
+            time_limit_minutes: finalTimeLimit,
+            exam_start_time: null,
+            exam_end_time: null,
+            scoring_config: { mode: 'option1' },
+            images: examData.images || {},
+            questions: examData.questions
+        }]);
+
+        if (qErr) throw qErr;
+
+        // 2. Lưu liên kết cho từng lớp được chọn vào custom_links
+        const defaultAvatar = (typeof PRESET_AVATARS !== 'undefined' && PRESET_AVATARS[0]) 
+            ? PRESET_AVATARS[0] 
+            : "https://i.ibb.co/HTPxzDtT/khung-long-bao-chua.jpg";
+
+        const linkRows = selectedClasses.map(cat => ({
+            id: quizId,
+            category_id: cat,
+            title: examTitle,
+            date: dateStr,
+            url: `./thi.html?id=${quizId}&cat=${encodeURIComponent(cat)}`,
+            badge_text: "HOT",
+            is_hot: true,
+            is_doc: false,
+            avatar: defaultAvatar,
+            timestamp: Date.now(),
+            is_shuffled: true,
+            allow_free: true,
+            time_limit_minutes: finalTimeLimit,
+            scoring_config: { mode: 'option1' }
+        }));
+
+        const { error: cErr } = await client.from('custom_links').insert(linkRows);
+        if (cErr) throw cErr;
+
+        const classNames = selectedClasses.map(id => {
+            const f = SOI_DE_AVAILABLE_CLASSES.find(c => c.id === id);
+            return f ? f.name : id;
+        }).join(', ');
+
+        alert(`🎉 ĐÃ ĐĂNG ĐỀ THI LÊN ${selectedClasses.length} LỚP THÀNH CÔNG!\n\n📑 Đề: "${examTitle}" (${finalTimeLimit} phút)\n🏫 Danh sách lớp: ${classNames}`);
+        
+        const drop = document.getElementById("soide-class-dropdown");
+        if (drop) drop.classList.remove("show");
+
+        window.location.reload();
+    } catch(err) {
+        alert("❌ Lỗi khi đăng đề lên lớp: " + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "🚀 Xác nhận đăng đề"; }
     }
 }
 
@@ -1656,7 +1967,8 @@ window.autoResizeTextarea = autoResizeTextarea;
 window.autoResizeAllTextareas = autoResizeAllTextareas;
 window.handlePasteZoneClick = handlePasteZoneClick;
 window.handlePasteOnQuestion = handlePasteOnQuestion;
-window.processPastedTextForQuestion = processPastedTextForQuestion;
+window.toggleCardRawBox = toggleCardRawBox;
+window.applyCardRawInput = applyCardRawInput;
 window.scrollToLeftPreviewQuestion = scrollToLeftPreviewQuestion;
 window.triggerSoiDeUpload = triggerSoiDeUpload;
 window.handleSoiDeFileSelected = handleSoiDeFileSelected;
@@ -1679,3 +1991,7 @@ window.changeSoiDeQuestionType = changeSoiDeQuestionType;
 window.triggerSoiDePastePrompt = triggerSoiDePastePrompt;
 window.handleSoiDeQuestionImageSelected = handleSoiDeQuestionImageSelected;
 window.deleteSoiDeQuestionImage = deleteSoiDeQuestionImage;
+window.toggleSoiDeClassDropdown = toggleSoiDeClassDropdown;
+window.toggleAllSoiDeClasses = toggleAllSoiDeClasses;
+window.handleSoiDeClassCheckChange = handleSoiDeClassCheckChange;
+window.submitExamToSelectedClasses = submitExamToSelectedClasses;
