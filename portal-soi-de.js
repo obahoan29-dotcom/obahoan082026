@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN TỰ ĐỘNG GIÃN CAO 100% NỘI DUNG CÂU HỎI & LỜI GIẢI)
+// FILE: portal-soi-de.js (BẢN TÍCH HỢP 2 VÙNG PASTE VÀ CUỘN ĐỒNG BỘ 2 CỘT)
 // CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
 // =========================================================
 
@@ -112,6 +112,7 @@ function injectSoiDeStyles() {
             height: 100%; overflow-y: auto; overflow-x: hidden;
             background: #f8fafc; padding: 10px 12px; box-sizing: border-box;
             border-right: 1px solid #cbd5e1; user-select: text;
+            scroll-behavior: smooth;
         }
 
         /* VẠCH KÉO CHIA ĐÔI */
@@ -131,6 +132,7 @@ function injectSoiDeStyles() {
             height: 100%; overflow-y: auto; overflow-x: hidden;
             background: #ffffff; padding: 10px 12px; box-sizing: border-box;
             display: flex; flex-direction: column; gap: 8px; user-select: text;
+            scroll-behavior: smooth;
         }
 
         .soide-drop-zone {
@@ -167,8 +169,57 @@ function injectSoiDeStyles() {
             position: relative;
         }
         .soide-editor-qcard:focus-within {
-            box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.25) !important;
+            box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.3) !important;
         }
+
+        /* 2 VÙNG PASTE MỜ MỜ TRÊN ĐẦU MỖI CÂU */
+        .soide-paste-zones-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 5px;
+        }
+        .soide-paste-box {
+            border: 1.5px dashed #94a3b8;
+            background: rgba(255, 255, 255, 0.55);
+            border-radius: 7px;
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #64748b;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.18s ease;
+            outline: none;
+            opacity: 0.76;
+            line-height: 1.3;
+        }
+        .soide-paste-box:hover {
+            opacity: 1;
+            background: #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }
+        .soide-paste-box:focus {
+            opacity: 1;
+            border-style: solid;
+        }
+        .soide-paste-box.zone-overwrite:hover, .soide-paste-box.zone-overwrite:focus {
+            border-color: #0284c7;
+            color: #0369a1;
+            background: #e0f2fe;
+            box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25);
+        }
+        .soide-paste-box.zone-insert:hover, .soide-paste-box.zone-insert:focus {
+            border-color: #10b981;
+            color: #047857;
+            background: #dcfce7;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+        }
+
         .soide-qcard-head {
             display: flex; align-items: center; justify-content: space-between;
             gap: 6px; margin-bottom: 2px;
@@ -250,7 +301,11 @@ function injectSoiDeStyles() {
             margin-bottom: 11px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
             position: relative;
-            transition: all 0.15s ease;
+            transition: all 0.25s ease;
+        }
+        .soide-preview-card.is-synced-active {
+            box-shadow: 0 0 0 3px #0284c7, 0 6px 18px rgba(2, 132, 199, 0.28) !important;
+            transform: scale(1.008);
         }
         .soide-preview-head-row {
             display: flex; align-items: center; justify-content: space-between;
@@ -373,6 +428,7 @@ function ensureSoiDeModalInDOM() {
     `;
     document.body.appendChild(modalDiv);
     setupSoiDeDragAndResize();
+    setupRightToLeftScrollSync();
     return modalDiv;
 }
 
@@ -398,7 +454,10 @@ function openSoiDeModal(event) {
         renderSoiDeBothSides();
     }
 
-    setTimeout(autoResizeAllTextareas, 40);
+    setTimeout(() => {
+        autoResizeAllTextareas();
+        setupRightToLeftScrollSync();
+    }, 50);
 }
 
 function closeSoiDeModal() {
@@ -466,7 +525,300 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-// 5. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
+// 5. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI (FEATURE 2)
+let lastSyncedQId = null;
+
+function setupRightToLeftScrollSync() {
+    const rightPane = document.getElementById("soide-right-pane");
+    if (!rightPane || rightPane.dataset.hasScrollSync === "true") return;
+    rightPane.dataset.hasScrollSync = "true";
+
+    let syncTimer = null;
+    rightPane.addEventListener("scroll", () => {
+        if (soiDeState.editorMode !== 'cards') return;
+        if (syncTimer) cancelAnimationFrame(syncTimer);
+        syncTimer = requestAnimationFrame(() => {
+            syncLeftPreviewFromRightScroll();
+        });
+    }, { passive: true });
+}
+
+function syncLeftPreviewFromRightScroll() {
+    const rightPane = document.getElementById("soide-right-pane");
+    const leftPane = document.getElementById("soide-left-pane");
+    if (!rightPane || !leftPane) return;
+
+    const rightPaneRect = rightPane.getBoundingClientRect();
+    const rightCards = rightPane.querySelectorAll('.soide-editor-qcard');
+    if (!rightCards || rightCards.length === 0) return;
+
+    let targetCard = null;
+    let minDistance = Infinity;
+    const probeY = rightPaneRect.top + 75;
+
+    for (let card of rightCards) {
+        const rect = card.getBoundingClientRect();
+        if (rect.top <= probeY && rect.bottom >= probeY) {
+            targetCard = card;
+            break;
+        }
+        const dist = Math.abs(rect.top - probeY);
+        if (dist < minDistance) {
+            minDistance = dist;
+            targetCard = card;
+        }
+    }
+
+    if (targetCard) {
+        const qId = targetCard.id.replace('soide-qcard-', '');
+        if (qId && qId !== lastSyncedQId) {
+            lastSyncedQId = qId;
+            scrollToLeftPreviewQuestion(qId, false);
+        }
+    }
+}
+
+function scrollToLeftPreviewQuestion(qId, triggerSmooth = true) {
+    const leftPane = document.getElementById("soide-left-pane");
+    const leftCard = document.getElementById(`soide-preview-card-${qId}`);
+    if (!leftPane || !leftCard) return;
+
+    const leftPaneRect = leftPane.getBoundingClientRect();
+    const leftCardRect = leftCard.getBoundingClientRect();
+    const currentScrollTop = leftPane.scrollTop;
+    const offsetWithinPane = leftCardRect.top - leftPaneRect.top;
+    const targetScrollTop = currentScrollTop + offsetWithinPane - 12;
+
+    leftPane.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: triggerSmooth ? 'smooth' : 'auto'
+    });
+
+    document.querySelectorAll('.soide-preview-card.is-synced-active').forEach(c => c.classList.remove('is-synced-active'));
+    leftCard.classList.add('is-synced-active');
+}
+
+// 6. THÔNG BÁO TOAST NHANH TRONG MODAL
+function showSoiDeToast(msg) {
+    let toast = document.getElementById("soide-mini-toast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "soide-mini-toast";
+        toast.style.cssText = `
+            position: absolute; top: 48px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, #059669, #047857); color: #fff;
+            padding: 6px 16px; border-radius: 20px; font-weight: 800; font-size: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 99999;
+            transition: all 0.22s ease; opacity: 0; pointer-events: none;
+        `;
+        const card = document.querySelector(".soide-modal-card");
+        if (card) card.appendChild(toast);
+    }
+    toast.innerText = msg;
+    toast.style.opacity = "1";
+    toast.style.transform = "translateX(-50%) translateY(4px)";
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(-50%) translateY(0)";
+    }, 2200);
+}
+
+// 7. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI VỪA DÁN (FEATURE 1)
+function parseSmartQuestionText(text) {
+    if (!text || typeof text !== 'string') return null;
+    let cleanText = text.trim();
+
+    // 1. Nếu là JSON hoặc JS Object
+    let parsed = robustParseExamScriptOrJson(cleanText);
+    if (parsed) {
+        if (Array.isArray(parsed) && parsed.length > 0) parsed = parsed[0];
+        if (typeof parsed === 'object' && parsed.question) {
+            return {
+                type: parsed.type || (parsed.statements ? 'true_false' : (parsed.options ? 'multiple_choice' : 'short_answer')),
+                question: parsed.question,
+                options: parsed.options || ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
+                statements: parsed.statements || [],
+                correct: parsed.correct !== undefined ? parsed.correct : 0,
+                correctAnswer: parsed.correctAnswer || parsed.correct_answer || "",
+                explanation: parsed.explanation || "",
+                part: parsed.part
+            };
+        }
+    }
+
+    // 2. Nếu là văn bản thường (Word / ChatGPT / Web)
+    let explanation = "";
+    const explainMatch = cleanText.match(/(?:(?:Lời giải chi tiết|Hướng dẫn giải chi tiết|Hướng dẫn giải|Lời giải|HƯỚNG DẪN GIẢI|LỜI GIẢI|HDG|HD)\s*[:：\-]\s*)([\s\S]*)$/i);
+    if (explainMatch) {
+        explanation = explainMatch[1].trim();
+        cleanText = cleanText.slice(0, explainMatch.index).trim();
+    }
+
+    let correctLetter = null;
+    let shortAns = "";
+    const correctMatch = cleanText.match(/(?:(?:Đáp án đúng|Đáp án chuẩn|Đáp án|Chọn|Đ\/A|ĐA)\s*[:：\-]?\s*)([A-D]|[a-d]|Đúng|Sai|[^\n\r]+)/i);
+    if (correctMatch) {
+        const rawAns = correctMatch[1].trim();
+        if (/^[A-D]$/i.test(rawAns)) {
+            correctLetter = rawAns.toUpperCase();
+        } else {
+            shortAns = rawAns;
+        }
+        cleanText = cleanText.replace(correctMatch[0], "").trim();
+    }
+
+    // Kiểm tra câu trắc nghiệm nhiều lựa chọn (A, B, C, D)
+    const optRegex = /(?:^|\n|\r)\s*([A-D])[\.\:\)]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[A-D][\.\:\)])|$)/gi;
+    const optMatches = [...cleanText.matchAll(optRegex)];
+    if (optMatches.length >= 2) {
+        const firstIndex = optMatches[0].index;
+        let qText = cleanText.slice(0, firstIndex).trim();
+        const options = ["", "", "", ""];
+        const letters = ["A", "B", "C", "D"];
+        optMatches.forEach(m => {
+            const L = m[1].toUpperCase();
+            const idx = letters.indexOf(L);
+            if (idx !== -1) options[idx] = m[2].trim();
+        });
+
+        let correctIdx = 0;
+        if (correctLetter && letters.indexOf(correctLetter) !== -1) {
+            correctIdx = letters.indexOf(correctLetter);
+        }
+
+        return {
+            type: "multiple_choice",
+            question: qText || cleanText,
+            options: options,
+            correct: correctIdx,
+            explanation: explanation
+        };
+    }
+
+    // Kiểm tra câu Đúng / Sai (a, b, c, d)
+    const stRegex = /(?:^|\n|\r)\s*([a-d])[\)\.]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[a-d][\)\.])|$)/gi;
+    const stMatches = [...cleanText.matchAll(stRegex)];
+    if (stMatches.length >= 2) {
+        const firstIndex = stMatches[0].index;
+        let qText = cleanText.slice(0, firstIndex).trim();
+        const statements = [];
+        stMatches.forEach(m => {
+            const id = m[1].toLowerCase();
+            let stText = m[2].trim();
+            let isCorrect = true;
+            const markMatch = stText.match(/[\(\[\{]\s*(Đúng|Sai|True|False)\s*[\)\]\}]/i);
+            if (markMatch) {
+                isCorrect = /^(Đúng|True)$/i.test(markMatch[1]);
+                stText = stText.replace(markMatch[0], '').trim();
+            }
+            statements.push({ id, statement: stText, correct: isCorrect });
+        });
+
+        return {
+            type: "true_false",
+            question: qText || cleanText,
+            statements: statements,
+            explanation: explanation
+        };
+    }
+
+    // Kiểm tra câu trả lời ngắn / Tự luận
+    if (shortAns || /^(?:Đáp số|Kết quả|KQ)/i.test(cleanText)) {
+        let qText = cleanText;
+        const ansMatch = cleanText.match(/(?:(?:Đáp số|Kết quả|KQ)\s*[:：\-]?\s*)([^\n\r]+)/i);
+        let finalAns = shortAns;
+        if (ansMatch) {
+            if (!finalAns) finalAns = ansMatch[1].trim();
+            qText = cleanText.replace(ansMatch[0], "").trim();
+        }
+        return {
+            type: "short_answer",
+            question: qText,
+            correctAnswer: finalAns || "0",
+            explanation: explanation
+        };
+    }
+
+    // Mặc định trả về nội dung câu hỏi
+    return {
+        type: "multiple_choice",
+        question: cleanText,
+        options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+        correct: 0,
+        explanation: explanation
+    };
+}
+
+// XỬ LÝ DÁN ĐÈ HOẶC DÁN THÊM MỚI TỪ CLIPBOARD
+function processPastedTextForQuestion(rawText, qIdx, mode) {
+    const qObj = parseSmartQuestionText(rawText);
+    if (!qObj) {
+        alert("⚠️ Không nhận diện được nội dung câu hỏi từ đoạn vừa dán!");
+        return;
+    }
+
+    if (mode === 'overwrite') {
+        const targetQ = soiDeState.examData.questions[qIdx];
+        if (!targetQ) return;
+        targetQ.type = qObj.type;
+        targetQ.question = qObj.question;
+        if (qObj.options) targetQ.options = qObj.options;
+        if (qObj.statements) targetQ.statements = qObj.statements;
+        if (qObj.correct !== undefined) targetQ.correct = qObj.correct;
+        if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
+        if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
+        if (qObj.part) targetQ.part = qObj.part;
+
+        renderSoiDeBothSides();
+        setTimeout(() => {
+            autoResizeAllTextareas();
+            scrollToLeftPreviewQuestion(targetQ.id, true);
+            const card = document.getElementById(`soide-qcard-${targetQ.id}`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 40);
+        showSoiDeToast(`📋 Đã dán đè thành công Câu ${qIdx + 1}!`);
+    } else if (mode === 'insert') {
+        const questions = soiDeState.examData.questions || [];
+        const maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
+        const newId = maxId + 1;
+        const newQ = { id: newId, ...qObj };
+        questions.splice(qIdx + 1, 0, newQ);
+
+        renderSoiDeBothSides();
+        setTimeout(() => {
+            autoResizeAllTextareas();
+            scrollToLeftPreviewQuestion(newId, true);
+            const card = document.getElementById(`soide-qcard-${newId}`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 40);
+        showSoiDeToast(`➕ Đã tạo thêm câu mới ngay sau Câu ${qIdx + 1}!`);
+    }
+}
+
+async function handlePasteZoneClick(qIdx, mode) {
+    const zoneEl = document.getElementById(`paste-zone-${mode}-${qIdx}`);
+    if (zoneEl) zoneEl.focus();
+
+    if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text && text.trim()) {
+                processPastedTextForQuestion(text, qIdx, mode);
+            }
+        } catch (e) {}
+    }
+}
+
+function handlePasteOnQuestion(event, qIdx, mode) {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = (event.clipboardData || window.clipboardData)?.getData('text');
+    if (text && text.trim()) {
+        processPastedTextForQuestion(text, qIdx, mode);
+    }
+}
+
+// 8. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
 function initDefaultSoiDeExam() {
     soiDeState.examData = {
         title: "ĐỀ KIỂM TRA ĐỊNH KỲ TOÁN 12",
@@ -506,7 +858,7 @@ function initDefaultSoiDeExam() {
     renderSoiDeBothSides();
 }
 
-// 6. UPLOAD & PHÂN TÍCH ĐỀ
+// 9. UPLOAD & PHÂN TÍCH ĐỀ
 function triggerSoiDeUpload() {
     const input = document.getElementById("soide-file-input");
     if (input) { input.value = ""; input.click(); }
@@ -570,7 +922,7 @@ function readAndParseSoiDeFile(file) {
     reader.readAsText(file);
 }
 
-// 7. RENDER ĐỒNG THỜI CẢ 2 NỬA
+// 10. RENDER ĐỒNG THỜI CẢ 2 NỬA
 function renderSoiDeBothSides() {
     renderSoiDeRightEditor();
     renderSoiDeLeftLivePreview();
@@ -590,7 +942,7 @@ function updateSoiDeMeta() {
     debouncedLivePreview();
 }
 
-// 8. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CHỮ TO, DÒNG SÁT NHAU, TỰ ĐỘNG GIÃN CAO 100% KHÔNG BỊ CẮT)
+// 11. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CÓ 2 VÙNG PASTE VÀ AUTO-RESIZE)
 function renderSoiDeRightEditor() {
     const metaTitle = document.getElementById("soide-meta-title");
     const metaMade = document.getElementById("soide-meta-made");
@@ -615,6 +967,11 @@ function renderSoiDeRightEditor() {
         card.id = `soide-qcard-${q.id}`;
         card.style.background = palette.bg;
         card.style.border = `1.8px solid ${palette.border}`;
+
+        // Khi con trỏ chuột bấm vào câu này ở cột phải, cột trái lập tức cuộn theo
+        card.addEventListener("focusin", function() {
+            scrollToLeftPreviewQuestion(q.id, true);
+        });
 
         let currentPartType = "multiple_choice";
         if (q.part === 4 || q.type === 'essay' || q.type === 'part4') currentPartType = "part4";
@@ -673,6 +1030,25 @@ function renderSoiDeRightEditor() {
         }
 
         card.innerHTML = `
+            <!-- 2 VÙNG PASTE MỜ MỜ TRÊN ĐẦU MỖI CÂU (FEATURE 1) -->
+            <div class="soide-paste-zones-row">
+                <div class="soide-paste-box zone-overwrite" id="paste-zone-overwrite-${qIdx}" tabindex="0"
+                     onclick="handlePasteZoneClick(${qIdx}, 'overwrite')"
+                     onpaste="handlePasteOnQuestion(event, ${qIdx}, 'overwrite')"
+                     title="Click vào đây rồi ấn Ctrl+V để dán đè câu này">
+                    <span>📋</span>
+                    <span>Click & ấn <b>Ctrl+V</b> để <b>paste đè</b> câu này</span>
+                </div>
+                <div class="soide-paste-box zone-insert" id="paste-zone-insert-${qIdx}" tabindex="0"
+                     onclick="handlePasteZoneClick(${qIdx}, 'insert')"
+                     onpaste="handlePasteOnQuestion(event, ${qIdx}, 'insert')"
+                     title="Click vào đây rồi ấn Ctrl+V để dán tạo thêm câu hỏi mới">
+                    <span>➕</span>
+                    <span>Click & ấn <b>Ctrl+V</b> để <b>paste thêm mới</b> câu hỏi</span>
+                </div>
+            </div>
+
+            <!-- HEADER CÂU HỎI -->
             <div class="soide-qcard-head">
                 <div class="soide-qcard-num" style="color:${palette.text};">
                     <span>Câu ${qIdx + 1}</span>
@@ -715,9 +1091,10 @@ function renderSoiDeRightEditor() {
 
     updateRawTextFromState();
     setTimeout(autoResizeAllTextareas, 20);
+    setupRightToLeftScrollSync();
 }
 
-// 9. CÁC HÀM CẬP NHẬT TRƯỜNG DỮ LIỆU
+// 12. CÁC HÀM CẬP NHẬT DỮ LIỆU
 function updateSoiDeQuestionText(idx, val) {
     if (soiDeState.examData.questions[idx]) {
         soiDeState.examData.questions[idx].question = val;
@@ -807,7 +1184,6 @@ function changeSoiDeQuestionType(qIdx, newType) {
     renderSoiDeBothSides();
 }
 
-// 10. THÊM CÂU HỎI MỚI (CHÈN SAU CÂU HIỆN TẠI HOẶC CUỐI ĐỀ)
 function insertQuestionAfter(qIdx) {
     const questions = soiDeState.examData.questions || [];
     const maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
@@ -826,9 +1202,11 @@ function insertQuestionAfter(qIdx) {
     renderSoiDeBothSides();
 
     setTimeout(() => {
+        autoResizeAllTextareas();
+        scrollToLeftPreviewQuestion(newId, true);
         const newCard = document.getElementById(`soide-qcard-${newId}`);
         if (newCard) newCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
+    }, 80);
 }
 
 function addNewQuestionToSoiDe() {
@@ -836,7 +1214,6 @@ function addNewQuestionToSoiDe() {
     insertQuestionAfter(questions.length - 1);
 }
 
-// 11. XÓA CÂU HỎI
 function deleteQuestionFromSoiDe(qIdx) {
     const qNum = qIdx + 1;
     if (!confirm(`⚠️ Bạn có chắc chắn muốn XÓA Câu ${qNum} không?`)) return;
@@ -850,7 +1227,7 @@ function deleteQuestionFromLeftPreview(qId) {
     if (qIdx !== -1) deleteQuestionFromSoiDe(qIdx);
 }
 
-// 12. CHUYỂN CHẾ ĐỘ BIÊN SOẠN
+// 13. CHUYỂN CHẾ ĐỘ BIÊN SOẠN
 function setSoiDeEditorMode(mode) {
     soiDeState.editorMode = mode;
     const btnCards = document.getElementById("btn-mode-cards");
@@ -907,7 +1284,7 @@ function debouncedFunction(fn, delay = 250) {
     soiDeState.debounceTimer = setTimeout(fn, delay);
 }
 
-// 13. KIỂM TRA LỖI CÚ PHÁP
+// 14. KIỂM TRA LỖI CÚ PHÁP
 function validateExamSyntax(questions) {
     const errors = [];
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -952,7 +1329,7 @@ function setValidationStatus(isValid, msg) {
     }
 }
 
-// 14. RENDER CỘT TRÁI: LIVE PREVIEW CHUẨN BỘ GD&ĐT, IN ĐẬM TIÊU ĐỀ, NỔI KHỐI MÀU & ĐẦY ĐỦ NÚT THAO TÁC
+// 15. RENDER CỘT TRÁI: LIVE PREVIEW CHUẨN BỘ GD&ĐT, IN ĐẬM TIÊU ĐỀ, NỔI KHỐI MÀU & ĐỒNG BỘ CUỘN
 function renderSoiDeLeftLivePreview() {
     const previewContainer = document.getElementById("soide-live-preview-content");
     const countEl = document.getElementById("soide-live-qcount");
@@ -969,7 +1346,7 @@ function renderSoiDeLeftLivePreview() {
     }
 
     if (questions.length === 0) {
-        previewContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b; font-weight:700;">Chưa có câu hỏi nào. Hãy upload file hoặc bấm [➕ Thêm câu] bên phải!</div>`;
+        previewContainer.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b; font-weight:700;">Chưa có câu hỏi nào. Hãy upload file hoặc bấm [➕ Thêm câu mới] bên phải!</div>`;
         return;
     }
 
@@ -1025,10 +1402,6 @@ function renderSoiDeLeftLivePreview() {
             const correctLetter = (typeof q.correct === "number") ? letters[q.correct] : String(q.correct || "A").toUpperCase();
             const opts = q.options || [];
 
-            // THUẬT TOÁN ĐỊNH DẠNG ĐỀ CHUẨN BỘ GIÁO DỤC:
-            // maxLen < 22 -> 1 hàng 4 cột
-            // maxLen < 55 -> 2 cột 2 hàng
-            // maxLen >= 55 -> 1 cột 4 hàng
             const maxLen = opts.reduce((max, opt) => Math.max(max, String(opt || "").length), 0);
             let layoutClass = "opt-grid-4";
             if (maxLen > 55) layoutClass = "opt-grid-1";
@@ -1128,7 +1501,7 @@ function renderSoiDeLeftLivePreview() {
     }
 }
 
-// 15. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V)
+// 16. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V)
 function setupSoiDePasteListeners() {
     document.querySelectorAll('.soide-left-pane .soide-preview-card').forEach(card => {
         card.addEventListener('paste', function(e) {
@@ -1236,7 +1609,7 @@ function deleteSoiDeQuestionImage(qId, imgKey) {
     renderSoiDeBothSides();
 }
 
-// 16. XUẤT FILE JSON ĐỀ THI
+// 17. XUẤT FILE JSON ĐỀ THI
 function downloadSoiDeJson() {
     try {
         const jsonStr = JSON.stringify(soiDeState.examData, null, 2);
@@ -1281,6 +1654,10 @@ window.closeSoiDeModal = closeSoiDeModal;
 window.ensureSoiDeModalInDOM = ensureSoiDeModalInDOM;
 window.autoResizeTextarea = autoResizeTextarea;
 window.autoResizeAllTextareas = autoResizeAllTextareas;
+window.handlePasteZoneClick = handlePasteZoneClick;
+window.handlePasteOnQuestion = handlePasteOnQuestion;
+window.processPastedTextForQuestion = processPastedTextForQuestion;
+window.scrollToLeftPreviewQuestion = scrollToLeftPreviewQuestion;
 window.triggerSoiDeUpload = triggerSoiDeUpload;
 window.handleSoiDeFileSelected = handleSoiDeFileSelected;
 window.addNewQuestionToSoiDe = addNewQuestionToSoiDe;
