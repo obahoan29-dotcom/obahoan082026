@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN NÂNG CẤP CHUẨN BỘ GD&ĐT & NỔI KHỐI ĐỒNG BỘ 2 CỘT)
+// FILE: portal-soi-de.js (BẢN TỰ ĐỘNG GIÃN CAO 100% NỘI DUNG CÂU HỎI & LỜI GIẢI)
 // CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
 // =========================================================
 
@@ -35,6 +35,18 @@ function formatQuestionText(text) {
     return text.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
         return prefix + '<span style="color: #78350f; font-weight: 800;">// ' + content.trim() + '</span>';
     });
+}
+
+// HÀM TỰ ĐỘNG GIÃN CHIỀU CAO TEXTAREA ĐỂ HIỂN THỊ ĐỦ 100% NỘI DUNG KHÔNG BỊ CẮT CHỮ
+function autoResizeTextarea(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(el.scrollHeight + 4, 38) + 'px';
+}
+
+function autoResizeAllTextareas() {
+    const textareas = document.querySelectorAll('#soide-cards-container textarea.soide-latex-input');
+    textareas.forEach(t => autoResizeTextarea(t));
 }
 
 // 1. TIÊM CSS VÀO HEAD
@@ -149,7 +161,7 @@ function injectSoiDeStyles() {
             padding: 8px 10px;
             display: flex;
             flex-direction: column;
-            gap: 4px; /* CÁC DÒNG SÁT NHAU */
+            gap: 5px;
             box-shadow: 0 2px 7px rgba(0, 0, 0, 0.04);
             transition: all 0.15s ease;
             position: relative;
@@ -190,18 +202,22 @@ function injectSoiDeStyles() {
         }
 
         .soide-textarea-label {
-            font-size: 11px; font-weight: 800; color: #475569; margin-bottom: 1px;
-            display: flex; justify-content: space-between; line-height: 1.2;
+            font-size: 11.5px; font-weight: 800; color: #475569; margin-bottom: 2px;
+            display: flex; justify-content: space-between; line-height: 1.25;
         }
 
-        /* Ô NHẬP LATEX: CHỮ TO HƠN, RÕ NÉT */
+        /* Ô NHẬP LATEX: CHỮ TO, TỰ ĐỘNG GIÃN CHIỀU CAO 100% THEO NỘI DUNG */
         .soide-latex-input {
-            width: 100%; padding: 5px 8px; border: 1.5px solid #cbd5e1; border-radius: 7px;
+            width: 100%; padding: 6px 9px; border: 1.5px solid #cbd5e1; border-radius: 7px;
             font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 15px !important; /* CHỮ TO RÕ */
-            font-weight: 600; line-height: 1.35;
+            font-size: 15px !important; /* CHỮ TO RÕ RÀNG */
+            font-weight: 600; line-height: 1.45;
             outline: none; box-sizing: border-box; resize: vertical;
             color: #0f172a; background: #ffffff;
+            field-sizing: content; /* CHUẨN CSS HIỆN ĐẠI: TỰ ĐỘNG CAO ĐỦ 100% NỘI DUNG */
+            min-height: 38px;
+            overflow-y: hidden; /* LOẠI BỎ THANH CUỘN LÀM CẮT ĐÔI DÒNG CHỮ */
+            transition: border-color 0.15s, background-color 0.15s;
         }
         .soide-latex-input:focus { border-color: #0284c7; background: #f8fafc; }
 
@@ -209,7 +225,7 @@ function injectSoiDeStyles() {
             display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
         }
         .soide-tf-editor-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .soide-tf-editor-table td { padding: 2px 4px; border: 1px solid #e2e8f0; }
+        .soide-tf-editor-table td { padding: 3px 4px; border: 1px solid #e2e8f0; vertical-align: middle; }
 
         /* CỘT TRÁI: ĐỊNH DẠNG ĐÁP ÁN CHUẨN BỘ GIÁO DỤC */
         .options-list.opt-grid-4 {
@@ -332,15 +348,15 @@ function ensureSoiDeModalInDOM() {
                     <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 8px; border-radius: 9px;">
                         <div>
                             <div class="soide-textarea-label">Tên đề thi:</div>
-                            <input type="text" id="soide-meta-title" class="soide-latex-input" style="font-size:13.5px !important; padding: 4px 6px;" oninput="updateSoiDeMeta()">
+                            <input type="text" id="soide-meta-title" class="soide-latex-input" style="font-size:13.5px !important; padding: 4px 6px; min-height:30px;" oninput="updateSoiDeMeta()">
                         </div>
                         <div>
                             <div class="soide-textarea-label">Mã đề:</div>
-                            <input type="text" id="soide-meta-made" class="soide-latex-input" style="font-size:13.5px !important; padding: 4px 6px;" oninput="updateSoiDeMeta()">
+                            <input type="text" id="soide-meta-made" class="soide-latex-input" style="font-size:13.5px !important; padding: 4px 6px; min-height:30px;" oninput="updateSoiDeMeta()">
                         </div>
                         <div>
                             <div class="soide-textarea-label">Số phút:</div>
-                            <input type="number" id="soide-meta-minutes" class="soide-latex-input" style="font-size:13.5px !important; padding: 4px 6px;" oninput="updateSoiDeMeta()">
+                            <input type="number" id="soide-meta-minutes" class="soide-latex-input" style="font-size:13.5px !important; padding: 4px 6px; min-height:30px;" oninput="updateSoiDeMeta()">
                         </div>
                     </div>
 
@@ -381,6 +397,8 @@ function openSoiDeModal(event) {
     } else {
         renderSoiDeBothSides();
     }
+
+    setTimeout(autoResizeAllTextareas, 40);
 }
 
 function closeSoiDeModal() {
@@ -421,6 +439,7 @@ function setupSoiDeDragAndResize() {
         if (isDragging) {
             isDragging = false;
             resizer.classList.remove("is-dragging");
+            autoResizeAllTextareas();
         }
     });
 
@@ -571,7 +590,7 @@ function updateSoiDeMeta() {
     debouncedLivePreview();
 }
 
-// 8. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CHỮ TO, DÒNG SÁT NHAU, NỔI KHỐI MÀU NHẸ)
+// 8. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CHỮ TO, DÒNG SÁT NHAU, TỰ ĐỘNG GIÃN CAO 100% KHÔNG BỊ CẮT)
 function renderSoiDeRightEditor() {
     const metaTitle = document.getElementById("soide-meta-title");
     const metaMade = document.getElementById("soide-meta-made");
@@ -613,13 +632,13 @@ function renderSoiDeRightEditor() {
                     ${(q.options || ["", "", "", ""]).map((opt, oIdx) => `
                         <div>
                             <span style="font-weight:900; font-size:11px; color:${palette.text};">${letters[oIdx]}:</span>
-                            <input type="text" class="soide-latex-input" value="${escapeHtmlForAttr(opt)}" oninput="updateSoiDeOption(${qIdx}, ${oIdx}, this.value)">
+                            <textarea class="soide-latex-input" rows="1" style="min-height:36px;" oninput="autoResizeTextarea(this); updateSoiDeOption(${qIdx}, ${oIdx}, this.value)">${escapeHtml(opt)}</textarea>
                         </div>
                     `).join('')}
                 </div>
                 <div style="display:flex; align-items:center; gap:6px; margin-top:2px;">
                     <b style="font-size:11.5px; color:#15803d;">Đáp án đúng:</b>
-                    <select class="soide-latex-input" style="width:65px; padding:2px 4px; font-size:13.5px !important;" onchange="updateSoiDeCorrectMC(${qIdx}, this.value)">
+                    <select class="soide-latex-input" style="width:65px; padding:2px 4px; font-size:13.5px !important; min-height:30px;" onchange="updateSoiDeCorrectMC(${qIdx}, this.value)">
                         ${letters.map(L => `<option value="${L}" ${L === currentCorrect ? 'selected' : ''}>${L}</option>`).join('')}
                     </select>
                 </div>
@@ -633,9 +652,9 @@ function renderSoiDeRightEditor() {
                         return `
                         <tr>
                             <td width="25" align="center"><b>${st.id})</b></td>
-                            <td><input type="text" class="soide-latex-input" style="padding:3px 6px;" value="${escapeHtmlForAttr(st.statement)}" oninput="updateSoiDeStatementText(${qIdx}, ${sIdx}, this.value)"></td>
+                            <td><textarea class="soide-latex-input" rows="1" style="padding:3px 6px; font-size:14px !important; min-height:32px;" oninput="autoResizeTextarea(this); updateSoiDeStatementText(${qIdx}, ${sIdx}, this.value)">${escapeHtml(st.statement)}</textarea></td>
                             <td width="90" align="center">
-                                <select class="soide-latex-input" style="padding:2px 4px; font-size:13px !important;" onchange="updateSoiDeStatementCorrect(${qIdx}, ${sIdx}, this.value)">
+                                <select class="soide-latex-input" style="padding:2px 4px; font-size:13px !important; min-height:30px;" onchange="updateSoiDeStatementCorrect(${qIdx}, ${sIdx}, this.value)">
                                     <option value="Đúng" ${isTrue ? 'selected' : ''}>🟢 Đúng</option>
                                     <option value="Sai" ${!isTrue ? 'selected' : ''}>🔴 Sai</option>
                                 </select>
@@ -648,7 +667,7 @@ function renderSoiDeRightEditor() {
             specificHtml = `
                 <div style="display:flex; align-items:center; gap:6px;">
                     <b style="font-size:12px; color:#0d9488;">Đáp số chính xác:</b>
-                    <input type="text" class="soide-latex-input" style="width:180px; padding:3px 6px;" value="${escapeHtmlForAttr(q.correctAnswer || '')}" oninput="updateSoiDeShortAnswer(${qIdx}, this.value)">
+                    <input type="text" class="soide-latex-input" style="width:180px; padding:3px 6px; min-height:32px;" value="${escapeHtmlForAttr(q.correctAnswer || '')}" oninput="updateSoiDeShortAnswer(${qIdx}, this.value)">
                 </div>
             `;
         }
@@ -680,14 +699,14 @@ function renderSoiDeRightEditor() {
                 <div class="soide-textarea-label">
                     <span>Nội dung câu hỏi (LaTeX $...$):</span>
                 </div>
-                <textarea class="soide-latex-input" rows="2" oninput="updateSoiDeQuestionText(${qIdx}, this.value)">${escapeHtml(q.question || "")}</textarea>
+                <textarea class="soide-latex-input" rows="1" oninput="autoResizeTextarea(this); updateSoiDeQuestionText(${qIdx}, this.value)">${escapeHtml(q.question || "")}</textarea>
             </div>
 
             ${specificHtml}
 
             <div>
                 <div class="soide-textarea-label">Lời giải chi tiết:</div>
-                <textarea class="soide-latex-input" rows="1" oninput="updateSoiDeExplanation(${qIdx}, this.value)">${escapeHtml(q.explanation || "")}</textarea>
+                <textarea class="soide-latex-input" rows="1" oninput="autoResizeTextarea(this); updateSoiDeExplanation(${qIdx}, this.value)">${escapeHtml(q.explanation || "")}</textarea>
             </div>
         `;
 
@@ -695,6 +714,7 @@ function renderSoiDeRightEditor() {
     });
 
     updateRawTextFromState();
+    setTimeout(autoResizeAllTextareas, 20);
 }
 
 // 9. CÁC HÀM CẬP NHẬT TRƯỜNG DỮ LIỆU
@@ -1259,6 +1279,8 @@ function escapeHtmlForAttr(text) {
 window.openSoiDeModal = openSoiDeModal;
 window.closeSoiDeModal = closeSoiDeModal;
 window.ensureSoiDeModalInDOM = ensureSoiDeModalInDOM;
+window.autoResizeTextarea = autoResizeTextarea;
+window.autoResizeAllTextareas = autoResizeAllTextareas;
 window.triggerSoiDeUpload = triggerSoiDeUpload;
 window.handleSoiDeFileSelected = handleSoiDeFileSelected;
 window.addNewQuestionToSoiDe = addNewQuestionToSoiDe;
