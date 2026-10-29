@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (BẢN FIX ĐỒNG BỘ CHI TIẾT TỪNG CÂU REALTIME 100% VÀ 7 LỚP CHUẨN)
+// FILE 3: exam-engine-core.js (BẢN TỐI ƯU MƯỢT 100% PHẦN II & ĐỒNG BỘ REALTIME)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -14,7 +14,11 @@ let hasInitExamEngine = false;
 let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
+
+// BỘ HẸN GIỜ TRÌ HOÃN THÔNG MINH ĐỂ KHÔNG BLOCKING UI KHI TÍCH NHANH
 let _autoSaveDebounceTimer = null;
+let _statementDebounceTimer = null;
+let _storageDebounceTimer = null;
 let _gasTempSheetDebounceTimer = null;
 
 (function injectLockStyles() {
@@ -25,6 +29,14 @@ let _gasTempSheetDebounceTimer = null;
     style.innerHTML = `
         .quiz-content-locked { pointer-events: none !important; user-select: none !important; opacity: 0.88; }
         .quiz-content-locked input, .quiz-content-locked textarea, .quiz-content-locked select, .quiz-content-locked button { cursor: not-allowed !important; }
+        /* Hiệu ứng chọn nhanh mượt mà cho ô Đúng/Sai */
+        .tf-table input[type="radio"] {
+            transition: transform 0.08s ease;
+            cursor: pointer;
+        }
+        .tf-table input[type="radio"]:active {
+            transform: scale(1.25);
+        }
     `;
     document.head.appendChild(style);
 })();
@@ -120,7 +132,6 @@ function buildCurrentLiveDraftPayload() {
     const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
     const primaryDocId = `${quizId}_${cleanSbd}`;
 
-    // Ép chuẩn 1 trong 7 tên lớp duy nhất
     const strictClassName = typeof getStrictStandardClassName === 'function' 
         ? getStrictStandardClassName(sClass || currentCat, sId) 
         : sClass;
@@ -579,6 +590,7 @@ function showError(title, msg) {
     errCard.style.display = "block"; 
 }
 
+// BỘ XỬ LÝ CHỌN ĐÁP ÁN PHẦN I (MƯỢT 100%)
 function selectOption(qId, letter) { 
     if (isSubmitted || isExamLocked) return; 
     const letters = ["A", "B", "C", "D"]; 
@@ -591,20 +603,36 @@ function selectOption(qId, letter) {
     const radio = document.querySelector(`input[name="q${qId}"][value="${letter}"]`); 
     if (radio) radio.checked = true; 
     window.SECURE_VAULT.userAnswers[`q${qId}`] = letter; 
+    
+    // Cập nhật tiến độ tức thì trên giao diện
     updateProgress(); 
-    saveExamStateToStorage(); 
-    autoSaveAnswerToCloud(`q${qId}`, letter);
+
+    // Trì hoãn lưu để giảm tải CPU
+    if (_storageDebounceTimer) clearTimeout(_storageDebounceTimer);
+    _storageDebounceTimer = setTimeout(() => {
+        saveExamStateToStorage();
+        autoSaveAnswerToCloud(`q${qId}`, letter);
+    }, 180);
 }
 
+// BỘ XỬ LÝ TÍCH CHỌN PHẦN II (ĐÚNG / SAI) - TỐI ƯU CỰC MƯỢT, 0MS DELAY
 function onStatementChange(subKey) { 
     if (isSubmitted || isExamLocked) return; 
     const selected = document.querySelector(`input[name="${subKey}"]:checked`); 
-    if (selected) {
-        window.SECURE_VAULT.userAnswers[subKey] = selected.value; 
-        updateProgress(); 
+    if (!selected) return;
+
+    // 1. Ghi nhận tức thì vào RAM bộ nhớ đệm (0ms)
+    window.SECURE_VAULT.userAnswers[subKey] = selected.value; 
+
+    // 2. Cập nhật ngay tiến độ và màu thanh điều hướng câu
+    updateProgress(); 
+
+    // 3. Debounce thông minh cho các thao tác nặng (ghi localStorage, IndexedDB, tính điểm nháp và đẩy Supabase)
+    if (_statementDebounceTimer) clearTimeout(_statementDebounceTimer);
+    _statementDebounceTimer = setTimeout(() => {
         saveExamStateToStorage(); 
         autoSaveAnswerToCloud(subKey, selected.value);
-    }
+    }, 180);
 }
 
 function onShortInputChange(qId) { 
@@ -634,10 +662,15 @@ function updateProgress() {
             if (window.SECURE_VAULT.userAnswers[`q${q.id}`]) { answeredCount++; status = "answered"; } 
         } else if (q.type === "true_false") { 
             let doneCount = 0; 
-            (q.statements || []).forEach(st => { 
-                if (window.SECURE_VAULT.userAnswers[`q${q.id}_${st.id}`]) doneCount++; 
-            }); 
-            if (doneCount === (q.statements ? q.statements.length : 4)) { answeredCount++; status = "answered"; } 
+            const stList = q.statements || [];
+            const reqCount = stList.length || 4;
+            for (let i = 0; i < reqCount; i++) {
+                const st = stList[i];
+                if (st && window.SECURE_VAULT.userAnswers[`q${q.id}_${st.id}`]) {
+                    doneCount++;
+                }
+            }
+            if (doneCount === reqCount) { answeredCount++; status = "answered"; } 
             else if (doneCount > 0) { status = "partial"; } 
         } else { 
             if (window.SECURE_VAULT.userAnswers[`q${q.id}`]) { answeredCount++; status = "answered"; } 
