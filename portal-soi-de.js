@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN TỰ ĐỘNG BÓC TÁCH MÃ LATEX KHI PASTE & CẢNH BÁO LỖI CÔNG THỨC)
+// FILE: portal-soi-de.js (BẢN TÍCH HỢP 2 VÙNG PASTE VÀ CUỘN ĐỒNG BỘ 2 CỘT)
 // CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
 // =========================================================
 
@@ -96,7 +96,6 @@ function injectSoiDeStyles() {
         .btn-soide-upload { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35); }
         .btn-soide-download { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; }
         .btn-soide-add { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #fff; }
-        .btn-soide-renumber { background: #475569; color: #f8fafc; border: 1px solid #64748b; }
         .btn-soide-switch { background: #334155; color: #cbd5e1; border: 1px solid #475569; }
         .btn-soide-switch.active { background: #0284c7; color: #ffffff; border-color: #38bdf8; }
         .btn-soide-close { background: #334155; color: #f87171; border-radius: 50%; width: 28px; height: 28px; padding: 0; justify-content: center; font-size: 14px; font-weight: 900; }
@@ -182,9 +181,9 @@ function injectSoiDeStyles() {
         }
         .soide-paste-box {
             border: 1.5px dashed #94a3b8;
-            background: rgba(255, 255, 255, 0.65);
-            border-radius: 8px;
-            padding: 5px 8px;
+            background: rgba(255, 255, 255, 0.55);
+            border-radius: 7px;
+            padding: 4px 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -196,7 +195,7 @@ function injectSoiDeStyles() {
             user-select: none;
             transition: all 0.18s ease;
             outline: none;
-            opacity: 0.82;
+            opacity: 0.76;
             line-height: 1.3;
         }
         .soide-paste-box:hover {
@@ -279,13 +278,6 @@ function injectSoiDeStyles() {
         .soide-tf-editor-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .soide-tf-editor-table td { padding: 3px 4px; border: 1px solid #e2e8f0; vertical-align: middle; }
 
-        /* CẢNH BÁO LỖI CÔNG THỨC TRÊN THẺ */
-        .soide-formula-error-badge {
-            background: #fef2f2; border: 1.2px solid #f87171; color: #dc2626;
-            padding: 3px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 800;
-            margin-top: 3px; line-height: 1.35; display: flex; align-items: center; gap: 4px;
-        }
-
         /* CỘT TRÁI: ĐỊNH DẠNG ĐÁP ÁN CHUẨN BỘ GIÁO DỤC */
         .options-list.opt-grid-4 {
             display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 8px;
@@ -364,9 +356,6 @@ function ensureSoiDeModalInDOM() {
                     
                     <button type="button" class="btn-soide-tool btn-soide-add" onclick="addNewQuestionToSoiDe()">
                         ➕ Thêm câu mới
-                    </button>
-                    <button type="button" class="btn-soide-tool btn-soide-renumber" onclick="renumberAllQuestions()" title="Đánh lại số thứ tự ID các câu từ 1 đến hết">
-                        🔢 Đánh lại số câu (1..N)
                     </button>
                     <button type="button" class="btn-soide-tool btn-soide-download" onclick="downloadSoiDeJson()">
                         💾 Tải JSON đề
@@ -536,7 +525,7 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-// 5. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI
+// 5. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI (FEATURE 2)
 let lastSyncedQId = null;
 
 function setupRightToLeftScrollSync() {
@@ -610,13 +599,14 @@ function scrollToLeftPreviewQuestion(qId, triggerSmooth = true) {
 }
 
 // 6. THÔNG BÁO TOAST NHANH TRONG MODAL
-function showSoiDeToast(msg, isWarning = false) {
+function showSoiDeToast(msg) {
     let toast = document.getElementById("soide-mini-toast");
     if (!toast) {
         toast = document.createElement("div");
         toast.id = "soide-mini-toast";
         toast.style.cssText = `
             position: absolute; top: 48px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, #059669, #047857); color: #fff;
             padding: 6px 16px; border-radius: 20px; font-weight: 800; font-size: 12px;
             box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 99999;
             transition: all 0.22s ease; opacity: 0; pointer-events: none;
@@ -624,165 +614,39 @@ function showSoiDeToast(msg, isWarning = false) {
         const card = document.querySelector(".soide-modal-card");
         if (card) card.appendChild(toast);
     }
-    toast.style.background = isWarning 
-        ? "linear-gradient(135deg, #dc2626, #b91c1c)" 
-        : "linear-gradient(135deg, #059669, #047857)";
-    toast.style.color = "#ffffff";
     toast.innerText = msg;
     toast.style.opacity = "1";
     toast.style.transform = "translateX(-50%) translateY(4px)";
     setTimeout(() => {
         toast.style.opacity = "0";
         toast.style.transform = "translateX(-50%) translateY(0)";
-    }, 2800);
+    }, 2200);
 }
 
-// 7. BỘ KIỂM TRA LỖI CÔNG THỨC LATEX VÀ ĐÓNG NGOẶC
-function checkLaTeXErrors(text) {
-    if (!text || typeof text !== 'string') return [];
-    const errors = [];
-
-    // Kiểm tra số lượng dấu $ không cân bằng
-    const dollarMatches = text.match(/(^|[^\\])\$/g);
-    if (dollarMatches && dollarMatches.length % 2 !== 0) {
-        errors.push(`Số lượng dấu '$' là số lẻ (${dollarMatches.length} dấu '$') - công thức chưa đóng.`);
-    }
-
-    // Kiểm tra số lượng dấu $$
-    const doubleDollarMatches = text.match(/(^|[^\\])\$\$/g);
-    if (doubleDollarMatches && doubleDollarMatches.length % 2 !== 0) {
-        errors.push(`Dấu công thức khối '$$' chưa được đóng mở cân bằng.`);
-    }
-
-    // Kiểm tra cân bằng dấu ngoặc nhọn { và } trong công thức
-    let openBraces = 0;
-    let closeBraces = 0;
-    for (let i = 0; i < text.length; i++) {
-        if (text[i] === '{' && (i === 0 || text[i - 1] !== '\\')) openBraces++;
-        if (text[i] === '}' && (i === 0 || text[i - 1] !== '\\')) closeBraces++;
-    }
-    if (openBraces !== closeBraces) {
-        errors.push(`Dấu ngoặc nhọn '{' và '}' không cân bằng (có ${openBraces} dấu '{' và ${closeBraces} dấu '}').`);
-    }
-
-    // Kiểm tra các lệnh gãy dở
-    if (/\\frac\s*\{[^}]*$/.test(text)) {
-        errors.push(`Lệnh '\\frac' chưa đóng đủ dấu ngoặc nhọn.`);
-    }
-    if (/\\sqrt\s*\{[^}]*$/.test(text)) {
-        errors.push(`Lệnh '\\sqrt' chưa đóng dấu ngoặc nhọn.`);
-    }
-
-    return errors;
-}
-
-function validateQuestionObjectFormulas(qObj) {
-    const errorList = [];
-    if (!qObj) return errorList;
-
-    if (qObj.question) {
-        const qErrs = checkLaTeXErrors(qObj.question);
-        if (qErrs.length > 0) errorList.push(`Đề bài: ${qErrs.join('; ')}`);
-    }
-    if (Array.isArray(qObj.options)) {
-        const letters = ["A", "B", "C", "D"];
-        qObj.options.forEach((opt, idx) => {
-            const optErrs = checkLaTeXErrors(opt);
-            if (optErrs.length > 0) errorList.push(`Phương án ${letters[idx] || idx + 1}: ${optErrs.join('; ')}`);
-        });
-    }
-    if (Array.isArray(qObj.statements)) {
-        qObj.statements.forEach(st => {
-            const stErrs = checkLaTeXErrors(st.statement);
-            if (stErrs.length > 0) errorList.push(`Mệnh đề ${st.id}): ${stErrs.join('; ')}`);
-        });
-    }
-    if (qObj.explanation) {
-        const expErrs = checkLaTeXErrors(qObj.explanation);
-        if (expErrs.length > 0) errorList.push(`Lời giải: ${expErrs.join('; ')}`);
-    }
-    return errorList;
-}
-
-// 8. BỘ TRÍCH XUẤT CÁC ĐỐI TƯỢNG JSON TỪ ĐOẠN DÁN BẤT KỲ (KỂ CẢ CÓ "questions": [ ... ])
-function extractJsonObjectsFromText(text) {
-    const objects = [];
-    let depth = 0;
-    let startIndex = -1;
-    let inString = false;
-    let stringChar = '';
-    let isEscaped = false;
-
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        if (inString) {
-            if (isEscaped) {
-                isEscaped = false;
-            } else if (char === '\\') {
-                isEscaped = true;
-            } else if (char === stringChar) {
-                inString = false;
-            }
-        } else {
-            if (char === '"' || char === "'" || char === '`') {
-                inString = true;
-                stringChar = char;
-            } else if (char === '{') {
-                if (depth === 0) startIndex = i;
-                depth++;
-            } else if (char === '}') {
-                depth--;
-                if (depth === 0 && startIndex !== -1) {
-                    objects.push(text.slice(startIndex, i + 1));
-                    startIndex = -1;
-                }
-            }
-        }
-    }
-    return objects;
-}
-
-// 9. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI VỪA DÁN (TỰ ĐỘNG BÓC TÁCH MỌI KIỂU MÃ)
+// 7. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI VỪA DÁN (FEATURE 1)
 function parseSmartQuestionText(text) {
-    if (!text || typeof text !== 'string') return [];
+    if (!text || typeof text !== 'string') return null;
     let cleanText = text.trim();
 
-    // Trường hợp 1: Trích xuất các block { ... } trong đoạn JSON/JS dán vào
-    const jsonBlocks = extractJsonObjectsFromText(cleanText);
-    if (jsonBlocks.length > 0) {
-        const parsedList = [];
-        for (const block of jsonBlocks) {
-            let parsed = robustParseExamScriptOrJson(block);
-            if (parsed && typeof parsed === 'object' && (parsed.question || parsed.options || parsed.statements)) {
-                let correctVal = 0;
-                if (parsed.correct !== undefined) {
-                    if (typeof parsed.correct === 'number') {
-                        correctVal = parsed.correct;
-                    } else if (typeof parsed.correct === 'string') {
-                        const L = parsed.correct.trim().toUpperCase();
-                        correctVal = ["A", "B", "C", "D"].indexOf(L) !== -1 ? ["A", "B", "C", "D"].indexOf(L) : 0;
-                    }
-                }
-
-                parsedList.push({
-                    id: parsed.id || null,
-                    type: parsed.type || (parsed.statements ? 'true_false' : (parsed.options ? 'multiple_choice' : 'short_answer')),
-                    question: parsed.question || "",
-                    options: Array.isArray(parsed.options) ? parsed.options : ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
-                    statements: Array.isArray(parsed.statements) ? parsed.statements : [],
-                    correct: correctVal,
-                    correctAnswer: parsed.correctAnswer || parsed.correct_answer || "",
-                    explanation: parsed.explanation || "",
-                    imageKey: parsed.imageKey || "",
-                    imageUrl: parsed.imageUrl || "",
-                    part: parsed.part
-                });
-            }
+    // 1. Nếu là JSON hoặc JS Object
+    let parsed = robustParseExamScriptOrJson(cleanText);
+    if (parsed) {
+        if (Array.isArray(parsed) && parsed.length > 0) parsed = parsed[0];
+        if (typeof parsed === 'object' && parsed.question) {
+            return {
+                type: parsed.type || (parsed.statements ? 'true_false' : (parsed.options ? 'multiple_choice' : 'short_answer')),
+                question: parsed.question,
+                options: parsed.options || ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
+                statements: parsed.statements || [],
+                correct: parsed.correct !== undefined ? parsed.correct : 0,
+                correctAnswer: parsed.correctAnswer || parsed.correct_answer || "",
+                explanation: parsed.explanation || "",
+                part: parsed.part
+            };
         }
-        if (parsedList.length > 0) return parsedList;
     }
 
-    // Trường hợp 2: Văn bản thuần (Word / PDF / ChatGPT / Web)
+    // 2. Nếu là văn bản thường (Word / ChatGPT / Web)
     let explanation = "";
     const explainMatch = cleanText.match(/(?:(?:Lời giải chi tiết|Hướng dẫn giải chi tiết|Hướng dẫn giải|Lời giải|HƯỚNG DẪN GIẢI|LỜI GIẢI|HDG|HD)\s*[:：\-]\s*)([\s\S]*)$/i);
     if (explainMatch) {
@@ -803,7 +667,7 @@ function parseSmartQuestionText(text) {
         cleanText = cleanText.replace(correctMatch[0], "").trim();
     }
 
-    // Bóc tách trắc nghiệm nhiều lựa chọn A, B, C, D
+    // Kiểm tra câu trắc nghiệm nhiều lựa chọn (A, B, C, D)
     const optRegex = /(?:^|\n|\r)\s*([A-D])[\.\:\)]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[A-D][\.\:\)])|$)/gi;
     const optMatches = [...cleanText.matchAll(optRegex)];
     if (optMatches.length >= 2) {
@@ -822,16 +686,16 @@ function parseSmartQuestionText(text) {
             correctIdx = letters.indexOf(correctLetter);
         }
 
-        return [{
+        return {
             type: "multiple_choice",
             question: qText || cleanText,
             options: options,
             correct: correctIdx,
             explanation: explanation
-        }];
+        };
     }
 
-    // Bóc tách Đúng / Sai a, b, c, d
+    // Kiểm tra câu Đúng / Sai (a, b, c, d)
     const stRegex = /(?:^|\n|\r)\s*([a-d])[\)\.]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[a-d][\)\.])|$)/gi;
     const stMatches = [...cleanText.matchAll(stRegex)];
     if (stMatches.length >= 2) {
@@ -850,15 +714,15 @@ function parseSmartQuestionText(text) {
             statements.push({ id, statement: stText, correct: isCorrect });
         });
 
-        return [{
+        return {
             type: "true_false",
             question: qText || cleanText,
             statements: statements,
             explanation: explanation
-        }];
+        };
     }
 
-    // Bóc tách câu trả lời ngắn
+    // Kiểm tra câu trả lời ngắn / Tự luận
     if (shortAns || /^(?:Đáp số|Kết quả|KQ)/i.test(cleanText)) {
         let qText = cleanText;
         const ansMatch = cleanText.match(/(?:(?:Đáp số|Kết quả|KQ)\s*[:：\-]?\s*)([^\n\r]+)/i);
@@ -867,66 +731,43 @@ function parseSmartQuestionText(text) {
             if (!finalAns) finalAns = ansMatch[1].trim();
             qText = cleanText.replace(ansMatch[0], "").trim();
         }
-        return [{
+        return {
             type: "short_answer",
             question: qText,
             correctAnswer: finalAns || "0",
             explanation: explanation
-        }];
+        };
     }
 
-    // Mặc định tạo trắc nghiệm
-    return [{
+    // Mặc định trả về nội dung câu hỏi
+    return {
         type: "multiple_choice",
         question: cleanText,
         options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
         correct: 0,
         explanation: explanation
-    }];
+    };
 }
 
-// 10. XỬ LÝ DÁN ĐÈ HOẶC DÁN THÊM MỚI TỪ CLIPBOARD (CÓ TỰ ĐỘNG ĐÁNH SỐ CÂU VÀ KIỂM TRA LỖI)
+// XỬ LÝ DÁN ĐÈ HOẶC DÁN THÊM MỚI TỪ CLIPBOARD
 function processPastedTextForQuestion(rawText, qIdx, mode) {
-    const qList = parseSmartQuestionText(rawText);
-    if (!qList || qList.length === 0) {
+    const qObj = parseSmartQuestionText(rawText);
+    if (!qObj) {
         alert("⚠️ Không nhận diện được nội dung câu hỏi từ đoạn vừa dán!");
         return;
     }
 
-    // Kiểm tra lỗi công thức LaTeX của tất cả các câu vừa nhận dạng
-    const allFormulaErrors = [];
-    qList.forEach((qItem, idx) => {
-        const itemErrors = validateQuestionObjectFormulas(qItem);
-        if (itemErrors.length > 0) {
-            allFormulaErrors.push(`Câu ${qIdx + idx + 1}: ` + itemErrors.join(' | '));
-        }
-    });
-
-    const questions = soiDeState.examData.questions || [];
-
     if (mode === 'overwrite') {
-        const targetQ = questions[qIdx];
+        const targetQ = soiDeState.examData.questions[qIdx];
         if (!targetQ) return;
-        const primaryNewQ = qList[0];
-
-        // Dán đè câu hiện tại
-        targetQ.type = primaryNewQ.type;
-        targetQ.question = primaryNewQ.question;
-        if (primaryNewQ.options) targetQ.options = primaryNewQ.options;
-        if (primaryNewQ.statements) targetQ.statements = primaryNewQ.statements;
-        if (primaryNewQ.correct !== undefined) targetQ.correct = primaryNewQ.correct;
-        if (primaryNewQ.correctAnswer !== undefined) targetQ.correctAnswer = primaryNewQ.correctAnswer;
-        if (primaryNewQ.explanation !== undefined) targetQ.explanation = primaryNewQ.explanation;
-        if (primaryNewQ.part) targetQ.part = primaryNewQ.part;
-
-        // Nếu dán kèm nhiều câu, chèn các câu tiếp theo vào sau
-        if (qList.length > 1) {
-            let maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
-            for (let i = 1; i < qList.length; i++) {
-                maxId++;
-                questions.splice(qIdx + i, 0, { id: maxId, ...qList[i] });
-            }
-        }
+        targetQ.type = qObj.type;
+        targetQ.question = qObj.question;
+        if (qObj.options) targetQ.options = qObj.options;
+        if (qObj.statements) targetQ.statements = qObj.statements;
+        if (qObj.correct !== undefined) targetQ.correct = qObj.correct;
+        if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
+        if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
+        if (qObj.part) targetQ.part = qObj.part;
 
         renderSoiDeBothSides();
         setTimeout(() => {
@@ -935,35 +776,22 @@ function processPastedTextForQuestion(rawText, qIdx, mode) {
             const card = document.getElementById(`soide-qcard-${targetQ.id}`);
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 40);
-
-        if (allFormulaErrors.length > 0) {
-            alert(`⚠️ CẢNH BÁO LỖI CÔNG THỨC LATEX VỪA DÁN:\n\n• ` + allFormulaErrors.join('\n• ') + `\n\n👉 Thầy hãy kiểm tra và chỉnh sửa lại công thức để hiển thị chuẩn nhé!`);
-        } else {
-            showSoiDeToast(`📋 Đã dán đè câu ${qIdx + 1}${qList.length > 1 ? ` và thêm ${qList.length - 1} câu tiếp theo` : ''} thành công!`);
-        }
+        showSoiDeToast(`📋 Đã dán đè thành công Câu ${qIdx + 1}!`);
     } else if (mode === 'insert') {
-        let maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
-        let firstInsertedId = null;
-
-        for (let i = 0; i < qList.length; i++) {
-            maxId++;
-            if (firstInsertedId === null) firstInsertedId = maxId;
-            questions.splice(qIdx + 1 + i, 0, { id: maxId, ...qList[i] });
-        }
+        const questions = soiDeState.examData.questions || [];
+        const maxId = questions.length > 0 ? Math.max(...questions.map(q => parseInt(q.id, 10) || 0)) : 0;
+        const newId = maxId + 1;
+        const newQ = { id: newId, ...qObj };
+        questions.splice(qIdx + 1, 0, newQ);
 
         renderSoiDeBothSides();
         setTimeout(() => {
             autoResizeAllTextareas();
-            if (firstInsertedId) scrollToLeftPreviewQuestion(firstInsertedId, true);
-            const card = document.getElementById(`soide-qcard-${firstInsertedId}`);
+            scrollToLeftPreviewQuestion(newId, true);
+            const card = document.getElementById(`soide-qcard-${newId}`);
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 40);
-
-        if (allFormulaErrors.length > 0) {
-            alert(`⚠️ CẢNH BÁO LỖI CÔNG THỨC LATEX VỪA DÁN:\n\n• ` + allFormulaErrors.join('\n• ') + `\n\n👉 Thầy hãy kiểm tra và chỉnh sửa lại công thức để hiển thị chuẩn nhé!`);
-        } else {
-            showSoiDeToast(`➕ Đã tạo thêm ${qList.length} câu mới ngay sau Câu ${qIdx + 1}!`);
-        }
+        showSoiDeToast(`➕ Đã tạo thêm câu mới ngay sau Câu ${qIdx + 1}!`);
     }
 }
 
@@ -984,54 +812,53 @@ async function handlePasteZoneClick(qIdx, mode) {
 function handlePasteOnQuestion(event, qIdx, mode) {
     event.preventDefault();
     event.stopPropagation();
-    const clipboardData = event.clipboardData || window.clipboardData;
-    if (!clipboardData) return;
-
-    // Kiểm tra nếu dán ảnh chụp màn hình Snipping Tool
-    const items = clipboardData.items;
-    if (items) {
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].type.indexOf('image') !== -1) {
-                const blob = items[i].getAsFile();
-                if (blob) {
-                    const q = soiDeState.examData.questions[qIdx];
-                    if (q) {
-                        const imgKey = q.imageKey || `img_q_${q.id}`;
-                        uploadSoiDeImage(blob, q.id, imgKey);
-                        showSoiDeToast(`📷 Đã dán ảnh minh họa cho Câu ${qIdx + 1}!`);
-                        return;
-                    }
-                }
-            }
-        }
-    }
-
-    const text = clipboardData.getData('text');
+    const text = (event.clipboardData || window.clipboardData)?.getData('text');
     if (text && text.trim()) {
         processPastedTextForQuestion(text, qIdx, mode);
     }
 }
 
-// 11. HÀM ĐÁNH LẠI SỐ THỨ TỰ CÂU HỎI TỰ ĐỘNG TỪ 1 ĐẾN HẾT
-function renumberAllQuestions() {
-    const questions = soiDeState.examData.questions || [];
-    if (questions.length === 0) {
-        alert("⚠️ Đề thi hiện chưa có câu hỏi nào để đánh số!");
-        return;
-    }
-
-    if (!confirm(`🔢 XÁC NHẬN ĐÁNH SỐ TỰ ĐỘNG:\n\nĐánh lại toàn bộ số thứ tự ID cho ${questions.length} câu hỏi theo thứ tự liên tục từ 1 đến ${questions.length}?`)) return;
-
-    questions.forEach((q, index) => {
-        q.id = index + 1;
-    });
-
+// 8. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
+function initDefaultSoiDeExam() {
+    soiDeState.examData = {
+        title: "ĐỀ KIỂM TRA ĐỊNH KỲ TOÁN 12",
+        maDe: "101",
+        timeLimitMinutes: 90,
+        images: {},
+        questions: [
+            {
+                id: 1,
+                type: "multiple_choice",
+                question: "Cho hàm số $y = f(x)$ liên tục trên $\\mathbb{R}$. Tìm nghiệm của phương trình $f'(x) = 0$?",
+                options: ["$x = 1$", "$x = 2$", "$x = -1$", "$x = 0$"],
+                correct: 0,
+                explanation: "Ta có $f'(x) = 0 \\Leftrightarrow x = 1$."
+            },
+            {
+                id: 2,
+                type: "true_false",
+                question: "Xét tính đúng sai của các mệnh đề sau đây:",
+                statements: [
+                    { id: "a", statement: "Hàm số đồng biến trên khoảng $(0; +\\infty)$.", correct: true },
+                    { id: "b", statement: "Hàm số có giá trị cực tiểu bằng $-2$.", correct: false },
+                    { id: "c", statement: "Đồ thị hàm số có tiệm cận đứng $x = 1$.", correct: true },
+                    { id: "d", statement: "Giá trị lớn nhất của hàm số trên $[1; 3]$ bằng $5$.", correct: true }
+                ],
+                explanation: "Mệnh đề a, c, d đúng; mệnh đề b sai."
+            },
+            {
+                id: 3,
+                type: "short_answer",
+                question: "Tính đạo hàm của hàm số $y = x^2 - 3x + 2$ tại điểm $x = 2$.",
+                correctAnswer: "1",
+                explanation: "$y' = 2x - 3 \\Rightarrow y'(2) = 1$."
+            }
+        ]
+    };
     renderSoiDeBothSides();
-    setTimeout(autoResizeAllTextareas, 40);
-    showSoiDeToast(`✅ Đã đánh số lại toàn bộ ${questions.length} câu hỏi từ 1 đến ${questions.length}!`);
 }
 
-// 12. UPLOAD & PHÂN TÍCH ĐỀ
+// 9. UPLOAD & PHÂN TÍCH ĐỀ
 function triggerSoiDeUpload() {
     const input = document.getElementById("soide-file-input");
     if (input) { input.value = ""; input.click(); }
@@ -1095,7 +922,7 @@ function readAndParseSoiDeFile(file) {
     reader.readAsText(file);
 }
 
-// 13. RENDER ĐỒNG THỜI CẢ 2 NỬA
+// 10. RENDER ĐỒNG THỜI CẢ 2 NỬA
 function renderSoiDeBothSides() {
     renderSoiDeRightEditor();
     renderSoiDeLeftLivePreview();
@@ -1115,7 +942,7 @@ function updateSoiDeMeta() {
     debouncedLivePreview();
 }
 
-// 14. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CÓ 2 VÙNG PASTE VÀ CẢNH BÁO LỖI CÔNG THỨC)
+// 11. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP (CÓ 2 VÙNG PASTE VÀ AUTO-RESIZE)
 function renderSoiDeRightEditor() {
     const metaTitle = document.getElementById("soide-meta-title");
     const metaMade = document.getElementById("soide-meta-made");
@@ -1150,12 +977,6 @@ function renderSoiDeRightEditor() {
         if (q.part === 4 || q.type === 'essay' || q.type === 'part4') currentPartType = "part4";
         else if (q.type === 'true_false') currentPartType = "true_false";
         else if (q.type === 'short_answer') currentPartType = "short_answer";
-
-        // Kiểm tra lỗi công thức riêng cho câu này
-        const qFormulaErrors = validateQuestionObjectFormulas(q);
-        const errorBadgeHtml = qFormulaErrors.length > 0 
-            ? `<div class="soide-formula-error-badge">⚠️ ${qFormulaErrors.join(' | ')}</div>` 
-            : "";
 
         let specificHtml = "";
         if (q.type === "multiple_choice" && !q.part) {
@@ -1209,7 +1030,7 @@ function renderSoiDeRightEditor() {
         }
 
         card.innerHTML = `
-            <!-- 2 VÙNG PASTE MỜ MỜ TRÊN ĐẦU MỖI CÂU -->
+            <!-- 2 VÙNG PASTE MỜ MỜ TRÊN ĐẦU MỖI CÂU (FEATURE 1) -->
             <div class="soide-paste-zones-row">
                 <div class="soide-paste-box zone-overwrite" id="paste-zone-overwrite-${qIdx}" tabindex="0"
                      onclick="handlePasteZoneClick(${qIdx}, 'overwrite')"
@@ -1250,8 +1071,6 @@ function renderSoiDeRightEditor() {
                 </div>
             </div>
 
-            ${errorBadgeHtml}
-
             <div>
                 <div class="soide-textarea-label">
                     <span>Nội dung câu hỏi (LaTeX $...$):</span>
@@ -1275,7 +1094,7 @@ function renderSoiDeRightEditor() {
     setupRightToLeftScrollSync();
 }
 
-// 15. CÁC HÀM CẬP NHẬT DỮ LIỆU
+// 12. CÁC HÀM CẬP NHẬT DỮ LIỆU
 function updateSoiDeQuestionText(idx, val) {
     if (soiDeState.examData.questions[idx]) {
         soiDeState.examData.questions[idx].question = val;
@@ -1408,7 +1227,7 @@ function deleteQuestionFromLeftPreview(qId) {
     if (qIdx !== -1) deleteQuestionFromSoiDe(qIdx);
 }
 
-// 16. CHUYỂN CHẾ ĐỘ BIÊN SOẠN
+// 13. CHUYỂN CHẾ ĐỘ BIÊN SOẠN
 function setSoiDeEditorMode(mode) {
     soiDeState.editorMode = mode;
     const btnCards = document.getElementById("btn-mode-cards");
@@ -1465,7 +1284,7 @@ function debouncedFunction(fn, delay = 250) {
     soiDeState.debounceTimer = setTimeout(fn, delay);
 }
 
-// 17. KIỂM TRA LỖI CÚ PHÁP TOÀN ĐỀ
+// 14. KIỂM TRA LỖI CÚ PHÁP
 function validateExamSyntax(questions) {
     const errors = [];
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -1478,9 +1297,9 @@ function validateExamSyntax(questions) {
         if (!q.question || !q.question.trim()) {
             errors.push(`Câu ${qNum}: Nội dung câu hỏi đang để trống!`);
         } else {
-            const fErrors = validateQuestionObjectFormulas(q);
-            if (fErrors.length > 0) {
-                errors.push(`Câu ${qNum}: ${fErrors.join('; ')}`);
+            const dollarMatches = q.question.match(/(^|[^\\])\$/g);
+            if (dollarMatches && dollarMatches.length % 2 !== 0) {
+                errors.push(`Câu ${qNum}: Dấu công thức toán '$' chưa đóng mở cân bằng!`);
             }
         }
 
@@ -1510,7 +1329,7 @@ function setValidationStatus(isValid, msg) {
     }
 }
 
-// 18. RENDER CỘT TRÁI: LIVE PREVIEW CHUẨN BỘ GD&ĐT, IN ĐẬM TIÊU ĐỀ, NỔI KHỐI MÀU & ĐỒNG BỘ CUỘN
+// 15. RENDER CỘT TRÁI: LIVE PREVIEW CHUẨN BỘ GD&ĐT, IN ĐẬM TIÊU ĐỀ, NỔI KHỐI MÀU & ĐỒNG BỘ CUỘN
 function renderSoiDeLeftLivePreview() {
     const previewContainer = document.getElementById("soide-live-preview-content");
     const countEl = document.getElementById("soide-live-qcount");
@@ -1638,12 +1457,6 @@ function renderSoiDeLeftLivePreview() {
                 💡 <b>Lời giải chi tiết:</b> ${q.explanation}
             </div>` : "";
 
-        // Kiểm tra lỗi công thức riêng cho câu này trên cột trái
-        const qFormulaErrors = validateQuestionObjectFormulas(q);
-        const errorBadgeHtml = qFormulaErrors.length > 0 
-            ? `<div class="soide-formula-error-badge" style="margin-bottom:6px;">⚠️ ${qFormulaErrors.join(' | ')}</div>` 
-            : "";
-
         html += `
             <div class="soide-preview-card" id="soide-preview-card-${qId}" data-qid="${qId}" style="background:${palette.bg}; border:1.8px solid ${palette.border};">
                 <!-- HEADER CÂU TRÊN CÙNG: IN ĐẬM TIÊU ĐỀ + NÚT THAO TÁC -->
@@ -1669,8 +1482,6 @@ function renderSoiDeLeftLivePreview() {
                     </div>
                 </div>
 
-                ${errorBadgeHtml}
-
                 <div class="q-content-text" style="margin-bottom:6px;">${formatQuestionText(q.question || "")}</div>
 
                 ${uploaderHtml}
@@ -1690,7 +1501,7 @@ function renderSoiDeLeftLivePreview() {
     }
 }
 
-// 19. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V) TRỰC TIẾP
+// 16. XỬ LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V)
 function setupSoiDePasteListeners() {
     document.querySelectorAll('.soide-left-pane .soide-preview-card').forEach(card => {
         card.addEventListener('paste', function(e) {
@@ -1798,7 +1609,7 @@ function deleteSoiDeQuestionImage(qId, imgKey) {
     renderSoiDeBothSides();
 }
 
-// 20. XUẤT FILE JSON ĐỀ THI
+// 17. XUẤT FILE JSON ĐỀ THI
 function downloadSoiDeJson() {
     try {
         const jsonStr = JSON.stringify(soiDeState.examData, null, 2);
@@ -1847,7 +1658,6 @@ window.handlePasteZoneClick = handlePasteZoneClick;
 window.handlePasteOnQuestion = handlePasteOnQuestion;
 window.processPastedTextForQuestion = processPastedTextForQuestion;
 window.scrollToLeftPreviewQuestion = scrollToLeftPreviewQuestion;
-window.renumberAllQuestions = renumberAllQuestions;
 window.triggerSoiDeUpload = triggerSoiDeUpload;
 window.handleSoiDeFileSelected = handleSoiDeFileSelected;
 window.addNewQuestionToSoiDe = addNewQuestionToSoiDe;
