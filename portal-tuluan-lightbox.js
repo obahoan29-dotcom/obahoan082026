@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: portal-tuluan-lightbox.js
-// QUẢN LÝ XEM ẢNH ZOOM 2 NGÓN TAY & CHẤM ĐIỂM THÀNH PHẦN (AUTO FOCUS, LIVE SYNC & ĐỔI MÀU XANH / ĐỎ)
+// FILE: portal-tuluan-lightbox.js (BẢN MA TRẬN 10 CỘT ĐIỂM TP CHUẨN XÁC 100% THEO ẢNH 2)
 // =========================================================
 
 let _compScoreAutoSaveTimer = null;
@@ -37,7 +36,6 @@ let _compScoreAutoSaveTimer = null;
     document.head.appendChild(style);
 })();
 
-// HÀM TỰ ĐỘNG QUÉT VÀ TÔ MÀU XANH / ĐỎ CHO TOÀN BỘ Ô ĐIỂM
 function updateCrossScoreInputStyles() {
     const inputs = document.querySelectorAll('.tuluan-score-input');
     inputs.forEach(inp => {
@@ -67,9 +65,8 @@ function onThumbnailItemClicked(cleanSbd, imgIndex, canView, event) {
     currentLightboxGallery.studentSbd = cleanSbd;
     currentLightboxGallery.images = record.images;
     currentLightboxGallery.currentIndex = Math.max(0, Math.min(imgIndex, record.images.length - 1));
-    currentLightboxGallery.currentQuestionCount = record.questionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 40);
+    currentLightboxGallery.currentQuestionCount = record.questionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 30);
     
-    // ĐỌC BẢN LƯU TỪ BỘ NHỚ KHI VỪA MỞ LẠI HỌC SINH NÀY
     const qId = currentTuLuanModalData.quizId;
     let loadedScores = null;
 
@@ -154,7 +151,7 @@ function openTuLuanLightbox(imgSrc, driveUrl, title, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentLightboxGallery.studentName = title || "Ảnh bài làm"; currentLightboxGallery.studentSbd = "";
     currentLightboxGallery.images = [{ directUrl: imgSrc, fileUrl: driveUrl }]; currentLightboxGallery.currentIndex = 0;
-    currentLightboxGallery.currentQuestionCount = (typeof detectExamQuestionCount === 'function') ? detectExamQuestionCount() : 40;
+    currentLightboxGallery.currentQuestionCount = (typeof detectExamQuestionCount === 'function') ? detectExamQuestionCount() : 30;
     currentLightboxGallery.componentScores = {};
 
     resetLightboxZoom(false); updateLightboxView();
@@ -167,123 +164,38 @@ function closeTuLuanLightbox(event) {
     closeComponentScorePopover(); resetLightboxZoom(false);
 }
 
-// BỘ ĐIỀU HƯỚNG PINCH-TO-ZOOM 2 NGÓN TAY VÀ PAN KÉO RÊ
-function setupLightboxTouchAndZoom() {
-    const area = document.getElementById("lightbox-touch-area");
-    if (!area) return;
-
-    function getDistance(t1, t2) { return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY); }
-
-    area.addEventListener("touchstart", function(e) {
-        if (!e.touches) return;
-        if (e.touches.length === 2) {
-            lightboxZoomState.initialDistance = getDistance(e.touches[0], e.touches[1]);
-            lightboxZoomState.initialScale = lightboxZoomState.scale;
-            lightboxZoomState.isDragging = false;
-        } else if (e.touches.length === 1) {
-            const touch = e.touches[0]; const now = Date.now();
-            if (now - lightboxZoomState.lastTapTime < 280) {
-                if (lightboxZoomState.scale > 1.1) resetLightboxZoom(true);
-                else { lightboxZoomState.scale = 2.4; lightboxZoomState.posX = 0; lightboxZoomState.posY = 0; applyImageTransform(true); }
-                lightboxZoomState.lastTapTime = 0; return;
-            }
-            lightboxZoomState.lastTapTime = now;
-            if (lightboxZoomState.scale > 1.05) { lightboxZoomState.isDragging = true; lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX; lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY; } 
-            else { lightboxZoomState.swipeStartX = touch.clientX; lightboxZoomState.swipeStartY = touch.clientY; lightboxZoomState.isDragging = false; }
-        }
-    }, { passive: false });
-
-    area.addEventListener("touchmove", function(e) {
-        if (!e.touches) return;
-        if (e.touches.length === 2 && lightboxZoomState.initialDistance > 0) {
-            e.preventDefault();
-            const factor = getDistance(e.touches[0], e.touches[1]) / lightboxZoomState.initialDistance;
-            let newScale = Math.min(Math.max(1, lightboxZoomState.initialScale * factor), 5);
-            lightboxZoomState.scale = newScale;
-            if (newScale === 1) { lightboxZoomState.posX = 0; lightboxZoomState.posY = 0; }
-            applyImageTransform(false);
-        } else if (e.touches.length === 1 && lightboxZoomState.isDragging && lightboxZoomState.scale > 1.05) {
-            e.preventDefault();
-            lightboxZoomState.posX = e.touches[0].clientX - lightboxZoomState.startX;
-            lightboxZoomState.posY = e.touches[0].clientY - lightboxZoomState.startY;
-            applyImageTransform(false);
-        }
-    }, { passive: false });
-
-    area.addEventListener("touchend", function(e) {
-        if (e.touches && e.touches.length === 1) {
-            lightboxZoomState.startX = e.touches[0].clientX - lightboxZoomState.posX;
-            lightboxZoomState.startY = e.touches[0].clientY - lightboxZoomState.posY;
-            lightboxZoomState.isDragging = (lightboxZoomState.scale > 1.05);
-            return;
-        }
-        if (!e.touches || e.touches.length === 0) {
-            lightboxZoomState.isDragging = false; lightboxZoomState.initialDistance = 0;
-            if (lightboxZoomState.scale <= 1.05 && e.changedTouches && e.changedTouches.length > 0) {
-                const diffX = e.changedTouches[0].clientX - lightboxZoomState.swipeStartX;
-                const diffY = e.changedTouches[0].clientY - lightboxZoomState.swipeStartY;
-                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 38) { if (diffX < 0) navigateLightbox(1); else navigateLightbox(-1); }
-            }
-        }
-    }, { passive: true });
-
-    area.addEventListener("wheel", function(e) { e.preventDefault(); zoomLightboxStep(e.deltaY < 0 ? 0.25 : -0.25); }, { passive: false });
-
-    let isMouseDown = false;
-    area.addEventListener("mousedown", function(e) { if (lightboxZoomState.scale > 1.05) { isMouseDown = true; lightboxZoomState.startX = e.clientX - lightboxZoomState.posX; lightboxZoomState.startY = e.clientY - lightboxZoomState.posY; } });
-    window.addEventListener("mousemove", function(e) { if (isMouseDown && lightboxZoomState.scale > 1.05) { lightboxZoomState.posX = e.clientX - lightboxZoomState.startX; lightboxZoomState.posY = e.clientY - lightboxZoomState.startY; applyImageTransform(false); } });
-    window.addEventListener("mouseup", function() { isMouseDown = false; });
-    document.addEventListener("keydown", function(e) {
-        const lb = document.getElementById("tuluan-lightbox");
-        if (lb && lb.style.display === "flex") { if (e.key === "ArrowLeft") navigateLightbox(-1); else if (e.key === "ArrowRight") navigateLightbox(1); else if (e.key === "Escape") closeTuLuanLightbox(); }
-    });
-}
-
-function applyImageTransform(smooth = false) {
-    const img = document.getElementById("lightbox-full-img"); const area = document.getElementById("lightbox-touch-area"); const resetBtn = document.getElementById("btn-zoom-reset");
-    if (!img) return;
-    img.style.transition = smooth ? "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)" : "none";
-    img.style.transform = `translate3d(${lightboxZoomState.posX}px, ${lightboxZoomState.posY}px, 0) scale(${lightboxZoomState.scale})`;
-    if (area) area.classList.toggle("is-zoomed", lightboxZoomState.scale > 1.05);
-    if (resetBtn) {
-        const roundScale = Math.round(lightboxZoomState.scale * 10) / 10;
-        resetBtn.innerText = roundScale > 1 ? `↺ ${roundScale}x` : `↺ 1x`;
-        resetBtn.style.color = roundScale > 1 ? "#38bdf8" : "#ffffff";
-    }
-}
-
-function resetLightboxZoom(smooth = false, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    lightboxZoomState.scale = 1; lightboxZoomState.posX = 0; lightboxZoomState.posY = 0; applyImageTransform(smooth);
-}
-
-function zoomLightboxStep(step, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-    let newScale = Math.min(Math.max(1, lightboxZoomState.scale + step), 5);
-    lightboxZoomState.scale = Math.round(newScale * 100) / 100;
-    if (lightboxZoomState.scale <= 1.02) { lightboxZoomState.scale = 1; lightboxZoomState.posX = 0; lightboxZoomState.posY = 0; }
-    applyImageTransform(true);
-}
-
-// =========================================================
-// LOGIC BẢNG ĐIỂM THÀNH PHẦN TỪNG CÂU VÀ AUTO-FOCUS
-// =========================================================
+// BỘ ĐIỀU HƯỚNG POPOVER ĐIỂM THÀNH PHẦN
 function toggleComponentScorePopover(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const pop = document.getElementById("component-score-popover"); if (!pop) return;
-    if (!pop.classList.contains("show")) { pop.classList.add("show"); renderComponentScoreGrid(); } else { pop.classList.remove("show"); }
+    if (!pop.classList.contains("show")) {
+        pop.classList.add("show");
+        renderComponentScoreGrid();
+    } else {
+        pop.classList.remove("show");
+    }
 }
 function closeComponentScorePopover(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const pop = document.getElementById("component-score-popover"); if (pop) pop.classList.remove("show");
 }
 
-function setQuickQuestionCount(num) { const input = document.getElementById("comp-score-q-count"); if (input) input.value = num; onComponentQuestionCountChanged(num); }
-function onComponentQuestionCountChanged(val) {
-    let count = parseInt(val, 10); if (isNaN(count) || count < 1) count = 40; if (count > 120) count = 120;
-    currentLightboxGallery.currentQuestionCount = count; renderComponentScoreGrid();
+function setQuickQuestionCount(num) {
+    const input = document.getElementById("comp-score-q-count");
+    if (input) input.value = num;
+    document.querySelectorAll(".btn-quick-count-pill").forEach(b => b.classList.toggle("active", b.id === `btn-count-${num}`));
+    onComponentQuestionCountChanged(num);
 }
 
+function onComponentQuestionCountChanged(val) {
+    let count = parseInt(val, 10);
+    if (isNaN(count) || count < 1) count = 30;
+    if (count > 120) count = 120;
+    currentLightboxGallery.currentQuestionCount = count;
+    renderComponentScoreGrid();
+}
+
+// RENDER MA TRẬN 10 CỘT ĐIỂM TP CHUẨN XÁC THEO ẢNH 2
 function renderComponentScoreGrid() {
     const container = document.getElementById("comp-score-grid-container"); 
     const nameEl = document.getElementById("comp-score-st-name"); 
@@ -291,11 +203,13 @@ function renderComponentScoreGrid() {
     const modeSelect = document.getElementById("comp-score-apply-mode");
     if (!container) return;
 
-    if (nameEl) nameEl.innerText = currentLightboxGallery.studentName || "Học sinh";
-    const totalQ = currentLightboxGallery.currentQuestionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 40);
+    if (nameEl) nameEl.innerText = (currentLightboxGallery.studentName || "Học sinh").toUpperCase();
+    const totalQ = currentLightboxGallery.currentQuestionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 30);
     if (qCountInput) qCountInput.value = totalQ;
 
-    // Gắn sự kiện khi đổi cách quy đổi điểm thì tự nhảy ra bảng ngoài
+    // Đánh dấu nút chọn nhanh tương ứng
+    document.querySelectorAll(".btn-quick-count-pill").forEach(b => b.classList.toggle("active", b.id === `btn-count-${totalQ}`));
+
     if (modeSelect && !modeSelect.dataset.hasListener) {
         modeSelect.dataset.hasListener = "true";
         modeSelect.addEventListener("change", () => updateComponentScoreTotals());
@@ -318,18 +232,22 @@ function renderComponentScoreGrid() {
     let html = "";
     for (let i = 1; i <= totalQ; i++) {
         const val = (savedDetails[i] !== undefined && savedDetails[i] !== null) ? savedDetails[i] : "";
-        html += `<div class="comp-score-cell-box"><input type="text" class="comp-score-cell-input" id="comp-q-${i}" value="${val}" placeholder="C${i}" oninput="onComponentCellInput(${i}, this.value)" onkeydown="onComponentCellKeyDown(event, ${i}, ${totalQ})"></div>`;
+        html += `
+            <div class="comp-score-cell-box">
+                <input type="text" class="comp-score-cell-input" id="comp-q-${i}" value="${val}" placeholder="" oninput="onComponentCellInput(${i}, this.value)" onkeydown="onComponentCellKeyDown(event, ${i}, ${totalQ})">
+            </div>
+        `;
     }
     container.innerHTML = html; 
     updateComponentScoreTotals();
 
-    // AUTO-FOCUS VÀO Ô TRỐNG ĐẦU TIÊN KHI MỞ BẢNG LÊN
+    // Tự động focus vào ô trống đầu tiên
     setTimeout(() => {
         for (let i = 1; i <= totalQ; i++) {
             const input = document.getElementById(`comp-q-${i}`);
             if (input && input.value === "") { input.focus(); break; }
         }
-    }, 100);
+    }, 80);
 }
 
 function onComponentCellInput(qIdx, val) {
@@ -341,10 +259,8 @@ function onComponentCellInput(qIdx, val) {
         if (!isNaN(num)) currentLightboxGallery.componentScores[qIdx] = num; 
     }
     
-    // TỰ ĐỘNG CẬP NHẬT TỔNG ĐIỂM VÀ ĐƯA RA BẢNG NGOÀI NGAY LẬP TỨC
     updateComponentScoreTotals();
 
-    // Lưu nháp tức thì vào SessionStorage
     const sbd = currentLightboxGallery.studentSbd; 
     const qId = currentTuLuanModalData.quizId;
     if (sbd && qId) sessionStorage.setItem(`draft_comp_score_${qId}_${sbd}`, JSON.stringify(currentLightboxGallery.componentScores));
@@ -352,15 +268,19 @@ function onComponentCellInput(qIdx, val) {
 
 function onComponentCellKeyDown(event, currentIdx, totalQ) {
     if (event.key === "Enter" || event.key === "Tab") {
-        event.preventDefault(); const nextIdx = currentIdx + 1;
-        if (nextIdx <= totalQ) { const nextInput = document.getElementById(`comp-q-${nextIdx}`); if (nextInput) nextInput.focus(); }
+        event.preventDefault();
+        const nextIdx = currentIdx + 1;
+        if (nextIdx <= totalQ) {
+            const nextInput = document.getElementById(`comp-q-${nextIdx}`);
+            if (nextInput) nextInput.focus();
+        }
     }
 }
 
-// CẬP NHẬT TỔNG ĐIỂM VÀ ĐỒNG THỜI CHO MỌC RA BẢNG NGOÀI TỨC THÌ
+// CẬP NHẬT TỔNG ĐIỂM VÀ ĐƯA RA BẢNG NGOÀI
 function updateComponentScoreTotals() {
     const scores = currentLightboxGallery.componentScores || {}; 
-    const totalQ = currentLightboxGallery.currentQuestionCount || 40;
+    const totalQ = currentLightboxGallery.currentQuestionCount || 30;
     let sum = 0; 
     let hasAnyScore = false;
 
@@ -380,7 +300,6 @@ function updateComponentScoreTotals() {
     if (totalEl) totalEl.innerText = sum; 
     if (scale10El) scale10El.innerText = scale10;
 
-    // TỰ ĐỘNG MỌC RA BẢNG NGOÀI NGAY SAU KHI NHẬP:
     const sbd = currentLightboxGallery.studentSbd;
     const qId = currentTuLuanModalData.quizId;
     const mode = document.getElementById("comp-score-apply-mode")?.value || "scale10";
@@ -411,17 +330,14 @@ function updateComponentScoreTotals() {
             currentTuLuanModalData.submissionsMap[sbd].questionCount = totalQ;
         }
 
-        // Cập nhật đổi màu Xanh / Đỏ tức thì cho các ô điểm
         updateCrossScoreInputStyles();
 
-        // Tự động lưu ngầm ra máy chủ và LocalStorage sau 600ms (không cần đợi bấm Lưu)
         if (qId && hasAnyScore) {
             triggerAutoSaveComponentScore(sbd, qId, finalScore);
         }
     }
 }
 
-// HÀM TỰ ĐỘNG LƯU NGẦM (DEBOUNCE AUTO-SAVE)
 function triggerAutoSaveComponentScore(sbd, qId, finalScore) {
     if (_compScoreAutoSaveTimer) clearTimeout(_compScoreAutoSaveTimer);
     _compScoreAutoSaveTimer = setTimeout(async () => {
@@ -429,7 +345,6 @@ function triggerAutoSaveComponentScore(sbd, qId, finalScore) {
     }, 600);
 }
 
-// BỘ LƯU DỮ LIỆU ĐA TẦNG (LOCALSTORAGE + SUPABASE) BẢO ĐẢM KHÔNG BAO GIỜ MẤT
 async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false) {
     if (!sbd || !qId) return;
 
@@ -440,7 +355,7 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
     const pad = n => String(n).padStart(2, '0'); 
     const scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
 
-    // 1. Lưu lập tức vào LocalStorage của trình duyệt (BẢO VỆ 100% KHI TẮT ĐI BẬT LẠI)
+    // Lưu LocalStorage
     try {
         const localKey = `tuluan_scores_${qId}`;
         const rawLocal = localStorage.getItem(localKey);
@@ -457,7 +372,6 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
         localStorage.setItem(localKey, JSON.stringify(map));
     } catch(e) {}
 
-    // Cập nhật bộ nhớ ram hiện tại
     if (currentTuLuanModalData.submissionsMap[sbd]) {
         currentTuLuanModalData.submissionsMap[sbd].crossScore = finalScore;
         currentTuLuanModalData.submissionsMap[sbd].crossScoreBy = graderDisplay;
@@ -466,11 +380,10 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
         currentTuLuanModalData.submissionsMap[sbd].questionCount = currentLightboxGallery.currentQuestionCount;
     }
 
-    // 2. Lưu đồng bộ lên Supabase
+    // Lưu Supabase
     try {
         const client = typeof getDbClient === 'function' ? getDbClient() : null;
         if (client) {
-            // Lưu vào app_key_values (luôn đảm bảo 100% không bị lỗi schema cột)
             try {
                 const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'detail_scores_' + qId).single();
                 const allCompScores = (existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {};
@@ -486,7 +399,6 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
                 await client.from('app_key_values').upsert({ key: 'detail_scores_' + qId, value: allCompScores });
             } catch(metaErr) {}
 
-            // Cập nhật vào tu_luan_submissions một cách an toàn
             try {
                 const { data: updatedRows } = await client.from('tu_luan_submissions')
                     .update({ 
@@ -498,7 +410,6 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
                     .eq('sbd', sbd)
                     .select();
 
-                // Nếu học sinh chưa có dòng nộp nào trước đó thì tự tạo mới
                 if (!updatedRows || updatedRows.length === 0) {
                     await client.from('tu_luan_submissions').insert([{
                         quiz_id: qId,
@@ -522,7 +433,6 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
             scoreInput.title = `🎯 Điểm TP: ${finalScore}đ\n👤 Người chấm: ${graderDisplay}\n🕒 Lúc: ${scoreTimeStr}`; 
         }
 
-        // Đổi màu Xanh / Đỏ tức thì
         updateCrossScoreInputStyles();
 
         if (showAlert) {
@@ -534,7 +444,6 @@ async function persistComponentScoreData(sbd, qId, finalScore, showAlert = false
     }
 }
 
-// SỰ KIỆN NÚT "LƯU & ĐƯA RA BẢNG" VẪN GIỮ NGUYÊN
 async function saveComponentScoresAction(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const sbd = currentLightboxGallery.studentSbd; 
@@ -549,7 +458,6 @@ async function saveComponentScoresAction(event) {
     await persistComponentScoreData(sbd, qId, finalScore, true);
 }
 
-// LƯU ĐIỂM TRỰC TIẾP TRÊN Ô BẢNG NGOÀI (CŨNG LƯU BẢO LƯU 100%)
 async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) {
     const qId = currentTuLuanModalData.quizId; if (!qId) return;
     const trimmedScore = String(scoreVal || "").trim(); 
@@ -565,7 +473,6 @@ async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) 
         scoreTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
     }
 
-    // 1. Lưu LocalStorage
     try {
         const localKey = `tuluan_scores_${qId}`;
         const rawLocal = localStorage.getItem(localKey);
@@ -578,7 +485,6 @@ async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) 
         localStorage.setItem(localKey, JSON.stringify(map));
     } catch(e) {}
 
-    // 2. Cập nhật ram
     if (!currentTuLuanModalData.submissionsMap[cleanSbd]) {
         currentTuLuanModalData.submissionsMap[cleanSbd] = { stt: stt, sbd: sbd, studentName: studentName, className: driveClassName, count: 0, images: [], crossScore: trimmedScore, crossScoreBy: graderDisplay, crossScoreTime: scoreTimeStr };
     } else { 
@@ -587,7 +493,6 @@ async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) 
         currentTuLuanModalData.submissionsMap[cleanSbd].crossScoreTime = scoreTimeStr; 
     }
 
-    // 3. Lưu Supabase
     try {
         const client = typeof getDbClient === 'function' ? getDbClient() : null;
         if (client) {
@@ -637,8 +542,6 @@ window.navigateLightbox = navigateLightbox;
 window.jumpToLightboxPage = jumpToLightboxPage;
 window.openTuLuanLightbox = openTuLuanLightbox;
 window.closeTuLuanLightbox = closeTuLuanLightbox;
-window.resetLightboxZoom = resetLightboxZoom;
-window.zoomLightboxStep = zoomLightboxStep;
 window.toggleComponentScorePopover = toggleComponentScorePopover;
 window.closeComponentScorePopover = closeComponentScorePopover;
 window.setQuickQuestionCount = setQuickQuestionCount;
