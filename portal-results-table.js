@@ -1,20 +1,16 @@
 // =========================================================
-// FILE: portal-results-table.js
-// QUẢN LÝ BẢNG KẾT QUẢ THI, CÀI ĐẶT FONT, XẾP HẠNG, LẦN THI
-// VÀ HIỆU ỨNG TRÁI TIM TÍM NEON DẠ QUANG SÁNG RỰC ĐẬP THEO NHỊP
+// FILE: portal-results-table.js (BẢN HOÀN CHỈNH BỔ SUNG CỘT THU ÉP BUỘC)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
 let _liveDoingTickerInterval = null;
 
-// TỰ ĐỘNG TIÊM BỘ STYLE TRÁI TIM TÍM NEON DẠ QUANG SÁNG RỰC (KHÁC ĐỎ VÀ XANH LÁ)
 (function injectHeartbeatDoingStyles() {
     const styleId = "status-doing-heartbeat-styles";
     if (document.getElementById(styleId)) return;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* NHỊP ĐẬP TRÁI TIM 2 PHA (LUB-DUB) KÈM VẦNG SÁNG TÍM NEON DẠ QUANG RỰC RỠ */
         @keyframes heartbeatDoing {
             0% {
                 transform: scale(1);
@@ -50,7 +46,6 @@ let _liveDoingTickerInterval = null;
             70% { transform: scale(1) rotate(0deg); }
         }
 
-        /* NỀN TÍM NEON DẠ QUANG SÁNG RỰC, VIỀN PHÁT SÁNG CỰC KỲ NỔI BẬT */
         .status-doing-heartbeat {
             display: inline-flex !important;
             align-items: center !important;
@@ -84,7 +79,6 @@ let _liveDoingTickerInterval = null;
             filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.85)) !important;
         }
 
-        /* DÒNG HỌC SINH ĐANG THI ĐƯỢC TÔ NỀN TÍM ÁNH KIM NHẸ NHÀNG */
         tr.row-student-is-doing td {
             background-color: #faf5ff !important;
         }
@@ -97,7 +91,6 @@ let _liveDoingTickerInterval = null;
             font-weight: 900 !important;
         }
 
-        /* KHỐI HIỂN THỊ THỜI GIAN NHẢY TỪNG GIÂY */
         .live-doing-timer-pill {
             display: inline-flex !important;
             align-items: center !important;
@@ -133,6 +126,50 @@ let _liveDoingTickerInterval = null;
             border-radius: 12px !important;
             font-size: 0.9em !important;
             font-weight: 800 !important;
+        }
+
+        /* NÚT THU ÉP BUỘC ĐƠN LẺ & NÚT THU TẤT CẢ TRÊN TIÊU ĐỀ */
+        .btn-force-submit-row {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #fde68a !important;
+            border-radius: 8px !important;
+            padding: 3px 7px !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            box-shadow: 0 1px 4px rgba(245, 158, 11, 0.3) !important;
+            transition: all 0.15s ease !important;
+            white-space: nowrap !important;
+        }
+        .btn-force-submit-row:hover {
+            filter: brightness(1.12) !important;
+            transform: translateY(-1px) !important;
+        }
+        .btn-force-submit-row:active {
+            transform: translateY(2px) scale(0.95) !important;
+        }
+
+        .btn-force-submit-header {
+            background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #fdba74 !important;
+            border-radius: 7px !important;
+            padding: 2px 6px !important;
+            font-size: 10px !important;
+            font-weight: 900 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
+            text-transform: none !important;
+        }
+        .btn-force-submit-header:hover {
+            filter: brightness(1.15) !important;
         }
     `;
     document.head.appendChild(style);
@@ -453,17 +490,42 @@ function deleteResultRowPermanently(rowUid, event) {
     updateStatsAndRenderTable(currentExamResultData.rawRows);
 }
 
-function ensureDeleteColumnHeader() {
+// BỔ SUNG CỘT THU ÉP BUỘC NẰM NGAY TRƯỚC CỘT XÓA
+function ensureActionColumnHeaders() {
     const table = document.getElementById("admin-result-table");
-    if (!table) return; const theadTr = table.querySelector("thead tr"); if (!theadTr) return;
-    if (!theadTr.querySelector(".th-row-action-col")) {
-        const th = document.createElement("th"); th.className = "th-row-action-col";
-        th.style.width = "75px"; th.style.textAlign = "center"; th.innerText = "Xóa";
-        theadTr.appendChild(th);
+    if (!table) return; 
+    const theadTr = table.querySelector("thead tr"); 
+    if (!theadTr) return;
+
+    let thForce = theadTr.querySelector(".th-force-submit-col");
+    let thDel = theadTr.querySelector(".th-row-action-col");
+
+    if (!thDel) {
+        thDel = document.createElement("th");
+        thDel.className = "th-row-action-col";
+        thDel.style.width = "75px";
+        thDel.style.textAlign = "center";
+        thDel.innerText = "XÓA";
+        theadTr.appendChild(thDel);
+    }
+
+    if (!thForce) {
+        thForce = document.createElement("th");
+        thForce.className = "th-force-submit-col";
+        thForce.style.width = "95px";
+        thForce.style.textAlign = "center";
+        thForce.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:11px;">Thu ép</span>
+                <button type="button" class="btn-force-submit-header" onclick="forceSubmitAllDoingStudents(event)" title="Thu ép bài toàn bộ thí sinh đang thi ngay lập tức">
+                    ⚡ Thu tất cả
+                </button>
+            </div>
+        `;
+        theadTr.insertBefore(thForce, thDel);
     }
 }
 
-// BỘ ĐỒNG HỒ TỰ ĐỘNG CẬP NHẬT TỪNG GIÂY CHO CÁC EM ĐANG THI TRÊN BẢNG
 function startLiveDoingTicker() {
     if (_liveDoingTickerInterval) clearInterval(_liveDoingTickerInterval);
     _liveDoingTickerInterval = setInterval(() => {
@@ -479,11 +541,13 @@ function startLiveDoingTicker() {
 }
 
 function renderFilteredResultTable(rows) {
-    ensureDeleteColumnHeader();
-    const tbody = document.getElementById("result-table-tbody"); if (!tbody) return; tbody.innerHTML = "";
+    ensureActionColumnHeaders();
+    const tbody = document.getElementById("result-table-tbody"); 
+    if (!tbody) return; 
+    tbody.innerHTML = "";
 
     if (!rows || rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">Không tìm thấy dữ liệu học sinh nào!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">Không tìm thấy dữ liệu học sinh nào!</td></tr>`;
         return;
     }
 
@@ -510,7 +574,6 @@ function renderFilteredResultTable(rows) {
         const currentSub = attCount > 0 ? row.allAttempts[row.selectedAttemptIndex] : null;
         const uid = row._rowUid || `row_${rowIdx}`;
 
-        // Nếu học sinh đang thi -> tô màu viền & nền tỏa sáng nhẹ
         if (row.isDoing) {
             tr.classList.add("row-student-is-doing");
         }
@@ -547,19 +610,16 @@ function renderFilteredResultTable(rows) {
         let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
         let col11_details = `<span class="status-not-submitted">---</span>`;
 
+        let col_forceSubmit = `<span style="color:#cbd5e1; font-weight:700;">---</span>`;
+
         if (row.isDoing) {
-            // ==========================================
-            // XỬ LÝ HỌC SINH ĐANG THI (HIỆN RÕ, TRÁI TIM TÍM NEON DẠ QUANG)
-            // ==========================================
             let startMs = row.doingStartTime || Date.now();
             let formattedIn = formatDateTimeFull(startMs);
             let liveDuration = formatElapsedDuration(startMs);
 
             col2_inTime = `<span style="color:#7e22ce; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
-            // CỘT THỜI GIAN THI: NHẢY TỪNG GIÂY
             col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
             
-            // CỘT TÌNH TRẠNG: GHI RÕ "ĐANG THI", CÓ NHỊP ĐẬP TRÁI TIM TÍM NEON SÁNG RỰC
             const attemptText = (attCount > 0) ? ` (Lần ${attCount + 1})` : "";
             if (row.isFreeDoing) { 
                 col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang thi trực tuyến"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>`; 
@@ -571,7 +631,6 @@ function renderFilteredResultTable(rows) {
             col9_tabs = doingTabs > 0 ? `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
             col10_cheatTime = row.cheatTimeString !== "0s" ? row.cheatTimeString : `<span class="status-not-submitted">---</span>`;
 
-            // Nếu đã từng nộp bài lần trước, vẫn hiển thị điểm của lần trước để Thầy tiện theo dõi
             if (currentSub) {
                 let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : 0);
                 col7_correct = `<span style="font-weight:900; color:#15803d;" title="Điểm lần trước">${cCount} câu</span>`;
@@ -585,8 +644,9 @@ function renderFilteredResultTable(rows) {
                 }
             }
 
+            col_forceSubmit = `<button type="button" class="btn-force-submit-row" onclick="forceSubmitSingleStudent('${uid}', event)" title="Thu ép bài học sinh này ngay lập tức">⚡ Thu ép</button>`;
+
         } else if (currentSub) {
-            // HỌC SINH ĐÃ NỘP BÀI
             let subDateMs = getSubmissionTimestamp(currentSub);
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
             col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || (currentSub.calcMetrics && currentSub.calcMetrics.completionTimeStr) || `${currentSub.spentMins||0} phút`}</span>`;
@@ -632,11 +692,28 @@ function renderFilteredResultTable(rows) {
         let safeTitleCol10 = stripHtml(col10_cheatTime);
         let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; padding:3px 8px; font-size:11.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s; box-shadow:0 1px 3px rgba(239,68,68,0.15);">🗑️ Xóa</button>`;
 
-        tr.innerHTML = `<td class="td-stt">${col1_stt}</td><td class="td-exam-col" title="${currentExamTitle}">${col_examName}</td><td class="td-attempt-cell-wrap">${col_attemptCount}</td><td class="td-truncate" title="${stripHtml(col2_inTime)}">${col2_inTime}</td><td class="td-truncate" title="${stripHtml(col3_spentTime)}">${col3_spentTime}</td><td class="td-truncate" title="${rawName}">${col4_name}</td><td class="td-class td-truncate" title="${rawClass}">${col_class}</td><td class="td-sbd td-truncate" title="${col5_sbd}">${col5_sbd}</td><td style="text-align:center;">${col6_status}</td><td style="text-align:center;">${col7_correct}</td><td class="td-score">${col8_score}</td><td style="text-align:center;">${col_rank}</td><td class="td-tabs">${col9_tabs}</td><td class="td-tab-times td-truncate" title="${safeTitleCol10}">${col10_cheatTime}</td><td class="td-truncate">${col11_details}</td><td style="text-align:center;">${col_action}</td>`;
+        tr.innerHTML = `
+            <td class="td-stt">${col1_stt}</td>
+            <td class="td-exam-col" title="${currentExamTitle}">${col_examName}</td>
+            <td class="td-attempt-cell-wrap">${col_attemptCount}</td>
+            <td class="td-truncate" title="${stripHtml(col2_inTime)}">${col2_inTime}</td>
+            <td class="td-truncate" title="${stripHtml(col3_spentTime)}">${col3_spentTime}</td>
+            <td class="td-truncate" title="${rawName}">${col4_name}</td>
+            <td class="td-class td-truncate" title="${rawClass}">${col_class}</td>
+            <td class="td-sbd td-truncate" title="${col5_sbd}">${col5_sbd}</td>
+            <td style="text-align:center;">${col6_status}</td>
+            <td style="text-align:center;">${col7_correct}</td>
+            <td class="td-score">${col8_score}</td>
+            <td style="text-align:center;">${col_rank}</td>
+            <td class="td-tabs">${col9_tabs}</td>
+            <td class="td-tab-times td-truncate" title="${safeTitleCol10}">${col10_cheatTime}</td>
+            <td class="td-truncate">${col11_details}</td>
+            <td style="text-align:center;">${col_forceSubmit}</td>
+            <td style="text-align:center;">${col_action}</td>
+        `;
         tbody.appendChild(tr);
     });
 
-    // KÍCH HOẠT ĐỒNG HỒ NHẢY GIỜ TRỰC TIẾP TỪNG GIÂY
     startLiveDoingTicker();
 }
 
