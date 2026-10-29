@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 5: exam-api.js (BẢN TƯƠNG THÍCH SUPABASE ACTIVE_SESSIONS 100%)
+// FILE 5: exam-api.js (BẢN TÍCH HỢP BỘ LẮNG NGHE LỆNH THU ÉP TỨC THÌ 0S)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -27,6 +27,7 @@ let pendingSubmissionPayload = null;
 let presenceInterval = null;
 let realtimeConfigChannel = null;
 let onlineRealtimeChannel = null;
+let forceSubmitRealtimeChannel = null;
 
 window.localOnlineCount = 1; 
 
@@ -300,6 +301,45 @@ function startOnlineRealtimeWatcher(quizId) {
         .subscribe();
 }
 
+// =========================================================================
+// BỘ LẮNG NGHE LỆNH THU ÉP BUỘC TỪ GIÁO VIÊN QUA SUPABASE REALTIME
+// =========================================================================
+function startForceSubmitWatcher(quizId) {
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!quizId || !client) return;
+
+    if (forceSubmitRealtimeChannel) {
+        try { client.removeChannel(forceSubmitRealtimeChannel); } catch(e) {}
+        forceSubmitRealtimeChannel = null;
+    }
+
+    const sbd = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+    const cleanSbd = (sbd || "user").replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+    forceSubmitRealtimeChannel = client.channel(`exam_force_submit_${quizId}`)
+        .on('broadcast', { event: 'FORCE_SUBMIT' }, payload => {
+            if (isSubmitted) return;
+            const data = payload.payload;
+            if (!data) return;
+
+            const targetSbd = String(data.sbd || data.targetSbd || "").trim().toLowerCase();
+            const mySbdClean = cleanSbd;
+            const myRawSbd = String(sbd).trim().toLowerCase();
+
+            if (targetSbd === 'all' || targetSbd === mySbdClean || targetSbd === myRawSbd) {
+                if (typeof showTimeChangeToast === 'function') {
+                    showTimeChangeToast("⚡ Giáo viên đã gửi lệnh thu bài ép buộc! Đang tiến hành nộp bài ngay...");
+                }
+                setTimeout(() => {
+                    if (typeof window.executeSubmitExam === 'function') {
+                        window.executeSubmitExam(true);
+                    }
+                }, 400);
+            }
+        })
+        .subscribe();
+}
+
 function startPresenceSystem(sId) {
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     updatePresence(cleanSbd);
@@ -307,7 +347,10 @@ function startPresenceSystem(sId) {
 
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
-    if (currentQuizId) { startOnlineRealtimeWatcher(currentQuizId); }
+    if (currentQuizId) { 
+        startOnlineRealtimeWatcher(currentQuizId); 
+        startForceSubmitWatcher(currentQuizId);
+    }
 
     if (presenceInterval) clearInterval(presenceInterval);
     presenceInterval = setInterval(() => { 
@@ -315,7 +358,6 @@ function startPresenceSystem(sId) {
     }, 30000);
 }
 
-// CẬP NHẬT TRẠNG THÁI ACTIVE_SESSIONS CHUẨN XÁC, AN TOÀN TUYỆT ĐỐI
 async function updatePresence(cleanSbd) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -328,13 +370,11 @@ async function updatePresence(cleanSbd) {
         const sClass = document.getElementById("student-class")?.value.trim() || "Lớp";
         const nowMs = Date.now();
 
-        // 1. Thử update dòng hiện tại
         const { data: updated } = await client.from('active_sessions')
             .update({ last_ping: nowMs })
             .match({ quiz_id: currentQuizId, sbd: cleanSbd })
             .select();
 
-        // 2. Nếu chưa có (hoặc vừa mở lại trình duyệt), chèn mới trực tiếp
         if (!updated || updated.length === 0) {
             await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
@@ -355,10 +395,16 @@ async function updatePresence(cleanSbd) {
 function clearPresence(sId) {
     if (presenceInterval) clearInterval(presenceInterval);
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    
     if (onlineRealtimeChannel && client) {
-        client.removeChannel(onlineRealtimeChannel);
+        try { client.removeChannel(onlineRealtimeChannel); } catch(e) {}
         onlineRealtimeChannel = null;
     }
+    if (forceSubmitRealtimeChannel && client) {
+        try { client.removeChannel(forceSubmitRealtimeChannel); } catch(e) {}
+        forceSubmitRealtimeChannel = null;
+    }
+
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
@@ -542,6 +588,7 @@ function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) {
     }]).then();
 }
 
+window.startForceSubmitWatcher = startForceSubmitWatcher;
 window.updateTopBackupStatus = updateTopBackupStatus;
 window.refreshOnlineCount = refreshOnlineCount;
 window.applyOnlineCountVisibility = applyOnlineCountVisibility;
