@@ -1,9 +1,12 @@
 // =========================================================
-// FILE: portal-results-table.js (BẢN HOÀN CHỈNH BỔ SUNG CỘT THU ÉP BUỘC)
+// FILE: portal-results-table.js (BẢN TÍCH HỢP PHÓNG TO/THU NHỎ MODAL ĐỘC LẬP VỚI WEB CHÍNH)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
 let _liveDoingTickerInterval = null;
+
+// BIẾN QUẢN LÝ TỶ LỆ PHÓNG TO / THU NHỎ ĐỘC LẬP CHO RIÊNG MODAL KẾT QUẢ
+let modalCustomZoomLevel = 1.0;
 
 (function injectHeartbeatDoingStyles() {
     const styleId = "status-doing-heartbeat-styles";
@@ -11,6 +14,75 @@ let _liveDoingTickerInterval = null;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
+        /* Khóa cứng nền cuộn và chạm của Web chính khi Modal Kết quả đang mở */
+        body.modal-backdrop-locked {
+            overflow: hidden !important;
+            touch-action: none !important;
+            overscroll-behavior: contain !important;
+        }
+
+        /* Khung modal kết quả tự cô lập cuộn và thao tác zoom */
+        .result-fullscreen-modal {
+            overscroll-behavior: contain !important;
+            touch-action: pan-x pan-y !important;
+        }
+
+        /* Khung chứa bảng điểm hỗ trợ phóng to thu nhỏ độc lập */
+        .result-modal-body {
+            transform-origin: top center !important;
+            transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+
+        /* THANH ĐIỀU KHIỂN PHÓNG TO / THU NHỎ ĐỘC LẬP */
+        .modal-independent-zoom-control {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            background: #1e293b !important;
+            border: 1.5px solid #475569 !important;
+            border-radius: 20px !important;
+            padding: 3px 5px !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+            user-select: none !important;
+        }
+        .btn-modal-zoom-step {
+            width: 24px !important;
+            height: 24px !important;
+            border-radius: 50% !important;
+            border: none !important;
+            background: #334155 !important;
+            color: #ffffff !important;
+            font-size: 13px !important;
+            font-weight: 900 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+            padding: 0 !important;
+            line-height: 1 !important;
+        }
+        .btn-modal-zoom-step:hover {
+            background: #0284c7 !important;
+            transform: scale(1.1) !important;
+        }
+        .btn-modal-zoom-step:active {
+            transform: scale(0.92) !important;
+        }
+        .modal-zoom-val-badge {
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            color: #38bdf8 !important;
+            padding: 0 6px !important;
+            min-width: 42px !important;
+            text-align: center !important;
+            font-family: 'Be Vietnam Pro', monospace !important;
+            cursor: pointer !important;
+        }
+        .modal-zoom-val-badge:hover {
+            text-decoration: underline !important;
+        }
+
         @keyframes heartbeatDoing {
             0% {
                 transform: scale(1);
@@ -173,6 +245,83 @@ let _liveDoingTickerInterval = null;
         }
     `;
     document.head.appendChild(style);
+})();
+
+// HÀM ÁP DỤNG PHÓNG TO / THU NHỎ ĐỘC LẬP CHO MODAL KẾT QUẢ
+function applyModalZoomLevel(newLevel) {
+    modalCustomZoomLevel = Math.min(1.8, Math.max(0.65, Math.round(newLevel * 100) / 100));
+    
+    // Cập nhật lên container hiển thị của modal kết quả
+    const mainView = document.getElementById("result-modal-main-view");
+    const detailView = document.getElementById("result-detailed-stats-view");
+    
+    const applyToEl = (el) => {
+        if (!el) return;
+        // Dùng CSS zoom nếu trình duyệt hỗ trợ (Chrome, Edge, Safari hiện đại), fallback sang transform
+        if ('zoom' in el.style) {
+            el.style.zoom = modalCustomZoomLevel;
+        } else {
+            el.style.transform = `scale(${modalCustomZoomLevel})`;
+            el.style.transformOrigin = "top center";
+        }
+    };
+
+    applyToEl(mainView);
+    applyToEl(detailView);
+
+    const badge = document.getElementById("modal-zoom-display-val");
+    if (badge) {
+        badge.innerText = `${Math.round(modalCustomZoomLevel * 100)}%`;
+        badge.title = `Nhấn vào để đưa về 100% gốc`;
+    }
+}
+
+function adjustModalZoomStep(step) {
+    applyModalZoomLevel(modalCustomZoomLevel + step);
+}
+
+function resetModalZoom() {
+    applyModalZoomLevel(1.0);
+}
+
+// ĐẢM BẢO NÚT CÔNG CỤ ZOOM ĐỘC LẬP LUÔN HIỆN DIỆN TRÊN HEADER MODAL
+function ensureModalZoomControlsInHeader() {
+    const toolsWrap = document.querySelector(".result-modal-tools");
+    if (!toolsWrap || document.getElementById("modal-independent-zoom-control")) return;
+
+    const zoomDiv = document.createElement("div");
+    zoomDiv.className = "modal-independent-zoom-control";
+    zoomDiv.id = "modal-independent-zoom-control";
+    zoomDiv.title = "Phóng to / Thu nhỏ độc lập bảng kết quả (hoặc giữ Ctrl + lăn chuột)";
+    zoomDiv.innerHTML = `
+        <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(-0.1)" title="Thu nhỏ bảng điểm">−</button>
+        <span class="modal-zoom-val-badge" id="modal-zoom-display-val" onclick="resetModalZoom()" title="Nhấp để về 100%">100%</span>
+        <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(0.1)" title="Phóng to bảng điểm">+</button>
+    `;
+
+    // Chèn trước nút đóng modal
+    const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
+    if (closeBtn) {
+        toolsWrap.insertBefore(zoomDiv, closeBtn);
+    } else {
+        toolsWrap.appendChild(zoomDiv);
+    }
+}
+
+// BẮT SỰ KIỆN CTRL + LĂN CHUỘT BÊN TRONG MODAL ĐỂ ZOOM ĐỘC LẬP
+(function setupIsolatedWheelZoom() {
+    window.addEventListener("wheel", function(e) {
+        const modal = document.getElementById("result-fullscreen-modal");
+        if (!modal || modal.style.display !== "flex") return;
+
+        // Nếu người dùng đang giữ Ctrl và lăn chuột bên trong modal
+        if (e.ctrlKey && modal.contains(e.target)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const delta = e.deltaY < 0 ? 0.06 : -0.06;
+            adjustModalZoomStep(delta);
+        }
+    }, { passive: false });
 })();
 
 function initTableSettings() {
@@ -403,6 +552,9 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
 
     window.history.pushState({ isViewingResult: true }, "", "#bang-ket-qua");
 
+    // Khóa cuộn trang web chính để độc lập 100% với Modal
+    document.body.classList.add("modal-backdrop-locked");
+
     modal.style.display = "flex";
     document.getElementById("result-modal-main-view").style.display = "flex";
     document.getElementById("result-detailed-stats-view").style.display = "none";
@@ -414,6 +566,9 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     headTitle.innerText = `📊 Kết quả: ${item.title || "Bài thi"}`;
     headSub.innerText = `Chuyên mục: ${displayCatName} | Ngày cập nhật: ${item.date || "---"}`;
     if (currentExamBtnText) currentExamBtnText.innerText = `📑 ${item.title}`;
+
+    ensureModalZoomControlsInHeader();
+    applyModalZoomLevel(modalCustomZoomLevel || 1.0);
 
     const cacheKey = `${catId}_${item.firebaseId || item.id || item.title}`;
     if (_examResultsCache[cacheKey]) {
@@ -542,6 +697,7 @@ function startLiveDoingTicker() {
 
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
+    ensureModalZoomControlsInHeader();
     const tbody = document.getElementById("result-table-tbody"); 
     if (!tbody) return; 
     tbody.innerHTML = "";
@@ -729,3 +885,8 @@ function filterResultTable() {
     });
     renderFilteredResultTable(filtered);
 }
+
+// BỔ SUNG ĐĂNG KÝ HÀM TOÀN CỤC CHO NÚT ZOOM
+window.adjustModalZoomStep = adjustModalZoomStep;
+window.resetModalZoom = resetModalZoom;
+window.applyModalZoomLevel = applyModalZoomLevel;
