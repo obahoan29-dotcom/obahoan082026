@@ -18,6 +18,10 @@
                     (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
                     (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
                 ) {
+                    // Cho phép Admin dùng phím tắt lưu đề
+                    if (window.checkIsAdminPreviewMode && window.checkIsAdminPreviewMode() && e.ctrlKey && (e.key === 'S' || e.key === 's')) {
+                        return true;
+                    }
                     e.preventDefault();
                     e.stopPropagation();
                     return false;
@@ -138,6 +142,31 @@
         .btn-history-share-json:active {
             transform: translateY(2px) scale(0.96);
         }
+
+        /* NÚT CHUYỂN SANG SOI ĐỀ DÀNH CHO ADMIN */
+        .btn-switch-to-soi-de {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            border: 1px solid #34d399 !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important;
+            cursor: pointer !important;
+            user-select: none !important;
+            transition: all 0.15s ease !important;
+            white-space: nowrap !important;
+            padding: 3px 10px !important;
+            border-radius: 14px !important;
+            display: none; /* Mặc định ẩn, chỉ hiện trong Admin */
+            align-items: center !important;
+            gap: 4px !important;
+        }
+        .btn-switch-to-soi-de:hover {
+            filter: brightness(1.12) !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45) !important;
+        }
+        .btn-switch-to-soi-de:active {
+            transform: translateY(1.5px) scale(0.96) !important;
+        }
     </style>
 
     <!-- CSDL Danh sách tài khoản học sinh dùng chung -->
@@ -185,6 +214,9 @@
     <script src="exam-img-uploader.js"></script>
     <script src="exam-render.js"></script>
     <script src="exam-engine-core.js"></script>
+
+    <!-- MODULE SOI ĐỀ THỜI GIAN THỰC -->
+    <script src="portal-soi-de.js"></script>
 </head>
 <body>
     
@@ -243,7 +275,13 @@
             <div class="navbar-container nav-bottom-row">
                 <div class="exam-code-pill"><span style="font-size: 0.95rem;">📑</span> <span id="nav-exam-code-text">Đề: ---</span></div>
                 
-                <div style="display: flex; gap: 8px;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <!-- NÚT CHUYỂN SANG SOI ĐỀ CẠNH NÚT SỐ NGƯỜI THI (ADMIN MODE) -->
+                    <button type="button" class="progress-pill btn-switch-to-soi-de" id="btn-admin-switch-soide" onclick="switchToSoiDeFromExam()" title="Mở công cụ Soi đề & biên tập trực tiếp">
+                        <span class="progress-icon">🔬</span>
+                        <span class="progress-val">Chuyển sang soi</span>
+                    </button>
+
                     <div class="progress-pill" id="nav-online-box" style="background: linear-gradient(135deg, #3b82f6, #2563eb); border-color: #1d4ed8; cursor: pointer;" title="Số học sinh đang làm bài (Admin bấm vào để cập nhật)" onclick="handleOnlineCountClick()">
                         <span class="progress-icon">👥</span>
                         <span class="progress-val" id="nav-online-val">1</span>
@@ -257,7 +295,7 @@
     </header>
 
     <div class="container">
-        <!-- VÙNG MỌC RA CÁC NÚT LỊCH SỬ NỘP BÀI LẦN 1, LẦN 2... CỦA HỌC SINH (YÊU CẦU 5) -->
+        <!-- VÙNG MỌC RA CÁC NÚT LỊCH SỬ NỘP BÀI LẦN 1, LẦN 2... CỦA HỌC SINH -->
         <div id="student-history-buttons-container"></div>
 
         <div id="error-card" class="card-panel" style="display: none; border-left: 6px solid #ef4444; background: #fff5f5;">
