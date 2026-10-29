@@ -1,11 +1,11 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (CHUẨN HÓA GHI ACTIVE_SESSIONS NHƯ CODE CŨ & GHI ĐÈ 100%)
+// FILE 4: student-exam-flow.js (BẢN CHUẨN HÓA 7 LỚP & GHI ĐÈ FILE DRIVE 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
 let currentSubmitAttempt = 1;
 
-// HÀM ÁNH XẠ 1 TRONG 7 TÊN LỚP CHUẨN TUYỆT ĐỐI
+// HÀM ÁNH XẠ CHÍNH XÁC VỀ ĐÚNG 1 TRONG 7 TÊN LỚP CHUẨN DUY NHẤT
 function getStrictStandardClassName(rawClass, rawSbd) {
     const s = String(rawClass || "").toLowerCase().trim();
     const sbd = String(rawSbd || "").toLowerCase().trim();
@@ -262,11 +262,13 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
-// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC THEO SCHEMA DATABASE CŨ (ĐẢM BẢO KHÔNG BỊ LỖI CONSTRAINT)
+// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
     if (detected) currentCat = detected;
+
+    const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
@@ -285,15 +287,15 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     if (client && currentQuizId) {
         try {
-            // 1. Xóa các phiên cũ của SBD này trong đề hiện tại để chống trùng
+            // 1. Xóa phiên cũ của SBD này trong đề hiện tại
             await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-            // 2. Chèn trực tiếp phiên mới theo đúng schema chuẩn
+            // 2. Chèn trực tiếp phiên mới với tên lớp đã được chuẩn hóa về 1 trong 7 lớp
             await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 name: sName,
-                class_name: sClass,
+                class_name: strictClassName,
                 category_id: currentCat,
                 is_free: isFreeStudent,
                 ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
@@ -307,7 +309,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 student_name: sName,
-                class_name: sClass,
+                class_name: strictClassName,
                 category_id: currentCat,
                 ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                 exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
@@ -322,6 +324,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                     quiz_id: currentQuizId,
                     sbd: cleanSbd,
                     student_name: sName,
+                    class_name: strictClassName,
                     user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
                     updatedAt: nowMs
                 }).catch(() => {});
@@ -332,7 +335,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 student_name: sName,
-                student_class: sClass,
+                student_class: strictClassName,
                 category_id: currentCat,
                 switch_count: 0,
                 duration_str: "Bắt đầu",
@@ -346,7 +349,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     document.getElementById("nav-student-name").innerText = sName; 
     document.getElementById("nav-student-id").innerText = sId; 
-    document.getElementById("nav-student-class").innerText = sClass; 
+    document.getElementById("nav-student-class").innerText = strictClassName; 
     document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
     document.getElementById("student-card").style.display = "none"; 
     
@@ -415,7 +418,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionId = `${currentQuizId}_${cleanSbd}`;
 
-    // LẤY CHÍNH XÁC TÊN ĐỀ THI ĐANG THI (KHÔNG VIẾT TẮT)
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
         : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
@@ -447,7 +449,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
 async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
         ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-        : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL) ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
+        : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
 
     if (!gasUrl || gasUrl.includes("DÁN_URL")) return false;
 
@@ -506,7 +508,7 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     }
 }
 
-// Hàm tải file JSON về máy tính: Đồng bộ tên chuẩn, không chèn số đếm
+// Tự động tải file JSON: Tên file cố định theo SBD_Tên, không chèn số đếm
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
@@ -727,7 +729,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // GỬI LƯU FILE JSON VÀ SHEET ĐIỂM CHÍNH THỨC SANG GOOGLE DRIVE (GHI ĐÈ FILE CŨ)
+    // GỬI LƯU FILE JSON VÀO DRIVE (GHI ĐÈ FILE CŨ, CHỈ LƯU BẢN MỚI NHẤT)
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
