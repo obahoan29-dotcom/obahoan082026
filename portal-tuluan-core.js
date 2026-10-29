@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-tuluan-core.js (BẢN CHUẨN HÓA LỚP & SỬA LỖI UI ĐIỆN THOẠI)
+// FILE: portal-tuluan-core.js (BẢN CHUẨN HÓA LỚP & CĂN GIỮA BẢNG ĐIỂM MOBILE 100%)
 // =========================================================
 
 let currentTuLuanModalData = {
@@ -253,19 +253,33 @@ let tuLuanRealtimeChannel = null;
         .tuluan-table thead th { padding: 6px 6px !important; font-size: 11px !important; position: sticky !important; top: 0 !important; z-index: 10 !important; background: #0f172a !important; color: #ffffff !important; font-weight: 800 !important; border-bottom: 2px solid #4f46e5 !important; }
         .tuluan-table tbody td { padding: 5px 6px !important; font-size: 12px !important; border-bottom: 1px solid #e2e8f0 !important; vertical-align: middle !important; position: relative !important; }
 
-        /* TỐI ƯU GIAO DIỆN BẢNG ĐIỂM THÀNH PHẦN TRÊN MOBILE */
+        /* ========================================= */
+        /* FIX CHUẨN XÁC BẢNG ĐIỂM THÀNH PHẦN TRÊN MOBILE */
+        /* ========================================= */
         @media (max-width: 640px) {
+            /* BẮT BUỘC DÙNG FIXED ĐỂ NỔI LÊN GIỮA MÀN HÌNH, THOÁT KHỎI RELATIVE CỦA NÚT BẤM */
             .component-score-popover {
-                width: 95vw !important;
-                padding: 12px 10px !important;
+                position: fixed !important;
+                top: 50% !important;
+                left: 50% !important;
+                right: auto !important;
+                bottom: auto !important;
+                transform: translate(-50%, -50%) !important;
+                margin: 0 !important;
+                width: 96vw !important;
+                max-width: 420px !important;
+                padding: 16px 12px !important;
+                z-index: 100000005 !important;
+                /* Thêm lớp bóng mờ đen cực mạnh mô phỏng màn che */
+                box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 0 2000px rgba(15, 23, 42, 0.5) !important;
             }
             .comp-score-grid-10 {
                 grid-template-columns: repeat(5, 1fr) !important;
-                gap: 4px !important;
+                gap: 5px !important;
             }
             .comp-score-cell-input {
-                font-size: 12px !important;
-                height: 32px !important;
+                font-size: 13px !important;
+                height: 38px !important;
             }
         }
     `;
