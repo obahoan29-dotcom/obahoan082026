@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (BẢN FIX ĐỒNG BỘ CHI TIẾT TỪNG CÂU REALTIME 100%)
+// FILE 3: exam-engine-core.js (BẢN FIX ĐỒNG BỘ CHI TIẾT TỪNG CÂU REALTIME 100% VÀ 7 LỚP CHUẨN)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -63,6 +63,11 @@ async function ensureActiveSessionAndDraft() {
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
     const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    
+    const strictClassName = typeof getStrictStandardClassName === 'function' 
+        ? getStrictStandardClassName(sClass || currentCat, sId) 
+        : sClass;
+
     const primaryDocId = `${quizId}_${cleanSbd}`;
     const nowMs = Date.now();
 
@@ -75,7 +80,7 @@ async function ensureActiveSessionAndDraft() {
             quiz_id: quizId,
             sbd: cleanSbd,
             name: sName,
-            class_name: sClass,
+            class_name: strictClassName,
             category_id: currentCat,
             is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
             ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
@@ -89,7 +94,7 @@ async function ensureActiveSessionAndDraft() {
             quiz_id: quizId,
             sbd: cleanSbd,
             student_name: sName,
-            class_name: sClass,
+            class_name: strictClassName,
             category_id: currentCat,
             ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
             exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
@@ -115,6 +120,7 @@ function buildCurrentLiveDraftPayload() {
     const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
     const primaryDocId = `${quizId}_${cleanSbd}`;
 
+    // Ép chuẩn 1 trong 7 tên lớp duy nhất
     const strictClassName = typeof getStrictStandardClassName === 'function' 
         ? getStrictStandardClassName(sClass || currentCat, sId) 
         : sClass;
@@ -123,14 +129,12 @@ function buildCurrentLiveDraftPayload() {
         ? EXAM_NAME 
         : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
 
-    // Tính điểm và sinh chuỗi chi tiết TẠI ĐÚNG THỜI ĐIỂM GỬI
     const tempScoreResult = calculateTemporaryDraftScore();
     const elapsedSec = examStartTime ? Math.max(1, Math.round((Date.now() - examStartTime) / 1000)) : 0;
     const spentMins = Math.floor(elapsedSec / 60);
     const spentSecs = elapsedSec % 60;
     const completionTimeStr = `${spentMins} phút ${spentSecs} giây`;
 
-    // Sao chép an toàn trạng thái câu trả lời (Deep Clone Object)
     const clonedAnswers = JSON.parse(JSON.stringify(window.SECURE_VAULT.userAnswers || {}));
 
     return {
@@ -156,7 +160,7 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
-// LƯU TỨC THÌ TỪNG CÂU VÀO SUPABASE + TỰ ĐỘNG CHẤM TẠM GỬI ĐẾN SHEET THU TẠM GOOGLE DRIVE
+// LƯU TỨC THÌ TỪNG CÂU VÀO SUPABASE + TỰ ĐỘNG CHẤM TẠM GỬI ĐẾN SHEET THU TẠM
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -167,7 +171,6 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
     if (!quizId) return;
 
-    // Lấy gói dữ liệu nháp tại thời điểm hiện tại
     const draftData = buildCurrentLiveDraftPayload();
     if (!draftData) return;
 
@@ -188,7 +191,7 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         } catch(e) {}
     }
 
-    // 3. TỰ ĐỘNG GỬI VỀ SHEET THU TẠM (Debounce 3.5s - Chấm lại và lấy chuỗi chi tiết TẠI THỜI ĐIỂM GỬI)
+    // 3. TỰ ĐỘNG GỬI VỀ SHEET THU TẠM (Debounce 3.5s)
     if (_gasTempSheetDebounceTimer) clearTimeout(_gasTempSheetDebounceTimer);
     _gasTempSheetDebounceTimer = setTimeout(() => {
         const freshDraftData = buildCurrentLiveDraftPayload();
@@ -198,7 +201,7 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     }, 3500);
 }
 
-// HÀM GỬI BẢN NHÁP KÈM ĐIỂM TẠM TÍNH VỀ GOOGLE SHEET THU TẠM
+// HÀM GỬI BẢN NHÁP VỀ GOOGLE SHEET THU TẠM
 function sendDraftToGoogleSheetTemp(draftData) {
     if (!draftData) return;
     const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
