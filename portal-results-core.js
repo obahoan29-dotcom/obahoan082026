@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-results-core.js (BẢN KẾT HỢP CHUẨN XÁC ACTIVE_SESSIONS NHƯ CODE CŨ)
+// FILE: portal-results-core.js (BẢN TÍCH HỢP TÍNH NĂNG THU ÉP BUỘC ĐƠN LẺ & TOÀN BỘ)
 // =========================================================
 
 let currentExamResultData = {
@@ -111,7 +111,6 @@ function stopRealtimeSubmissionsListener() {
     }
 }
 
-// BỘ LẮNG NGHE REALTIME: NHẬN DIỆN HỌC SINH VỪA VÀO THI 0S NHƯ CODE CŨ
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
@@ -135,7 +134,6 @@ function startRealtimeSubmissionsListener(quizId) {
         let channel = client.channel(`admin_realtime_${targetQuizId}_${Date.now()}`);
 
         candidateIds.forEach(id => {
-            // Lắng nghe bài thi nộp thành công
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
@@ -143,7 +141,6 @@ function startRealtimeSubmissionsListener(quizId) {
                 filter: `quiz_id=eq.${id}` 
             }, () => debouncedRefreshResults(200));
 
-            // Lắng nghe học sinh vừa vào làm bài hoặc rời thi (active_sessions)
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
@@ -154,14 +151,13 @@ function startRealtimeSubmissionsListener(quizId) {
                     const oldStartTime = payload.old ? payload.old.start_time : null;
                     const newStartTime = payload.new ? payload.new.start_time : null;
                     if (oldStartTime && newStartTime && oldStartTime === newStartTime) {
-                        return; // Bỏ qua ping thường xuyên
+                        return;
                     }
                 }
                 debouncedRefreshResults(200);
             });
         });
 
-        // Kèm theo theo dõi bản nháp
         channel = channel.on('postgres_changes', { 
             event: '*', 
             schema: 'public', 
@@ -175,7 +171,6 @@ function startRealtimeSubmissionsListener(quizId) {
     }
 }
 
-// BỘ TRUY VẤN VÀ ĐỒNG BỘ KẾT QUẢ TỪ SUPABASE
 async function fetchAndRenderExamResults(item, isSilent = false) {
     if (!item) return;
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
@@ -202,7 +197,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
     if (!isSilent) {
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
     }
 
     try {
@@ -214,11 +209,10 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             candidateCodes.push(String(quizId).trim());
         }
 
-        // 1. Truy vấn các bảng bằng candidateCodes
         let [subRes, cheatRes, activeRes, draftRes] = await Promise.all([
             client.from('submissions').select('*').in('quiz_id', candidateCodes),
             client.from('cheating_logs').select('*').in('quiz_id', candidateCodes),
-            client.from('active_sessions').select('*'), // Quét bảng active_sessions để không bao giờ bị lọt
+            client.from('active_sessions').select('*'),
             client.from('live_drafts').select('*')
         ]);
 
@@ -227,7 +221,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         let allDraftsData = draftRes.data || [];
         let cheatData = cheatRes.data || [];
 
-        // Lọc active_sessions khớp với candidateCodes hoặc tiêu đề bài thi
         const candSet = new Set(candidateCodes.map(c => String(c).trim().toLowerCase()));
         const cleanTitleNorm = normalizeName(examTitle);
 
@@ -245,15 +238,12 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             return qMatch || titleMatch;
         });
 
-        // Nếu submissions chưa có bài nào, quét thêm qua tiêu đề
         if (rawSubsData.length === 0 && examTitle && examTitle.trim() !== "") {
             const { data: extraSubs } = await client.from('submissions').select('*').ilike('exam_title', `%${examTitle.trim()}%`);
             if (extraSubs && extraSubs.length > 0) {
                 rawSubsData = extraSubs;
             }
         }
-
-        console.log(`📊 [ResultsCore] Đã nạp "${examTitle}": ${rawSubsData.length} bài nộp, ${activeData.length} active_sessions, ${draftsData.length} live_drafts.`);
 
         const rawSubs = rawSubsData.map(r => ({
             id: r.id,
@@ -286,7 +276,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             };
         });
 
-        // Đưa activeSessions vào map hỗ trợ cả SBD nguyên bản lẫn SBD chuẩn hóa
         const activeSessionsMap = {};
         activeData.forEach(a => {
             if (!a || !a.sbd) return;
@@ -342,15 +331,13 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     } catch(err) {
         console.error("❌ Lỗi nạp bảng điểm Supabase:", err);
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
     }
 }
 
-// BỘ DỰNG BẢNG: HIỂN THỊ CHÍNH XÁC 100% "ĐANG THI" CHO HỌC SINH VỪA VÀO PHÒNG THI
 function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, activeSessionsMap, liveDraftsMap, examItem, examMeta = {}) {
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(categoryId) : [];
 
-    // 1. Tổng hợp nhật ký chuyển tab
     const cheatHistoryBySbd = {};
     const maxCheatCountBySbd = {};
 
@@ -371,7 +358,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         }
     }
 
-    // 2. Tập hợp bài đã nộp
     let submissionsList = [];
     for (let sub of (Array.isArray(submissionsListRaw) ? submissionsListRaw : [])) {
         if (!sub) continue;
@@ -380,7 +366,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     }
     submissionsList.sort((a, b) => getSubmissionTimestamp(a) - getSubmissionTimestamp(b));
 
-    // 3. TẬP HỢP TOÀN BỘ PHIÊN ĐANG THI (active_sessions + live_drafts)
     const activeUsersMap = {};
     const nowMs = Date.now();
 
@@ -388,7 +373,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         let sess = activeSessionsMap[rawKey];
         if (!sess) continue;
         let lastPing = sess.lastPing || sess.startTime || 0;
-        // Cho phép trong vòng 10 phút kể từ lần ping gần nhất (hoặc nếu vừa mới vào thi)
         if ((nowMs - lastPing) < 600000 || (nowMs - sess.startTime) < 5400000) {
             let sbdClean = cleanSbdStandard(sess.sbd);
             let sbdLower = String(sess.sbd || "").trim().toLowerCase();
@@ -397,7 +381,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         }
     }
 
-    // Gộp thêm các em có bài nháp trong live_drafts
     for (let rawKey in liveDraftsMap) {
         let draft = liveDraftsMap[rawKey];
         if (!draft) continue;
@@ -422,13 +405,11 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     const usedPendingKeys = new Set();
     const usedSubIds = new Set();
 
-    // 4. DUYỆT DANH SÁCH HỌC SINH CHÍNH KHÓA (LỚP 10P: TRỊNH HỒNG DƯƠNG SBD: 10p11)
     classAccounts.forEach((acc, idx) => {
         const accSbdLower = String(acc.sbd || "").trim().toLowerCase();
         const accSbdClean = cleanSbdStandard(acc.sbd);
         const accNameNorm = typeof normalizeName === 'function' ? normalizeName(acc.name) : acc.name.toLowerCase();
 
-        // Tìm các bài đã nộp của em này
         let matchedSubs = [];
         for (let sub of submissionsList) {
             let isSbdMatch = isSbdMatchedFlexibly(acc.sbd, sub.sbd || sub.studentId);
@@ -443,11 +424,9 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
         matchedSubs = deduplicateAttempts(matchedSubs);
 
-        // KIỂM TRA TRẠNG THÁI ĐANG THI CỦA HỌC SINH
         let isDoing = false;
         let doingStartTime = null;
 
-        // Quét khớp mềm theo SBD trong activeUsersMap
         let activeSess = activeUsersMap[accSbdLower] || activeUsersMap[accSbdClean];
         if (!activeSess) {
             for (let k in activeUsersMap) {
@@ -462,12 +441,10 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             const sessTime = Number(activeSess.lastPing || activeSess.startTime || 0);
 
             if (matchedSubs.length === 0) {
-                // CHƯA NỘP BÀI LẦN NÀO -> ĐANG THI LẦN 1!
                 isDoing = true;
                 doingStartTime = activeSess.startTime || sessTime || nowMs;
                 usedPendingKeys.add(cleanSbdStandard(activeSess.sbd));
             } else {
-                // ĐÃ TỪNG NỘP -> KIỂM TRA XEM CÓ ĐANG LÀM LẦN TIẾP THEO KHÔNG
                 const latestSubTime = getSubmissionTimestamp(matchedSubs[matchedSubs.length - 1]);
                 if (sessTime > (latestSubTime + 3000) || (nowMs - sessTime) < 1800000) {
                     isDoing = true;
@@ -499,7 +476,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
 
     let freeSttCounter = classAccounts.length + 1;
 
-    // 5. THÍ SINH TỰ DO ĐANG THI (CHƯA NỘP)
     for (let sessKey in activeUsersMap) {
         let sess = activeUsersMap[sessKey];
         if (!sess) continue;
@@ -535,7 +511,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         });
     }
 
-    // 6. THÍ SINH TỰ DO ĐÃ NỘP BÀI
     for (let sub of submissionsList) {
         if (usedSubIds.has(sub.id)) continue;
         const rawSbd = sub.sbd || sub.studentId || "free";
@@ -571,7 +546,148 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(finalRows);
 }
 
-// THU BÀI TỰ ĐỘNG TỪ BẢN LƯU NHÁP LIVE DRAFTS
+// =========================================================================
+// BỘ MÁY THU ÉP BUỘC ĐƠN LẺ VÀ THU ÉP TOÀN BỘ CHUẨN XÁC 100%
+// =========================================================================
+
+async function forceSubmitSingleStudent(rowUid, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
+    if (!row) return;
+
+    const acc = row.account;
+    const sbd = acc.sbd || "---";
+    const name = acc.name || "Học sinh";
+    const currentItem = currentExamResultData.item;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+
+    if (!currentItem || !client) return;
+
+    const quizId = (typeof extractQuizIdFromItem === 'function' ? extractQuizIdFromItem(currentItem) : null) || currentItem.id;
+    if (!quizId) { alert("⚠️ Không tìm thấy ID đề thi!"); return; }
+
+    if (!confirm(`⚡ XÁC NHẬN THU BÀI ÉP BUỘC:\n\nBạn có chắc muốn THU ÉP BÀI cho học sinh:\n"${name}" (SBD: ${sbd}) ngay lập tức không?\n\n- Nếu học sinh đang mở web thi: Web sẽ tự động dừng và nộp bài ngay.\n- Nếu học sinh đã thoát ngang (treo): Hệ thống sẽ tự chấm điểm từ bản nháp và chốt điểm chính thức.`)) return;
+
+    try {
+        const cleanSbd = cleanSbdStandard(sbd);
+
+        // 1. Gửi tín hiệu Realtime ép nộp bài cho thiết bị học sinh (nếu học sinh đang online)
+        try {
+            const forceChannel = client.channel(`exam_force_submit_${quizId}`);
+            await forceChannel.send({
+                type: 'broadcast',
+                event: 'FORCE_SUBMIT',
+                payload: { quizId: quizId, sbd: cleanSbd, targetSbd: sbd }
+            });
+        } catch(sigErr) {}
+
+        // 2. Kiểm tra bản nháp live_drafts hoặc active_sessions để chốt bài trên máy chủ
+        const [draftRes, quizRes, activeRes] = await Promise.all([
+            client.from('live_drafts').select('*').match({ quiz_id: quizId, sbd: cleanSbd }).single(),
+            client.from('quizzes').select('*').eq('id', quizId).single(),
+            client.from('active_sessions').select('*').match({ quiz_id: quizId, sbd: cleanSbd }).single()
+        ]);
+
+        const quizObj = quizRes.data;
+        if (!quizObj) throw new Error("Không tìm thấy cấu trúc đề thi trên máy chủ!");
+
+        const userAnswers = (draftRes.data && draftRes.data.user_answers) ? draftRes.data.user_answers : {};
+        const cat = row.account.className || currentExamResultData.categoryId || "them-11";
+
+        const answerVault = {};
+        const letters = ["A", "B", "C", "D"];
+        (quizObj.questions || []).forEach(q => {
+            if (q.type === "multiple_choice" && q.correct !== undefined) {
+                answerVault[`q${q.id}`] = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
+            } else if (q.type === "true_false" && q.statements) {
+                q.statements.forEach(st => {
+                    answerVault[`q${q.id}_${st.id}`] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng') ? "Đúng" : "Sai";
+                });
+            } else if (q.correctAnswer !== undefined) {
+                answerVault[`q${q.id}`] = String(q.correctAnswer).trim();
+            }
+        });
+
+        const scoringConfig = quizObj.scoring_config || { mode: "option1" };
+        const scoreResult = calculateExamScoreWithConfig(quizObj.questions, userAnswers, answerVault, scoringConfig);
+        const submissionId = `${quizId}_${cleanSbd}`;
+
+        // 3. Chèn vào bảng submissions bài nộp chính thức
+        await client.from('submissions').upsert({
+            id: submissionId,
+            quiz_id: quizId,
+            sbd: sbd,
+            student_name: name,
+            class_name: acc.className || "Lớp",
+            score10: scoreResult.finalScore,
+            raw_score: scoreResult.totalRawScore,
+            max_scale: scoreResult.maxScale,
+            correct_count: scoreResult.correctCount,
+            wrong_count: scoreResult.wrongCount,
+            completion_time: "Thu ép buộc",
+            spent_mins: quizObj.time_limit_minutes || 90,
+            tab_switch_count: "0 lần",
+            data_string: scoreResult.dataDetails.join(" | ") + " | [THU ÉP BUỘC BỞI GIÁO VIÊN]",
+            user_answers: userAnswers,
+            category_id: cat,
+            is_free: !row.isClassStudent,
+            ma_de: quizObj.made || "101",
+            exam_title: quizObj.title || "Đề thi",
+            created_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+        // 4. Xóa sạch phiên treo khỏi live_drafts và active_sessions
+        await Promise.all([
+            client.from('live_drafts').delete().match({ quiz_id: quizId, sbd: cleanSbd }),
+            client.from('active_sessions').delete().match({ quiz_id: quizId, sbd: cleanSbd })
+        ]);
+
+        alert(`✅ ĐÃ THU ÉP BÀI THÀNH CÔNG!\n\n- Thí sinh: ${name} (SBD: ${sbd})\n- Điểm số: ${scoreResult.finalScore} / ${scoreResult.maxScale} điểm.`);
+        await refreshCurrentExamResults();
+    } catch(err) {
+        alert("❌ Lỗi khi thu ép bài: " + err.message);
+    }
+}
+
+async function forceSubmitAllDoingStudents(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const doingRows = currentExamResultData.rawRows.filter(r => r.isDoing);
+    if (doingRows.length === 0) {
+        alert("ℹ️ Hiện không có học sinh nào đang làm bài thi để thu ép!");
+        return;
+    }
+
+    if (!confirm(`⚡ CẢNH BÁO THU ÉP TOÀN BỘ:\n\nBạn có chắc muốn THU ÉP BÀI của TẤT CẢ ${doingRows.length} thí sinh đang làm bài thi không?\n\n- Các thiết bị học sinh đang thi sẽ lập tức nộp bài.\n- Các em bị treo máy/thoát ngang sẽ được hệ thống chấm điểm và chốt sổ ngay.`)) return;
+
+    const currentItem = currentExamResultData.item;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+    if (!currentItem || !client) return;
+
+    const quizId = (typeof extractQuizIdFromItem === 'function' ? extractQuizIdFromItem(currentItem) : null) || currentItem.id;
+    if (!quizId) return;
+
+    try {
+        // Gửi lệnh Broadcast thu toàn bộ phòng
+        try {
+            const forceChannel = client.channel(`exam_force_submit_${quizId}`);
+            await forceChannel.send({
+                type: 'broadcast',
+                event: 'FORCE_SUBMIT',
+                payload: { quizId: quizId, sbd: "ALL" }
+            });
+        } catch(sigErr) {}
+
+        // Tự động thu từng em qua hàm triggerAutoCollectDrafts
+        if (typeof triggerAutoCollectDrafts === 'function') {
+            await triggerAutoCollectDrafts();
+        } else {
+            await refreshCurrentExamResults();
+        }
+    } catch(err) {
+        alert("❌ Lỗi thu ép bài toàn bộ: " + err.message);
+    }
+}
+
 async function triggerAutoCollectDrafts(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
@@ -580,8 +696,6 @@ async function triggerAutoCollectDrafts(event) {
 
     const quizId = (typeof extractQuizIdFromItem === 'function' ? extractQuizIdFromItem(currentItem) : null) || currentItem.id;
     if (!quizId) { alert("⚠️ Không tìm thấy ID đề thi!"); return; }
-
-    if (!confirm("⚡ BẠN CÓ CHẮC MUỐN THU BÀI TỰ ĐỘNG?\nHệ thống sẽ tính điểm và nộp bài chính thức cho tất cả các em chưa kịp nộp.")) return;
 
     const btn = document.getElementById("btn-auto-collect-drafts");
     if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang quét thu bài..."; }
@@ -692,6 +806,8 @@ async function triggerAutoCollectDrafts(event) {
     }
 }
 
+window.forceSubmitSingleStudent = forceSubmitSingleStudent;
+window.forceSubmitAllDoingStudents = forceSubmitAllDoingStudents;
 window.triggerAutoCollectDrafts = triggerAutoCollectDrafts;
 window.startRealtimeSubmissionsListener = startRealtimeSubmissionsListener;
 window.stopRealtimeSubmissionsListener = stopRealtimeSubmissionsListener;
