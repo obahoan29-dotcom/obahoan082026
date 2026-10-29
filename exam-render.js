@@ -1,6 +1,5 @@
 // =========================================================
-// FILE 2: exam-render.js
-// RENDER GIAO DIỆN CÂU HỎI, NỘP TỰ LUẬN DRIVE TRONG PHÒNG THI & MATHJAX
+// FILE: exam-render.js (BẢN TỰ ĐỘNG CHÈN PHẦN I, II, III, IV & PHÂN MÀU CHUẨN QUỐC TẾ)
 // =========================================================
 
 function isPart4Question(q) {
@@ -21,11 +20,21 @@ function formatQuestionText(text) {
     });
 }
 
+function scrollToSection(partId) {
+    const target = document.getElementById(partId);
+    if (target) {
+        const headerOffset = window.innerWidth <= 640 ? 72 : 82;
+        const elementPosition = target.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({ top: offsetPosition, behavior: "smooth" });
+    }
+}
+
 function renderQuizLayout(questions, imageMap) { 
     const container = document.getElementById('dynamic-questions-container'); 
     container.innerHTML = ''; 
     
-    // Tách riêng biệt 4 phần theo đúng chuẩn cấu trúc
+    // Tách riêng biệt 4 phần theo đúng chuẩn cấu trúc Bộ GD&ĐT
     const p1List = questions.filter(q => q.type === "multiple_choice" && !isPart4Question(q)); 
     const p2List = questions.filter(q => q.type === "true_false" && !isPart4Question(q)); 
     const p3List = questions.filter(q => (q.type === "short_answer") && !isPart4Question(q)); 
@@ -111,7 +120,6 @@ function renderQuizLayout(questions, imageMap) {
         </div>`;
     }
 
-    // YÊU CẦU 1 & 2: THANH NỘP TỰ LUẬN DRIVE CHUNG Ở ĐẦU MỌI ĐỀ THI
     const globalDriveUploadBanner = `
         <div style="margin-bottom: 15px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1.5px solid #86efac; border-radius: 14px; padding: 11px 15px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; box-shadow: 0 2px 8px rgba(22, 163, 74, 0.1);">
             <div style="display: flex; align-items: center; gap: 10px;">
@@ -127,9 +135,9 @@ function renderQuizLayout(questions, imageMap) {
         </div>
     `;
 
-    // PHẦN 1: TRẮC NGHIỆM 4 PHƯƠNG ÁN
+    // PHẦN 1
     if (p1List.length > 0) { 
-        html += `<div class="exam-section-banner"><div class="section-icon">📑</div><div class="section-text"><h3>PHẦN 1. TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN</h3><p>Chọn duy nhất 01 phương án đúng trong các phương án A, B, C, D</p></div></div>`; 
+        html += `<div class="exam-section-banner" id="exam-section-p1"><div class="section-icon">📑</div><div class="section-text"><h3>PHẦN 1. TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN</h3><p>Chọn duy nhất 01 phương án đúng trong các phương án A, B, C, D</p></div></div>`; 
         p1List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
             const letters = ["A", "B", "C", "D"]; 
@@ -157,9 +165,9 @@ function renderQuizLayout(questions, imageMap) {
         }); 
     } 
 
-    // PHẦN 2: TRẮC NGHIỆM ĐÚNG SAI
+    // PHẦN 2
     if (p2List.length > 0) { 
-        html += `<div class="exam-section-banner" style="background: linear-gradient(135deg, #7c3aed, #4f46e5);"><div class="section-icon">⚖️</div><div class="section-text"><h3>PHẦN 2. TRẮC NGHIỆM ĐÚNG SAI</h3><p>Thí sinh chọn Đúng hoặc Sai cho từng mệnh đề a), b), c), d)</p></div></div>`; 
+        html += `<div class="exam-section-banner" id="exam-section-p2" style="background: linear-gradient(135deg, #7c3aed, #4f46e5);"><div class="section-icon">⚖️</div><div class="section-text"><h3>PHẦN 2. TRẮC NGHIỆM ĐÚNG SAI</h3><p>Thí sinh chọn Đúng hoặc Sai cho từng mệnh đề a), b), c), d)</p></div></div>`; 
         p2List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
             const imgUrl = getEffectiveImageUrl(q, imageMap);
@@ -180,7 +188,7 @@ function renderQuizLayout(questions, imageMap) {
                 delete q.explanation;
             }
             html += `<div class="question-card" id="q-card-${q.id}" data-qid="${q.id}" data-imgkey="${q.imageKey || ''}" data-qidx="${p1List.length + qIdx}"> 
-                <div class="q-header"><div class="q-num-badge">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
+                <div class="q-header"><div class="q-num-badge" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
                 ${uploaderHTML}
                 ${imgHTML} 
                 <div class="tf-table-box"> <table class="tf-table"><thead><tr><th>Mệnh đề</th><th>Đúng</th><th>Sai</th></tr></thead><tbody>${rows}</tbody></table> </div> 
@@ -189,9 +197,9 @@ function renderQuizLayout(questions, imageMap) {
         }); 
     } 
 
-    // PHẦN 3: TRẢ LỜI NGẮN
+    // PHẦN 3
     if (p3List.length > 0) { 
-        html += `<div class="exam-section-banner" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
+        html += `<div class="exam-section-banner" id="exam-section-p3" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
         p3List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
             if (q.correctAnswer !== undefined) {
@@ -208,7 +216,7 @@ function renderQuizLayout(questions, imageMap) {
 
             html += `
             <div class="question-card" id="q-card-${q.id}" data-qid="${q.id}" data-imgkey="${q.imageKey || ''}" data-qidx="${p1List.length + p2List.length + qIdx}"> 
-                <div class="q-header"><div class="q-num-badge">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
+                <div class="q-header"><div class="q-num-badge" style="background: linear-gradient(135deg, #0d9488, #059669);">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
                 ${uploaderHTML}
                 ${imgHTML} 
                 <div class="part4-row-container">
@@ -221,9 +229,9 @@ function renderQuizLayout(questions, imageMap) {
         }); 
     } 
 
-    // PHẦN 4: TỰ LUẬN ĐIỀN ĐÁP ÁN NGẮN & NỘP BÀI TỰ LUẬN
+    // PHẦN 4
     if (p4List.length > 0) { 
-        html += `<div class="exam-section-banner" style="background: linear-gradient(135deg, #ea580c, #c2410c); margin-top: 20px;"> 
+        html += `<div class="exam-section-banner" id="exam-section-p4" style="background: linear-gradient(135deg, #ea580c, #c2410c); margin-top: 20px;"> 
             <div class="section-icon">📝</div> 
             <div class="section-text"> 
                 <h3>PHẦN IV. CÂU TỰ LUẬN ĐIỀN ĐÁP ÁN NGẮN</h3> 
@@ -259,6 +267,8 @@ function renderQuizLayout(questions, imageMap) {
     } 
 
     container.innerHTML = globalDriveUploadBanner + html; 
+    
+    // TẠO THANH ĐIỀU HƯỚNG CÂU HỎI KÈM BADGE PHẦN I, II, III, IV
     renderQuestionPalette(questions); 
     setupScrollObserver(); 
     if (typeof updateProgress === 'function') updateProgress(); 
@@ -268,15 +278,55 @@ function renderQuizLayout(questions, imageMap) {
     }
 }
 
+// BỘ TẠO CÁC NÚT VÀNG PHẦN I, II, III, IV KÈM PHÂN MÀU TỪNG CÂU
 function renderQuestionPalette(questions) { 
     const container = document.getElementById('q-nav-scroll-container'); 
     if (!container) return; 
+    
+    const p1List = questions.filter(q => q.type === "multiple_choice" && !isPart4Question(q)); 
+    const p2List = questions.filter(q => q.type === "true_false" && !isPart4Question(q)); 
+    const p3List = questions.filter(q => (q.type === "short_answer") && !isPart4Question(q)); 
+    const p4List = questions.filter(q => isPart4Question(q)); 
+
     let html = ""; 
-    let idx = 1; 
-    questions.forEach(q => { 
-        html += `<div class="q-circle" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${idx}">${idx}</div>`; 
-        idx++; 
-    }); 
+    let globalIdx = 1;
+
+    // PHẦN 1: HUY HIỆU VÀNG + CÂU PHẦN 1
+    if (p1List.length > 0) {
+        html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p1')" title="Cuộn tới Phần I">Phần I</div>`;
+        p1List.forEach(q => {
+            html += `<div class="q-circle part-1" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            globalIdx++;
+        });
+    }
+
+    // PHẦN 2: HUY HIỆU VÀNG + CÂU PHẦN 2
+    if (p2List.length > 0) {
+        html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p2')" title="Cuộn tới Phần II">Phần II</div>`;
+        p2List.forEach(q => {
+            html += `<div class="q-circle part-2" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            globalIdx++;
+        });
+    }
+
+    // PHẦN 3: HUY HIỆU VÀNG + CÂU PHẦN 3
+    if (p3List.length > 0) {
+        html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p3')" title="Cuộn tới Phần III">Phần III</div>`;
+        p3List.forEach(q => {
+            html += `<div class="q-circle part-3" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            globalIdx++;
+        });
+    }
+
+    // PHẦN 4: HUY HIỆU VÀNG + CÂU PHẦN 4
+    if (p4List.length > 0) {
+        html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p4')" title="Cuộn tới Phần IV">Phần IV</div>`;
+        p4List.forEach(q => {
+            html += `<div class="q-circle part-4" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            globalIdx++;
+        });
+    }
+
     container.innerHTML = html; 
 }
 
@@ -340,3 +390,5 @@ function setupScrollObserver() {
 }
 
 window.isPart4Question = isPart4Question;
+window.scrollToSection = scrollToSection;
+window.renderQuestionPalette = renderQuestionPalette;
