@@ -9,6 +9,10 @@ function closeResultModal(triggerHistoryBack = true) {
     const modal = document.getElementById("result-fullscreen-modal");
     if (modal) modal.style.display = "none";
     closeRegradeModal();
+    
+    // FIX LỖI: Nhả khóa cuộn màn hình để chuột có thể lăn được trang chính
+    document.body.classList.remove("modal-backdrop-locked");
+    
     if (triggerHistoryBack && window.location.hash.startsWith("#bang-ket-qua")) { window.history.back(); }
 }
 
