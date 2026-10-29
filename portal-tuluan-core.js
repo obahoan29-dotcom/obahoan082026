@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-tuluan-core.js (BẢN CHUẨN HÓA 7 LỚP & MA TRẬN 10 CỘT ĐIỂM TP CHUẨN XÁC)
+// FILE: portal-tuluan-core.js (BẢN CHUẨN HÓA LỚP & SỬA LỖI UI ĐIỆN THOẠI)
 // =========================================================
 
 let currentTuLuanModalData = {
@@ -37,6 +37,58 @@ let tuLuanRealtimeChannel = null;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
+        /* THÊM MỚI: NÚT X MÀU ĐỎ ĐỂ XÓA ẢNH TRỰC TIẾP TRÊN THUMBNAIL */
+        .btn-del-single-thumb {
+            position: absolute !important; 
+            top: -4px !important; 
+            right: -4px !important;
+            background: #ef4444 !important; 
+            color: #ffffff !important; 
+            border: 1.5px solid #b91c1c !important;
+            border-radius: 50% !important; 
+            width: 20px !important; 
+            height: 20px !important;
+            font-size: 11px !important; 
+            font-weight: 900 !important; 
+            line-height: 1 !important;
+            cursor: pointer !important; 
+            display: flex !important; 
+            align-items: center !important; 
+            justify-content: center !important;
+            z-index: 20 !important; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
+            transition: all 0.15s ease !important;
+            padding: 0 !important;
+        }
+        .btn-del-single-thumb:hover { 
+            background: #dc2626 !important; 
+            transform: scale(1.15) !important; 
+        }
+
+        /* THÊM MỚI: LÀM RÕ TÊN HỌC SINH VÀ SỐ TRANG TRÊN LIGHTBOX */
+        .lightbox-title-wrap { 
+            display: flex !important; 
+            align-items: center !important; 
+            gap: 8px !important; 
+            flex-wrap: wrap !important; 
+        }
+        #lightbox-student-title { 
+            color: #facc15 !important; 
+            font-size: 15px !important; 
+            font-weight: 900 !important; 
+            text-transform: uppercase !important; 
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; 
+        }
+        .lightbox-page-badge { 
+            background: #3b82f6 !important; 
+            color: #ffffff !important; 
+            padding: 3px 8px !important; 
+            border-radius: 12px !important; 
+            font-size: 12px !important; 
+            font-weight: 800 !important; 
+            border: 1px solid #93c5fd !important; 
+        }
+
         .student-pass-popover, .student-feedback-popover, .dapan-schedule-popover, .component-score-popover {
             display: none !important; position: absolute !important; background: #ffffff !important;
             border-radius: 16px !important; padding: 14px 16px !important;
@@ -50,7 +102,7 @@ let tuLuanRealtimeChannel = null;
         .student-feedback-popover { right: 0 !important; top: calc(100% + 8px) !important; bottom: auto !important; width: 320px !important; border: 1.5px solid #d97706 !important; }
         .student-pass-popover { right: 0 !important; top: calc(100% + 8px) !important; bottom: auto !important; width: 300px !important; border: 1.5px solid #0284c7 !important; }
         
-        /* CẤU HÌNH POPOVER ĐIỂM THÀNH PHẦN */
+        /* CẤU HÌNH POPOVER ĐIỂM THÀNH PHẦN CHUẨN TRÊN PC */
         .component-score-popover {
             top: calc(100% + 6px) !important;
             right: 0 !important;
@@ -65,7 +117,7 @@ let tuLuanRealtimeChannel = null;
             border-radius: 18px !important;
         }
         
-        /* MA TRẬN 10 CỘT Ô VUÔNG ĐIỂM TỪNG CÂU */
+        /* MA TRẬN 10 CỘT Ô VUÔNG ĐIỂM TỪNG CÂU TRÊN MÁY TÍNH */
         .comp-score-grid-10 {
             display: grid !important;
             grid-template-columns: repeat(10, 1fr) !important;
@@ -200,6 +252,22 @@ let tuLuanRealtimeChannel = null;
         .tuluan-table { width: 100% !important; border-collapse: separate !important; border-spacing: 0 !important; font-size: 12.5px !important; text-align: left !important; white-space: nowrap !important; }
         .tuluan-table thead th { padding: 6px 6px !important; font-size: 11px !important; position: sticky !important; top: 0 !important; z-index: 10 !important; background: #0f172a !important; color: #ffffff !important; font-weight: 800 !important; border-bottom: 2px solid #4f46e5 !important; }
         .tuluan-table tbody td { padding: 5px 6px !important; font-size: 12px !important; border-bottom: 1px solid #e2e8f0 !important; vertical-align: middle !important; position: relative !important; }
+
+        /* TỐI ƯU GIAO DIỆN BẢNG ĐIỂM THÀNH PHẦN TRÊN MOBILE */
+        @media (max-width: 640px) {
+            .component-score-popover {
+                width: 95vw !important;
+                padding: 12px 10px !important;
+            }
+            .comp-score-grid-10 {
+                grid-template-columns: repeat(5, 1fr) !important;
+                gap: 4px !important;
+            }
+            .comp-score-cell-input {
+                font-size: 12px !important;
+                height: 32px !important;
+            }
+        }
     `;
     document.head.appendChild(style);
 })();
@@ -569,7 +637,7 @@ function ensureTuLuanModalDOM() {
                                     </div>
                                 </div>
 
-                                <!-- MA TRẬN LƯỚI 10 CỘT -->
+                                <!-- MA TRẬN LƯỚI 10 HOẶC 5 CỘT TÙY MÀN HÌNH -->
                                 <div class="comp-score-grid-10" id="comp-score-grid-container"></div>
 
                                 <div style="font-size:12px; color:#475569; font-weight:600; margin:8px 0 10px 0; display:flex; align-items:center; gap:4px;">
