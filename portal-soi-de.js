@@ -1,7 +1,7 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN FIX TỰ XẾP VÀO CUỐI TỪNG PHẦN & BỎ TÍCH CHỌN MẶC ĐỊNH)
+// FILE: portal-soi-de.js
 // CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
-// TỰ ĐỘNG PHÂN LOẠI CÂU VÀO CUỐI PHẦN I, II, III, IV & ĐĂNG ĐỀ 8 LỚP
+// TÍCH HỢP: NÚT UPDATE CẬP NHẬT TRỰC TIẾP TỪ PHÒNG THI & 8 LỚP
 // =========================================================
 
 let soiDeState = {
@@ -18,7 +18,8 @@ let soiDeState = {
     isDraggingSplit: false,
     debounceTimer: null,
     validationErrors: [],
-    rawEditingCardIds: new Set() // Lưu danh sách các câu đang bật khung mã thô
+    rawEditingCardIds: new Set(),
+    isFromExamRoom: false // Đánh dấu mở trực tiếp từ phòng thi
 };
 
 // DANH SÁCH 8 LỚP CHUẨN ĐỂ ĐĂNG ĐỀ
@@ -33,15 +34,31 @@ const SOI_DE_AVAILABLE_CLASSES = [
     { id: "hsg-toan-11", name: "🏆 HSG Toán 11" }
 ];
 
-// BẢNG MÀU DỊU MẮT LUÂN PHIÊN (PASTEL THEME PALETTES) ĐỒNG BỘ CHO CẢ 2 CỘT
+// BẢNG MÀU DỊU MẮT LUÂN PHIÊN (PASTEL THEME PALETTES)
 const SOI_DE_THEME_PALETTES = [
-    { border: '#38bdf8', bg: '#f0f9ff', badgeBg: 'linear-gradient(135deg, #0284c7, #0369a1)', text: '#0369a1', lightBorder: '#bae6fd' }, // Xanh dương
-    { border: '#34d399', bg: '#f0fdf4', badgeBg: 'linear-gradient(135deg, #059669, #047857)', text: '#065f46', lightBorder: '#a7f3d0' }, // Xanh ngọc
-    { border: '#c084fc', bg: '#faf5ff', badgeBg: 'linear-gradient(135deg, #9333ea, #7c3aed)', text: '#6b21a8', lightBorder: '#e9d5ff' }, // Tím nhạt
-    { border: '#fb923c', bg: '#fff7ed', badgeBg: 'linear-gradient(135deg, #ea580c, #c2410c)', text: '#9a3412', lightBorder: '#fed7aa' }, // Cam ấm
-    { border: '#f472b6', bg: '#fdf2f8', badgeBg: 'linear-gradient(135deg, #db2777, #be185d)', text: '#9d174d', lightBorder: '#fbcfe8' }, // Hồng phấn
-    { border: '#eab308', bg: '#fefce8', badgeBg: 'linear-gradient(135deg, #ca8a04, #a16207)', text: '#854d0e', lightBorder: '#fef08a' }  // Vàng mơ
+    { border: '#38bdf8', bg: '#f0f9ff', badgeBg: 'linear-gradient(135deg, #0284c7, #0369a1)', text: '#0369a1', lightBorder: '#bae6fd' },
+    { border: '#34d399', bg: '#f0fdf4', badgeBg: 'linear-gradient(135deg, #059669, #047857)', text: '#065f46', lightBorder: '#a7f3d0' },
+    { border: '#c084fc', bg: '#faf5ff', badgeBg: 'linear-gradient(135deg, #9333ea, #7c3aed)', text: '#6b21a8', lightBorder: '#e9d5ff' },
+    { border: '#fb923c', bg: '#fff7ed', badgeBg: 'linear-gradient(135deg, #ea580c, #c2410c)', text: '#9a3412', lightBorder: '#fed7aa' },
+    { border: '#f472b6', bg: '#fdf2f8', badgeBg: 'linear-gradient(135deg, #db2777, #be185d)', text: '#9d174d', lightBorder: '#fbcfe8' },
+    { border: '#eab308', bg: '#fefce8', badgeBg: 'linear-gradient(135deg, #ca8a04, #a16207)', text: '#854d0e', lightBorder: '#fef08a' }
 ];
+
+// HÀM KIỂM TRA ADMIN CHUNG
+function checkIsAdminModeSafe() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin') === '1') return true;
+        if (typeof safeLocal !== 'undefined') {
+            const logged = safeLocal.getItem("adminLoggedInSession");
+            const expiresAt = safeLocal.getItem("admin_expires_at");
+            if (logged === "true" && expiresAt && Date.now() < parseInt(expiresAt, 10)) {
+                return true;
+            }
+        }
+    } catch(e) {}
+    return false;
+}
 
 // NHẬN DIỆN CÂU HỎI THUỘC PHẦN IV
 function isPart4Question(q) {
@@ -61,10 +78,10 @@ function getQuestionPartType(q) {
     if (isPart4Question(q)) return 4;
     if (q.type === "true_false") return 2;
     if (q.type === "short_answer") return 3;
-    return 1; // multiple_choice
+    return 1;
 }
 
-// BỘ GOM VÀ TỰ ĐỘNG SẮP XẾP TOÀN BỘ CÂU HỎI THEO THỨ TỰ PHẦN I -> II -> III -> IV
+// SẮP XẾP TOÀN BỘ CÂU HỎI THEO THỨ TỰ PHẦN I -> II -> III -> IV
 function reorganizeAllQuestionsByParts(questionsList) {
     if (!Array.isArray(questionsList)) return [];
     const p1 = questionsList.filter(q => getQuestionPartType(q) === 1);
@@ -74,7 +91,7 @@ function reorganizeAllQuestionsByParts(questionsList) {
     return [...p1, ...p2, ...p3, ...p4];
 }
 
-// HÀM CHÈN DANH SÁCH CÂU MỚI VÀO ĐÚNG CUỐI TỪNG PHẦN TƯƠNG ỨNG
+// HÀM CHÈN DANH SÁCH CÂU MỚI VÀO ĐÚNG CUỐI TỪNG PHẦN
 function insertQuestionsOrganizedByPart(newQuestions) {
     if (!Array.isArray(newQuestions) || newQuestions.length === 0) return [];
     let currentQuestions = soiDeState.examData.questions || [];
@@ -96,7 +113,6 @@ function insertQuestionsOrganizedByPart(newQuestions) {
     return newQuestions;
 }
 
-// HÀM ĐỊNH DẠNG TEXT CÂU HỎI AN TOÀN
 function formatQuestionText(text) {
     if (!text) return "";
     return text.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
@@ -104,7 +120,6 @@ function formatQuestionText(text) {
     });
 }
 
-// TỰ ĐỘNG GIÃN CHIỀU CAO TEXTAREA
 function autoResizeTextarea(el) {
     if (!el) return;
     el.style.height = 'auto';
@@ -160,6 +175,18 @@ function injectSoiDeStyles() {
         .btn-soide-tool:hover { filter: brightness(1.12); transform: translateY(-1px); }
         .btn-soide-tool:active { transform: translateY(1.5px) scale(0.96); }
 
+        /* NÚT UPDATE CẬP NHẬT ĐỀ THI */
+        .btn-soide-update {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            color: #ffffff !important; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.45) !important;
+            border: 1px solid #fde68a !important; font-weight: 900 !important;
+            animation: pulseUpdateBtn 1.8s infinite;
+        }
+        @keyframes pulseUpdateBtn {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+            50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2); }
+        }
+
         .btn-soide-upload-class {
             background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
             color: #ffffff !important; box-shadow: 0 2px 7px rgba(14, 165, 233, 0.4);
@@ -167,7 +194,7 @@ function injectSoiDeStyles() {
         }
         .btn-soide-upload { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35); }
         .btn-soide-download { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; }
-        .btn-soide-add { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #fff; }
+        .btn-soide-add { background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%); color: #fff; }
         .btn-soide-switch { background: #334155; color: #cbd5e1; border: 1px solid #475569; }
         .btn-soide-switch.active { background: #0284c7; color: #ffffff; border-color: #38bdf8; }
         .btn-soide-close { background: #334155; color: #f87171; border-radius: 50%; width: 28px; height: 28px; padding: 0; justify-content: center; font-size: 14px; font-weight: 900; }
@@ -199,7 +226,6 @@ function injectSoiDeStyles() {
             overflow: hidden; position: relative; user-select: none;
         }
 
-        /* NỬA TRÁI: LIVE PREVIEW */
         .soide-left-pane {
             height: 100%; overflow-y: auto; overflow-x: hidden;
             background: #f8fafc; padding: 10px 12px; box-sizing: border-box;
@@ -207,7 +233,6 @@ function injectSoiDeStyles() {
             scroll-behavior: smooth;
         }
 
-        /* VẠCH KÉO CHIA ĐÔI */
         .soide-resizer {
             width: 8px; height: 100%; background: #e2e8f0; cursor: col-resize;
             flex-shrink: 0; position: relative; transition: background 0.15s;
@@ -219,7 +244,6 @@ function injectSoiDeStyles() {
         .soide-resizer:hover, .soide-resizer.is-dragging { background: #10b981; }
         .soide-resizer:hover::after, .soide-resizer.is-dragging::after { color: #ffffff; }
 
-        /* NỬA PHẢI: LATEX EDITOR */
         .soide-right-pane {
             height: 100%; overflow-y: auto; overflow-x: hidden;
             background: #ffffff; padding: 10px 12px; box-sizing: border-box;
@@ -249,7 +273,6 @@ function injectSoiDeStyles() {
             display: flex; background: #f0fdf4; border: 1.2px solid #bbf7d0; color: #16a34a;
         }
 
-        /* KHỐI SOẠN THẢO BÊN PHẢI */
         .soide-editor-qcard {
             border-radius: 12px; padding: 8px 10px;
             display: flex; flex-direction: column; gap: 5px;
@@ -260,7 +283,6 @@ function injectSoiDeStyles() {
             box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.3) !important;
         }
 
-        /* 2 VÙNG PASTE */
         .soide-paste-zones-row {
             display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px;
         }
@@ -283,7 +305,6 @@ function injectSoiDeStyles() {
             box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
         }
 
-        /* KHUNG NHẬP MÃ NGUỒN THÔ TẠI TỪNG CÂU */
         .soide-card-raw-box {
             background: #0f172a; border-radius: 9px; padding: 8px;
             display: flex; flex-direction: column; gap: 6px; border: 1.5px solid #38bdf8;
@@ -355,7 +376,6 @@ function injectSoiDeStyles() {
         .soide-tf-editor-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .soide-tf-editor-table td { padding: 3px 4px; border: 1px solid #e2e8f0; vertical-align: middle; }
 
-        /* PREVIEW CỘT TRÁI */
         .options-list.opt-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr) !important; gap: 8px; }
         .options-list.opt-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr) !important; gap: 7px; }
         .options-list.opt-grid-1 { display: grid; grid-template-columns: 1fr !important; gap: 5px; }
@@ -375,7 +395,6 @@ function injectSoiDeStyles() {
         }
         .soide-preview-title-badge { font-size: 13.5px; font-weight: 900; line-height: 1.3; }
 
-        /* MÃ NGUỒN THÔ TOÀN BỘ ĐỀ */
         .soide-raw-textarea {
             width: 100%; flex: 1; min-height: 480px; padding: 12px;
             font-family: 'Consolas', 'Courier New', monospace; font-size: 13.5px;
@@ -408,12 +427,17 @@ function ensureSoiDeModalInDOM() {
                     </div>
                 </div>
                 <div class="soide-header-tools">
+                    <!-- NÚT UPDATE CẬP NHẬT TỨC THÌ LÊN MÁY CHỦ VÀ PHÒNG THI -->
+                    <button type="button" class="btn-soide-tool btn-soide-update" id="btn-soide-update-exam" onclick="updateExamFromSoiDe()" title="Cập nhật trực tiếp toàn bộ thay đổi lên máy chủ Supabase và phòng thi">
+                        ⚡ Update
+                    </button>
+
                     <!-- NÚT TẢI ĐỀ LÊN LỚP -->
                     <button type="button" class="btn-soide-tool btn-soide-upload-class" id="btn-soide-class-picker" onclick="toggleSoiDeClassDropdown(event)">
                         🚀 Tải đề lên lớp ▾
                     </button>
 
-                    <!-- DROPDOWN 8 LỚP (ĐÃ BỎ TÍCH MẶC ĐỊNH THEO YÊU CẦU 2) -->
+                    <!-- DROPDOWN 8 LỚP -->
                     <div class="soide-class-dropdown" id="soide-class-dropdown" onclick="event.stopPropagation()">
                         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:5px;">
                             <b style="font-size:12px; color:#0284c7;">🎯 Chọn lớp đăng đề:</b>
@@ -516,7 +540,6 @@ function ensureSoiDeModalInDOM() {
     setupSoiDeDragAndResize();
     setupRightToLeftScrollSync();
 
-    // Click ra ngoài tự đóng Dropdown chọn lớp
     document.addEventListener("click", function(e) {
         const drop = document.getElementById("soide-class-dropdown");
         const btn = document.getElementById("btn-soide-class-picker");
@@ -527,16 +550,202 @@ function ensureSoiDeModalInDOM() {
         }
     });
 
+    // Bắt phím tắt Ctrl + S để update nhanh
+    window.addEventListener("keydown", function(e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+            const modal = document.getElementById("modal-soi-de");
+            if (modal && modal.style.display === "flex") {
+                e.preventDefault();
+                updateExamFromSoiDe();
+            }
+        }
+    });
+
     return modalDiv;
 }
 
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", ensureSoiDeModalInDOM);
-} else {
-    ensureSoiDeModalInDOM();
+// TỰ ĐỘNG KHỞI TẠO NÚT "CHUYỂN SANG SOI" TRONG GIAO DIỆN BÀI THI KHI Ở CHẾ ĐỘ ADMIN
+function checkAndDisplayAdminSoiDeButton() {
+    const btn = document.getElementById("btn-admin-switch-soide");
+    if (!btn) return;
+
+    const isAdmin = checkIsAdminModeSafe();
+    if (isAdmin) {
+        btn.style.display = "inline-flex";
+    } else {
+        btn.style.display = "none";
+    }
 }
 
-// 3. MỞ VÀ ĐÓNG MODAL SOI ĐỀ
+// 3. HÀM CHUYỂN SANG SOI ĐỀ TỪ PHÒNG THI (THI.HTML)
+function switchToSoiDeFromExam() {
+    if (typeof examData === 'undefined' || !examData) {
+        alert("⚠️ Không tìm thấy dữ liệu đề thi hiện tại!");
+        return;
+    }
+
+    // Đảm bảo cấu trúc modal tồn tại
+    ensureSoiDeModalInDOM();
+
+    // Khôi phục đầy đủ đáp án & giải thích từ SECURE_VAULT nếu có
+    const clonedQuestions = (examData.questions || []).map(q => {
+        const item = JSON.parse(JSON.stringify(q));
+        if (window.SECURE_VAULT) {
+            if (window.SECURE_VAULT.answers && window.SECURE_VAULT.answers[`q${q.id}`] !== undefined) {
+                if (item.type === "multiple_choice") {
+                    const letters = ["A", "B", "C", "D"];
+                    item.correct = letters.indexOf(window.SECURE_VAULT.answers[`q${q.id}`]);
+                    if (item.correct === -1) item.correct = 0;
+                } else if (item.type === "short_answer" || isPart4Question(item)) {
+                    item.correctAnswer = window.SECURE_VAULT.answers[`q${q.id}`];
+                }
+            }
+            if (item.type === "true_false" && Array.isArray(item.statements) && window.SECURE_VAULT.answers) {
+                item.statements.forEach(st => {
+                    const val = window.SECURE_VAULT.answers[`q${q.id}_${st.id}`];
+                    if (val !== undefined) {
+                        st.correct = (val === "Đúng" || val === true);
+                    }
+                });
+            }
+            if (window.SECURE_VAULT.explanations && window.SECURE_VAULT.explanations[`q${q.id}`]) {
+                item.explanation = window.SECURE_VAULT.explanations[`q${q.id}`];
+            }
+        }
+        return item;
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || examData.id || "quiz";
+    const currentMade = (typeof getMaDe === 'function' ? getMaDe() : examData.made) || "101";
+
+    soiDeState.examData = {
+        id: quizId,
+        title: examData.title || (typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "ĐỀ THI"),
+        maDe: currentMade,
+        timeLimitMinutes: parseInt(examData.timeLimitMinutes || examData.time_limit_minutes, 10) || 90,
+        images: JSON.parse(JSON.stringify(examData.images || {})),
+        questions: reorganizeAllQuestionsByParts(clonedQuestions),
+        scoringConfig: examData.scoringConfig || { mode: 'option1' }
+    };
+    soiDeState.isFromExamRoom = true;
+
+    openSoiDeModal();
+    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu từ bài thi vào Soi đề! Bấm '⚡ Update' sau khi sửa.`);
+}
+
+// 4. HÀM UPDATE CẬP NHẬT TRỰC TIẾP LÊN MÁY CHỦ VÀ PHÒNG THI
+async function updateExamFromSoiDe() {
+    const btn = document.getElementById("btn-soide-update-exam");
+    if (!soiDeState.examData || !Array.isArray(soiDeState.examData.questions) || soiDeState.examData.questions.length === 0) {
+        alert("⚠️ Đề thi hiện chưa có câu hỏi nào để cập nhật!");
+        return;
+    }
+
+    const errors = validateExamSyntax(soiDeState.examData.questions);
+    if (errors.length > 0) {
+        if (!confirm(`⚠️ Có ${errors.length} cảnh báo cú pháp (VD: ${errors[0]}).\nBạn có muốn tiếp tục lưu không?`)) {
+            return;
+        }
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "⏳ Đang cập nhật...";
+    }
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+    if (!client) {
+        alert("❌ Chưa kết nối được máy chủ Supabase! Vui lòng kiểm tra lại app-config.js.");
+        if (btn) { btn.disabled = false; btn.innerText = "⚡ Update"; }
+        return;
+    }
+
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        let quizId = soiDeState.examData.id || urlParams.get('id') || (typeof examData !== 'undefined' && examData ? examData.id : null);
+
+        if (!quizId) {
+            quizId = "quiz_" + Date.now();
+            soiDeState.examData.id = quizId;
+        }
+
+        const cleanQuestions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
+        const finalTitle = soiDeState.examData.title || "ĐỀ THI TRẮC NGHIỆM";
+        const finalMade = soiDeState.examData.maDe || "101";
+        const finalMinutes = parseInt(soiDeState.examData.timeLimitMinutes, 10) || 90;
+        const imagesMap = soiDeState.examData.images || {};
+
+        // 1. CẬP NHẬT VÀO TABLE: quizzes
+        const { error: qErr } = await client.from('quizzes').upsert({
+            id: quizId,
+            title: finalTitle,
+            made: finalMade,
+            time_limit_minutes: finalMinutes,
+            questions: cleanQuestions,
+            images: imagesMap,
+            scoring_config: soiDeState.examData.scoringConfig || { mode: 'option1' }
+        }, { onConflict: 'id' });
+
+        if (qErr) throw qErr;
+
+        // 2. CẬP NHẬT TIÊU ĐỀ & THỜI GIAN VÀO TABLE: custom_links
+        try {
+            await client.from('custom_links').update({
+                title: finalTitle,
+                time_limit_minutes: finalMinutes
+            }).eq('id', quizId);
+        } catch(cErr) {}
+
+        // 3. NẾU ĐANG TRONG PHÒNG THI (thi.html): CẬP NHẬT TỨC THÌ GIAO DIỆN BÀI THI
+        if (typeof examData !== 'undefined' && examData) {
+            examData.title = finalTitle;
+            examData.made = finalMade;
+            examData.timeLimitMinutes = finalMinutes;
+            examData.time_limit_minutes = finalMinutes;
+            examData.questions = cleanQuestions;
+            examData.images = imagesMap;
+
+            if (typeof EXAM_NAME !== 'undefined') EXAM_NAME = finalTitle;
+
+            const bannerTitle = document.getElementById("banner-title");
+            if (bannerTitle) bannerTitle.innerText = finalTitle;
+
+            const navCodeText = document.getElementById("nav-exam-code-text");
+            if (navCodeText) navCodeText.innerText = `Đề: ${finalMade}`;
+
+            // Lưu vào bộ nhớ đệm đảo đề để không bị mất khi load lại
+            try {
+                if (typeof getExamCode === 'function') {
+                    safeLocal.setItem(`shuffled_exam_${getExamCode()}`, JSON.stringify(cleanQuestions));
+                }
+            } catch(e) {}
+
+            // Vẽ lại toàn bộ câu hỏi và công thức toán học
+            if (typeof renderQuizLayout === 'function') {
+                renderQuizLayout(cleanQuestions, imagesMap);
+            }
+            if (window.MathJax && MathJax.typesetPromise) {
+                MathJax.typesetPromise().catch(() => {});
+            }
+        }
+
+        // Cập nhật lại 2 nửa của Soi đề
+        renderSoiDeBothSides();
+
+        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ thay đổi đã được đồng bộ trực tiếp lên máy chủ Supabase và phòng thi!`);
+
+    } catch(err) {
+        alert("❌ Lỗi khi cập nhật đề thi: " + err.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "⚡ Update";
+        }
+    }
+}
+
+// 5. MỞ VÀ ĐÓNG MODAL SOI ĐỀ
 function openSoiDeModal(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     
@@ -563,7 +772,7 @@ function closeSoiDeModal() {
     if (modal) modal.style.display = "none";
 }
 
-// 4. KÉO THẢ VẠCH CHIA & DROP ZONE
+// 6. KÉO THẢ VẠCH CHIA & DROP ZONE
 function setupSoiDeDragAndResize() {
     const resizer = document.getElementById("soide-resizer");
     const container = document.getElementById("soide-split-body");
@@ -623,7 +832,7 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-// 5. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI
+// 7. ĐỒNG BỘ CUỘN TỪ CỘT PHẢI SANG CỘT TRÁI
 let lastSyncedQId = null;
 
 function setupRightToLeftScrollSync() {
@@ -717,18 +926,16 @@ function showSoiDeToast(msg) {
     setTimeout(() => {
         toast.style.opacity = "0";
         toast.style.transform = "translateX(-50%) translateY(0)";
-    }, 2500);
+    }, 2800);
 }
 
-// 6. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI ĐƠN LẺ
+// 8. BỘ PHÂN TÍCH THÔNG MINH CHO CÂU HỎI
 function parseSmartSingleQuestion(text) {
     if (!text || typeof text !== 'string') return null;
     let cleanText = text.trim();
 
-    // Loại bỏ tiền tố "// Câu x" hoặc "Câu x:" nếu có để phân tích
     cleanText = cleanText.replace(/^(?:\/\/|\s)*(?:Câu|Bài)\s*\d+[\s\:\.\-–—]*/i, "").trim();
 
-    // 1. Nếu là JSON hoặc JS Object
     let parsed = robustParseExamScriptOrJson(cleanText);
     if (parsed) {
         if (Array.isArray(parsed) && parsed.length > 0) parsed = parsed[0];
@@ -746,7 +953,6 @@ function parseSmartSingleQuestion(text) {
         }
     }
 
-    // 2. Tách Lời giải chi tiết nếu có
     let explanation = "";
     const explainMatch = cleanText.match(/(?:(?:Lời giải chi tiết|Hướng dẫn giải chi tiết|Hướng dẫn giải|Lời giải|HƯỚNG DẪN GIẢI|LỜI GIẢI|HDG|HD)\s*[:：\-]\s*)([\s\S]*)$/i);
     if (explainMatch) {
@@ -767,7 +973,6 @@ function parseSmartSingleQuestion(text) {
         cleanText = cleanText.replace(correctMatch[0], "").trim();
     }
 
-    // Kiểm tra câu trắc nghiệm nhiều lựa chọn (A, B, C, D) -> PHẦN 1
     const optRegex = /(?:^|\n|\r)\s*([A-D])[\.\:\)]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[A-D][\.\:\)])|$)/gi;
     const optMatches = [...cleanText.matchAll(optRegex)];
     if (optMatches.length >= 2) {
@@ -795,7 +1000,6 @@ function parseSmartSingleQuestion(text) {
         };
     }
 
-    // Kiểm tra câu Đúng / Sai (a, b, c, d) -> PHẦN 2
     const stRegex = /(?:^|\n|\r)\s*([a-d])[\)\.]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[a-d][\)\.])|$)/gi;
     const stMatches = [...cleanText.matchAll(stRegex)];
     if (stMatches.length >= 2) {
@@ -822,7 +1026,6 @@ function parseSmartSingleQuestion(text) {
         };
     }
 
-    // Kiểm tra câu trả lời ngắn / Tự luận -> PHẦN 3 / PHẦN 4
     const isP4 = cleanText.toUpperCase().includes("PHẦN IV") || cleanText.toUpperCase().includes("PHẦN 4");
     if (shortAns || /^(?:Đáp số|Kết quả|KQ)/i.test(cleanText) || isP4) {
         let qText = cleanText;
@@ -850,19 +1053,16 @@ function parseSmartSingleQuestion(text) {
     };
 }
 
-// BỘ TÁCH ĐA CÂU: BÓC ĐƯỢC CẢ 1 HOẶC NHIỀU CÂU HỎI KHI PASTE
 function parseSmartQuestionOrQuestions(text) {
     if (!text || typeof text !== 'string') return [];
     const cleanText = text.trim();
 
-    // Thử parse cả cấu trúc JSON hoặc mảng đề thi
     const robust = robustParseExamScriptOrJson(cleanText);
     if (robust) {
         if (Array.isArray(robust)) return robust.map(q => parseSmartSingleQuestion(JSON.stringify(q)));
         if (robust.questions && Array.isArray(robust.questions)) return robust.questions.map(q => parseSmartSingleQuestion(JSON.stringify(q)));
     }
 
-    // Tách bằng phân cách //------ hoặc "Câu x"
     const splitRegex = /(?:^|\n|\r)\s*(?:\/\/\s*-{3,}|\/\/\s*Câu\s*\d+|Câu\s*\d+[\.\:\-])/i;
     const parts = cleanText.split(splitRegex).map(s => s.trim()).filter(Boolean);
 
@@ -875,15 +1075,11 @@ function parseSmartQuestionOrQuestions(text) {
         if (list.length > 0) return list;
     }
 
-    // Nếu chỉ là 1 câu duy nhất
     const single = parseSmartSingleQuestion(cleanText);
     return single ? [single] : [];
 }
 
-// =========================================================================
-// XỬ LÝ MỞ KHUNG MÃ NGUỒN THÔ & DÁN TỰ ĐỘNG XẾP VÀO CUỐI TỪNG PHẦN
-// =========================================================================
-
+// 9. XỬ LÝ MÃ NGUỒN THÔ TỪNG CÂU
 function toggleCardRawBox(qId) {
     if (soiDeState.rawEditingCardIds.has(qId)) {
         soiDeState.rawEditingCardIds.delete(qId);
@@ -902,7 +1098,6 @@ function toggleCardRawBox(qId) {
     }, 40);
 }
 
-// Khi click vào vùng dán: Paste đè hoặc Paste thêm mới (TỰ ĐỘNG XẾP VÀO CUỐI PHẦN TƯƠNG ỨNG)
 async function handlePasteZoneClick(qIdx, mode) {
     let clipboardText = "";
     if (navigator.clipboard && navigator.clipboard.readText) {
@@ -955,7 +1150,6 @@ async function handlePasteZoneClick(qIdx, mode) {
             });
         }
 
-        // TỰ ĐỘNG XẾP CÁC CÂU NÀY VÀO CUỐI MỖI PHẦN TƯƠNG ỨNG (YÊU CẦU 1)
         insertQuestionsOrganizedByPart(parsedQuestions);
         parsedQuestions.forEach(q => soiDeState.rawEditingCardIds.add(q.id));
 
@@ -976,7 +1170,6 @@ async function handlePasteZoneClick(qIdx, mode) {
     }
 }
 
-// Bắt sự kiện Ctrl+V trực tiếp trên vùng dán
 function handlePasteOnQuestion(event, qIdx, mode) {
     event.preventDefault();
     event.stopPropagation();
@@ -1018,7 +1211,6 @@ function handlePasteOnQuestion(event, qIdx, mode) {
             });
         }
 
-        // TỰ ĐỘNG XẾP VÀO CUỐI MỖI PHẦN TƯƠNG ỨNG
         insertQuestionsOrganizedByPart(parsedQuestions);
         parsedQuestions.forEach(q => soiDeState.rawEditingCardIds.add(q.id));
 
@@ -1034,7 +1226,6 @@ function handlePasteOnQuestion(event, qIdx, mode) {
     }
 }
 
-// Áp dụng nội dung từ khung mã nguồn thô của câu vào State & Sắp xếp vị trí
 function applyCardRawInput(qIdx, qId) {
     const ta = document.getElementById(`soide-card-raw-text-${qId}`);
     if (!ta) return;
@@ -1062,7 +1253,6 @@ function applyCardRawInput(qIdx, qId) {
         if (qObj.part) targetQ.part = qObj.part;
     }
 
-    // Tự động sắp xếp lại đề theo thứ tự Phần 1 -> 2 -> 3 -> 4
     soiDeState.examData.questions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
     soiDeState.rawEditingCardIds.delete(qId);
     
@@ -1076,7 +1266,7 @@ function applyCardRawInput(qIdx, qId) {
     showSoiDeToast(`✅ Đã nhận diện và sắp xếp chuẩn vào phần tương ứng!`);
 }
 
-// 7. KHỞI TẠO ĐỀ MẪU BAN ĐẦU
+// 10. KHỞI TẠO ĐỀ MẪU
 function initDefaultSoiDeExam() {
     soiDeState.examData = {
         title: "ĐỀ KIỂM TRA ĐỊNH KỲ TOÁN 12",
@@ -1116,7 +1306,7 @@ function initDefaultSoiDeExam() {
     renderSoiDeBothSides();
 }
 
-// 8. UPLOAD & PHÂN TÍCH ĐỀ
+// 11. UPLOAD & PHÂN TÍCH ĐỀ
 function triggerSoiDeUpload() {
     const input = document.getElementById("soide-file-input");
     if (input) { input.value = ""; input.click(); }
@@ -1175,7 +1365,7 @@ function readAndParseSoiDeFile(file) {
             }
 
             renderSoiDeBothSides();
-            alert(`✅ ĐÃ NẠP THÀNH CÔNG ĐỀ THI!\n\n- Tên đề: ${soiDeState.examData.title}\n- Tổng số câu: ${soiDeState.examData.questions.length} câu (Đã xếp chuẩn 4 phần).`);
+            alert(`✅ ĐÃ NẠP THÀNH CÔNG ĐỀ THI!\n\n- Tên đề: ${soiDeState.examData.title}\n- Tổng số câu: ${soiDeState.examData.questions.length} câu.`);
         } catch(err) {
             alert("❌ Lỗi đọc file đề thi: " + err.message);
         }
@@ -1183,7 +1373,7 @@ function readAndParseSoiDeFile(file) {
     reader.readAsText(file);
 }
 
-// 9. RENDER ĐỒNG THỜI CẢ 2 NỬA
+// 12. RENDER ĐỒNG THỜI CẢ 2 NỬA
 function renderSoiDeBothSides() {
     renderSoiDeRightEditor();
     renderSoiDeLeftLivePreview();
@@ -1203,7 +1393,7 @@ function updateSoiDeMeta() {
     debouncedLivePreview();
 }
 
-// 10. RENDER NỬA PHẢI: TRÌNH BIÊN TẬP
+// 13. RENDER NỬA PHẢI
 function renderSoiDeRightEditor() {
     const metaTitle = document.getElementById("soide-meta-title");
     const metaMade = document.getElementById("soide-meta-made");
@@ -1239,11 +1429,9 @@ function renderSoiDeRightEditor() {
         else if (q.type === 'short_answer') currentPartType = "short_answer";
 
         const isRawEditing = soiDeState.rawEditingCardIds.has(q.id);
-
         let cardBodyHtml = "";
 
         if (isRawEditing) {
-            // HIỂN THỊ KHUNG MÃ NGUỒN THÔ CHO CÂU NÀY
             const jsonTextOfQ = JSON.stringify(q, null, 2);
             cardBodyHtml = `
                 <div class="soide-card-raw-box" id="soide-card-raw-box-${q.id}">
@@ -1259,7 +1447,6 @@ function renderSoiDeRightEditor() {
                 </div>
             `;
         } else {
-            // HIỂN THỊ DẠNG THẺ (CARDS) BÌNH THƯỜNG
             let specificHtml = "";
             if (q.type === "multiple_choice" && !q.part) {
                 const letters = ["A", "B", "C", "D"];
@@ -1385,7 +1572,7 @@ function renderSoiDeRightEditor() {
     setupRightToLeftScrollSync();
 }
 
-// 11. CÁC HÀM CẬP NHẬT DỮ LIỆU
+// 14. CÁC HÀM CẬP NHẬT DỮ LIỆU
 function updateSoiDeQuestionText(idx, val) {
     if (soiDeState.examData.questions[idx]) {
         soiDeState.examData.questions[idx].question = val;
@@ -1472,7 +1659,6 @@ function changeSoiDeQuestionType(qIdx, newType) {
         if (!q.correctAnswer) q.correctAnswer = "0";
     }
 
-    // Tự động sắp xếp lại đề để câu này rơi về cuối của phần mới vừa chọn
     soiDeState.examData.questions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
     renderSoiDeBothSides();
     showSoiDeToast(`✅ Đã chuyển câu sang phần mới và tự động xếp đúng vị trí!`);
@@ -1527,7 +1713,6 @@ function insertQuestionAfter(qIdx) {
         };
     }
 
-    // Tự động xếp vào cuối phần tương ứng
     insertQuestionsOrganizedByPart([newQuestion]);
     renderSoiDeBothSides();
 
@@ -1578,7 +1763,6 @@ function deleteQuestionFromLeftPreview(qId) {
     if (qIdx !== -1) deleteQuestionFromSoiDe(qIdx);
 }
 
-// 12. CHUYỂN CHẾ ĐỘ BIÊN SOẠN & ĐỊNH DẠNG MÃ NGUỒN THÔ NGĂN CÁCH //-----------
 function setSoiDeEditorMode(mode) {
     soiDeState.editorMode = mode;
     const btnCards = document.getElementById("btn-mode-cards");
@@ -1601,7 +1785,6 @@ function setSoiDeEditorMode(mode) {
     }
 }
 
-// TẠO CHUỖI MÃ NGUỒN THÔ VỚI CÁC DẢI //----------- NGĂN CÁCH TỪNG CÂU
 function updateRawTextFromState() {
     const rawEditor = document.getElementById("soide-raw-editor");
     if (!rawEditor) return;
@@ -1665,7 +1848,7 @@ function debouncedFunction(fn, delay = 250) {
     soiDeState.debounceTimer = setTimeout(fn, delay);
 }
 
-// 13. KIỂM TRA LỖI CÚ PHÁP
+// 15. KIỂM TRA LỖI CÚ PHÁP
 function validateExamSyntax(questions) {
     const errors = [];
     if (!Array.isArray(questions) || questions.length === 0) {
@@ -1710,7 +1893,7 @@ function setValidationStatus(isValid, msg) {
     }
 }
 
-// 14. RENDER CỘT TRÁI: LIVE PREVIEW
+// 16. RENDER CỘT TRÁI: LIVE PREVIEW
 function renderSoiDeLeftLivePreview() {
     const previewContainer = document.getElementById("soide-live-preview-content");
     const countEl = document.getElementById("soide-live-qcount");
@@ -1873,7 +2056,6 @@ function renderSoiDeLeftLivePreview() {
     });
 
     previewContainer.innerHTML = html;
-
     setupSoiDePasteListeners();
 
     if (window.MathJax && MathJax.typesetPromise) {
@@ -1881,7 +2063,7 @@ function renderSoiDeLeftLivePreview() {
     }
 }
 
-// 15. DÁN ẢNH SNIPPING TOOL
+// 17. DÁN ẢNH SNIPPING TOOL
 function setupSoiDePasteListeners() {
     document.querySelectorAll('.soide-left-pane .soide-preview-card').forEach(card => {
         card.addEventListener('paste', function(e) {
@@ -1989,7 +2171,7 @@ function deleteSoiDeQuestionImage(qId, imgKey) {
     renderSoiDeBothSides();
 }
 
-// 16. XUẤT FILE JSON ĐỀ THI
+// 18. XUẤT FILE JSON ĐỀ THI
 function downloadSoiDeJson() {
     try {
         const jsonStr = JSON.stringify(soiDeState.examData, null, 2);
@@ -2009,10 +2191,7 @@ function downloadSoiDeJson() {
     }
 }
 
-// =========================================================================
-// 17. CHỨC NĂNG TẢI ĐỀ LÊN 8 LỚP
-// =========================================================================
-
+// 19. ĐĂNG ĐỀ LÊN 8 LỚP
 function toggleSoiDeClassDropdown(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const drop = document.getElementById("soide-class-dropdown");
@@ -2067,10 +2246,8 @@ async function submitExamToSelectedClasses() {
         const examTitle = examData.title || `ĐỀ THI ${dateStr}`;
         const maDe = examData.maDe || "101";
 
-        // Đảm bảo các câu hỏi đã được sắp xếp chuẩn 4 phần trước khi gửi lên máy chủ
         const cleanQuestions = reorganizeAllQuestionsByParts(examData.questions);
 
-        // 1. Lưu vào bảng quizzes
         const { error: qErr } = await client.from('quizzes').insert([{
             id: quizId,
             title: examTitle,
@@ -2085,7 +2262,6 @@ async function submitExamToSelectedClasses() {
 
         if (qErr) throw qErr;
 
-        // 2. Lưu liên kết cho từng lớp được chọn vào custom_links
         const defaultAvatar = (typeof PRESET_AVATARS !== 'undefined' && PRESET_AVATARS[0]) 
             ? PRESET_AVATARS[0] 
             : "https://i.ibb.co/HTPxzDtT/khung-long-bao-chua.jpg";
@@ -2128,7 +2304,7 @@ async function submitExamToSelectedClasses() {
     }
 }
 
-// CÁC HÀM TIỆN ÍCH TRÁNH XSS
+// CÁC HÀM TIỆN ÍCH
 function escapeHtml(text) {
     if (!text) return "";
     return String(text)
@@ -2147,7 +2323,17 @@ function escapeHtmlForAttr(text) {
         .replace(/>/g, "&gt;");
 }
 
+// TỰ ĐỘNG THEO DÕI & BẬT NÚT ADMIN TRÊN THI.HTML
+document.addEventListener("DOMContentLoaded", function() {
+    ensureSoiDeModalInDOM();
+    checkAndDisplayAdminSoiDeButton();
+    setTimeout(checkAndDisplayAdminSoiDeButton, 1000);
+});
+
 // ĐĂNG KÝ TOÀN CỤC CÁC HÀM
+window.switchToSoiDeFromExam = switchToSoiDeFromExam;
+window.updateExamFromSoiDe = updateExamFromSoiDe;
+window.checkAndDisplayAdminSoiDeButton = checkAndDisplayAdminSoiDeButton;
 window.openSoiDeModal = openSoiDeModal;
 window.closeSoiDeModal = closeSoiDeModal;
 window.ensureSoiDeModalInDOM = ensureSoiDeModalInDOM;
