@@ -1,5 +1,6 @@
 // =========================================================
-// FILE: portal-results-table.js (BẢN TÍCH HỢP PHÓNG TO/THU NHỎ MODAL ĐỘC LẬP VỚI WEB CHÍNH)
+// FILE: portal-results-table.js 
+// (BẢN TỐI ƯU SIÊU GỌN HEADER, ZOOM TỚI 40% & NÚT THU HIỆN ĐỦ DÒNG 1 MÀN HÌNH)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -7,6 +8,7 @@ let _liveDoingTickerInterval = null;
 
 // BIẾN QUẢN LÝ TỶ LỆ PHÓNG TO / THU NHỎ ĐỘC LẬP CHO RIÊNG MODAL KẾT QUẢ
 let modalCustomZoomLevel = 1.0;
+let isFitAllRowsActive = false;
 
 (function injectHeartbeatDoingStyles() {
     const styleId = "status-doing-heartbeat-styles";
@@ -14,26 +16,166 @@ let modalCustomZoomLevel = 1.0;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* Khóa cứng nền cuộn và chạm của Web chính khi Modal Kết quả đang mở */
+        /* 1. ẨN HOÀN TOÀN NÚT THU BÀI TỰ ĐỘNG Ở HEADER BẢNG KẾT QUẢ */
+        #btn-auto-collect-drafts {
+            display: none !important;
+        }
+
+        /* 2. RÚT GỌN TỐI ĐA CHIỀU CAO HEADER VÀ TOP STATS ĐỂ DÀNH KHÔNG GIAN CHO BẢNG */
+        .result-fullscreen-modal {
+            overscroll-behavior: contain !important;
+            touch-action: pan-x pan-y !important;
+        }
+
         body.modal-backdrop-locked {
             overflow: hidden !important;
             touch-action: none !important;
             overscroll-behavior: contain !important;
         }
 
-        /* Khung modal kết quả tự cô lập cuộn và thao tác zoom */
-        .result-fullscreen-modal {
-            overscroll-behavior: contain !important;
-            touch-action: pan-x pan-y !important;
+        .result-modal-header {
+            padding: 4px 12px !important;
+            min-height: 36px !important;
+            gap: 6px !important;
+            background: #ffffff !important;
+            border-bottom: 1.5px solid #e2e8f0 !important;
         }
 
-        /* Khung chứa bảng điểm hỗ trợ phóng to thu nhỏ độc lập */
+        .result-modal-title-box {
+            gap: 6px !important;
+            min-width: 0 !important;
+            flex: 1 !important;
+        }
+
+        #btn-result-back-action {
+            padding: 3px 8px !important;
+            font-size: 11px !important;
+            border-radius: 7px !important;
+            height: 26px !important;
+        }
+
+        .result-modal-icon {
+            width: 26px !important;
+            height: 26px !important;
+            font-size: 14px !important;
+            border-radius: 6px !important;
+        }
+
+        .result-modal-heading {
+            font-size: 13px !important;
+            line-height: 1.2 !important;
+            margin: 0 !important;
+            font-weight: 900 !important;
+        }
+
+        .result-modal-subheading {
+            font-size: 10px !important;
+            line-height: 1.15 !important;
+            margin-top: 1px !important;
+            color: #64748b !important;
+        }
+
+        .result-modal-tools {
+            gap: 4px !important;
+        }
+
+        .result-search-input {
+            padding: 3px 8px !important;
+            height: 26px !important;
+            font-size: 11px !important;
+            width: 125px !important;
+            border-radius: 14px !important;
+        }
+        .result-search-input:focus {
+            width: 150px !important;
+        }
+
+        #btn-toggle-autorefresh,
+        .btn-refresh-result,
+        .btn-regrade-exam,
+        .btn-upload-json-backup,
+        .btn-export-excel {
+            padding: 3px 8px !important;
+            font-size: 11px !important;
+            height: 26px !important;
+            border-radius: 14px !important;
+        }
+
+        .btn-table-settings,
+        .btn-close-result-modal {
+            width: 26px !important;
+            height: 26px !important;
+            font-size: 14px !important;
+        }
+
+        /* THANH THỐNG KÊ TOP SIÊU MỎNG GỌN GÀNG */
+        .result-modal-stats-bar {
+            padding: 2px 10px !important;
+            font-size: 10.5px !important;
+            min-height: 24px !important;
+            gap: 4px !important;
+            background: #f8fafc !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+
+        .result-modal-stats-bar .stat-badge-item {
+            padding: 1px 5px !important;
+            font-size: 10px !important;
+            border-radius: 6px !important;
+        }
+
+        #btn-view-detailed-stats {
+            padding: 2px 8px !important;
+            font-size: 10px !important;
+            border-radius: 10px !important;
+        }
+
+        /* KHUNG CHỨA BẢNG TẬN DỤNG HẾT BIÊN ĐỘ */
         .result-modal-body {
+            padding: 4px 6px !important;
             transform-origin: top center !important;
             transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
 
-        /* THANH ĐIỀU KHIỂN PHÓNG TO / THU NHỎ ĐỘC LẬP */
+        .result-table-card {
+            border-radius: 8px !important;
+        }
+
+        /* 3. NÚT THU HIỆN ĐỦ DÒNG (NẰM SÁT CỤM ZOOM) */
+        .btn-fit-all-rows {
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #5eead4 !important;
+            border-radius: 14px !important;
+            padding: 3px 9px !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 3px !important;
+            box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25) !important;
+            transition: all 0.15s ease !important;
+            white-space: nowrap !important;
+            user-select: none !important;
+            height: 26px !important;
+            font-family: inherit !important;
+        }
+        .btn-fit-all-rows:hover {
+            filter: brightness(1.12) !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 10px rgba(13, 148, 136, 0.4) !important;
+        }
+        .btn-fit-all-rows:active {
+            transform: translateY(1.5px) scale(0.96) !important;
+        }
+        .btn-fit-all-rows.is-fitted {
+            background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+            border-color: #fdba74 !important;
+            box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35) !important;
+        }
+
+        /* CỤM NÚT PHÓNG TO / THU NHỎ ĐỘC LẬP */
         .modal-independent-zoom-control {
             display: inline-flex !important;
             align-items: center !important;
@@ -41,18 +183,20 @@ let modalCustomZoomLevel = 1.0;
             background: #1e293b !important;
             border: 1.5px solid #475569 !important;
             border-radius: 20px !important;
-            padding: 3px 5px !important;
+            padding: 2px 4px !important;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
             user-select: none !important;
+            height: 26px !important;
+            box-sizing: border-box !important;
         }
         .btn-modal-zoom-step {
-            width: 24px !important;
-            height: 24px !important;
+            width: 20px !important;
+            height: 20px !important;
             border-radius: 50% !important;
             border: none !important;
             background: #334155 !important;
             color: #ffffff !important;
-            font-size: 13px !important;
+            font-size: 12px !important;
             font-weight: 900 !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -70,11 +214,11 @@ let modalCustomZoomLevel = 1.0;
             transform: scale(0.92) !important;
         }
         .modal-zoom-val-badge {
-            font-size: 11px !important;
+            font-size: 10.5px !important;
             font-weight: 800 !important;
             color: #38bdf8 !important;
-            padding: 0 6px !important;
-            min-width: 42px !important;
+            padding: 0 5px !important;
+            min-width: 38px !important;
             text-align: center !important;
             font-family: 'Be Vietnam Pro', monospace !important;
             cursor: pointer !important;
@@ -84,30 +228,12 @@ let modalCustomZoomLevel = 1.0;
         }
 
         @keyframes heartbeatDoing {
-            0% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65), 0 0 10px rgba(192, 132, 252, 0.5);
-            }
-            14% {
-                transform: scale(1.13);
-                box-shadow: 0 0 18px 5px rgba(168, 85, 247, 0.85), 0 0 30px rgba(147, 51, 234, 0.7);
-            }
-            28% {
-                transform: scale(1.02);
-                box-shadow: 0 0 8px 2px rgba(168, 85, 247, 0.5), 0 0 16px rgba(192, 132, 252, 0.4);
-            }
-            42% {
-                transform: scale(1.18);
-                box-shadow: 0 0 22px 6px rgba(147, 51, 234, 0.95), 0 0 38px rgba(126, 34, 206, 0.8);
-            }
-            70% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25);
-            }
-            100% {
-                transform: scale(1);
-                box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25);
-            }
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65), 0 0 10px rgba(192, 132, 252, 0.5); }
+            14% { transform: scale(1.13); box-shadow: 0 0 18px 5px rgba(168, 85, 247, 0.85), 0 0 30px rgba(147, 51, 234, 0.7); }
+            28% { transform: scale(1.02); box-shadow: 0 0 8px 2px rgba(168, 85, 247, 0.5), 0 0 16px rgba(192, 132, 252, 0.4); }
+            42% { transform: scale(1.18); box-shadow: 0 0 22px 6px rgba(147, 51, 234, 0.95), 0 0 38px rgba(126, 34, 206, 0.8); }
+            70% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25); }
         }
 
         @keyframes heartIconRotate {
@@ -151,12 +277,8 @@ let modalCustomZoomLevel = 1.0;
             filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.85)) !important;
         }
 
-        tr.row-student-is-doing td {
-            background-color: #faf5ff !important;
-        }
-        tr.row-student-is-doing:hover td {
-            background-color: #f3e8ff !important;
-        }
+        tr.row-student-is-doing td { background-color: #faf5ff !important; }
+        tr.row-student-is-doing:hover td { background-color: #f3e8ff !important; }
         tr.row-student-is-doing .td-stt {
             background-color: #e9d5ff !important;
             color: #581c87 !important;
@@ -177,13 +299,11 @@ let modalCustomZoomLevel = 1.0;
             box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2) !important;
             white-space: nowrap !important;
         }
-
         .live-doing-timer-pill .timer-clock-icon {
             font-size: 12.5px !important;
             line-height: 1 !important;
             animation: heartIconRotate 2s infinite ease-in-out !important;
         }
-
         .live-doing-timer-val {
             font-variant-numeric: tabular-nums !important;
             letter-spacing: 0.2px !important;
@@ -200,7 +320,6 @@ let modalCustomZoomLevel = 1.0;
             font-weight: 800 !important;
         }
 
-        /* NÚT THU ÉP BUỘC ĐƠN LẺ & NÚT THU TẤT CẢ TRÊN TIÊU ĐỀ */
         .btn-force-submit-row {
             background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
             color: #ffffff !important;
@@ -217,13 +336,8 @@ let modalCustomZoomLevel = 1.0;
             transition: all 0.15s ease !important;
             white-space: nowrap !important;
         }
-        .btn-force-submit-row:hover {
-            filter: brightness(1.12) !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-force-submit-row:active {
-            transform: translateY(2px) scale(0.95) !important;
-        }
+        .btn-force-submit-row:hover { filter: brightness(1.12) !important; transform: translateY(-1px) !important; }
+        .btn-force-submit-row:active { transform: translateY(2px) scale(0.95) !important; }
 
         .btn-force-submit-header {
             background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
@@ -240,24 +354,20 @@ let modalCustomZoomLevel = 1.0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
             text-transform: none !important;
         }
-        .btn-force-submit-header:hover {
-            filter: brightness(1.15) !important;
-        }
+        .btn-force-submit-header:hover { filter: brightness(1.15) !important; }
     `;
     document.head.appendChild(style);
 })();
 
-// HÀM ÁP DỤNG PHÓNG TO / THU NHỎ ĐỘC LẬP CHO MODAL KẾT QUẢ
+// HÀM ÁP DỤNG PHÓNG TO / THU NHỎ ĐỘC LẬP (ĐÃ CHO PHÉP THU TỚI 40%)
 function applyModalZoomLevel(newLevel) {
-    modalCustomZoomLevel = Math.min(1.8, Math.max(0.65, Math.round(newLevel * 100) / 100));
+    modalCustomZoomLevel = Math.min(1.8, Math.max(0.40, Math.round(newLevel * 100) / 100));
     
-    // Cập nhật lên container hiển thị của modal kết quả
     const mainView = document.getElementById("result-modal-main-view");
     const detailView = document.getElementById("result-detailed-stats-view");
     
     const applyToEl = (el) => {
         if (!el) return;
-        // Dùng CSS zoom nếu trình duyệt hỗ trợ (Chrome, Edge, Safari hiện đại), fallback sang transform
         if ('zoom' in el.style) {
             el.style.zoom = modalCustomZoomLevel;
         } else {
@@ -277,44 +387,122 @@ function applyModalZoomLevel(newLevel) {
 }
 
 function adjustModalZoomStep(step) {
+    isFitAllRowsActive = false;
+    const fitBtn = document.getElementById("btn-fit-all-rows");
+    if (fitBtn) {
+        fitBtn.classList.remove("is-fitted");
+        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+    }
     applyModalZoomLevel(modalCustomZoomLevel + step);
 }
 
 function resetModalZoom() {
+    isFitAllRowsActive = false;
+    const fitBtn = document.getElementById("btn-fit-all-rows");
+    if (fitBtn) {
+        fitBtn.classList.remove("is-fitted");
+        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+    }
     applyModalZoomLevel(1.0);
 }
 
-// ĐẢM BẢO NÚT CÔNG CỤ ZOOM ĐỘC LẬP LUÔN HIỆN DIỆN TRÊN HEADER MODAL
+// =========================================================================
+// HÀM TỰ ĐỘNG CO TỶ LỆ ĐỂ HIỆN ĐỦ 100% CÁC DÒNG HỌC SINH MÀ KHÔNG CẦN CUỘN
+// =========================================================================
+function fitAllRowsInView(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const scrollWrap = document.querySelector(".result-table-scroll-wrap");
+    const table = document.getElementById("admin-result-table");
+    const fitBtn = document.getElementById("btn-fit-all-rows");
+    if (!scrollWrap || !table) return;
+
+    // Toggle: Nếu đang ở chế độ fit đủ dòng, bấm lại sẽ khôi phục về 100% chuẩn
+    if (isFitAllRowsActive) {
+        isFitAllRowsActive = false;
+        if (fitBtn) {
+            fitBtn.classList.remove("is-fitted");
+            fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        }
+        resetTableSettings();
+        applyModalZoomLevel(1.0);
+        return;
+    }
+
+    // Tối ưu padding và cỡ chữ tối đa cho bảng trước khi tính tỷ lệ
+    tableDisplaySettings.rowPadding = 2;
+    tableDisplaySettings.fontSize = 11;
+    applyTableSettings();
+
+    setTimeout(() => {
+        const availH = scrollWrap.clientHeight;
+        const currentZoom = modalCustomZoomLevel || 1.0;
+        const unscaledH = table.scrollHeight / currentZoom;
+
+        if (availH > 0 && unscaledH > 0) {
+            let targetZoom = Math.floor(((availH - 4) / unscaledH) * 100) / 100;
+            // Cho phép hạ sâu tới mức 40% (0.40)
+            targetZoom = Math.min(1.0, Math.max(0.40, targetZoom));
+            applyModalZoomLevel(targetZoom);
+            scrollWrap.scrollTop = 0;
+            isFitAllRowsActive = true;
+            if (fitBtn) {
+                fitBtn.classList.add("is-fitted");
+                fitBtn.innerHTML = "↺ Hiện 100%";
+            }
+        }
+    }, 40);
+}
+
+// ĐẢM BẢO NÚT "THU HIỆN ĐỦ DÒNG" VÀ BỘ CÔNG CỤ ZOOM LUÔN HIỆN DIỆN TRÊN HEADER
 function ensureModalZoomControlsInHeader() {
     const toolsWrap = document.querySelector(".result-modal-tools");
-    if (!toolsWrap || document.getElementById("modal-independent-zoom-control")) return;
+    if (!toolsWrap) return;
 
-    const zoomDiv = document.createElement("div");
-    zoomDiv.className = "modal-independent-zoom-control";
-    zoomDiv.id = "modal-independent-zoom-control";
-    zoomDiv.title = "Phóng to / Thu nhỏ độc lập bảng kết quả (hoặc giữ Ctrl + lăn chuột)";
-    zoomDiv.innerHTML = `
-        <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(-0.1)" title="Thu nhỏ bảng điểm">−</button>
-        <span class="modal-zoom-val-badge" id="modal-zoom-display-val" onclick="resetModalZoom()" title="Nhấp để về 100%">100%</span>
-        <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(0.1)" title="Phóng to bảng điểm">+</button>
-    `;
+    // 1. Chèn nút "Thu hiện đủ dòng"
+    if (!document.getElementById("btn-fit-all-rows")) {
+        const fitBtn = document.createElement("button");
+        fitBtn.type = "button";
+        fitBtn.className = "btn-fit-all-rows";
+        fitBtn.id = "btn-fit-all-rows";
+        fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ học sinh trên 1 màn hình mà không cần cuộn chuột";
+        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.onclick = (e) => fitAllRowsInView(e);
 
-    // Chèn trước nút đóng modal
-    const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
-    if (closeBtn) {
-        toolsWrap.insertBefore(zoomDiv, closeBtn);
-    } else {
-        toolsWrap.appendChild(zoomDiv);
+        const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
+        if (closeBtn) {
+            toolsWrap.insertBefore(fitBtn, closeBtn);
+        } else {
+            toolsWrap.appendChild(fitBtn);
+        }
+    }
+
+    // 2. Chèn bộ điều khiển Zoom độc lập
+    if (!document.getElementById("modal-independent-zoom-control")) {
+        const zoomDiv = document.createElement("div");
+        zoomDiv.className = "modal-independent-zoom-control";
+        zoomDiv.id = "modal-independent-zoom-control";
+        zoomDiv.title = "Phóng to / Thu nhỏ độc lập bảng kết quả (hoặc giữ Ctrl + lăn chuột)";
+        zoomDiv.innerHTML = `
+            <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(-0.1)" title="Thu nhỏ bảng điểm">−</button>
+            <span class="modal-zoom-val-badge" id="modal-zoom-display-val" onclick="resetModalZoom()" title="Nhấp để về 100%">100%</span>
+            <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(0.1)" title="Phóng to bảng điểm">+</button>
+        `;
+
+        const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
+        if (closeBtn) {
+            toolsWrap.insertBefore(zoomDiv, closeBtn);
+        } else {
+            toolsWrap.appendChild(zoomDiv);
+        }
     }
 }
 
-// BẮT SỰ KIỆN CTRL + LĂN CHUỘT BÊN TRONG MODAL ĐỂ ZOOM ĐỘC LẬP
+// BẮT SỰ KIỆN CTRL + LĂN CHUỘT BÊN TRONG MODAL ĐỂ ZOOM ĐỘC LẬP TỚI 40%
 (function setupIsolatedWheelZoom() {
     window.addEventListener("wheel", function(e) {
         const modal = document.getElementById("result-fullscreen-modal");
         if (!modal || modal.style.display !== "flex") return;
 
-        // Nếu người dùng đang giữ Ctrl và lăn chuột bên trong modal
         if (e.ctrlKey && modal.contains(e.target)) {
             e.preventDefault();
             e.stopPropagation();
@@ -552,7 +740,6 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
 
     window.history.pushState({ isViewingResult: true }, "", "#bang-ket-qua");
 
-    // Khóa cuộn trang web chính để độc lập 100% với Modal
     document.body.classList.add("modal-backdrop-locked");
 
     modal.style.display = "flex";
@@ -645,7 +832,6 @@ function deleteResultRowPermanently(rowUid, event) {
     updateStatsAndRenderTable(currentExamResultData.rawRows);
 }
 
-// BỔ SUNG CỘT THU ÉP BUỘC NẰM NGAY TRƯỚC CỘT XÓA
 function ensureActionColumnHeaders() {
     const table = document.getElementById("admin-result-table");
     if (!table) return; 
@@ -886,7 +1072,8 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
-// BỔ SUNG ĐĂNG KÝ HÀM TOÀN CỤC CHO NÚT ZOOM
+// ĐĂNG KÝ HÀM TOÀN CỤC
 window.adjustModalZoomStep = adjustModalZoomStep;
 window.resetModalZoom = resetModalZoom;
 window.applyModalZoomLevel = applyModalZoomLevel;
+window.fitAllRowsInView = fitAllRowsInView;
