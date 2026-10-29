@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN CHUẨN HÓA 7 LỚP & GHI ĐÈ FILE DRIVE 100%)
+// FILE 4: student-exam-flow.js (BẢN KHÓA CỨNG ĐĂNG NHẬP CHÍNH XÁC THEO LỚP 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -28,7 +28,7 @@ function openStudentLoginModal(item, categoryId, event) {
     const targetCatId = categoryId || item.categoryId || "them-11";
     activeStudentLogin.targetUrl = item.url || "";
     activeStudentLogin.examTitle = item.title || "Bài kiểm tra";
-    activeStudentLogin.categoryId = targetCatId;
+    activeStudentLogin.categoryId = targetCatId; // KHÓA CHẶT LỚP CỦA ĐỀ THI
     activeStudentLogin.currentMode = "class";
     activeStudentLogin.item = item;
 
@@ -80,7 +80,7 @@ function openStudentLoginModal(item, categoryId, event) {
         if (!allowFree) {
             tabFree.disabled = true; 
             tabFree.classList.add("disabled"); 
-            tabFree.title = "Đề thi này chỉ dành cho học sinh trong danh sách lớp";
+            tabFree.title = "Đề thi này chỉ dành riêng cho học sinh trong danh sách lớp";
         } else {
             tabFree.disabled = false; 
             tabFree.classList.remove("disabled"); 
@@ -139,6 +139,7 @@ function toggleStudentPassVisibility() {
     }
 }
 
+// BỘ XỬ LÝ ĐĂNG NHẬP KHÓA CỨNG 100% THEO ĐÚNG LỚP CỦA ĐỀ THI
 function submitStudentLogin() {
     const errBox = document.getElementById("st-login-error");
     const showErr = (msg) => {
@@ -148,43 +149,73 @@ function submitStudentLogin() {
     let targetUrl = activeStudentLogin.targetUrl;
     if (!targetUrl) { showErr("❌ Không tìm thấy đường dẫn đề thi!"); return; }
 
-    let finalSbd = ""; let finalName = ""; let finalClass = "";
-    let activeCat = activeStudentLogin.categoryId || "them-11";
+    // KHÓA CỨNG LỚP CỦA ĐỀ THI - TUYỆT ĐỐI KHÔNG GHI ĐÈ BẰNG LỚP KHÁC
+    const targetCat = activeStudentLogin.categoryId || "them-11";
+    const targetCatDisplayName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(targetCat) : targetCat;
+
+    let finalSbd = ""; 
+    let finalName = ""; 
+    let finalClass = "";
 
     if (activeStudentLogin.currentMode === "class") {
         const usernameVal = (document.getElementById("st-username-input").value || "").trim();
         const passVal = (document.getElementById("st-password-input").value || "").trim();
 
-        if (!usernameVal || !passVal) { showErr("⚠️ Vui lòng nhập đầy đủ Tên đăng nhập (hoặc SBD) và Mật khẩu!"); return; }
-
-        const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(usernameVal) : null;
-        if (detectedCat) {
-            activeCat = detectedCat;
+        if (!usernameVal || !passVal) { 
+            showErr("⚠️ Vui lòng nhập đầy đủ Tên đăng nhập (hoặc SBD) và Mật khẩu!"); 
+            return; 
         }
 
-        const accounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(activeCat) : [];
+        // 1. CHỈ LẤY DANH SÁCH HỌC SINH CỦA CHÍNH LỚP NÀY
+        const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(targetCat) : [];
         const normUser = typeof normalizeName === 'function' ? normalizeName(usernameVal) : usernameVal.toLowerCase();
-        const matched = accounts.find(acc => {
+
+        // 2. TÌM KIẾM HỌC SINH TRONG LỚP MỤC TIÊU
+        const matched = classAccounts.find(acc => {
             const accSbd = String(acc.sbd || "").trim().toLowerCase();
             const accUser = typeof normalizeName === 'function' ? normalizeName(acc.username) : String(acc.username || "").toLowerCase();
             const accName = typeof normalizeName === 'function' ? normalizeName(acc.name) : String(acc.name || "").toLowerCase();
-            const passOk = String(acc.pass || "").trim() === passVal;
             const isUserMatch = (accSbd === usernameVal.toLowerCase()) || (normUser && (accUser === normUser || accName === normUser));
+            const passOk = String(acc.pass || "").trim() === passVal;
             return isUserMatch && passOk;
         });
 
-        if (!matched) { showErr("❌ Tên đăng nhập hoặc mật khẩu không chính xác cho lớp này!"); return; }
-        finalSbd = matched.sbd; finalName = matched.name || matched.username; finalClass = matched.className || "Lớp học";
+        // 3. NẾU KHÔNG KHỚP: KIỂM TRA XEM CÓ PHẢI HỌC SINH LỚP KHÁC NHẢY VÀO KHÔNG
+        if (!matched) {
+            const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(usernameVal) : null;
+            if (otherCat && otherCat !== targetCat) {
+                const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
+                showErr(`⛔ Tài khoản "${usernameVal}" thuộc danh sách ${otherCatName}!\nĐề thi này chỉ dành riêng cho ${targetCatDisplayName}. Vui lòng chọn đúng đề thi của lớp bạn!`);
+            } else {
+                showErr(`❌ Sai Tên đăng nhập (SBD) hoặc Mật khẩu trong danh sách ${targetCatDisplayName}!`);
+            }
+            return;
+        }
+
+        finalSbd = matched.sbd; 
+        finalName = matched.name || matched.username; 
+        finalClass = matched.className || targetCatDisplayName;
     } else {
-        if (activeStudentLogin.item && activeStudentLogin.item.allowFree === false) { showErr("⛔ Giáo viên đã tắt chế độ thi tự do đối với đề thi này!"); return; }
+        // TAB THÍ SINH TỰ DO
+        if (activeStudentLogin.item && activeStudentLogin.item.allowFree === false) { 
+            showErr("⛔ Giáo viên đã tắt chế độ thi tự do đối với đề thi này!"); 
+            return; 
+        }
         finalName = (document.getElementById("st-free-name-input").value || "").trim();
         finalClass = (document.getElementById("st-free-class-input").value || "").trim();
         finalSbd = (document.getElementById("st-free-sbd-input").value || "").trim();
-        if (!finalName || !finalClass || !finalSbd) { showErr("⚠️ Vui lòng nhập đầy đủ Họ tên, Lớp và SBD tự do!"); return; }
+        
+        if (!finalName || !finalClass || !finalSbd) { 
+            showErr("⚠️ Vui lòng nhập đầy đủ Họ tên, Lớp và SBD tự do!"); 
+            return; 
+        }
 
+        // KHÔNG CHO PHÉP DÙNG SBD CỦA HỌC SINH CHÍNH THỨC ĐỂ THI TỰ DO BỪA BÃI
         const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
         if (detectedCat) {
-            activeCat = detectedCat;
+            const detectedName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(detectedCat) : detectedCat;
+            showErr(`⚠️ Số báo danh "${finalSbd}" thuộc danh sách chính thức của ${detectedName}!\nVui lòng chuyển sang tab "Học sinh theo lớp" để đăng nhập bằng mật khẩu.`);
+            return;
         }
     }
 
@@ -192,21 +223,22 @@ function submitStudentLogin() {
     safeLocal.removeItem("saved_student_sbd");
     safeLocal.removeItem("saved_student_name"); 
     safeLocal.removeItem("saved_student_class");
-    safeLocal.setItem("current_exam_student", JSON.stringify({ sbd: finalSbd, name: finalName, className: finalClass, categoryId: activeCat }));
+    safeLocal.setItem("current_exam_student", JSON.stringify({ sbd: finalSbd, name: finalName, className: finalClass, categoryId: targetCat }));
 
     try {
         let u = new URL(targetUrl, window.location.href);
-        u.searchParams.set("cat", activeCat); 
+        u.searchParams.set("cat", targetCat); 
         u.searchParams.set("sbd", finalSbd); 
         u.searchParams.set("name", finalName);
         u.searchParams.set("class", finalClass); 
         u.searchParams.set("autostart", "1"); 
         window.location.href = u.toString();
     } catch (e) {
-        window.location.href = `${targetUrl}&cat=${encodeURIComponent(activeCat)}&sbd=${encodeURIComponent(finalSbd)}&name=${encodeURIComponent(finalName)}&class=${encodeURIComponent(finalClass)}&autostart=1`;
+        window.location.href = `${targetUrl}&cat=${encodeURIComponent(targetCat)}&sbd=${encodeURIComponent(finalSbd)}&name=${encodeURIComponent(finalName)}&class=${encodeURIComponent(finalClass)}&autostart=1`;
     }
 }
 
+// BỘ KIỂM TRA MẬT KHẨU TRONG PHÒNG THI (THI.HTML) - KHÓA THEO ĐÚNG LỚP HIỆN TẠI
 function checkPassword() { 
     const val = document.getElementById("exam-pass-input").value.trim(); 
     if (!val) {
@@ -215,8 +247,15 @@ function checkPassword() {
     }
 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const matchedStudent = (typeof findStudentFromDatabase === 'function' ? findStudentFromDatabase(val, currentCat) : null) || 
-                           (typeof findStudentByPassword === 'function' ? findStudentByPassword(val, currentCat) : null);
+    const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
+    
+    // CHỈ TÌM TRONG DANH SÁCH LỚP CỦA ĐỀ THI NÀY
+    const pLow = val.toLowerCase();
+    const matchedStudent = classAccounts.find(acc => 
+        (acc.sbd && String(acc.sbd).trim().toLowerCase() === pLow) ||
+        (acc.pass && String(acc.pass).trim().toLowerCase() === pLow) ||
+        (acc.username && String(acc.username).trim().toLowerCase() === pLow)
+    );
     
     if (matchedStudent) {
         if (typeof applyStudentToUI === 'function') applyStudentToUI(matchedStudent);
@@ -230,10 +269,11 @@ function checkPassword() {
         document.getElementById("student-card").style.display = "block"; 
         if (typeof syncStudentFromParamsAndStorage === 'function') syncStudentFromParamsAndStorage();
     } else { 
-        alert("❌ Mật khẩu bài thi không đúng!"); 
+        alert(`❌ Mật khẩu hoặc mã học sinh không đúng trong danh sách ${typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat}!`); 
     } 
 }
 
+// BỘ KIỂM TRA THÔNG TIN HỌC SINH TRƯỚC KHI BẮT ĐẦU LÀM BÀI TRONG PHÒNG THI
 async function startExamAction(isAutostart = false) {
     const sId = document.getElementById("student-id").value.trim();
     const sName = document.getElementById("student-name").value.trim();
@@ -244,17 +284,31 @@ async function startExamAction(isAutostart = false) {
         return;
     }
 
-    let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
-    if (detected) currentCat = detected;
+    // LẤY ĐÚNG LỚP CỦA ĐỀ THI HIỆN TẠI TỪ URL
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const currentCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat;
 
-    const checkInClass = typeof findStudentFromDatabase === 'function' ? findStudentFromDatabase(sId, currentCat) : null;
+    const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
+    const checkInClass = classAccounts.find(acc => 
+        String(acc.sbd || "").trim().toLowerCase() === sId.toLowerCase()
+    );
+
     const isFree = !checkInClass;
 
     if (isFree) {
+        // NẾU KHÔNG CÓ TRONG LỚP HIỆN TẠI, KIỂM TRA XEM CÓ PHẢI SBD CỦA LỚP KHÁC HAY KHÔNG
+        const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
+        if (otherCat && otherCat !== currentCat) {
+            const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
+            alert(`⛔ Số báo danh "${sId}" thuộc danh sách học sinh của ${otherCatName}!\nBạn không thể sử dụng tài khoản này để làm đề thi của ${currentCatName}.\nVui lòng quay lại trang chủ và chọn đúng đề thi của lớp bạn!`);
+            window.location.href = `./index.html`;
+            return;
+        }
+
         const allowFree = typeof isCurrentExamAllowFree === 'function' ? isCurrentExamAllowFree() : true;
         if (!allowFree) {
-            alert("⛔ Đề thi này không cho phép thí sinh tự do tham gia!\nVui lòng kiểm tra lại thông tin đăng nhập.");
+            alert(`⛔ Đề thi này chỉ dành riêng cho học sinh lớp ${currentCatName}!\nThí sinh tự do hoặc học sinh lớp khác không được phép tham gia.`);
+            window.location.href = `./index.html`;
             return;
         }
     }
@@ -262,12 +316,10 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
-// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC
+// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC VÀO ACTIVE_SESSIONS
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
-    let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
-    if (detected) currentCat = detected;
-
+    // GIỮ NGUYÊN LỚP CỦA ĐỀ THI HIỆN TẠI
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -290,7 +342,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             // 1. Xóa phiên cũ của SBD này trong đề hiện tại
             await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-            // 2. Chèn trực tiếp phiên mới với tên lớp đã được chuẩn hóa về 1 trong 7 lớp
+            // 2. Chèn trực tiếp phiên mới với đúng lớp hiện tại
             await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -381,16 +433,14 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
     const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
     
-    let currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const detected = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
-    if (detected) currentCat = detected;
-
+    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
 
-    const isClassAcc = typeof findStudentFromDatabase === 'function' ? !!findStudentFromDatabase(sId, currentCat) : false;
+    const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
+    const isClassAcc = classAccounts.some(acc => String(acc.sbd || "").trim().toLowerCase() === sId.toLowerCase());
     const isFreeStudent = !isClassAcc;
 
     const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
@@ -508,7 +558,7 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     }
 }
 
-// Tự động tải file JSON: Tên file cố định theo SBD_Tên, không chèn số đếm
+// Tự động tải file JSON: Tên file cố định theo SBD_Tên
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
@@ -729,7 +779,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // GỬI LƯU FILE JSON VÀO DRIVE (GHI ĐÈ FILE CŨ, CHỈ LƯU BẢN MỚI NHẤT)
+    // GỬI LƯU FILE JSON VÀO DRIVE
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
