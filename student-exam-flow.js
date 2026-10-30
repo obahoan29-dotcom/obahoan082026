@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN BẢO TOÀN TẤT CẢ CÁC LẦN THI ĐỘC LẬP 100%)
+// FILE 4: student-exam-flow.js (HỖ TRỢ ĐA LẦN THI ĐẦY ĐỦ 100% KHÔNG BỊ ĐÈ)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -139,7 +139,6 @@ function toggleStudentPassVisibility() {
     }
 }
 
-// BỘ XỬ LÝ ĐĂNG NHẬP KHÓA CỨNG 100% THEO ĐÚNG LỚP CỦA ĐỀ THI
 function submitStudentLogin() {
     const errBox = document.getElementById("st-login-error");
     const showErr = (msg) => {
@@ -232,7 +231,6 @@ function submitStudentLogin() {
     }
 }
 
-// BỘ KIỂM TRA MẬT KHẨU TRONG PHÒNG THI (THI.HTML) - KHÓA THEO ĐÚNG LỚP HIỆN TẠI
 function checkPassword() { 
     const val = document.getElementById("exam-pass-input").value.trim(); 
     if (!val) {
@@ -266,7 +264,6 @@ function checkPassword() {
     } 
 }
 
-// BỘ KIỂM TRA THÔNG TIN HỌC SINH TRƯỚC KHI BẮT ĐẦU LÀM BÀI TRONG PHÒNG THI
 async function startExamAction(isAutostart = false) {
     const sId = document.getElementById("student-id").value.trim();
     const sName = document.getElementById("student-name").value.trim();
@@ -307,7 +304,6 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
-// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC VÀO ACTIVE_SESSIONS
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -322,8 +318,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 
     safeLocal.removeItem(getStorageKey());
-    safeLocal.removeItem("pending_exam_submission");
-    pendingSubmissionPayload = null; // Xóa sạch để lần thi này nhận ID hoàn toàn mới
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const nowMs = Date.now();
@@ -415,7 +409,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// BỘ ĐÓNG GÓI BẢN NỘP BÀI: TỰ ĐỘNG TẠO ID MỚI CHO TỪNG LẦN THI ĐỂ KHÔNG BỊ ĐÈ LẦN TRƯỚC
+// BỘ ĐÓNG GÓI BẢN NỘP VỚI ID DUY NHẤT THEO TỪNG LẦN NỘP (CHỐNG GHI ĐÈ LẦN THI TRƯỚC)
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -453,14 +447,10 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
 
-    const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const nowMs = Date.now();
-
-    // SỬA ĐỔI QUAN TRỌNG: NẾU ĐÃ CÓ PENDING CỦA LẦN NÀY THÌ GIỮ NGUYÊN ĐỂ TRÁNH NHÂN ĐÔI KHI RETRY,
-    // CÒN MỖI LẦN THI MỚI SẼ SINH ID KÈM TIMESTAMP RIÊNG BIỆT ĐỂ BẢO TOÀN TRỌN VẸN CẢ 3 LẦN THI
-    const submissionId = (pendingSubmissionPayload && pendingSubmissionPayload.id) 
-        ? pendingSubmissionPayload.id 
-        : `${currentQuizId}_${cleanSbd}_${nowMs}`;
+    const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
+    // ID MỖI LẦN THI LÀ DUY NHẤT THEO THỜI GIAN -> KHÔNG BAO GIỜ BỊ ĐÈ BẢN NỘP LẦN TRƯỚC
+    const submissionId = `${currentQuizId}_${cleanSbd}_${nowMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
@@ -486,7 +476,8 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         is_free: isFreeStudent,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
         exam_title: exactExamTitle,
-        created_at: new Date(nowMs).toISOString()
+        created_at: new Date(nowMs).toISOString(),
+        createdAt: nowMs
     };
 }
 
@@ -502,7 +493,8 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
 
     const sbd = payload.sbd || "sbd";
     const sName = payload.student_name || "hocsinh";
-    const fileName = `${sbd}_${sName}.json`.replace(/\s+/g, '_');
+    const timeMark = payload.createdAt || Date.now();
+    const fileName = `${sbd}_${sName}_${timeMark}.json`.replace(/\s+/g, '_');
 
     const jsonStr = JSON.stringify(payload, null, 2);
     let base64Data = "";
@@ -552,12 +544,11 @@ async function sendSubmissionJsonToGoogleDriveFolder(payload) {
     }
 }
 
-// Tự động tải file JSON: Tên file cố định theo SBD_Tên
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
         const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-        const fileName = `${sId}_${sName}.json`;
+        const fileName = `${sId}_${sName}_Lan${attemptNumber}.json`;
 
         const exportObj = {
             ...payload,
@@ -588,7 +579,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     if (!payload) return;
     const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
     const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const fileName = `${sId}_${sName}.json`;
+    const fileName = `${sId}_${sName}_Lan${attemptNumber}.json`;
     const exportObj = { ...payload, attemptNumber, exportedAt: Date.now() };
     const jsonStr = JSON.stringify(exportObj, null, 2);
 
@@ -773,7 +764,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // GỬI LƯU FILE JSON VÀO DRIVE
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
@@ -810,7 +800,7 @@ async function executeSubmitExam(isForceSubmit = false) {
                     ⏳ Đang gửi bài lên máy chủ: <span style="color:#ef4444; font-size:1.3rem;">${sec}s</span>
                 </div>
                 <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">
-                    ${currentSubmitAttempt === 1 ? 'Đang nộp bài qua 2 luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
+                    ${currentSubmitAttempt === 1 ? 'Đang nộp bài lần 1 qua 2 luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
                 </div>
             `;
             progressView.style.display = "block";
@@ -841,7 +831,6 @@ async function executeSubmitExam(isForceSubmit = false) {
     const trySendToSupabase = async () => {
         if (!client) throw new Error("Chưa kết nối Supabase Client");
         
-        // DÙNG INSERT ĐỂ BẢO ĐẢM TẠO RECORD MỚI CHO TỪNG LẦN THI ĐỘC LẬP
         let { error } = await client
             .from('submissions')
             .upsert(dbPayload, { onConflict: 'id' });
