@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-regrade.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
-// BỔ SUNG: XỬ LÝ NẠP FILE JSON NỘP SÓT VÀ CHẤM BÙ TỰ ĐỘNG KHÔNG GHI ĐÈ
+// BỔ SUNG: XỬ LÝ NẠP FILE JSON NỘP SÓT VÀ CHẤM BÙ TỰ ĐỘNG
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
@@ -207,10 +207,7 @@ async function handleBackupJsonFileInput(input) {
 
             const effectiveQuizId = targetQuizId || data.quiz_id || data.quizId || "exam";
             const sbdClean = String(data.sbd || data.studentId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-            const nowTime = data.createdAt || Date.now();
-            
-            // FIX QUAN TRỌNG: Gắn mốc thời gian để không ghi đè bài thi trước
-            const subId = data.id || `${effectiveQuizId}_${sbdClean}_${nowTime}`;
+            const subId = data.id || `${effectiveQuizId}_${sbdClean}`;
             const studentName = data.student_name || data.studentName || data.name || "Học sinh";
             const className = data.class_name || data.className || data.studentClass || "Lớp";
             const currentCat = data.category_id || data.categoryId || currentExamResultData.categoryId || "them-11";
@@ -284,11 +281,8 @@ async function handleBackupJsonFileInput(input) {
                 created_at: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString()
             };
 
-            const { error: upsertErr } = await client.from('submissions').insert([payloadRow]);
-            if (upsertErr) {
-                // Nếu lỗi thì fallback sang upsert theo id
-                await client.from('submissions').upsert(payloadRow, { onConflict: 'id' });
-            }
+            const { error: upsertErr } = await client.from('submissions').upsert(payloadRow);
+            if (upsertErr) throw upsertErr;
 
             // Xóa phiên dở dang và bản nháp (nếu có)
             client.from('live_drafts').delete().match({ quiz_id: effectiveQuizId, sbd: sbdClean }).then();

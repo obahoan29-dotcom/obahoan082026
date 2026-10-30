@@ -1,11 +1,11 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN FIX TRIỆT ĐỂ LƯU ĐA LẦN THI KHÔNG GHI ĐÈ & FIX LỖI KẸT GIAO DIỆN LẦN 2)
+// FILE 4: student-exam-flow.js (BẢN KHÓA CỨNG ĐĂNG NHẬP CHÍNH XÁC THEO LỚP 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
 let currentSubmitAttempt = 1;
 
-// HÀM ÁNH XẠ CHÍNH XÁC VỀ ĐÚNG 1 TRONG CÁC TÊN LỚP CHUẨN DUY NHẤT
+// HÀM ÁNH XẠ CHÍNH XÁC VỀ ĐÚNG 1 TRONG 7 TÊN LỚP CHUẨN DUY NHẤT
 function getStrictStandardClassName(rawClass, rawSbd) {
     const s = String(rawClass || "").toLowerCase().trim();
     const sbd = String(rawSbd || "").toLowerCase().trim();
@@ -139,6 +139,7 @@ function toggleStudentPassVisibility() {
     }
 }
 
+// BỘ XỬ LÝ ĐĂNG NHẬP KHÓA CỨNG 100% THEO ĐÚNG LỚP CỦA ĐỀ THI
 function submitStudentLogin() {
     const errBox = document.getElementById("st-login-error");
     const showErr = (msg) => {
@@ -148,6 +149,7 @@ function submitStudentLogin() {
     let targetUrl = activeStudentLogin.targetUrl;
     if (!targetUrl) { showErr("❌ Không tìm thấy đường dẫn đề thi!"); return; }
 
+    // KHÓA CỨNG LỚP CỦA ĐỀ THI - TUYỆT ĐỐI KHÔNG GHI ĐÈ BẰNG LỚP KHÁC
     const targetCat = activeStudentLogin.categoryId || "them-11";
     const targetCatDisplayName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(targetCat) : targetCat;
 
@@ -164,9 +166,11 @@ function submitStudentLogin() {
             return; 
         }
 
+        // 1. CHỈ LẤY DANH SÁCH HỌC SINH CỦA CHÍNH LỚP NÀY
         const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(targetCat) : [];
         const normUser = typeof normalizeName === 'function' ? normalizeName(usernameVal) : usernameVal.toLowerCase();
 
+        // 2. TÌM KIẾM HỌC SINH TRONG LỚP MỤC TIÊU
         const matched = classAccounts.find(acc => {
             const accSbd = String(acc.sbd || "").trim().toLowerCase();
             const accUser = typeof normalizeName === 'function' ? normalizeName(acc.username) : String(acc.username || "").toLowerCase();
@@ -176,6 +180,7 @@ function submitStudentLogin() {
             return isUserMatch && passOk;
         });
 
+        // 3. NẾU KHÔNG KHỚP: KIỂM TRA XEM CÓ PHẢI HỌC SINH LỚP KHÁC NHẢY VÀO KHÔNG
         if (!matched) {
             const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(usernameVal) : null;
             if (otherCat && otherCat !== targetCat) {
@@ -191,6 +196,7 @@ function submitStudentLogin() {
         finalName = matched.name || matched.username; 
         finalClass = matched.className || targetCatDisplayName;
     } else {
+        // TAB THÍ SINH TỰ DO
         if (activeStudentLogin.item && activeStudentLogin.item.allowFree === false) { 
             showErr("⛔ Giáo viên đã tắt chế độ thi tự do đối với đề thi này!"); 
             return; 
@@ -204,6 +210,7 @@ function submitStudentLogin() {
             return; 
         }
 
+        // KHÔNG CHO PHÉP DÙNG SBD CỦA HỌC SINH CHÍNH THỨC ĐỂ THI TỰ DO BỪA BÃI
         const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
         if (detectedCat) {
             const detectedName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(detectedCat) : detectedCat;
@@ -231,6 +238,7 @@ function submitStudentLogin() {
     }
 }
 
+// BỘ KIỂM TRA MẬT KHẨU TRONG PHÒNG THI (THI.HTML) - KHÓA THEO ĐÚNG LỚP HIỆN TẠI
 function checkPassword() { 
     const val = document.getElementById("exam-pass-input").value.trim(); 
     if (!val) {
@@ -241,6 +249,7 @@ function checkPassword() {
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
     
+    // CHỈ TÌM TRONG DANH SÁCH LỚP CỦA ĐỀ THI NÀY
     const pLow = val.toLowerCase();
     const matchedStudent = classAccounts.find(acc => 
         (acc.sbd && String(acc.sbd).trim().toLowerCase() === pLow) ||
@@ -264,6 +273,7 @@ function checkPassword() {
     } 
 }
 
+// BỘ KIỂM TRA THÔNG TIN HỌC SINH TRƯỚC KHI BẮT ĐẦU LÀM BÀI TRONG PHÒNG THI
 async function startExamAction(isAutostart = false) {
     const sId = document.getElementById("student-id").value.trim();
     const sName = document.getElementById("student-name").value.trim();
@@ -274,6 +284,7 @@ async function startExamAction(isAutostart = false) {
         return;
     }
 
+    // LẤY ĐÚNG LỚP CỦA ĐỀ THI HIỆN TẠI TỪ URL
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const currentCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat;
 
@@ -285,6 +296,7 @@ async function startExamAction(isAutostart = false) {
     const isFree = !checkInClass;
 
     if (isFree) {
+        // NẾU KHÔNG CÓ TRONG LỚP HIỆN TẠI, KIỂM TRA XEM CÓ PHẢI SBD CỦA LỚP KHÁC HAY KHÔNG
         const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
         if (otherCat && otherCat !== currentCat) {
             const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
@@ -304,7 +316,9 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
+// BỘ GHI PHIÊN VÀO THI CHUẨN XÁC VÀO ACTIVE_SESSIONS
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
+    // GIỮ NGUYÊN LỚP CỦA ĐỀ THI HIỆN TẠI
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
@@ -325,8 +339,10 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     if (client && currentQuizId) {
         try {
+            // 1. Xóa phiên cũ của SBD này trong đề hiện tại
             await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
+            // 2. Chèn trực tiếp phiên mới với đúng lớp hiện tại
             await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -340,6 +356,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 last_ping: nowMs
             }]);
 
+            // 3. Khởi tạo song song vào live_drafts
             await client.from('live_drafts').upsert({
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -352,6 +369,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 last_updated: new Date().toISOString()
             });
 
+            // 4. Lưu offline vào IndexedDB
             if (typeof examIndexedDB !== 'undefined') {
                 examIndexedDB.setItem('live_drafts', {
                     key: `${currentQuizId}_${cleanSbd}`,
@@ -364,6 +382,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 }).catch(() => {});
             }
 
+            // 5. Ghi log vào thi
             client.from('cheating_logs').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -409,7 +428,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// BỘ ĐÓNG GÓI BẢN NỘP VỚI ID ĐỘC NHẤT KÈM TIMESTAMP - KHÔNG BAO GIỜ BỊ GHI ĐÈ
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -447,11 +465,8 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
 
-    const nowMs = Date.now();
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
-    
-    // FIX QUAN TRỌNG: ID BẢN NỘP KÈM MỐC THỜI GIAN -> MỖI LẦN THI LÀ 1 DÒNG RIÊNG BIỆT KHÔNG ĐÈ LÊN LẦN TRƯỚC
-    const submissionId = `${currentQuizId}_${cleanSbd}_${nowMs}`;
+    const submissionId = `${currentQuizId}_${cleanSbd}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
@@ -477,68 +492,78 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         is_free: isFreeStudent,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
         exam_title: exactExamTitle,
-        created_at: new Date(nowMs).toISOString(),
-        createdAt: nowMs
+        created_at: new Date().toISOString()
     };
 }
 
-// GỬI LƯU BẢN DỰ PHÒNG JSON SANG GOOGLE DRIVE (CHẠY NGẦM HOÀN TOÀN KHÔNG CHẶN LUỒNG)
-function sendSubmissionJsonToGoogleDriveFolder(payload) {
+async function sendSubmissionJsonToGoogleDriveFolder(payload) {
+    const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+        ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+        : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
+
+    if (!gasUrl || gasUrl.includes("DÁN_URL")) return false;
+
+    const strictClassName = getStrictStandardClassName(payload.class_name, payload.sbd);
+    const exactExamTitle = payload.exam_title || "Đề thi";
+
+    const sbd = payload.sbd || "sbd";
+    const sName = payload.student_name || "hocsinh";
+    const fileName = `${sbd}_${sName}.json`.replace(/\s+/g, '_');
+
+    const jsonStr = JSON.stringify(payload, null, 2);
+    let base64Data = "";
     try {
-        const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-            ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-            : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
+        base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
+    } catch(e) {
+        base64Data = btoa(jsonStr);
+    }
 
-        if (!gasUrl || gasUrl.includes("DÁN_URL")) return false;
+    const drivePayload = {
+        action: "saveSubmissionJsonFile",
+        rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
+        className: strictClassName,
+        class: strictClassName,
+        lop: strictClassName,
+        examTitle: exactExamTitle,
+        filename: fileName,
+        mimeType: "application/json",
+        base64: base64Data,
+        submission: payload
+    };
 
-        const strictClassName = getStrictStandardClassName(payload.class_name, payload.sbd);
-        const exactExamTitle = payload.exam_title || "Đề thi";
+    const payloadText = JSON.stringify(drivePayload);
 
-        const sbd = payload.sbd || "sbd";
-        const sName = payload.student_name || "hocsinh";
-        const timeMark = payload.createdAt || Date.now();
-        const fileName = `${sbd}_${sName}_${timeMark}.json`.replace(/\s+/g, '_');
-
-        const jsonStr = JSON.stringify(payload, null, 2);
-        let base64Data = "";
-        try {
-            base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
-        } catch(e) {
-            base64Data = btoa(jsonStr);
-        }
-
-        const drivePayload = {
-            action: "saveSubmissionJsonFile",
-            rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
-            className: strictClassName,
-            class: strictClassName,
-            lop: strictClassName,
-            examTitle: exactExamTitle,
-            filename: fileName,
-            mimeType: "application/json",
-            base64: base64Data,
-            submission: payload
-        };
-
-        // Gửi ngầm không chặn luồng chính, tuyệt đối không dùng keepalive: true để tránh lỗi 64KB
+    try {
         fetch(gasUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(drivePayload)
-        }).catch(() => null);
-
+            body: payloadText,
+            keepalive: true
+        }).catch(() => {
+            if (navigator.sendBeacon) {
+                const blob = new Blob([payloadText], { type: "text/plain;charset=utf-8" });
+                navigator.sendBeacon(gasUrl, blob);
+            }
+        });
         return true;
-    } catch(err) {
-        console.warn("Lỗi lưu dự phòng Drive:", err);
+    } catch(e) {
+        if (navigator.sendBeacon) {
+            try {
+                const blob = new Blob([payloadText], { type: "text/plain;charset=utf-8" });
+                navigator.sendBeacon(gasUrl, blob);
+                return true;
+            } catch(bErr) {}
+        }
         return false;
     }
 }
 
+// Tự động tải file JSON: Tên file cố định theo SBD_Tên
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
     try {
         const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
         const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-        const fileName = `${sId}_${sName}_Lan${attemptNumber}.json`;
+        const fileName = `${sId}_${sName}.json`;
 
         const exportObj = {
             ...payload,
@@ -569,7 +594,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
     if (!payload) return;
     const sId = (payload.sbd || "sbd").replace(/[^a-zA-Z0-9]/g, '_');
     const sName = (payload.student_name || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
-    const fileName = `${sId}_${sName}_Lan${attemptNumber}.json`;
+    const fileName = `${sId}_${sName}.json`;
     const exportObj = { ...payload, attemptNumber, exportedAt: Date.now() };
     const jsonStr = JSON.stringify(exportObj, null, 2);
 
@@ -713,9 +738,6 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
-// =========================================================================
-// BỘ THỰC THI NỘP BÀI SIÊU TỐC - LƯU TẤT CẢ CÁC LẦN THI ĐỘC LẬP
-// =========================================================================
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -734,7 +756,6 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const payload = buildCompleteSubmissionPayload(isForceSubmit);
     
-    // Lưu ngay lập tức vào máy để bảo đảm an toàn dữ liệu 100%
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
@@ -752,7 +773,13 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // Gửi bản sao lưu ngầm lên Google Drive
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then(reg => {
+            return reg.sync.register('sync-pending-submissions');
+        }).catch(() => {});
+    }
+
+    // GỬI LƯU FILE JSON VÀO DRIVE
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
@@ -778,55 +805,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         created_at: payload.created_at
     };
 
-    if (progressView) {
-        progressView.innerHTML = `
-            <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
-            <div style="font-weight:900; color:#0284c7; font-size:1.15rem;">
-                ⏳ Đang lưu bài lên máy chủ...
-            </div>
-            <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">
-                Hệ thống đang kết nối và chốt điểm số an toàn 100%.
-            </div>
-        `;
-        progressView.style.display = "block";
-    }
-
-    // HÀM GỬI LÊN SUPABASE: ƯU TIÊN UPSERT TRỰC TIẾP
-    const trySendToSupabase = async () => {
-        let client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-        
-        // Nếu trước đó client null (do mạng chập chờn lúc load trang), thử tạo lại
-        if (!client && typeof window.supabase !== 'undefined' && window.supabase.createClient) {
-            try { 
-                client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
-                window.supabaseClient = client;
-            } catch(e) {}
-        }
-
-        if (!client) throw new Error("Chưa kết nối Supabase Client");
-        
-        const { error } = await client.from('submissions').upsert(dbPayload, { onConflict: 'id' });
-        if (error) throw error;
-        
-        return true;
-    };
-
-    // BƯỚC 1: THỬ NỘP TRỰC TIẾP NGAY LẬP TỨC
-    let submitSuccess = false;
-    try {
-        await trySendToSupabase();
-        submitSuccess = true;
-    } catch (immediateErr) {
-        console.warn("Gửi trực tiếp thất bại, kích hoạt bộ retry đếm ngược:", immediateErr.message || immediateErr);
-    }
-
-    // BƯỚC 2: NẾU THÀNH CÔNG NGAY -> HIỂN THỊ KẾT QUẢ NGAY LẬP TỨC
-    if (submitSuccess) {
-        finalizeSuccessfulSubmission(payload, confirmModal);
-        return;
-    }
-
-    // BƯỚC 3: NẾU MẠNG CHẬM HOẶC CÓ LỖI TẠM THỜI -> KÍCH HOẠT BỘ RETRY 7 GIÂY
     let secondsLeft = 7;
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
@@ -838,7 +816,7 @@ async function executeSubmitExam(isForceSubmit = false) {
                     ⏳ Đang gửi bài lên máy chủ: <span style="color:#ef4444; font-size:1.3rem;">${sec}s</span>
                 </div>
                 <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">
-                    ${currentSubmitAttempt === 1 ? 'Đang tự động gửi lại qua luồng an toàn...' : `Đang nộp lại bài lần ${currentSubmitAttempt}...`}
+                    ${currentSubmitAttempt === 1 ? 'Đang nộp bài lần 1 qua 2 luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
                 </div>
             `;
             progressView.style.display = "block";
@@ -848,6 +826,8 @@ async function executeSubmitExam(isForceSubmit = false) {
     updateCountdownDisplay(secondsLeft);
 
     let isFinishedTime = false;
+    let submitSuccess = false;
+
     const countdownPromise = new Promise(resolve => {
         submissionCountdownTimer = setInterval(() => {
             secondsLeft--;
@@ -862,6 +842,24 @@ async function executeSubmitExam(isForceSubmit = false) {
         }, 1000);
     });
 
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+
+    const trySendToSupabase = async () => {
+        if (!client) throw new Error("Chưa kết nối Supabase Client");
+        
+        let { error } = await client
+            .from('submissions')
+            .upsert(dbPayload, { onConflict: 'id' });
+
+        if (error) {
+            const { error: insErr } = await client.from('submissions').insert([dbPayload]);
+            if (!insErr) error = null;
+        }
+
+        if (error) throw error;
+        return true;
+    };
+
     const sendLoopPromise = (async () => {
         const startTime = Date.now();
         while (Date.now() - startTime < 6800 && !isFinishedTime) {
@@ -870,7 +868,8 @@ async function executeSubmitExam(isForceSubmit = false) {
                 submitSuccess = true;
                 break;
             } catch (err) {
-                await new Promise(r => setTimeout(r, 1000));
+                console.warn(`Thử gửi bài gặp lỗi:`, err.message || err);
+                await new Promise(r => setTimeout(r, 1200));
             }
         }
     })();
@@ -879,17 +878,48 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
     if (submitSuccess) {
-        finalizeSuccessfulSubmission(payload, confirmModal);
+        if (client) {
+            client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
+            client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
+        }
+        if (typeof clearPresence === 'function') clearPresence(payload.sbd);
+        if (timerInterval) clearInterval(timerInterval); 
+
+        safeLocal.removeItem("pending_exam_submission");
+        safeLocal.removeItem(getStorageKey()); 
+        safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
+        safeLocal.setItem("last_submission_cleared", "true");
+
+        if (typeof examIndexedDB !== 'undefined') {
+            examIndexedDB.removeItem('pending_submissions', payload.id).catch(() => {});
+        }
+        
+        recordSubmissionToHistory(payload);
+
+        isSubmitted = true; 
+        isSubmittingInProgress = false;
+        if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(true);
+
+        if (confirmModal) confirmModal.style.display = "none"; 
+
+        renderResultSummaryScreen(
+            payload.correct_count, 
+            payload.wrong_count, 
+            payload.spent_mins, 
+            payload.completion_time, 
+            payload.score10, 
+            payload.max_scale, 
+            payload.quiz_id
+        ); 
         return;
     }
 
-    // BƯỚC 4: NẾU VẪN THẤT BẠI (CHẮC CHẮN MẤT MẠNG HOẶC SUPABASE BỊ CHẶN)
-    isSubmittingInProgress = false;
-    const savedFileName = downloadSubmissionJsonSilently(payload, currentSubmitAttempt);
-    recordSubmissionToHistory(payload);
-
     if (currentSubmitAttempt === 1) {
-        currentSubmitAttempt++;
+        isSubmittingInProgress = false;
+        currentSubmitAttempt = 2;
+
+        const savedFileName = downloadSubmissionJsonSilently(payload, 1);
+        recordSubmissionToHistory(payload);
 
         if (progressView) {
             progressView.innerHTML = `
@@ -919,78 +949,39 @@ async function executeSubmitExam(isForceSubmit = false) {
             `;
             actionsBox.style.display = "block";
         }
-    } else {
-        // TỪ LẦN THỨ 2 TRỞ ĐI
-        let attemptToShow = currentSubmitAttempt;
-        currentSubmitAttempt++;
-
-        if (progressView) {
-            progressView.innerHTML = `
-                <div style="font-size:38px; margin-bottom:8px;">📶❌</div>
-                <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">LẦN ${attemptToShow} VẪN CHƯA THỂ GỬI LÊN MÁY CHỦ!</div>
-                <div style="font-size:0.92rem; color:#475569; margin-top:8px; font-weight:600; line-height:1.45;">
-                    Đường truyền Internet trên máy đang bị gián đoạn. Bài làm của em đã được bảo lưu nguyên vẹn 100% trên thiết bị và IndexedDB.<br>
-                    Em hãy bấm nút dưới đây để gửi trực tiếp tệp bài làm cho Thầy giáo!
-                </div>
-            `;
-        }
-
-        if (actionsBox) {
-            actionsBox.innerHTML = `
-                <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
-                    <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, ${attemptToShow})" 
-                            style="width:100%; padding:13px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(234, 88, 12, 0.35); display:flex; align-items:center; justify-content:center; gap:6px;">
-                        📤 Hãy gửi file json lần ${attemptToShow} nếu cần
-                    </button>
-                    <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
-                            style="width:100%; padding:10px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
-                        🔄 Thử gửi lại một lần nữa
-                    </button>
-                </div>
-            `;
-            actionsBox.style.display = "block";
-        }
+        return;
     }
-}
 
-// HÀM HOÀN TẤT NỘP BÀI THÀNH CÔNG VÀ CHUYỂN MÀN HÌNH TỨC THÌ
-function finalizeSuccessfulSubmission(payload, confirmModal) {
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    
-    if (client) {
-        client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
-        client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
-    }
-    if (typeof clearPresence === 'function') clearPresence(payload.sbd);
-    if (timerInterval) clearInterval(timerInterval); 
-
-    safeLocal.removeItem("pending_exam_submission");
-    safeLocal.removeItem(getStorageKey()); 
-    safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
-    safeLocal.setItem("last_submission_cleared", "true");
-
-    if (typeof examIndexedDB !== 'undefined') {
-        examIndexedDB.removeItem('pending_submissions', payload.id).catch(() => {});
-    }
-    
+    isSubmittingInProgress = false;
+    const savedFileName2 = downloadSubmissionJsonSilently(payload, 2);
     recordSubmissionToHistory(payload);
 
-    isSubmitted = true; 
-    isSubmittingInProgress = false;
-    currentSubmitAttempt = 1; // Khôi phục lại trạng thái cho lần thi sau
-    if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(true);
+    if (progressView) {
+        progressView.innerHTML = `
+            <div style="font-size:38px; margin-bottom:8px;">📶❌</div>
+            <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">LẦN 2 VẪN CHƯA THỂ GỬI LÊN MÁY CHỦ!</div>
+            <div style="font-size:0.92rem; color:#475569; margin-top:8px; font-weight:600; line-height:1.45;">
+                Đường truyền Internet trên máy đang bị gián đoạn. Bài làm của em đã được bảo lưu nguyên vẹn 100% trên thiết bị và IndexedDB.<br>
+                Em hãy bấm nút dưới đây để gửi trực tiếp tệp bài làm cho Thầy giáo!
+            </div>
+        `;
+    }
 
-    if (confirmModal) confirmModal.style.display = "none"; 
-
-    renderResultSummaryScreen(
-        payload.correct_count, 
-        payload.wrong_count, 
-        payload.spent_mins, 
-        payload.completion_time, 
-        payload.score10, 
-        payload.max_scale, 
-        payload.quiz_id
-    );
+    if (actionsBox) {
+        actionsBox.innerHTML = `
+            <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
+                <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, 2)" 
+                        style="width:100%; padding:13px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(234, 88, 12, 0.35); display:flex; align-items:center; justify-content:center; gap:6px;">
+                    📤 Hãy gửi file json lần 2 nếu cần
+                </button>
+                <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
+                        style="width:100%; padding:10px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
+                    🔄 Thử gửi lại một lần nữa
+                </button>
+            </div>
+        `;
+        actionsBox.style.display = "block";
+    }
 }
 
 function showSubmitConfirmModal() { 
