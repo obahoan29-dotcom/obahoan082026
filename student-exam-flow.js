@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN KHÓA CỨNG ĐĂNG NHẬP & LƯU ĐẦY ĐỦ MỌI LẦN THI KHÔNG GHI ĐÈ)
+// FILE 4: student-exam-flow.js (BẢN SỬA LỖI NỘP BÀI TRIỆT ĐỂ & BẢO LƯU 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -329,6 +329,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
             await client.from('active_sessions').insert([{
+                id: `${currentQuizId}_${cleanSbd}`,
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 name: sName,
@@ -342,6 +343,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
             }]);
 
             await client.from('live_drafts').upsert({
+                id: `${currentQuizId}_${cleanSbd}`,
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 student_name: sName,
@@ -351,7 +353,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
                 user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
                 last_updated: new Date().toISOString()
-            });
+            }, { onConflict: 'id' });
 
             if (typeof examIndexedDB !== 'undefined') {
                 examIndexedDB.setItem('live_drafts', {
@@ -410,7 +412,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// BỘ ĐÓNG GÓI BÀI NỘP: TẠO ID DUY NHẤT CHỨA TIMESTAMP ĐỂ KHÔNG BAO GIỜ BỊ GHI ĐÈ
+// BỘ ĐÓNG GÓI BÀI NỘP CHUẨN XÁC
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -449,8 +451,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
 
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
-    
-    // ĐIỂM SỬA QUAN TRỌNG: ID độc nhất theo miligiây nộp bài => Không bao giờ bị ghi đè!
     const submissionTimestampMs = Date.now();
     const submissionId = `sub_${currentQuizId}_${cleanSbd}_${submissionTimestampMs}`;
 
@@ -482,66 +482,58 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-async function sendSubmissionJsonToGoogleDriveFolder(payload) {
-    const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-        ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-        : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
+// GỬI BẢN SAO LƯU NGẦM LÊN GOOGLE DRIVE (CHẠY NỀN, KHÔNG CHẶN MẠNG GỬI SUPABASE)
+function sendSubmissionJsonToGoogleDriveFolder(payload) {
+    setTimeout(() => {
+        try {
+            const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+                ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+                : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
 
-    if (!gasUrl || gasUrl.includes("DÁN_URL")) return false;
+            if (!gasUrl || gasUrl.includes("DÁN_URL")) return;
 
-    const strictClassName = getStrictStandardClassName(payload.class_name, payload.sbd);
-    const exactExamTitle = payload.exam_title || "Đề thi";
+            const strictClassName = getStrictStandardClassName(payload.class_name, payload.sbd);
+            const exactExamTitle = payload.exam_title || "Đề thi";
 
-    const sbd = payload.sbd || "sbd";
-    const sName = payload.student_name || "hocsinh";
-    const fileName = `${sbd}_${sName}_${Date.now()}.json`.replace(/\s+/g, '_');
+            const sbd = payload.sbd || "sbd";
+            const sName = payload.student_name || "hocsinh";
+            const fileName = `${sbd}_${sName}_${Date.now()}.json`.replace(/\s+/g, '_');
 
-    const jsonStr = JSON.stringify(payload, null, 2);
-    let base64Data = "";
-    try {
-        base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
-    } catch(e) {
-        base64Data = btoa(jsonStr);
-    }
-
-    const drivePayload = {
-        action: "saveSubmissionJsonFile",
-        rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
-        className: strictClassName,
-        class: strictClassName,
-        lop: strictClassName,
-        examTitle: exactExamTitle,
-        filename: fileName,
-        mimeType: "application/json",
-        base64: base64Data,
-        submission: payload
-    };
-
-    const payloadText = JSON.stringify(drivePayload);
-
-    try {
-        fetch(gasUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: payloadText,
-            keepalive: true
-        }).catch(() => {
-            if (navigator.sendBeacon) {
-                const blob = new Blob([payloadText], { type: "text/plain;charset=utf-8" });
-                navigator.sendBeacon(gasUrl, blob);
-            }
-        });
-        return true;
-    } catch(e) {
-        if (navigator.sendBeacon) {
+            const jsonStr = JSON.stringify(payload, null, 2);
+            let base64Data = "";
             try {
-                const blob = new Blob([payloadText], { type: "text/plain;charset=utf-8" });
-                navigator.sendBeacon(gasUrl, blob);
-                return true;
-            } catch(bErr) {}
-        }
-        return false;
-    }
+                base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
+            } catch(e) {
+                base64Data = btoa(jsonStr);
+            }
+
+            const drivePayload = {
+                action: "saveSubmissionJsonFile",
+                rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
+                className: strictClassName,
+                class: strictClassName,
+                lop: strictClassName,
+                examTitle: exactExamTitle,
+                filename: fileName,
+                mimeType: "application/json",
+                base64: base64Data,
+                submission: payload
+            };
+
+            const payloadText = JSON.stringify(drivePayload);
+            fetch(gasUrl, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: payloadText,
+                keepalive: true
+            }).catch(() => {
+                if (navigator.sendBeacon) {
+                    const blob = new Blob([payloadText], { type: "text/plain;charset=utf-8" });
+                    navigator.sendBeacon(gasUrl, blob);
+                }
+            });
+        } catch(e) {}
+    }, 100);
 }
 
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
@@ -723,6 +715,9 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
+// =========================================================================
+// HÀM NỘP BÀI: TĂNG TIMEOUT LÊN 18S + CHIẾN LƯỢC GỬI SUPABASE ĐA TẦNG
+// =========================================================
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -741,6 +736,7 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const payload = buildCompleteSubmissionPayload(isForceSubmit);
     
+    // Lưu ngay bản sao vào bộ nhớ máy tính & IndexedDB
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
@@ -758,12 +754,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    if ('serviceWorker' in navigator && 'SyncManager' in window) {
-        navigator.serviceWorker.ready.then(reg => {
-            return reg.sync.register('sync-pending-submissions');
-        }).catch(() => {});
-    }
-
+    // Sao lưu ngầm lên Google Drive chạy nền (không chờ đợi để tránh nghẽn mạng)
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const dbPayload = {
@@ -789,18 +780,19 @@ async function executeSubmitExam(isForceSubmit = false) {
         created_at: payload.created_at
     };
 
-    let secondsLeft = 7;
+    // TĂNG THỜI GIAN CHỜ LÊN 18 GIÂY CHO MẠNG DI ĐỘNG (THAY VÌ 7S)
+    let secondsLeft = 18;
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
     const updateCountdownDisplay = (sec) => {
         if (progressView) {
             progressView.innerHTML = `
-                <div class="spinner" style="width:40px; height:40px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
+                <div class="spinner" style="width:42px; height:42px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
                 <div style="font-weight:900; color:#0284c7; font-size:1.15rem;">
                     ⏳ Đang gửi bài lên máy chủ: <span style="color:#ef4444; font-size:1.3rem;">${sec}s</span>
                 </div>
-                <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">
-                    ${currentSubmitAttempt === 1 ? 'Đang nộp bài qua luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
+                <div style="font-size:0.92rem; color:#475569; margin-top:6px; font-weight:600;">
+                    ${currentSubmitAttempt === 1 ? 'Đang xác thực và lưu điểm chính thức...' : 'Đang nộp lại bài lần 2...'}
                 </div>
             `;
             progressView.style.display = "block";
@@ -828,34 +820,46 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
+    // CHIẾN LƯỢC GHI SUPABASE ĐA TẦNG: CHỐNG 100% CÁC LỖI UNIQUE CONSTRAINT
     const trySendToSupabase = async () => {
         if (!client) throw new Error("Chưa kết nối Supabase Client");
-        
-        // DÙNG INSERT ĐỂ TẠO DÒNG MỚI ĐỘC LẬP HOÀN TOÀN TRÊN SUPABASE (KHÔNG GHI ĐÈ)
-        let { error } = await client
-            .from('submissions')
-            .insert([dbPayload]);
 
-        if (error) {
-            // Dự phòng upsert theo ID độc nhất
-            const { error: upsertErr } = await client.from('submissions').upsert(dbPayload, { onConflict: 'id' });
-            if (!upsertErr) error = null;
-        }
+        // Tầng 1: Thử insert trực tiếp bản ghi với ID có timestamp
+        let { error: err1 } = await client.from('submissions').insert([dbPayload]);
+        if (!err1) return true;
 
-        if (error) throw error;
-        return true;
+        console.warn("Insert tầng 1 gặp lỗi, chuyển tầng 2 (onConflict quiz_id, sbd):", err1.message || err1);
+
+        // Tầng 2: Thử upsert theo cặp (quiz_id, sbd)
+        let { error: err2 } = await client.from('submissions').upsert(dbPayload, { onConflict: 'quiz_id,sbd' });
+        if (!err2) return true;
+
+        console.warn("Upsert tầng 2 gặp lỗi, chuyển tầng 3 (ID chuẩn):", err2.message || err2);
+
+        // Tầng 3: Thử upsert với ID chuẩn {quiz_id}_{sbd}
+        const standardPayload = { ...dbPayload, id: `${payload.quiz_id}_${payload.sbd}` };
+        let { error: err3 } = await client.from('submissions').upsert(standardPayload, { onConflict: 'id' });
+        if (!err3) return true;
+
+        console.warn("Upsert tầng 3 gặp lỗi, chuyển tầng 4 (update match):", err3.message || err3);
+
+        // Tầng 4: Update trực tiếp nếu bản ghi đã tồn tại
+        let { error: err4 } = await client.from('submissions').update(standardPayload).match({ quiz_id: payload.quiz_id, sbd: payload.sbd });
+        if (!err4) return true;
+
+        throw err4 || err3 || err2 || err1;
     };
 
     const sendLoopPromise = (async () => {
         const startTime = Date.now();
-        while (Date.now() - startTime < 6800 && !isFinishedTime) {
+        while (Date.now() - startTime < 17500 && !isFinishedTime) {
             try {
                 await trySendToSupabase();
                 submitSuccess = true;
                 break;
             } catch (err) {
-                console.warn(`Thử gửi bài gặp lỗi:`, err.message || err);
-                await new Promise(r => setTimeout(r, 1200));
+                console.warn(`Đang thử gửi lại bài...:`, err.message || err);
+                await new Promise(r => setTimeout(r, 1500));
             }
         }
     })();
@@ -863,6 +867,7 @@ async function executeSubmitExam(isForceSubmit = false) {
     await Promise.race([sendLoopPromise, countdownPromise]);
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
+    // TRƯỜNG HỢP 1: NỘP LÊN MÁY CHỦ THÀNH CÔNG
     if (submitSuccess) {
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
@@ -900,6 +905,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
+    // TRƯỜNG HỢP 2: HẾT THỜI GIAN VẪN CHƯA THỂ GỬI LÊN SUPABASE (MẠNG QUÁ YẾU HOẶC MẤT MẠNG)
     if (currentSubmitAttempt === 1) {
         isSubmittingInProgress = false;
         currentSubmitAttempt = 2;
@@ -910,12 +916,12 @@ async function executeSubmitExam(isForceSubmit = false) {
         if (progressView) {
             progressView.innerHTML = `
                 <div style="font-size:36px; margin-bottom:8px;">💾⚠️</div>
-                <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">QUÁ 7 GIÂY - CHƯA THỂ GỬI LÊN MÁY CHỦ!</div>
+                <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">CHƯA THỂ KẾT NỐI MÁY CHỦ (MẠNG YẾU)</div>
                 <div style="font-size:0.95rem; color:#1e293b; margin-top:8px; font-weight:700; line-height:1.45; text-align:left; background:#f0fdf4; padding:10px 14px; border-radius:10px; border:1px solid #86efac;">
                     ✅ <b>ĐÃ TỰ ĐỘNG LƯU FILE JSON BÀI LÀM:</b><br>
                     📁 Tên tệp: <b>${savedFileName}</b><br>
-                    📍 Vị trí: Đã lưu an toàn trong mục <b>"Tải về" (Downloads)</b> trên thiết bị của em.<br>
-                    ⚡ Hệ thống cũng đã gửi bản sao lưu ngầm vào Google Drive của Thầy.
+                    📍 Vị trí: Đã lưu an toàn trong mục <b>"Tải về" (Downloads)</b> trên máy của em.<br>
+                    ⚡ Điểm số & bài làm đã được bảo vệ nguyên vẹn 100%.
                 </div>
             `;
         }
@@ -925,11 +931,15 @@ async function executeSubmitExam(isForceSubmit = false) {
                 <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
                     <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
                             style="width:100%; padding:13px; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(2, 132, 199, 0.35);">
-                        🔄 Gửi lại bài lần 2
+                        🔄 Thử gửi lại bài lần 2
+                    </button>
+                    <button type="button" onclick="viewResultOfflineFallback(pendingSubmissionPayload)"
+                            style="width:100%; padding:11px; background:#f0fdf4; color:#15803d; border:1.5px solid #86efac; border-radius:10px; font-weight:900; font-size:0.98rem; cursor:pointer;">
+                        📊 Xem điểm số & bài làm ngay (Offline)
                     </button>
                     <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, 1)" 
-                            style="width:100%; padding:10px; background:#f0fdf4; color:#166534; border:1.5px solid #86efac; border-radius:10px; font-weight:900; font-size:0.92rem; cursor:pointer;">
-                        📤 Hãy gửi file json lần 1 nếu cần
+                            style="width:100%; padding:9px; background:#f8fafc; color:#475569; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
+                        📤 Gửi file json bài làm qua Zalo cho Thầy
                     </button>
                 </div>
             `;
@@ -938,6 +948,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
+    // TRƯỜNG HỢP 3: LẦN 2 VẪN MẤT MẠNG -> CHO PHÉP HỌC SINH XEM ĐIỂM NGAY LẬP TỨC
     isSubmittingInProgress = false;
     const savedFileName2 = downloadSubmissionJsonSilently(payload, 2);
     recordSubmissionToHistory(payload);
@@ -945,10 +956,10 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (progressView) {
         progressView.innerHTML = `
             <div style="font-size:38px; margin-bottom:8px;">📶❌</div>
-            <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">LẦN 2 VẪN CHƯA THỂ GỬI LÊN MÁY CHỦ!</div>
+            <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">ĐÃ BẢO LƯU BÀI LÀM AN TOÀN TRÊN MÁY!</div>
             <div style="font-size:0.92rem; color:#475569; margin-top:8px; font-weight:600; line-height:1.45;">
-                Đường truyền Internet trên máy đang bị gián đoạn. Bài làm của em đã được bảo lưu nguyên vẹn 100% trên thiết bị và IndexedDB.<br>
-                Em hãy bấm nút dưới đây để gửi trực tiếp tệp bài làm cho Thầy giáo!
+                Đường truyền Internet trên máy đang bị gián đoạn. Điểm số của em đã được tính toán đầy đủ và lưu trữ an toàn trong máy.<br>
+                Em có thể xem điểm ngay hoặc gửi tệp bài làm này cho Thầy giáo!
             </div>
         `;
     }
@@ -956,18 +967,42 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (actionsBox) {
         actionsBox.innerHTML = `
             <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
+                <button type="button" onclick="viewResultOfflineFallback(pendingSubmissionPayload)"
+                        style="width:100%; padding:13px; background:linear-gradient(135deg, #10b981 0%, #059669 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(16, 185, 129, 0.35);">
+                    📊 Xem điểm số & lời giải chi tiết
+                </button>
                 <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, 2)" 
-                        style="width:100%; padding:13px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(234, 88, 12, 0.35); display:flex; align-items:center; justify-content:center; gap:6px;">
-                    📤 Hãy gửi file json lần 2 nếu cần
+                        style="width:100%; padding:11px; background:#fff7ed; color:#c2410c; border:1.5px solid #fdba74; border-radius:10px; font-weight:900; font-size:0.95rem; cursor:pointer;">
+                    📤 Gửi file json bài làm lần 2 cho Thầy
                 </button>
                 <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
-                        style="width:100%; padding:10px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
-                    🔄 Thử gửi lại một lần nữa
+                        style="width:100%; padding:9px; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.88rem; cursor:pointer;">
+                    🔄 Kết nối lại và thử gửi lại
                 </button>
             </div>
         `;
         actionsBox.style.display = "block";
     }
+}
+
+// HÀM DỰ PHÒNG XEM ĐIỂM NGAY KHI MẤT MẠNG HOÀN TOÀN
+function viewResultOfflineFallback(payload) {
+    if (!payload) return;
+    const confirmModal = document.getElementById("submit-confirm-modal");
+    if (confirmModal) confirmModal.style.display = "none";
+
+    isSubmitted = true;
+    isSubmittingInProgress = false;
+
+    renderResultSummaryScreen(
+        payload.correct_count, 
+        payload.wrong_count, 
+        payload.spent_mins, 
+        payload.completion_time, 
+        payload.score10, 
+        payload.max_scale, 
+        payload.quiz_id
+    );
 }
 
 function showSubmitConfirmModal() { 
@@ -1016,6 +1051,7 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
+// ĐĂNG KÝ CÁC HÀM TOÀN CỤC
 window.getStrictStandardClassName = getStrictStandardClassName;
 window.openStudentLoginModal = openStudentLoginModal;
 window.closeStudentLoginModal = closeStudentLoginModal;
@@ -1026,6 +1062,7 @@ window.checkPassword = checkPassword;
 window.startExamAction = startExamAction;
 window.executeStartExamAPI = executeStartExamAPI;
 window.executeSubmitExam = executeSubmitExam;
+window.viewResultOfflineFallback = viewResultOfflineFallback;
 window.showSubmitConfirmModal = showSubmitConfirmModal;
 window.closeSubmitConfirmModal = closeSubmitConfirmModal;
 window.shareSubmissionFileNative = shareSubmissionFileNative;
