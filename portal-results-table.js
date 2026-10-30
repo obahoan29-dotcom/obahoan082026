@@ -1,12 +1,11 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN TỐI ƯU SIÊU GỌN HEADER, ZOOM TỚI 40% & NÚT THU HIỆN ĐỦ DÒNG 1 MÀN HÌNH)
+// (BẢN TỐI ƯU HIỂN THỊ ĐỦ SỐ LẦN THI, DROPDOWN XÒE TỪNG LẦN & ĐIỂM, XEM CHI TIẾT LẦN CHỌN)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
 let _liveDoingTickerInterval = null;
 
-// BIẾN QUẢN LÝ TỶ LỆ PHÓNG TO / THU NHỎ ĐỘC LẬP CHO RIÊNG MODAL KẾT QUẢ
 let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 
@@ -16,12 +15,10 @@ let isFitAllRowsActive = false;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* 1. ẨN HOÀN TOÀN NÚT THU BÀI TỰ ĐỘNG Ở HEADER BẢNG KẾT QUẢ */
         #btn-auto-collect-drafts {
             display: none !important;
         }
 
-        /* 2. RÚT GỌN TỐI ĐA CHIỀU CAO HEADER VÀ TOP STATS ĐỂ DÀNH KHÔNG GIAN CHO BẢNG */
         .result-fullscreen-modal {
             overscroll-behavior: contain !important;
             touch-action: pan-x pan-y !important;
@@ -108,7 +105,6 @@ let isFitAllRowsActive = false;
             font-size: 14px !important;
         }
 
-        /* THANH THỐNG KÊ TOP SIÊU MỎNG GỌN GÀNG */
         .result-modal-stats-bar {
             padding: 2px 10px !important;
             font-size: 10.5px !important;
@@ -130,7 +126,6 @@ let isFitAllRowsActive = false;
             border-radius: 10px !important;
         }
 
-        /* KHUNG CHỨA BẢNG TẬN DỤNG HẾT BIÊN ĐỘ */
         .result-modal-body {
             padding: 4px 6px !important;
             transform-origin: top center !important;
@@ -141,7 +136,6 @@ let isFitAllRowsActive = false;
             border-radius: 8px !important;
         }
 
-        /* 3. NÚT THU HIỆN ĐỦ DÒNG (NẰM SÁT CỤM ZOOM) */
         .btn-fit-all-rows {
             background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
             color: #ffffff !important;
@@ -175,7 +169,6 @@ let isFitAllRowsActive = false;
             box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35) !important;
         }
 
-        /* CỤM NÚT PHÓNG TO / THU NHỎ ĐỘC LẬP */
         .modal-independent-zoom-control {
             display: inline-flex !important;
             align-items: center !important;
@@ -355,11 +348,83 @@ let isFitAllRowsActive = false;
             text-transform: none !important;
         }
         .btn-force-submit-header:hover { filter: brightness(1.15) !important; }
+
+        /* NÂNG CẤP MENU DROPDOWN CHỌN LẦN THI ĐA DÒNG */
+        .td-attempt-cell-wrap {
+            position: relative !important;
+            overflow: visible !important;
+            z-index: 50 !important;
+        }
+        .btn-attempt-trigger {
+            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+            color: #ffffff !important;
+            border: 1.2px solid #a5b4fc !important;
+            padding: 3px 9px !important;
+            border-radius: 12px !important;
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25) !important;
+            white-space: nowrap !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 3px !important;
+            transition: all 0.15s ease !important;
+        }
+        .btn-attempt-trigger:hover {
+            filter: brightness(1.15) !important;
+            transform: translateY(-1px) !important;
+        }
+        .attempt-dropdown-menu {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 210px;
+            background: #ffffff;
+            border: 1.5px solid #818cf8;
+            border-radius: 12px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.35);
+            padding: 6px;
+            z-index: 9999999 !important;
+            text-align: left;
+            animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .attempt-dropdown-menu.show {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 4px !important;
+        }
+        .attempt-menu-item {
+            padding: 7px 10px !important;
+            border-radius: 8px !important;
+            font-size: 11.5px !important;
+            font-weight: 700 !important;
+            color: #1e293b !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+            transition: 0.15s !important;
+            border: 1px solid transparent !important;
+        }
+        .attempt-menu-item:hover {
+            background: #f0fdf4 !important;
+            border-color: #86efac !important;
+            color: #166534 !important;
+        }
+        .attempt-menu-item.selected {
+            background: #e0f2fe !important;
+            border-color: #38bdf8 !important;
+            color: #0369a1 !important;
+            font-weight: 900 !important;
+        }
     `;
     document.head.appendChild(style);
 })();
 
-// HÀM ÁP DỤNG PHÓNG TO / THU NHỎ ĐỘC LẬP (ĐÃ CHO PHÉP THU TỚI 40%)
 function applyModalZoomLevel(newLevel) {
     modalCustomZoomLevel = Math.min(1.8, Math.max(0.40, Math.round(newLevel * 100) / 100));
     
@@ -406,9 +471,6 @@ function resetModalZoom() {
     applyModalZoomLevel(1.0);
 }
 
-// =========================================================================
-// HÀM TỰ ĐỘNG CO TỶ LỆ ĐỂ HIỆN ĐỦ 100% CÁC DÒNG HỌC SINH MÀ KHÔNG CẦN CUỘN
-// =========================================================================
 function fitAllRowsInView(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
@@ -416,7 +478,6 @@ function fitAllRowsInView(event) {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (!scrollWrap || !table) return;
 
-    // Toggle: Nếu đang ở chế độ fit đủ dòng, bấm lại sẽ khôi phục về 100% chuẩn
     if (isFitAllRowsActive) {
         isFitAllRowsActive = false;
         if (fitBtn) {
@@ -428,7 +489,6 @@ function fitAllRowsInView(event) {
         return;
     }
 
-    // Tối ưu padding và cỡ chữ tối đa cho bảng trước khi tính tỷ lệ
     tableDisplaySettings.rowPadding = 2;
     tableDisplaySettings.fontSize = 11;
     applyTableSettings();
@@ -440,7 +500,6 @@ function fitAllRowsInView(event) {
 
         if (availH > 0 && unscaledH > 0) {
             let targetZoom = Math.floor(((availH - 4) / unscaledH) * 100) / 100;
-            // Cho phép hạ sâu tới mức 40% (0.40)
             targetZoom = Math.min(1.0, Math.max(0.40, targetZoom));
             applyModalZoomLevel(targetZoom);
             scrollWrap.scrollTop = 0;
@@ -453,12 +512,10 @@ function fitAllRowsInView(event) {
     }, 40);
 }
 
-// ĐẢM BẢO NÚT "THU HIỆN ĐỦ DÒNG" VÀ BỘ CÔNG CỤ ZOOM LUÔN HIỆN DIỆN TRÊN HEADER
 function ensureModalZoomControlsInHeader() {
     const toolsWrap = document.querySelector(".result-modal-tools");
     if (!toolsWrap) return;
 
-    // 1. Chèn nút "Thu hiện đủ dòng"
     if (!document.getElementById("btn-fit-all-rows")) {
         const fitBtn = document.createElement("button");
         fitBtn.type = "button";
@@ -476,7 +533,6 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
-    // 2. Chèn bộ điều khiển Zoom độc lập
     if (!document.getElementById("modal-independent-zoom-control")) {
         const zoomDiv = document.createElement("div");
         zoomDiv.className = "modal-independent-zoom-control";
@@ -497,7 +553,6 @@ function ensureModalZoomControlsInHeader() {
     }
 }
 
-// BẮT SỰ KIỆN CTRL + LĂN CHUỘT BÊN TRONG MODAL ĐỂ ZOOM ĐỘC LẬP TỚI 40%
 (function setupIsolatedWheelZoom() {
     window.addEventListener("wheel", function(e) {
         const modal = document.getElementById("result-fullscreen-modal");
@@ -808,19 +863,30 @@ function calculateRanksForRows(rows) {
     });
 }
 
+// BỘ CHỌN LẦN THI VÀ CẬP NHẬT TỨC THÌ DÒNG HỌC SINH ĐÓ
 function selectStudentAttempt(rowUid, attemptIdx, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
-    if (row) { row.selectedAttemptIndex = attemptIdx; calculateRanksForRows(currentExamResultData.rawRows); filterResultTable(); }
+    if (row && row.allAttempts && row.allAttempts[attemptIdx]) { 
+        row.selectedAttemptIndex = attemptIdx; 
+        calculateRanksForRows(currentExamResultData.rawRows); 
+        filterResultTable(); 
+    }
 }
 
 function toggleAttemptMenu(rowUid, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
-    const menu = document.getElementById(`attempt-menu-${rowUid}`); const btn = document.getElementById(`attempt-btn-${rowUid}`);
+    const menu = document.getElementById(`attempt-menu-${rowUid}`); 
+    const btn = document.getElementById(`attempt-btn-${rowUid}`);
     const isShown = menu && menu.classList.contains("show");
+    
     document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
     document.querySelectorAll('.btn-attempt-trigger.active').forEach(b => b.classList.remove('active'));
-    if (!isShown && menu) { menu.classList.add("show"); if (btn) btn.classList.add("active"); }
+    
+    if (!isShown && menu) { 
+        menu.classList.add("show"); 
+        if (btn) btn.classList.add("active"); 
+    }
 }
 
 function deleteResultRowPermanently(rowUid, event) {
@@ -881,6 +947,7 @@ function startLiveDoingTicker() {
     }, 1000);
 }
 
+// BỘ VẼ BẢNG KẾT QUẢ: HỌC SINH THI MẤY LẦN HIỆN RÕ BẤY NHIÊU LẦN, CLICK LẦN NÀO HIỆN CHI TIẾT LẦN ĐÓ
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
     ensureModalZoomControlsInHeader();
@@ -912,7 +979,18 @@ function renderFilteredResultTable(rows) {
 
     sortedRows.forEach((row, rowIdx) => {
         const tr = document.createElement("tr");
-        const acc = row.account; const attCount = row.allAttempts.length;
+        const acc = row.account; 
+        const attCount = Array.isArray(row.allAttempts) ? row.allAttempts.length : 0;
+        
+        // Đảm bảo selectedAttemptIndex luôn hợp lệ
+        if (attCount > 0) {
+            if (row.selectedAttemptIndex === undefined || row.selectedAttemptIndex === null || row.selectedAttemptIndex >= attCount || row.selectedAttemptIndex < 0) {
+                row.selectedAttemptIndex = attCount - 1;
+            }
+        } else {
+            row.selectedAttemptIndex = 0;
+        }
+
         const currentSub = attCount > 0 ? row.allAttempts[row.selectedAttemptIndex] : null;
         const uid = row._rowUid || `row_${rowIdx}`;
 
@@ -922,24 +1000,48 @@ function renderFilteredResultTable(rows) {
 
         let col1_stt = row.stt;
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
-        let col_attemptCount = `<span class="status-not-submitted">---</span>`;
+        let col_attemptCount = `<span class="status-not-submitted">Chưa thi</span>`;
 
-        if (attCount === 0 && row.isDoing) {
-            col_attemptCount = `<span class="attempt-badge-doing">Đang thi Lần 1</span>`;
-        } else if (attCount === 1) { 
-            col_attemptCount = row.isDoing 
-                ? `<span class="attempt-badge-doing">Đang thi Lần 2</span>` 
-                : `<span class="attempt-badge-single">1 lần</span>`; 
-        } else if (attCount >= 2) {
+        // 1. TẠO GIAO DIỆN CỘT "SỐ LẦN THI": NẾU THI >= 1 LẦN THÌ HIỆN DROPDOWN XÒE RA TỪNG LẦN KÈM ĐIỂM
+        if (attCount === 0) {
+            if (row.isDoing) {
+                col_attemptCount = `<span class="attempt-badge-doing">Đang thi Lần 1</span>`;
+            } else {
+                col_attemptCount = `<span class="status-not-submitted">Chưa thi</span>`;
+            }
+        } else if (attCount === 1 && !row.isDoing) {
+            // Thi đúng 1 lần và không đang thi tiếp
+            col_attemptCount = `<span class="attempt-badge-single" title="Đã thi 1 lần">1 lần</span>`;
+        } else {
+            // Thi từ 2 lần trở lên (hoặc 1 lần + đang thi lần 2)
             let menuItemsHtml = "";
             row.allAttempts.forEach((at, aIdx) => {
-                let sc = at.score10 !== undefined ? at.score10 : (at.calcMetrics ? at.calcMetrics.score10Scale : "--");
-                let tm = at.timestamp ? at.timestamp.split(' - ')[1] || at.timestamp : `Lần ${aIdx+1}`;
+                let sc = at.score10 !== undefined ? at.score10 : "--";
+                let tm = at.timestamp ? (at.timestamp.split(' - ')[1] || at.timestamp) : `Lần ${aIdx + 1}`;
                 let isSel = aIdx === row.selectedAttemptIndex;
-                menuItemsHtml += `<div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)"><span>${isSel ? '✓ ' : ''}<b>Lần ${aIdx + 1}</b> (${tm})</span><span style="color:#0284c7; font-weight:800;">${sc}đ</span></div>`;
+                menuItemsHtml += `
+                    <div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)" title="Bấm để xem chi tiết bài làm lần ${aIdx + 1}">
+                        <span>${isSel ? '✓ ' : ''}<b>Lần ${aIdx + 1}</b> (${tm})</span>
+                        <span style="color:#0284c7; font-weight:900; background:#f0f9ff; padding:2px 6px; border-radius:6px; border:1px solid #bae6fd;">${sc}đ</span>
+                    </div>
+                `;
             });
+
             const doingBadgeText = row.isDoing ? ` (Đang thi Lần ${attCount + 1})` : "";
-            col_attemptCount = `<div class="td-attempt-cell"><button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi khác">${attCount} lần${doingBadgeText} ▾</button><div class="attempt-dropdown-menu" id="attempt-menu-${uid}"><div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">CHỌN LẦN THI:</div>${menuItemsHtml}</div></div>`;
+            col_attemptCount = `
+                <div class="td-attempt-cell">
+                    <button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Nhấn vào để xem danh sách ${attCount} lần thi và chọn lần muốn xem">
+                        <b>${attCount} lần</b>${doingBadgeText} ▾
+                    </button>
+                    <div class="attempt-dropdown-menu" id="attempt-menu-${uid}">
+                        <div style="font-size:11px; font-weight:800; color:#475569; padding:4px 8px; border-bottom:1.5px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📑 CÁC LẦN THI ĐÃ NỘP:</span>
+                            <span style="color:#6366f1;">(Đang xem Lần ${row.selectedAttemptIndex + 1})</span>
+                        </div>
+                        ${menuItemsHtml}
+                    </div>
+                </div>
+            `;
         }
 
         let col2_inTime = `<span class="status-not-submitted">---</span>`; 
@@ -951,59 +1053,28 @@ function renderFilteredResultTable(rows) {
         let col9_tabs = `<span class="status-not-submitted">---</span>`; 
         let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
         let col11_details = `<span class="status-not-submitted">---</span>`;
-
         let col_forceSubmit = `<span style="color:#cbd5e1; font-weight:700;">---</span>`;
 
-        if (row.isDoing) {
-            let startMs = row.doingStartTime || Date.now();
-            let formattedIn = formatDateTimeFull(startMs);
-            let liveDuration = formatElapsedDuration(startMs);
-
-            col2_inTime = `<span style="color:#7e22ce; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
-            col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
-            
-            const attemptText = (attCount > 0) ? ` (Lần ${attCount + 1})` : "";
-            if (row.isFreeDoing) { 
-                col6_status = `<span class="status-doing-heartbeat free-mode" title="Thí sinh tự do đang thi trực tuyến"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>`; 
-            } else { 
-                col6_status = `<span class="status-doing-heartbeat" title="Học sinh đang trong phòng thi làm bài"><span class="heartbeat-icon">💜</span> Đang thi${attemptText}</span>`; 
-            }
-            
-            let doingTabs = row.cheatLogsTabCount || 0;
-            col9_tabs = doingTabs > 0 ? `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
-            col10_cheatTime = row.cheatTimeString !== "0s" ? row.cheatTimeString : `<span class="status-not-submitted">---</span>`;
-
-            if (currentSub) {
-                let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : 0);
-                col7_correct = `<span style="font-weight:900; color:#15803d;" title="Điểm lần trước">${cCount} câu</span>`;
-                let sc = currentSub.score10 !== undefined ? currentSub.score10 : (currentSub.calcMetrics ? currentSub.calcMetrics.score10Scale : 0);
-                let scNum = parseFloat(sc) || 0;
-                let pillClass = scNum >= 8.0 ? 'score-pill-high' : (scNum >= 5.0 ? 'score-pill-mid' : 'score-pill-low');
-                col8_score = `<span class="${pillClass}" title="Điểm lần thi trước">${scNum.toFixed(1)}</span>`;
-                if (currentSub.dataString) {
-                    let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
-                    col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM LẦN TRƯỚC:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
-                }
-            }
-
-            col_forceSubmit = `<button type="button" class="btn-force-submit-row" onclick="forceSubmitSingleStudent('${uid}', event)" title="Thu ép bài học sinh này ngay lập tức">⚡ Thu ép</button>`;
-
-        } else if (currentSub) {
+        // 2. HIỂN THỊ DỮ LIỆU CỦA LẦN ĐANG ĐƯỢC CHỌN (selectedAttemptIndex)
+        if (currentSub) {
             let subDateMs = getSubmissionTimestamp(currentSub);
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
-            col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || (currentSub.calcMetrics && currentSub.calcMetrics.completionTimeStr) || `${currentSub.spentMins||0} phút`}</span>`;
-            col6_status = `<span class="status-pill status-done">✓ Đã nộp bài</span>`;
+            col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || `${currentSub.spentMins || 0} phút`}</span>`;
             
-            let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : 0);
+            const attemptLabel = attCount > 1 ? ` (Lần ${row.selectedAttemptIndex + 1})` : "";
+            col6_status = `<span class="status-pill status-done">✓ Đã nộp${attemptLabel}</span>`;
+            
+            let cCount = (currentSub.correctCount !== undefined) ? currentSub.correctCount : 0;
             col7_correct = `<span style="font-weight:900; color:#15803d;">${cCount} câu</span>`;
 
-            let sc = currentSub.score10 !== undefined ? currentSub.score10 : (currentSub.calcMetrics ? currentSub.calcMetrics.score10Scale : 0);
+            let sc = (currentSub.score10 !== undefined) ? currentSub.score10 : 0;
             let scNum = parseFloat(sc) || 0;
             let pillClass = scNum >= 8.0 ? 'score-pill-high' : (scNum >= 5.0 ? 'score-pill-mid' : 'score-pill-low');
             col8_score = `<span class="${pillClass}">${scNum.toFixed(1)}</span>`;
 
             if (row.rank !== null && row.rank !== undefined) {
-                let rankNum = row.rank; let rankBadge = "";
+                let rankNum = row.rank; 
+                let rankBadge = "";
                 if (rankNum === 1) { rankBadge = `<span style="background: linear-gradient(135deg, #fef08a, #fde047); color: #854d0e; border: 1.5px solid #eab308; padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 0.95em; box-shadow: 0 2px 6px rgba(234,179,8,0.25);">🥇 Hạng 1</span>`; } 
                 else if (rankNum === 2) { rankBadge = `<span style="background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #334155; border: 1.5px solid #94a3b8; padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 0.95em; box-shadow: 0 2px 6px rgba(148,163,184,0.2);">🥈 Hạng 2</span>`; } 
                 else if (rankNum === 3) { rankBadge = `<span style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #9a3412; border: 1.5px solid #fb923c; padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 0.95em; box-shadow: 0 2px 6px rgba(251,146,60,0.2);">🥉 Hạng 3</span>`; } 
@@ -1021,8 +1092,33 @@ function renderFilteredResultTable(rows) {
 
             if (currentSub.dataString) {
                 let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
-                col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
+                col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM (LẦN ${row.selectedAttemptIndex + 1}):\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
             }
+        }
+
+        // 3. NẾU ĐANG LÀM BÀI TRONG PHÒNG THI THÌ BỔ SUNG TRẠNG THÁI "ĐANG THI" VÀ NÚT THU ÉP
+        if (row.isDoing) {
+            let startMs = row.doingStartTime || Date.now();
+            let formattedIn = formatDateTimeFull(startMs);
+            let liveDuration = formatElapsedDuration(startMs);
+
+            // Nếu chưa có bài nộp nào thì mới gán thời gian đang làm vào cột chính
+            if (!currentSub) {
+                col2_inTime = `<span style="color:#7e22ce; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
+                col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
+                col6_status = row.isFreeDoing 
+                    ? `<span class="status-doing-heartbeat free-mode"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>` 
+                    : `<span class="status-doing-heartbeat"><span class="heartbeat-icon">💜</span> Đang thi</span>`;
+            } else {
+                // Đã có bài nộp cũ và đang thi lần tiếp theo: hiển thị trạng thái đang thi ở tình trạng
+                col6_status = `<span class="status-doing-heartbeat" title="Đang làm bài lần ${attCount + 1}"><span class="heartbeat-icon">💜</span> Đang thi Lần ${attCount + 1}</span>`;
+            }
+
+            let doingTabs = row.cheatLogsTabCount || 0;
+            if (doingTabs > 0) col9_tabs = `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>`;
+            if (row.cheatTimeString !== "0s") col10_cheatTime = row.cheatTimeString;
+
+            col_forceSubmit = `<button type="button" class="btn-force-submit-row" onclick="forceSubmitSingleStudent('${uid}', event)" title="Thu ép bài học sinh này ngay lập tức">⚡ Thu ép</button>`;
         }
 
         let rawName = acc.name || (currentSub ? currentSub.studentName : "---");
@@ -1064,7 +1160,9 @@ function filterResultTable() {
     if (!query) { renderFilteredResultTable(currentExamResultData.rawRows); return; }
 
     const filtered = currentExamResultData.rawRows.filter(r => {
-        let name = (r.account.name || "").toLowerCase(); let sbd = String(r.account.sbd || "").toLowerCase(); let cName = String(r.account.className || "").toLowerCase();
+        let name = (r.account.name || "").toLowerCase(); 
+        let sbd = String(r.account.sbd || "").toLowerCase(); 
+        let cName = String(r.account.className || "").toLowerCase();
         let statusText = r.isDoing ? "đang thi" : (r.allAttempts.length > 0 ? "đã nộp bài" : (r.isFreeDoing ? "đang thi tự do" : "chưa thi"));
         let rankText = (r.rank !== null && r.rank !== undefined) ? `hạng ${r.rank}` : "";
         return name.includes(query) || sbd.includes(query) || cName.includes(query) || statusText.includes(query) || rankText.includes(query);
@@ -1072,8 +1170,20 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
+// BỘ ĐÓNG DROPDOWN KHI CLICK RA NGOÀI BẢNG
+document.addEventListener("click", function(event) {
+    if (!event.target.closest('.td-attempt-cell')) {
+        document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
+        document.querySelectorAll('.btn-attempt-trigger.active').forEach(b => b.classList.remove('active'));
+    }
+});
+
 // ĐĂNG KÝ HÀM TOÀN CỤC
+window.selectStudentAttempt = selectStudentAttempt;
+window.toggleAttemptMenu = toggleAttemptMenu;
 window.adjustModalZoomStep = adjustModalZoomStep;
 window.resetModalZoom = resetModalZoom;
 window.applyModalZoomLevel = applyModalZoomLevel;
 window.fitAllRowsInView = fitAllRowsInView;
+window.renderFilteredResultTable = renderFilteredResultTable;
+window.filterResultTable = filterResultTable;
