@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-results-core.js (BẢN FIX TRIỆT ĐỂ THU ÉP TỨC THÌ 0S & NGỪNG ĐẬP TRÁI TIM)
+// FILE: portal-results-core.js (BẢN FIX ĐỒNG BỘ ĐẦY ĐỦ CÁC LẦN THI KHÔNG GHI ĐÈ & THU ÉP 0S)
 // =========================================================
 
 let currentExamResultData = {
@@ -78,6 +78,7 @@ function extractTabCountFromDataString(dataStr) {
     return m ? (parseInt(m[1], 10) || 0) : 0;
 }
 
+// BỘ LỌC CHỐNG NỘP ĐÚP (CHỈ LOẠI BỎ SPAM < 20S CÙNG ĐIỂM, GIỮ 100% CÁC LẦN THI KHÁC NHAU)
 function deduplicateAttempts(attempts) {
     if (!attempts || attempts.length <= 1) return attempts || [];
     let unique = [];
@@ -87,7 +88,8 @@ function deduplicateAttempts(attempts) {
         let isDup = unique.some(existing => {
             let exTime = getSubmissionTimestamp(existing);
             let exScore = (existing.score10 !== undefined) ? String(existing.score10) : "";
-            return (subTime > 0 && exTime > 0 && Math.abs(subTime - exTime) < 30000 && subScore === exScore);
+            // Chỉ coi là trùng nếu nộp cách nhau dưới 15 giây và cùng điểm y hệt (do spam click nộp)
+            return (subTime > 0 && exTime > 0 && Math.abs(subTime - exTime) < 15000 && subScore === exScore);
         });
         if (!isDup) unique.push(sub);
     });
@@ -212,7 +214,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         }
 
         let [subRes, cheatRes, activeRes, draftRes] = await Promise.all([
-            client.from('submissions').select('*').in('quiz_id', candidateCodes),
+            client.from('submissions').select('*').in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
             client.from('cheating_logs').select('*').in('quiz_id', candidateCodes),
             client.from('active_sessions').select('*'),
             client.from('live_drafts').select('*')
@@ -241,7 +243,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         });
 
         if (rawSubsData.length === 0 && examTitle && examTitle.trim() !== "") {
-            const { data: extraSubs } = await client.from('submissions').select('*').ilike('exam_title', `%${examTitle.trim()}%`);
+            const { data: extraSubs } = await client.from('submissions').select('*').ilike('exam_title', `%${examTitle.trim()}%`).order('created_at', { ascending: true });
             if (extraSubs && extraSubs.length > 0) {
                 rawSubsData = extraSubs;
             }
@@ -370,6 +372,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         if (sub.dataString) sub.dataString = sortDataString(sub.dataString);
         submissionsList.push(sub);
     }
+    // Sắp xếp các lần thi theo thời gian nộp tăng dần: Lần 1 -> Lần 2 -> Lần 3
     submissionsList.sort((a, b) => getSubmissionTimestamp(a) - getSubmissionTimestamp(b));
 
     const activeUsersMap = {};
@@ -522,11 +525,22 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             if (!isSbdBelongsToCategory(rawSbd, categoryId)) continue;
         }
 
+        // Gom các lần thi của cùng 1 thí sinh tự do
+        let existingFreeRow = finalRows.find(r => !r.isClassStudent && isSbdMatchedFlexibly(r.account.sbd, rawSbd));
+        if (existingFreeRow) {
+            existingFreeRow.allAttempts.push(sub);
+            existingFreeRow.selectedAttemptIndex = existingFreeRow.allAttempts.length - 1;
+            usedSubIds.add(sub.id);
+            continue;
+        }
+
         const freeAcc = {
             sbd: sub.sbd || "---",
             name: sub.studentName || "Thí sinh tự do",
             className: sub.studentClass || "Tự do"
         };
+
+        usedSubIds.add(sub.id);
 
         finalRows.push({
             _rowUid: 'row_free_' + sub.id + '_' + Math.random().toString(36).substring(2, 7),
@@ -548,9 +562,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(finalRows);
 }
 
-// =========================================================================
-// BỘ HỖ TRỢ LẤY CẤU TRÚC ĐỀ THI AN TOÀN TUYỆT ĐỐI (KHÔNG BAO GIỜ THROW ERROR)
-// =========================================================================
+// BỘ HỖ TRỢ LẤY CẤU TRÚC ĐỀ THI AN TOÀN
 async function getQuizObjectSafely(client, candidateCodes) {
     if (typeof examData !== 'undefined' && examData && Array.isArray(examData.questions) && examData.questions.length > 0) {
         return examData;
@@ -573,9 +585,7 @@ async function getQuizObjectSafely(client, candidateCodes) {
     return null;
 }
 
-// =========================================================================
-// BỘ MÁY THU ÉP BUỘC ĐƠN LẺ: TRÁI TIM NGỪNG ĐẬP VÀ ĐIỂM SỐ HIỆN RA NGAY LẬP TỨC
-// =========================================================================
+// BỘ MÁY THU ÉP BUỘC ĐƠN LẺ: CẤP ID MỚI KÈM TIMESTAMP (KHÔNG GHI ĐÈ)
 async function forceSubmitSingleStudent(rowUid, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
@@ -613,7 +623,6 @@ async function forceSubmitSingleStudent(rowUid, event) {
         const sbdVariations = getSbdVariations(sbd);
         const cleanSbd = cleanSbdStandard(sbd);
 
-        // 1. GỬI TÍN HIỆU REALTIME THU BÀI CHO THIẾT BỊ HỌC SINH
         try {
             const forceChannel = client.channel(`exam_force_submit_${quizId}`);
             await forceChannel.send({
@@ -623,7 +632,6 @@ async function forceSubmitSingleStudent(rowUid, event) {
             });
         } catch(sigErr) {}
 
-        // 2. TÌM BẢN NHÁP LIVE_DRAFTS (NẾU CÓ)
         let draftItem = null;
         try {
             const { data: drafts } = await client.from('live_drafts')
@@ -633,7 +641,6 @@ async function forceSubmitSingleStudent(rowUid, event) {
             if (drafts && drafts.length > 0) draftItem = drafts[0];
         } catch(e) {}
 
-        // 3. TÍNH ĐIỂM VÀ TẠO BẢN NỘP CHÍNH THỨC
         let finalScore10 = 0;
         let finalRawScore = 0;
         let finalMaxScale = 10.0;
@@ -667,7 +674,6 @@ async function forceSubmitSingleStudent(rowUid, event) {
             finalWrongCount = scoreResult.wrongCount;
             finalDataString = scoreResult.dataDetails.join(" | ") + " | [THU ÉP TỪ BẢN NHÁP]";
         } else if (row.allAttempts && row.allAttempts.length > 0) {
-            // Nếu học sinh đã có bài nộp lần 1 và lần 2 không có nháp, giữ bài nộp tốt nhất của em
             const lastSub = row.allAttempts[row.allAttempts.length - 1];
             finalScore10 = lastSub.score10 ?? 0;
             finalRawScore = lastSub.rawScore ?? 0;
@@ -677,7 +683,10 @@ async function forceSubmitSingleStudent(rowUid, event) {
             finalUserAnswers = lastSub.userAnswers || {};
         }
 
-        const cleanSubmissionId = `${quizId}_${cleanSbd}`;
+        // TẠO ID MỚI ĐỘC NHẤT CÓ TIMESTAMP (KHÔNG GHI ĐÈ LẦN TRƯỚC)
+        const subNow = Date.now();
+        const cleanSubmissionId = `sub_${quizId}_${cleanSbd}_${subNow}`;
+
         const newSubObj = {
             id: cleanSubmissionId,
             quizId: quizId,
@@ -713,24 +722,16 @@ async function forceSubmitSingleStudent(rowUid, event) {
             ma_de: maDe,
             examTitle: examTitle,
             exam_title: examTitle,
-            timestamp: typeof formatDateTimeFull === 'function' ? formatDateTimeFull(Date.now()) : new Date().toLocaleString("vi-VN"),
-            created_at: new Date().toISOString()
+            timestamp: typeof formatDateTimeFull === 'function' ? formatDateTimeFull(subNow) : new Date(subNow).toLocaleString("vi-VN"),
+            created_at: new Date(subNow).toISOString()
         };
 
-        // 4. LẬP TỨC CẬP NHẬT GIAO DIỆN TẠI CHỖ (OPTIMISTIC UPDATE - 0S)
         row.isDoing = false;
         row.doingStartTime = null;
         if (!row.allAttempts) row.allAttempts = [];
-        // Nếu đã có bài nộp cùng ID thì thay thế, chưa có thì đẩy vào danh sách
-        const existIdx = row.allAttempts.findIndex(a => a.id === cleanSubmissionId);
-        if (existIdx !== -1) {
-            row.allAttempts[existIdx] = newSubObj;
-        } else {
-            row.allAttempts.push(newSubObj);
-        }
+        row.allAttempts.push(newSubObj);
         row.selectedAttemptIndex = row.allAttempts.length - 1;
 
-        // Xóa khỏi cache bộ nhớ đệm để không bị khôi phục lại khi render
         for (let k in _examResultsCache) {
             const cache = _examResultsCache[k];
             if (cache?.activeSessionsData) {
@@ -741,35 +742,11 @@ async function forceSubmitSingleStudent(rowUid, event) {
             }
         }
 
-        // Vẽ lại bảng ngay tức thì: TRÁI TIM NGỪNG ĐẬP, ĐIỂM SỐ VÀ XẾP HẠNG HIỆN RA NGAY!
         calculateRanksForRows(currentExamResultData.rawRows);
         updateStatsAndRenderTable(currentExamResultData.rawRows);
 
-        // 5. NGẦM XỬ LÝ LƯU VÀO SUBMISSIONS & XÓA SẠCH PHIÊN TREO TRÊN SUPABASE
-        await client.from('submissions').upsert({
-            id: cleanSubmissionId,
-            quiz_id: quizId,
-            sbd: sbd,
-            student_name: name,
-            class_name: acc.className || "Lớp",
-            score10: finalScore10,
-            raw_score: finalRawScore,
-            max_scale: finalMaxScale,
-            correct_count: finalCorrectCount,
-            wrong_count: finalWrongCount,
-            completion_time: "Thu ép buộc",
-            spent_mins: 90,
-            tab_switch_count: `${row.cheatLogsTabCount || 0} lần`,
-            data_string: finalDataString,
-            user_answers: finalUserAnswers,
-            category_id: currentExamResultData.categoryId || "them-11",
-            is_free: !row.isClassStudent,
-            ma_de: maDe,
-            exam_title: examTitle,
-            created_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+        await client.from('submissions').insert([newSubObj]);
 
-        // Xóa triệt để mọi biến thể SBD và candidateCodes trong active_sessions và live_drafts
         await Promise.all([
             client.from('active_sessions').delete().in('sbd', sbdVariations),
             client.from('live_drafts').delete().in('sbd', sbdVariations)
@@ -799,9 +776,7 @@ async function forceSubmitSingleStudent(rowUid, event) {
     }
 }
 
-// =========================================================================
-// BỘ THU ÉP TOÀN BỘ PHÒNG THI (ĐỒNG LOẠT TẤT CẢ HỌC SINH ĐANG THI)
-// =========================================================================
+// BỘ THU ÉP TOÀN BỘ PHÒNG THI
 async function forceSubmitAllDoingStudents(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const doingRows = currentExamResultData.rawRows.filter(r => r.isDoing);
@@ -817,18 +792,7 @@ async function forceSubmitAllDoingStudents(event) {
     if (!currentItem || !client) return;
 
     const quizId = (typeof extractQuizIdFromItem === 'function' ? extractQuizIdFromItem(currentItem) : null) || currentItem.id;
-    const examTitle = currentItem.title || "Đề thi";
-    const maDe = currentItem.made || "101";
 
-    let candidateCodes = [];
-    if (typeof getExamCandidateCodes === 'function') {
-        candidateCodes = getExamCandidateCodes(examTitle, maDe, quizId);
-    }
-    if (quizId && !candidateCodes.includes(String(quizId).trim())) {
-        candidateCodes.push(String(quizId).trim());
-    }
-
-    // 1. GỬI LỆNH REALTIME TỚI TẤT CẢ THIẾT BỊ HỌC SINH
     try {
         const forceChannel = client.channel(`exam_force_submit_${quizId}`);
         await forceChannel.send({
@@ -838,7 +802,6 @@ async function forceSubmitAllDoingStudents(event) {
         });
     } catch(sigErr) {}
 
-    // 2. LẬP TỨC CẬP NHẬT GIAO DIỆN TẠI CHỖ (0S) CHO TẤT CẢ HỌC SINH ĐANG THI
     doingRows.forEach(row => {
         row.isDoing = false;
         row.doingStartTime = null;
@@ -850,13 +813,10 @@ async function forceSubmitAllDoingStudents(event) {
     calculateRanksForRows(currentExamResultData.rawRows);
     updateStatsAndRenderTable(currentExamResultData.rawRows);
 
-    // 3. TIẾN HÀNH THU THẬP VÀ CHỐT ĐIỂM TRÊN MÁY CHỦ CHO TỪNG EM
     await triggerAutoCollectDrafts(null, true);
 }
 
-// =========================================================================
-// THU BÀI TỰ ĐỘNG TỪ BẢN LƯU NHÁP LIVE DRAFTS VÀ ACTIVE SESSIONS
-// =========================================================================
+// THU BÀI TỰ ĐỘNG TỪ BẢN LƯU NHÁP LIVE DRAFTS
 async function triggerAutoCollectDrafts(event, isSilentMode = false) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
@@ -916,7 +876,6 @@ async function triggerAutoCollectDrafts(event, isSilentMode = false) {
         let collectedCount = 0;
         const allTargetSbds = new Set();
 
-        // Xử lý tất cả các em đang làm bài trên bảng kết quả
         for (const row of doingRows) {
             const acc = row.account;
             const sbd = acc.sbd || "---";
@@ -948,8 +907,8 @@ async function triggerAutoCollectDrafts(event, isSilentMode = false) {
                 uAnswers = lastA.userAnswers || {};
             }
 
-            const cleanSubId = `${quizId}_${cleanSbd}`;
-            await client.from('submissions').upsert({
+            const cleanSubId = `sub_${quizId}_${cleanSbd}_${Date.now()}`;
+            await client.from('submissions').insert([{
                 id: cleanSubId,
                 quiz_id: quizId,
                 sbd: sbd,
@@ -970,12 +929,11 @@ async function triggerAutoCollectDrafts(event, isSilentMode = false) {
                 ma_de: maDe,
                 exam_title: examTitle,
                 created_at: new Date().toISOString()
-            }, { onConflict: 'id' });
+            }]);
 
             collectedCount++;
         }
 
-        // Xóa sạch toàn bộ phiên treo của các em này
         if (allTargetSbds.size > 0) {
             const arrSbds = Array.from(allTargetSbds);
             await Promise.all([
@@ -984,7 +942,6 @@ async function triggerAutoCollectDrafts(event, isSilentMode = false) {
             ]);
         }
 
-        // Làm mới dữ liệu từ server
         await fetchAndRenderExamResults(currentItem, true);
 
         if (!isSilentMode) {
