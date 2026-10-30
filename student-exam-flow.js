@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN KHÓA CỨNG ĐĂNG NHẬP CHÍNH XÁC THEO LỚP 100%)
+// FILE 4: student-exam-flow.js (BẢN BẢO TOÀN TẤT CẢ CÁC LẦN THI ĐỘC LẬP 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -149,7 +149,6 @@ function submitStudentLogin() {
     let targetUrl = activeStudentLogin.targetUrl;
     if (!targetUrl) { showErr("❌ Không tìm thấy đường dẫn đề thi!"); return; }
 
-    // KHÓA CỨNG LỚP CỦA ĐỀ THI - TUYỆT ĐỐI KHÔNG GHI ĐÈ BẰNG LỚP KHÁC
     const targetCat = activeStudentLogin.categoryId || "them-11";
     const targetCatDisplayName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(targetCat) : targetCat;
 
@@ -166,11 +165,9 @@ function submitStudentLogin() {
             return; 
         }
 
-        // 1. CHỈ LẤY DANH SÁCH HỌC SINH CỦA CHÍNH LỚP NÀY
         const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(targetCat) : [];
         const normUser = typeof normalizeName === 'function' ? normalizeName(usernameVal) : usernameVal.toLowerCase();
 
-        // 2. TÌM KIẾM HỌC SINH TRONG LỚP MỤC TIÊU
         const matched = classAccounts.find(acc => {
             const accSbd = String(acc.sbd || "").trim().toLowerCase();
             const accUser = typeof normalizeName === 'function' ? normalizeName(acc.username) : String(acc.username || "").toLowerCase();
@@ -180,7 +177,6 @@ function submitStudentLogin() {
             return isUserMatch && passOk;
         });
 
-        // 3. NẾU KHÔNG KHỚP: KIỂM TRA XEM CÓ PHẢI HỌC SINH LỚP KHÁC NHẢY VÀO KHÔNG
         if (!matched) {
             const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(usernameVal) : null;
             if (otherCat && otherCat !== targetCat) {
@@ -196,7 +192,6 @@ function submitStudentLogin() {
         finalName = matched.name || matched.username; 
         finalClass = matched.className || targetCatDisplayName;
     } else {
-        // TAB THÍ SINH TỰ DO
         if (activeStudentLogin.item && activeStudentLogin.item.allowFree === false) { 
             showErr("⛔ Giáo viên đã tắt chế độ thi tự do đối với đề thi này!"); 
             return; 
@@ -210,7 +205,6 @@ function submitStudentLogin() {
             return; 
         }
 
-        // KHÔNG CHO PHÉP DÙNG SBD CỦA HỌC SINH CHÍNH THỨC ĐỂ THI TỰ DO BỪA BÃI
         const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
         if (detectedCat) {
             const detectedName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(detectedCat) : detectedCat;
@@ -249,7 +243,6 @@ function checkPassword() {
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
     
-    // CHỈ TÌM TRONG DANH SÁCH LỚP CỦA ĐỀ THI NÀY
     const pLow = val.toLowerCase();
     const matchedStudent = classAccounts.find(acc => 
         (acc.sbd && String(acc.sbd).trim().toLowerCase() === pLow) ||
@@ -284,7 +277,6 @@ async function startExamAction(isAutostart = false) {
         return;
     }
 
-    // LẤY ĐÚNG LỚP CỦA ĐỀ THI HIỆN TẠI TỪ URL
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const currentCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat;
 
@@ -296,7 +288,6 @@ async function startExamAction(isAutostart = false) {
     const isFree = !checkInClass;
 
     if (isFree) {
-        // NẾU KHÔNG CÓ TRONG LỚP HIỆN TẠI, KIỂM TRA XEM CÓ PHẢI SBD CỦA LỚP KHÁC HAY KHÔNG
         const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
         if (otherCat && otherCat !== currentCat) {
             const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
@@ -318,7 +309,6 @@ async function startExamAction(isAutostart = false) {
 
 // BỘ GHI PHIÊN VÀO THI CHUẨN XÁC VÀO ACTIVE_SESSIONS
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
-    // GIỮ NGUYÊN LỚP CỦA ĐỀ THI HIỆN TẠI
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
@@ -332,6 +322,8 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 
     safeLocal.removeItem(getStorageKey());
+    safeLocal.removeItem("pending_exam_submission");
+    pendingSubmissionPayload = null; // Xóa sạch để lần thi này nhận ID hoàn toàn mới
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const nowMs = Date.now();
@@ -339,10 +331,8 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     if (client && currentQuizId) {
         try {
-            // 1. Xóa phiên cũ của SBD này trong đề hiện tại
             await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-            // 2. Chèn trực tiếp phiên mới với đúng lớp hiện tại
             await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -356,7 +346,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 last_ping: nowMs
             }]);
 
-            // 3. Khởi tạo song song vào live_drafts
             await client.from('live_drafts').upsert({
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -369,7 +358,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 last_updated: new Date().toISOString()
             });
 
-            // 4. Lưu offline vào IndexedDB
             if (typeof examIndexedDB !== 'undefined') {
                 examIndexedDB.setItem('live_drafts', {
                     key: `${currentQuizId}_${cleanSbd}`,
@@ -382,7 +370,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 }).catch(() => {});
             }
 
-            // 5. Ghi log vào thi
             client.from('cheating_logs').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -428,6 +415,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
+// BỘ ĐÓNG GÓI BẢN NỘP BÀI: TỰ ĐỘNG TẠO ID MỚI CHO TỪNG LẦN THI ĐỂ KHÔNG BỊ ĐÈ LẦN TRƯỚC
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -466,7 +454,13 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
 
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
-    const submissionId = `${currentQuizId}_${cleanSbd}`;
+    const nowMs = Date.now();
+
+    // SỬA ĐỔI QUAN TRỌNG: NẾU ĐÃ CÓ PENDING CỦA LẦN NÀY THÌ GIỮ NGUYÊN ĐỂ TRÁNH NHÂN ĐÔI KHI RETRY,
+    // CÒN MỖI LẦN THI MỚI SẼ SINH ID KÈM TIMESTAMP RIÊNG BIỆT ĐỂ BẢO TOÀN TRỌN VẸN CẢ 3 LẦN THI
+    const submissionId = (pendingSubmissionPayload && pendingSubmissionPayload.id) 
+        ? pendingSubmissionPayload.id 
+        : `${currentQuizId}_${cleanSbd}_${nowMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
@@ -492,7 +486,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         is_free: isFreeStudent,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
         exam_title: exactExamTitle,
-        created_at: new Date().toISOString()
+        created_at: new Date(nowMs).toISOString()
     };
 }
 
@@ -816,7 +810,7 @@ async function executeSubmitExam(isForceSubmit = false) {
                     ⏳ Đang gửi bài lên máy chủ: <span style="color:#ef4444; font-size:1.3rem;">${sec}s</span>
                 </div>
                 <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">
-                    ${currentSubmitAttempt === 1 ? 'Đang nộp bài lần 1 qua 2 luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
+                    ${currentSubmitAttempt === 1 ? 'Đang nộp bài qua 2 luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
                 </div>
             `;
             progressView.style.display = "block";
@@ -847,6 +841,7 @@ async function executeSubmitExam(isForceSubmit = false) {
     const trySendToSupabase = async () => {
         if (!client) throw new Error("Chưa kết nối Supabase Client");
         
+        // DÙNG INSERT ĐỂ BẢO ĐẢM TẠO RECORD MỚI CHO TỪNG LẦN THI ĐỘC LẬP
         let { error } = await client
             .from('submissions')
             .upsert(dbPayload, { onConflict: 'id' });
