@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN FIX TRIỆT ĐỂ LƯU ĐA LẦN THI KHÔNG GHI ĐÈ)
+// FILE 4: student-exam-flow.js (BẢN FIX TRIỆT ĐỂ LƯU ĐA LẦN THI KHÔNG GHI ĐÈ & FIX LỖI KẸT GIAO DIỆN LẦN 2)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -791,24 +791,23 @@ async function executeSubmitExam(isForceSubmit = false) {
         progressView.style.display = "block";
     }
 
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-
-    // HÀM GỬI LÊN SUPABASE: ƯU TIÊN INSERT DÒNG MỚI (LƯU ĐA LẦN THI ĐỘC LẬP)
+    // HÀM GỬI LÊN SUPABASE: ƯU TIÊN UPSERT TRỰC TIẾP
     const trySendToSupabase = async () => {
-        if (!client) throw new Error("Chưa kết nối Supabase Client");
+        let client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
         
-        // 1. Thử insert dòng mới với ID mang mốc thời gian độc nhất
-        let { error } = await client
-            .from('submissions')
-            .insert([dbPayload]);
-
-        // 2. Nếu vì lý do nào đó lỗi insert, fallback sang upsert theo id
-        if (error) {
-            const r1 = await client.from('submissions').upsert(dbPayload, { onConflict: 'id' });
-            if (!r1.error) error = null;
+        // Nếu trước đó client null (do mạng chập chờn lúc load trang), thử tạo lại
+        if (!client && typeof window.supabase !== 'undefined' && window.supabase.createClient) {
+            try { 
+                client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
+                window.supabaseClient = client;
+            } catch(e) {}
         }
 
+        if (!client) throw new Error("Chưa kết nối Supabase Client");
+        
+        const { error } = await client.from('submissions').upsert(dbPayload, { onConflict: 'id' });
         if (error) throw error;
+        
         return true;
     };
 
@@ -839,7 +838,7 @@ async function executeSubmitExam(isForceSubmit = false) {
                     ⏳ Đang gửi bài lên máy chủ: <span style="color:#ef4444; font-size:1.3rem;">${sec}s</span>
                 </div>
                 <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">
-                    ${currentSubmitAttempt === 1 ? 'Đang tự động gửi lại qua luồng an toàn...' : 'Đang nộp lại bài lần 2...'}
+                    ${currentSubmitAttempt === 1 ? 'Đang tự động gửi lại qua luồng an toàn...' : `Đang nộp lại bài lần ${currentSubmitAttempt}...`}
                 </div>
             `;
             progressView.style.display = "block";
@@ -871,7 +870,6 @@ async function executeSubmitExam(isForceSubmit = false) {
                 submitSuccess = true;
                 break;
             } catch (err) {
-                console.warn(`Retry gửi bài:`, err.message || err);
                 await new Promise(r => setTimeout(r, 1000));
             }
         }
@@ -885,13 +883,13 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
-    // BƯỚC 4: NẾU HẾT 7 GIÂY VẪN CHƯA GỬI ĐƯỢC DO MẤT MẠNG HOÀN TOÀN
-    if (currentSubmitAttempt === 1) {
-        isSubmittingInProgress = false;
-        currentSubmitAttempt = 2;
+    // BƯỚC 4: NẾU VẪN THẤT BẠI (CHẮC CHẮN MẤT MẠNG HOẶC SUPABASE BỊ CHẶN)
+    isSubmittingInProgress = false;
+    const savedFileName = downloadSubmissionJsonSilently(payload, currentSubmitAttempt);
+    recordSubmissionToHistory(payload);
 
-        const savedFileName = downloadSubmissionJsonSilently(payload, 1);
-        recordSubmissionToHistory(payload);
+    if (currentSubmitAttempt === 1) {
+        currentSubmitAttempt++;
 
         if (progressView) {
             progressView.innerHTML = `
@@ -921,38 +919,37 @@ async function executeSubmitExam(isForceSubmit = false) {
             `;
             actionsBox.style.display = "block";
         }
-        return;
-    }
+    } else {
+        // TỪ LẦN THỨ 2 TRỞ ĐI
+        let attemptToShow = currentSubmitAttempt;
+        currentSubmitAttempt++;
 
-    isSubmittingInProgress = false;
-    const savedFileName2 = downloadSubmissionJsonSilently(payload, 2);
-    recordSubmissionToHistory(payload);
+        if (progressView) {
+            progressView.innerHTML = `
+                <div style="font-size:38px; margin-bottom:8px;">📶❌</div>
+                <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">LẦN ${attemptToShow} VẪN CHƯA THỂ GỬI LÊN MÁY CHỦ!</div>
+                <div style="font-size:0.92rem; color:#475569; margin-top:8px; font-weight:600; line-height:1.45;">
+                    Đường truyền Internet trên máy đang bị gián đoạn. Bài làm của em đã được bảo lưu nguyên vẹn 100% trên thiết bị và IndexedDB.<br>
+                    Em hãy bấm nút dưới đây để gửi trực tiếp tệp bài làm cho Thầy giáo!
+                </div>
+            `;
+        }
 
-    if (progressView) {
-        progressView.innerHTML = `
-            <div style="font-size:38px; margin-bottom:8px;">📶❌</div>
-            <div style="font-weight:900; color:#dc2626; font-size:1.15rem;">LẦN 2 VẪN CHƯA THỂ GỬI LÊN MÁY CHỦ!</div>
-            <div style="font-size:0.92rem; color:#475569; margin-top:8px; font-weight:600; line-height:1.45;">
-                Đường truyền Internet trên máy đang bị gián đoạn. Bài làm của em đã được bảo lưu nguyên vẹn 100% trên thiết bị và IndexedDB.<br>
-                Em hãy bấm nút dưới đây để gửi trực tiếp tệp bài làm cho Thầy giáo!
-            </div>
-        `;
-    }
-
-    if (actionsBox) {
-        actionsBox.innerHTML = `
-            <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
-                <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, 2)" 
-                        style="width:100%; padding:13px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(234, 88, 12, 0.35); display:flex; align-items:center; justify-content:center; gap:6px;">
-                    📤 Hãy gửi file json lần 2 nếu cần
-                </button>
-                <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
-                        style="width:100%; padding:10px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
-                    🔄 Thử gửi lại một lần nữa
-                </button>
-            </div>
-        `;
-        actionsBox.style.display = "block";
+        if (actionsBox) {
+            actionsBox.innerHTML = `
+                <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
+                    <button type="button" onclick="shareSubmissionFileNative(pendingSubmissionPayload, ${attemptToShow})" 
+                            style="width:100%; padding:13px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#fff; border:none; border-radius:11px; font-weight:900; font-size:1.05rem; cursor:pointer; box-shadow:0 4px 14px rgba(234, 88, 12, 0.35); display:flex; align-items:center; justify-content:center; gap:6px;">
+                        📤 Hãy gửi file json lần ${attemptToShow} nếu cần
+                    </button>
+                    <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
+                            style="width:100%; padding:10px; background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; border-radius:10px; font-weight:800; font-size:0.9rem; cursor:pointer;">
+                        🔄 Thử gửi lại một lần nữa
+                    </button>
+                </div>
+            `;
+            actionsBox.style.display = "block";
+        }
     }
 }
 
@@ -980,6 +977,7 @@ function finalizeSuccessfulSubmission(payload, confirmModal) {
 
     isSubmitted = true; 
     isSubmittingInProgress = false;
+    currentSubmitAttempt = 1; // Khôi phục lại trạng thái cho lần thi sau
     if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(true);
 
     if (confirmModal) confirmModal.style.display = "none"; 
