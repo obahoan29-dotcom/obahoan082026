@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN TỐI ƯU SIÊU GỌN HEADER, XÒE ĐA LẦN THI KÈM NGÀY GIỜ VÀ ĐIỂM SỐ 100%)
+// (BẢN TỐI ƯU SIÊU GỌN HEADER, XÒE ĐA LẦN THI KÈM ĐẦY ĐỦ THÔNG SỐ, GIỜ, NGÀY, ĐIỂM, TỪNG CÂU)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -332,36 +332,57 @@ let isFitAllRowsActive = false;
         }
         .btn-force-submit-header:hover { filter: brightness(1.15) !important; }
 
-        /* MENU XÒE CHỌN LẦN THI ĐẦY ĐỦ THỜI GIAN VÀ ĐIỂM SỐ */
+        /* MENU XÒE CHỌN LẦN THI ĐẦY ĐỦ THÔNG SỐ: NGÀY GIỜ, THỜI LƯỢNG, ĐIỂM, CÂU ĐÚNG */
         .attempt-dropdown-menu {
-            min-width: 250px !important;
-            max-width: 330px !important;
-            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.35), 0 0 0 1.5px #cbd5e1 !important;
-            padding: 7px !important;
-            border-radius: 12px !important;
+            min-width: 330px !important;
+            max-width: 440px !important;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.35), 0 0 0 1.5px #cbd5e1 !important;
+            padding: 8px !important;
+            border-radius: 14px !important;
+            background: #ffffff !important;
+            z-index: 9999999 !important;
         }
         .attempt-menu-item {
-            padding: 7px 10px !important;
-            border-radius: 8px !important;
-            margin-bottom: 3px !important;
+            padding: 8px 10px !important;
+            border-radius: 9px !important;
+            margin-bottom: 5px !important;
             display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            gap: 8px !important;
+            flex-direction: column !important;
+            gap: 3px !important;
             font-size: 12px !important;
             font-weight: 700 !important;
             cursor: pointer !important;
             transition: all 0.15s ease !important;
+            border: 1.5px solid transparent !important;
+            background: #f8fafc !important;
         }
         .attempt-menu-item:hover {
-            background: #f1f5f9 !important;
-            color: #0284c7 !important;
+            background: #f0f9ff !important;
+            border-color: #7dd3fc !important;
+            transform: translateY(-1px) !important;
         }
         .attempt-menu-item.selected {
             background: linear-gradient(135deg, #eff6ff, #dbeafe) !important;
-            border: 1.2px solid #93c5fd !important;
+            border: 1.5px solid #3b82f6 !important;
             color: #1e40af !important;
-            font-weight: 800 !important;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2) !important;
+        }
+        .attempt-item-row-top {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+        }
+        .attempt-item-row-bottom {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 6px !important;
+            font-size: 11px !important;
+            color: #64748b !important;
+            border-top: 1px dashed rgba(203, 213, 225, 0.8) !important;
+            padding-top: 3px !important;
+            margin-top: 2px !important;
         }
     `;
     document.head.appendChild(style);
@@ -808,7 +829,7 @@ function calculateRanksForRows(rows) {
 function selectStudentAttempt(rowUid, attemptIdx, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
-    if (row) { 
+    if (row && row.allAttempts && row.allAttempts[attemptIdx]) { 
         row.selectedAttemptIndex = attemptIdx; 
         calculateRanksForRows(currentExamResultData.rawRows); 
         filterResultTable(); 
@@ -933,55 +954,68 @@ function renderFilteredResultTable(rows) {
         let col_attemptCount = `<span class="status-not-submitted">---</span>`;
 
         // =========================================================================
-        // XỬ LÝ CỘT SỐ LẦN THI: XÒE MENU TẤT CẢ CÁC LẦN THI KÈM NGÀY GIỜ VÀ ĐIỂM SỐ
+        // XỬ LÝ CỘT SỐ LẦN THI: XÒE MENU TẤT CẢ CÁC LẦN THI KÈM ĐẦY ĐỦ THÔNG SỐ
         // =========================================================================
+        const buildAttemptMenuItems = () => {
+            let itemsHtml = "";
+            row.allAttempts.forEach((at, aIdx) => {
+                let sc = at.score10 !== undefined ? at.score10 : (at.calcMetrics ? at.calcMetrics.score10Scale : "--");
+                let tm = at.timestamp || (at.created_at ? formatDateTimeFull(new Date(at.created_at).getTime()) : `Lần ${aIdx + 1}`);
+                let spent = at.completionTime || (at.spent_mins ? `${at.spent_mins} phút` : "");
+                let cCount = at.correctCount !== undefined ? at.correctCount : (at.correct_count !== undefined ? at.correct_count : "--");
+                let isSel = (aIdx === row.selectedAttemptIndex);
+                let tabs = at.tabSwitchCount || at.tab_switch_count || "";
+
+                itemsHtml += `
+                    <div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)" title="Bấm để xem kết quả Lần ${aIdx + 1}">
+                        <div class="attempt-item-row-top">
+                            <span>${isSel ? '🟢 ' : '⚪ '}<b>Lần ${aIdx + 1}</b> (${tm})</span>
+                            <span style="color:#0284c7; font-weight:900; font-size:13px;">${sc}đ</span>
+                        </div>
+                        <div class="attempt-item-row-bottom">
+                            <span>⏱ ${spent || 'N/A'} • Đúng: <b style="color:#15803d;">${cCount} câu</b></span>
+                            <span>${tabs && tabs !== '0 lần' ? `<span style="color:#dc2626;">⚠️ ${tabs}</span>` : '0 tab'}</span>
+                        </div>
+                    </div>`;
+            });
+            return itemsHtml;
+        };
+
         if (attCount === 0 && row.isDoing) {
             col_attemptCount = `<span class="attempt-badge-doing">Đang thi Lần 1</span>`;
         } else if (attCount === 1 && !row.isDoing) { 
-            col_attemptCount = `<span class="attempt-badge-single">1 lần</span>`; 
+            // Nếu có 1 lần nộp: Cho phép bấm xòe xem thông số chi tiết của lần 1 đó
+            col_attemptCount = `
+                <div class="td-attempt-cell">
+                    <button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để xem chi tiết lần nộp này" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;">
+                        1 lần (L1) ▾
+                    </button>
+                    <div class="attempt-dropdown-menu" id="attempt-menu-${uid}">
+                        <div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">THÔNG SỐ LẦN THI:</div>
+                        ${buildAttemptMenuItems()}
+                    </div>
+                </div>`;
         } else if (attCount >= 1 && row.isDoing) {
-            let menuItemsHtml = "";
-            row.allAttempts.forEach((at, aIdx) => {
-                let sc = at.score10 !== undefined ? at.score10 : (at.calcMetrics ? at.calcMetrics.score10Scale : "--");
-                let tm = at.timestamp || `Lần ${aIdx + 1}`;
-                let isSel = (aIdx === row.selectedAttemptIndex);
-                menuItemsHtml += `
-                    <div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)">
-                        <span>${isSel ? '✓ ' : ''}<b>Lần ${aIdx + 1}</b> (${tm})</span>
-                        <span style="color:#0284c7; font-weight:800;">${sc}đ</span>
-                    </div>`;
-            });
             col_attemptCount = `
                 <div class="td-attempt-cell">
                     <button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để xem các lần thi trước" style="background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);">
-                        Đang thi Lần ${attCount + 1} (${attCount} lần nộp) ▾
+                        Đang thi L${attCount + 1} (${attCount} lần nộp) ▾
                     </button>
                     <div class="attempt-dropdown-menu" id="attempt-menu-${uid}">
                         <div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">CHỌN LẦN THI ĐỂ XEM:</div>
-                        ${menuItemsHtml}
+                        ${buildAttemptMenuItems()}
                     </div>
                 </div>`;
         } else if (attCount >= 2) {
-            let menuItemsHtml = "";
-            row.allAttempts.forEach((at, aIdx) => {
-                let sc = at.score10 !== undefined ? at.score10 : (at.calcMetrics ? at.calcMetrics.score10Scale : "--");
-                let tm = at.timestamp || `Lần ${aIdx + 1}`;
-                let isSel = (aIdx === row.selectedAttemptIndex);
-                menuItemsHtml += `
-                    <div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)">
-                        <span>${isSel ? '✓ ' : ''}<b>Lần ${aIdx + 1}</b> (${tm})</span>
-                        <span style="color:#0284c7; font-weight:800;">${sc}đ</span>
-                    </div>`;
-            });
             const selBadgeText = `(Xem L${row.selectedAttemptIndex + 1})`;
             col_attemptCount = `
                 <div class="td-attempt-cell">
-                    <button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi khác">
+                    <button type="button" class="btn-attempt-trigger" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi khác" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
                         ${attCount} lần ${selBadgeText} ▾
                     </button>
                     <div class="attempt-dropdown-menu" id="attempt-menu-${uid}">
-                        <div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">CHỌN LẦN THI:</div>
-                        ${menuItemsHtml}
+                        <div style="font-size:11px; font-weight:800; color:#64748b; padding:4px 8px; border-bottom:1px solid #f1f5f9;">DANH SÁCH ${attCount} LẦN THI:</div>
+                        ${buildAttemptMenuItems()}
                     </div>
                 </div>`;
         }
@@ -1018,15 +1052,16 @@ function renderFilteredResultTable(rows) {
             col10_cheatTime = row.cheatTimeString !== "0s" ? row.cheatTimeString : `<span class="status-not-submitted">---</span>`;
 
             if (currentSub) {
-                let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : 0);
+                let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : (currentSub.correct_count !== undefined ? currentSub.correct_count : 0));
                 col7_correct = `<span style="font-weight:900; color:#15803d;" title="Điểm lần thi trước">${cCount} câu</span>`;
                 let sc = currentSub.score10 !== undefined ? currentSub.score10 : (currentSub.calcMetrics ? currentSub.calcMetrics.score10Scale : 0);
                 let scNum = parseFloat(sc) || 0;
                 let pillClass = scNum >= 8.0 ? 'score-pill-high' : (scNum >= 5.0 ? 'score-pill-mid' : 'score-pill-low');
                 col8_score = `<span class="${pillClass}" title="Điểm lần thi trước">${scNum.toFixed(1)}</span>`;
-                if (currentSub.dataString) {
-                    let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
-                    col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM LẦN TRƯỚC:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
+                if (currentSub.dataString || currentSub.data_string) {
+                    let dStr = currentSub.dataString || currentSub.data_string || "";
+                    let safeText = dStr.replace(/"/g, '&quot;');
+                    col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM LẦN TRƯỚC:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${dStr}</span>`;
                 }
             }
 
@@ -1034,17 +1069,22 @@ function renderFilteredResultTable(rows) {
 
         } else if (currentSub) {
             let subDateMs = getSubmissionTimestamp(currentSub);
-            col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
-            col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || (currentSub.calcMetrics && currentSub.calcMetrics.completionTimeStr) || `${currentSub.spentMins||0} phút`}</span>`;
-            col6_status = `<span class="status-pill status-done">✓ Đã nộp bài</span>`;
+            let inTimeText = subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || currentSub.created_at || "---");
+            let spentTimeText = currentSub.completionTime || currentSub.completion_time || (currentSub.calcMetrics && currentSub.calcMetrics.completionTimeStr) || `${currentSub.spentMins || currentSub.spent_mins || 0} phút`;
+
+            col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;" title="Thời điểm nộp Lần ${row.selectedAttemptIndex + 1}">${inTimeText}</span>`;
+            col3_spentTime = `<span style="color:#0f766e; font-weight:700;" title="Thời gian làm bài Lần ${row.selectedAttemptIndex + 1}">${spentTimeText}</span>`;
             
-            let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : 0);
-            col7_correct = `<span style="font-weight:900; color:#15803d;">${cCount} câu</span>`;
+            const subBadgeLbl = (attCount >= 2) ? ` (L${row.selectedAttemptIndex + 1})` : '';
+            col6_status = `<span class="status-pill status-done">✓ Đã nộp${subBadgeLbl}</span>`;
+            
+            let cCount = currentSub.calcMetrics ? currentSub.calcMetrics.correctCount : (currentSub.correctCount !== undefined ? currentSub.correctCount : (currentSub.correct_count !== undefined ? currentSub.correct_count : 0));
+            col7_correct = `<span style="font-weight:900; color:#15803d;" title="Số câu đúng Lần ${row.selectedAttemptIndex + 1}">${cCount} câu</span>`;
 
             let sc = currentSub.score10 !== undefined ? currentSub.score10 : (currentSub.calcMetrics ? currentSub.calcMetrics.score10Scale : 0);
             let scNum = parseFloat(sc) || 0;
             let pillClass = scNum >= 8.0 ? 'score-pill-high' : (scNum >= 5.0 ? 'score-pill-mid' : 'score-pill-low');
-            col8_score = `<span class="${pillClass}">${scNum.toFixed(1)}</span>`;
+            col8_score = `<span class="${pillClass}" title="Điểm Lần ${row.selectedAttemptIndex + 1}">${scNum.toFixed(1)}</span>`;
 
             if (row.rank !== null && row.rank !== undefined) {
                 let rankNum = row.rank; let rankBadge = "";
@@ -1055,24 +1095,25 @@ function renderFilteredResultTable(rows) {
                 col_rank = rankBadge;
             }
 
-            let rawSubTab = parseInt(currentSub.tabSwitchCount, 10) || 0;
-            let dataStringTab = extractTabCountFromDataString(currentSub.dataString);
+            let rawSubTab = parseInt(currentSub.tabSwitchCount || currentSub.tab_switch_count, 10) || 0;
+            let dataStringTab = extractTabCountFromDataString(currentSub.dataString || currentSub.data_string);
             let logTab = row.cheatLogsTabCount || 0;
             let finalTabCount = Math.max(rawSubTab, dataStringTab, logTab);
 
             col9_tabs = finalTabCount > 0 ? `<span class="tabs-warn">⚠️ ${finalTabCount} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
             col10_cheatTime = row.cheatTimeString;
 
-            if (currentSub.dataString) {
-                let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
-                col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM:\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
+            let dString = currentSub.dataString || currentSub.data_string || "";
+            if (dString) {
+                let safeText = dString.replace(/"/g, '&quot;');
+                col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM (LẦN ${row.selectedAttemptIndex + 1}):\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${dString}</span>`;
             }
         }
 
-        let rawName = acc.name || (currentSub ? currentSub.studentName : "---");
+        let rawName = acc.name || (currentSub ? (currentSub.studentName || currentSub.student_name) : "---");
         let freeTagHtml = (!row.isClassStudent) ? `<span class="tag-free-student">Tự do</span>` : '';
         let col4_name = `<span class="td-name">${rawName}</span>${freeTagHtml}`;
-        let rawClass = acc.className || (currentSub ? (currentSub.studentClass || currentSub.className) : "") || "---";
+        let rawClass = acc.className || (currentSub ? (currentSub.studentClass || currentSub.class_name || currentSub.className) : "") || "---";
         let col_class = `<span class="class-badge">${rawClass}</span>`;
         let col5_sbd = acc.sbd || (currentSub ? (currentSub.sbd || currentSub.studentId) : "---");
         let safeTitleCol10 = stripHtml(col10_cheatTime);
