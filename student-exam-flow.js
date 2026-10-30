@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN TỐI ƯU NỘP BÀI SIÊU TỐC & KHÓA CỨNG THEO LỚP)
+// FILE 4: student-exam-flow.js (BẢN FIX TRIỆT ĐỂ LƯU ĐA LẦN THI KHÔNG GHI ĐÈ)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -409,7 +409,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// BỘ ĐÓNG GÓI BẢN NỘP BẢO ĐẢM TƯƠNG THÍCH 100% VỚI PRIMARY KEY SUPABASE
+// BỘ ĐÓNG GÓI BẢN NỘP VỚI ID ĐỘC NHẤT KÈM TIMESTAMP - KHÔNG BAO GIỜ BỊ GHI ĐÈ
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -449,8 +449,9 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
 
     const nowMs = Date.now();
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
-    // ĐỒNG BỘ CHUẨN ID VỚI SUPABASE SCHEMA: quizId_cleanSbd
-    const submissionId = `${currentQuizId}_${cleanSbd}`;
+    
+    // FIX QUAN TRỌNG: ID BẢN NỘP KÈM MỐC THỜI GIAN -> MỖI LẦN THI LÀ 1 DÒNG RIÊNG BIỆT KHÔNG ĐÈ LÊN LẦN TRƯỚC
+    const submissionId = `${currentQuizId}_${cleanSbd}_${nowMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
@@ -713,7 +714,7 @@ window.triggerShareFromHistory = function(attemptNumber) {
 };
 
 // =========================================================================
-// BỘ THỰC THI NỘP BÀI SIÊU TỐC - TỐI ƯU HÓA HOÀN TOÀN KHÔNG BỊ TREO/QUAY TÍT
+// BỘ THỰC THI NỘP BÀI SIÊU TỐC - LƯU TẤT CẢ CÁC LẦN THI ĐỘC LẬP
 // =========================================================================
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
@@ -792,44 +793,27 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-    // HÀM GỬI LÊN SUPABASE VỚI ĐA TẦNG FALLBACK ĐỂ CHỐNG LỖI CONSTRAINT
+    // HÀM GỬI LÊN SUPABASE: ƯU TIÊN INSERT DÒNG MỚI (LƯU ĐA LẦN THI ĐỘC LẬP)
     const trySendToSupabase = async () => {
         if (!client) throw new Error("Chưa kết nối Supabase Client");
         
-        // 1. Thử upsert mặc định với onConflict: id
+        // 1. Thử insert dòng mới với ID mang mốc thời gian độc nhất
         let { error } = await client
             .from('submissions')
-            .upsert(dbPayload, { onConflict: 'id' });
+            .insert([dbPayload]);
 
-        // 2. Nếu lỗi, thử upsert tự động dựa trên Primary Key
+        // 2. Nếu vì lý do nào đó lỗi insert, fallback sang upsert theo id
         if (error) {
-            const r1 = await client.from('submissions').upsert(dbPayload);
+            const r1 = await client.from('submissions').upsert(dbPayload, { onConflict: 'id' });
             if (!r1.error) error = null;
-        }
-
-        // 3. Nếu vẫn lỗi, thử update trước (nếu học sinh thi lại), nếu không có dòng nào thì insert mới
-        if (error) {
-            const { data: updated, error: upErr } = await client
-                .from('submissions')
-                .update(dbPayload)
-                .match({ quiz_id: payload.quiz_id, sbd: payload.sbd })
-                .select();
-
-            if (!upErr && updated && updated.length > 0) {
-                error = null;
-            } else {
-                const { error: insErr } = await client.from('submissions').insert([dbPayload]);
-                if (!insErr) error = null;
-            }
         }
 
         if (error) throw error;
         return true;
     };
 
+    // BƯỚC 1: THỬ NỘP TRỰC TIẾP NGAY LẬP TỨC
     let submitSuccess = false;
-
-    // BƯỚC 1: THỬ NỘP TRỰC TIẾP NGAY LẬP TỨC (TRONG 0.2s - 0.6s)
     try {
         await trySendToSupabase();
         submitSuccess = true;
@@ -837,7 +821,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         console.warn("Gửi trực tiếp thất bại, kích hoạt bộ retry đếm ngược:", immediateErr.message || immediateErr);
     }
 
-    // BƯỚC 2: NẾU THÀNH CÔNG NGAY -> KẾT THÚC VÀ HIỂN THỊ KẾT QUẢ NGAY LẬP TỨC!
+    // BƯỚC 2: NẾU THÀNH CÔNG NGAY -> HIỂN THỊ KẾT QUẢ NGAY LẬP TỨC
     if (submitSuccess) {
         finalizeSuccessfulSubmission(payload, confirmModal);
         return;
