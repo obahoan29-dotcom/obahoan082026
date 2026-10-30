@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN ĐÃ GỠ BỎ HOÀN TOÀN CỘT THU ÉP & HIỂN THỊ CHUẨN XÁC MỌI LẦN THI)
+// (BẢN FIX HIỂN THỊ ĐỦ 100% TẤT CẢ CÁC LẦN THI TRỰC TIẾP TRÊN BẢNG)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -304,97 +304,100 @@ let isFitAllRowsActive = false;
         }
 
         .attempt-badge-doing {
-            display: inline-block !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 3px !important;
             background: #faf5ff !important;
-            color: #6b21a8 !important;
+            color: #7c3aed !important;
             border: 1.2px solid #c084fc !important;
-            padding: 3px 8px !important;
-            border-radius: 12px !important;
-            font-size: 0.9em !important;
+            padding: 2px 7px !important;
+            border-radius: 10px !important;
+            font-size: 10.5px !important;
             font-weight: 800 !important;
+            white-space: nowrap !important;
+            animation: heartbeatDoing 1.8s infinite ease-in-out !important;
         }
 
-        /* NÂNG CẤP MENU DROPDOWN CHỌN LẦN THI ĐA DÒNG */
+        /* ========================================================= */
+        /* BỘ STYLE MỚI: HIỂN THỊ ĐỦ 100% CÁC LẦN THI TRỰC TIẾP TRÊN Ô */
+        /* ========================================================= */
         .td-attempt-cell-wrap {
-            position: relative !important;
-            overflow: visible !important;
-            z-index: 50 !important;
             text-align: center !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            padding: 4px 6px !important;
         }
-        .td-attempt-cell {
-            text-align: center;
-            position: relative;
-            display: inline-block;
+
+        .td-attempts-list {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 4px !important;
+            flex-wrap: wrap !important;
+            max-width: 100% !important;
         }
-        .btn-attempt-trigger {
-            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-            color: #ffffff !important;
-            border: 1.2px solid #a5b4fc !important;
-            padding: 3px 9px !important;
+
+        .btn-attempt-pill {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 3px !important;
+            padding: 3px 7px !important;
             border-radius: 12px !important;
             font-size: 11px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25) !important;
-            white-space: nowrap !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
+            border: 1.2px solid #cbd5e1 !important;
+            background: #ffffff !important;
+            color: #334155 !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
             transition: all 0.15s ease !important;
+            white-space: nowrap !important;
+            user-select: none !important;
+            line-height: 1.2 !important;
+            font-family: inherit !important;
         }
-        .btn-attempt-trigger:hover {
-            filter: brightness(1.15) !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-attempt-trigger.single-attempt {
-            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
-            border-color: #7dd3fc !important;
-        }
-        .attempt-dropdown-menu {
-            display: none;
-            position: absolute;
-            top: calc(100% + 4px);
-            left: 50%;
-            transform: translateX(-50%);
-            min-width: 230px;
-            background: #ffffff;
-            border: 1.5px solid #818cf8;
-            border-radius: 12px;
-            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.35);
-            padding: 6px;
-            z-index: 9999999 !important;
-            text-align: left;
-            animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .attempt-dropdown-menu.show {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 4px !important;
-        }
-        .attempt-menu-item {
-            padding: 7px 10px !important;
-            border-radius: 8px !important;
-            font-size: 11.5px !important;
-            font-weight: 700 !important;
-            color: #1e293b !important;
-            cursor: pointer !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            gap: 8px !important;
-            transition: 0.15s !important;
-            border: 1px solid transparent !important;
-        }
-        .attempt-menu-item:hover {
+
+        .btn-attempt-pill:hover {
+            border-color: #818cf8 !important;
             background: #f0fdf4 !important;
-            border-color: #86efac !important;
             color: #166534 !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
         }
-        .attempt-menu-item.selected {
-            background: #e0f2fe !important;
-            border-color: #38bdf8 !important;
-            color: #0369a1 !important;
+
+        .btn-attempt-pill:active {
+            transform: translateY(1px) scale(0.96) !important;
+        }
+
+        .btn-attempt-pill.active {
+            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+            border-color: #4338ca !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 7px rgba(79, 70, 229, 0.35) !important;
+        }
+
+        .btn-attempt-pill.active .attempt-pill-score {
+            background: rgba(255, 255, 255, 0.25) !important;
+            color: #ffffff !important;
+            border-color: rgba(255, 255, 255, 0.4) !important;
+        }
+
+        .attempt-pill-score {
+            font-size: 10px !important;
             font-weight: 900 !important;
+            background: #f1f5f9 !important;
+            color: #0284c7 !important;
+            padding: 1px 4px !important;
+            border-radius: 6px !important;
+            border: 1px solid #bae6fd !important;
+            margin-left: 2px !important;
+        }
+
+        .attempt-check-icon {
+            font-size: 10px !important;
+            font-weight: 900 !important;
+            color: #4ade80 !important;
+            line-height: 1 !important;
         }
     `;
     document.head.appendChild(style);
@@ -855,17 +858,7 @@ function selectStudentAttempt(rowUid, attemptIdx, event) {
 
 function toggleAttemptMenu(rowUid, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
-    const menu = document.getElementById(`attempt-menu-${rowUid}`); 
-    const btn = document.getElementById(`attempt-btn-${rowUid}`);
-    const isShown = menu && menu.classList.contains("show");
-    
-    document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
-    document.querySelectorAll('.btn-attempt-trigger.active').forEach(b => b.classList.remove('active'));
-    
-    if (!isShown && menu) { 
-        menu.classList.add("show"); 
-        if (btn) btn.classList.add("active"); 
-    }
+    // Giữ hàm để tương thích nếu có code ngoài gọi
 }
 
 function deleteResultRowPermanently(rowUid, event) {
@@ -877,14 +870,12 @@ function deleteResultRowPermanently(rowUid, event) {
     updateStatsAndRenderTable(currentExamResultData.rawRows);
 }
 
-// ĐÃ GỠ BỎ HOÀN TOÀN CỘT THU ÉP KHỎI HEADER
 function ensureActionColumnHeaders() {
     const table = document.getElementById("admin-result-table");
     if (!table) return; 
     const theadTr = table.querySelector("thead tr"); 
     if (!theadTr) return;
 
-    // Xóa triệt để cột Thu ép nếu đã từng được chèn
     const oldThForce = theadTr.querySelector(".th-force-submit-col");
     if (oldThForce) oldThForce.remove();
 
@@ -913,7 +904,9 @@ function startLiveDoingTicker() {
     }, 1000);
 }
 
-// BỘ VẼ BẢNG KẾT QUẢ: HỌC SINH THI BAO NHIÊU LẦN THÌ HIỆN ĐỦ BẤY NHIÊU LẦN, CLICK VÀO LẦN NÀO HIỆN CHI TIẾT LẦN ĐÓ
+// =========================================================================
+// BỘ VẼ BẢNG KẾT QUẢ: HIỂN THỊ ĐỦ 100% CÁC LẦN THI TRỰC TIẾP TRÊN CỘT "SỐ LẦN THI"
+// =========================================================================
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
     ensureModalZoomControlsInHeader();
@@ -968,45 +961,43 @@ function renderFilteredResultTable(rows) {
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
         let col_attemptCount = `<span class="status-not-submitted">Chưa thi</span>`;
 
-        // 1. TẠO GIAO DIỆN CỘT "SỐ LẦN THI": HIỆN ĐỦ MỌI LẦN THI (1 LẦN, 2 LẦN, N LẦN ĐỀU CÓ THỂ MỞ XEM TỪNG LẦN)
+        // -------------------------------------------------------------
+        // XỬ LÝ CỘT "SỐ LẦN THI": HIỂN THỊ ĐỦ BẤY NHIÊU LẦN THI DƯỚI DẠNG NÚT PILL
+        // -------------------------------------------------------------
         if (attCount === 0) {
             if (row.isDoing) {
-                col_attemptCount = `<span class="attempt-badge-doing">Đang thi Lần 1</span>`;
+                col_attemptCount = `<span class="attempt-badge-doing" title="Học sinh đang trong phòng thi">💓 Đang thi Lần 1</span>`;
             } else {
                 col_attemptCount = `<span class="status-not-submitted">Chưa thi</span>`;
             }
         } else {
-            // Có ít nhất 1 lần thi: Tạo menu chọn lần thi đầy đủ 100%
-            let menuItemsHtml = "";
+            let attemptsHtml = '<div class="td-attempts-list">';
             row.allAttempts.forEach((at, aIdx) => {
-                let sc = at.score10 !== undefined && at.score10 !== null ? Number(at.score10).toFixed(1) : "--";
-                let tm = at.timestamp ? at.timestamp : `Lần ${aIdx + 1}`;
-                let isSel = aIdx === row.selectedAttemptIndex;
-                menuItemsHtml += `
-                    <div class="attempt-menu-item ${isSel ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)" title="Bấm để xem chi tiết kết quả lần ${aIdx + 1} (${tm})">
-                        <span>${isSel ? '✓ ' : ''}<b>Lần ${aIdx + 1}</b> (${tm})</span>
-                        <span style="color:#0284c7; font-weight:900; background:#f0f9ff; padding:2px 6px; border-radius:6px; border:1px solid #bae6fd;">${sc}đ</span>
-                    </div>
+                let sc = (at.score10 !== undefined && at.score10 !== null) ? Number(at.score10).toFixed(1) : "--";
+                let isSel = (aIdx === row.selectedAttemptIndex);
+                let tm = at.timestamp || (at.createdAt ? formatDateTimeFull(at.createdAt) : `Lần ${aIdx + 1}`);
+                let tooltip = `Lần ${aIdx + 1}: ${sc} điểm\nThời gian nộp: ${tm}\n(Bấm để xem chi tiết kết quả lần này)`;
+                
+                attemptsHtml += `
+                    <button type="button" 
+                            class="btn-attempt-pill ${isSel ? 'active' : ''}" 
+                            onclick="selectStudentAttempt('${uid}', ${aIdx}, event)" 
+                            title="${tooltip}">
+                        ${isSel ? '<span class="attempt-check-icon">✓</span>' : ''}<b>Lần ${aIdx + 1}</b><span class="attempt-pill-score">${sc}đ</span>
+                    </button>
                 `;
             });
 
-            const doingBadgeText = row.isDoing ? ` (Đang thi Lần ${attCount + 1})` : "";
-            const singleClass = (attCount === 1 && !row.isDoing) ? "single-attempt" : "";
+            if (row.isDoing) {
+                attemptsHtml += `
+                    <span class="attempt-badge-doing" title="Học sinh đang làm bài lần ${attCount + 1}">
+                        💓 Đang thi L${attCount + 1}
+                    </span>
+                `;
+            }
 
-            col_attemptCount = `
-                <div class="td-attempt-cell">
-                    <button type="button" class="btn-attempt-trigger ${singleClass}" id="attempt-btn-${uid}" onclick="toggleAttemptMenu('${uid}', event)" title="Nhấn vào để xem đầy đủ ${attCount} lần thi và chọn lần muốn xem">
-                        <b>${attCount} lần</b>${doingBadgeText} ▾
-                    </button>
-                    <div class="attempt-dropdown-menu" id="attempt-menu-${uid}">
-                        <div style="font-size:11px; font-weight:800; color:#475569; padding:4px 8px; border-bottom:1.5px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
-                            <span>📑 CÁC LẦN THI ĐÃ NỘP:</span>
-                            <span style="color:#6366f1;">(Đang xem Lần ${row.selectedAttemptIndex + 1})</span>
-                        </div>
-                        ${menuItemsHtml}
-                    </div>
-                </div>
-            `;
+            attemptsHtml += '</div>';
+            col_attemptCount = attemptsHtml;
         }
 
         let col2_inTime = `<span class="status-not-submitted">---</span>`; 
@@ -1019,7 +1010,7 @@ function renderFilteredResultTable(rows) {
         let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
         let col11_details = `<span class="status-not-submitted">---</span>`;
 
-        // 2. HIỂN THỊ DỮ LIỆU CỦA LẦN THI ĐANG ĐƯỢC CHỌN (selectedAttemptIndex)
+        // HIỂN THỊ DỮ LIỆU CỦA LẦN THI ĐANG ĐƯỢC CHỌN (selectedAttemptIndex)
         if (currentSub) {
             let subDateMs = getSubmissionTimestamp(currentSub);
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
@@ -1060,7 +1051,7 @@ function renderFilteredResultTable(rows) {
             }
         }
 
-        // 3. HIỂN THỊ TRẠNG THÁI NẾU HỌC SINH ĐANG LÀM BÀI TRONG PHÒNG THI
+        // TRẠNG THÁI NẾU ĐANG THI
         if (row.isDoing) {
             let startMs = row.doingStartTime || Date.now();
             let formattedIn = formatDateTimeFull(startMs);
@@ -1090,7 +1081,6 @@ function renderFilteredResultTable(rows) {
         let safeTitleCol10 = stripHtml(col10_cheatTime);
         let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; padding:3px 8px; font-size:11.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s; box-shadow:0 1px 3px rgba(239,68,68,0.15);">🗑️ Xóa</button>`;
 
-        // HÀNG BẢNG HOÀN TOÀN KHÔNG CÒN CỘT THU ÉP
         tr.innerHTML = `
             <td class="td-stt">${col1_stt}</td>
             <td class="td-exam-col" title="${currentExamTitle}">${col_examName}</td>
@@ -1130,9 +1120,9 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
-// BỘ ĐÓNG DROPDOWN KHI CLICK RA NGOÀI BẢNG
+// BỘ ĐÓNG DROPDOWN KHI CLICK RA NGOÀI BẢNG (Giữ lại an toàn)
 document.addEventListener("click", function(event) {
-    if (!event.target.closest('.td-attempt-cell')) {
+    if (!event.target.closest('.td-attempt-cell-wrap')) {
         document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
         document.querySelectorAll('.btn-attempt-trigger.active').forEach(b => b.classList.remove('active'));
     }
