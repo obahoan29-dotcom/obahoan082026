@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN FIX HIỂN THỊ ĐỦ 100% TẤT CẢ CÁC LẦN THI TRỰC TIẾP TRÊN BẢNG)
+// (BẢN FIX TRIỆT ĐỂ LỖI CHE KHUẤT - HIỂN THỊ ĐỦ 100% CÁC LẦN THI)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -319,13 +319,21 @@ let isFitAllRowsActive = false;
         }
 
         /* ========================================================= */
-        /* BỘ STYLE MỚI: HIỂN THỊ ĐỦ 100% CÁC LẦN THI TRỰC TIẾP TRÊN Ô */
+        /* CỘT SỐ LẦN THI: KHÔNG CÒN DROPDOWN - HIỆN ĐỦ 100% CÁC NÚT */
         /* ========================================================= */
+        .result-table thead th:nth-child(3) {
+            width: 145px !important;
+            min-width: 130px !important;
+            text-align: center !important;
+        }
+
         .td-attempt-cell-wrap {
             text-align: center !important;
             white-space: normal !important;
             overflow: visible !important;
             padding: 4px 6px !important;
+            width: 145px !important;
+            min-width: 130px !important;
         }
 
         .td-attempts-list {
@@ -335,18 +343,20 @@ let isFitAllRowsActive = false;
             gap: 4px !important;
             flex-wrap: wrap !important;
             max-width: 100% !important;
+            margin: 0 auto !important;
         }
 
+        /* Nút huy hiệu từng lần thi */
         .btn-attempt-pill {
             display: inline-flex !important;
             align-items: center !important;
             gap: 3px !important;
-            padding: 3px 7px !important;
-            border-radius: 12px !important;
+            padding: 3px 8px !important;
+            border-radius: 14px !important;
             font-size: 11px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            border: 1.2px solid #cbd5e1 !important;
+            border: 1.4px solid #cbd5e1 !important;
             background: #ffffff !important;
             color: #334155 !important;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
@@ -362,24 +372,25 @@ let isFitAllRowsActive = false;
             background: #f0fdf4 !important;
             color: #166534 !important;
             transform: translateY(-1px) !important;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1) !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
         }
 
         .btn-attempt-pill:active {
             transform: translateY(1px) scale(0.96) !important;
         }
 
+        /* Lần thi đang chọn xem */
         .btn-attempt-pill.active {
             background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
             border-color: #4338ca !important;
             color: #ffffff !important;
-            box-shadow: 0 2px 7px rgba(79, 70, 229, 0.35) !important;
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4) !important;
         }
 
         .btn-attempt-pill.active .attempt-pill-score {
-            background: rgba(255, 255, 255, 0.25) !important;
+            background: rgba(255, 255, 255, 0.28) !important;
             color: #ffffff !important;
-            border-color: rgba(255, 255, 255, 0.4) !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
         }
 
         .attempt-pill-score {
@@ -394,7 +405,7 @@ let isFitAllRowsActive = false;
         }
 
         .attempt-check-icon {
-            font-size: 10px !important;
+            font-size: 10.5px !important;
             font-weight: 900 !important;
             color: #4ade80 !important;
             line-height: 1 !important;
@@ -841,7 +852,7 @@ function calculateRanksForRows(rows) {
     });
 }
 
-// BỘ CHỌN LẦN THI VÀ CẬP NHẬT TỨC THÌ DÒNG HỌC SINH ĐÓ (LƯU LẠI CHỈ MỤC THEO SBD)
+// BỘ CHỌN LẦN THI TRỰC TIẾP (BẤM VÀO LÀ CẢ DÒNG ĐỔI THEO LẦN ĐÓ)
 function selectStudentAttempt(rowUid, attemptIdx, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
@@ -905,7 +916,7 @@ function startLiveDoingTicker() {
 }
 
 // =========================================================================
-// BỘ VẼ BẢNG KẾT QUẢ: HIỂN THỊ ĐỦ 100% CÁC LẦN THI TRỰC TIẾP TRÊN CỘT "SỐ LẦN THI"
+// BỘ VẼ BẢNG: HIỂN THỊ ĐỦ 100% CÁC LẦN THI TRỰC TIẾP - HOÀN TOÀN KHÔNG BỊ CHE
 // =========================================================================
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
@@ -1120,7 +1131,7 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
-// BỘ ĐÓNG DROPDOWN KHI CLICK RA NGOÀI BẢNG (Giữ lại an toàn)
+// BỘ ĐÓNG DROPDOWN KHI CLICK RA NGOÀI BẢNG (Giữ an toàn)
 document.addEventListener("click", function(event) {
     if (!event.target.closest('.td-attempt-cell-wrap')) {
         document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
