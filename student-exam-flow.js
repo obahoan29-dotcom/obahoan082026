@@ -1,5 +1,6 @@
 // =========================================================
-// FILE 4: student-exam-flow.js (BẢN SỬA LỖI NỘP BÀI TRIỆT ĐỂ & BẢO LƯU 100%)
+// FILE 4: student-exam-flow.js 
+// (BẢN CHUẨN HÓA LƯU RIÊNG TỪNG LẦN THI TRÊN SUPABASE & BẢO LƯU 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -412,7 +413,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     }
 }
 
-// BỘ ĐÓNG GÓI BÀI NỘP CHUẨN XÁC
+// BỘ ĐÓNG GÓI BÀI NỘP CHUẨN XÁC VỚI TIMESTAMP DUY NHẤT CHO MỖI LẦN THI
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -452,6 +453,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
 
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionTimestampMs = Date.now();
+    // ID MỖI LẦN THI ĐỀU KHÁC BIỆT KÈM MỐC THỜI GIAN -> KHÔNG BAO GIỜ BỊ ĐÈ
     const submissionId = `sub_${currentQuizId}_${cleanSbd}_${submissionTimestampMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
@@ -482,7 +484,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// GỬI BẢN SAO LƯU NGẦM LÊN GOOGLE DRIVE (CHẠY NỀN, KHÔNG CHẶN MẠNG GỬI SUPABASE)
+// GỬI BẢN SAO LƯU NGẦM LÊN GOOGLE DRIVE (CHẠY NỀN)
 function sendSubmissionJsonToGoogleDriveFolder(payload) {
     setTimeout(() => {
         try {
@@ -716,8 +718,8 @@ window.triggerShareFromHistory = function(attemptNumber) {
 };
 
 // =========================================================================
-// HÀM NỘP BÀI: TĂNG TIMEOUT LÊN 18S + CHIẾN LƯỢC GỬI SUPABASE ĐA TẦNG
-// =========================================================
+// HÀM NỘP BÀI: CHUẨN HÓA LƯU RIÊNG TỪNG LẦN THI - TUYỆT ĐỐI KHÔNG GHI ĐÈ
+// =========================================================================
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -780,7 +782,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         created_at: payload.created_at
     };
 
-    // TĂNG THỜI GIAN CHỜ LÊN 18 GIÂY CHO MẠNG DI ĐỘNG (THAY VÌ 7S)
     let secondsLeft = 18;
     if (submissionCountdownTimer) clearInterval(submissionCountdownTimer);
 
@@ -820,34 +821,29 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-    // CHIẾN LƯỢC GHI SUPABASE ĐA TẦNG: CHỐNG 100% CÁC LỖI UNIQUE CONSTRAINT
+    // =========================================================================
+    // CHIẾN LƯỢC GỬI SUPABASE CHUẨN HÓA:
+    // 1. Luôn INSERT dòng mới với ID duy nhất (sub_quiz_sbd_timestamp) -> Lần 1, 2, 3 đều lưu riêng
+    // 2. Nếu do mạng lag phải gửi lại đúng gói tin đó -> UPSERT theo khóa id duy nhất (không trùng lặp rác)
+    // 3. TUYỆT ĐỐI KHÔNG UPSERT theo (quiz_id, sbd) để không bao giờ ghi đè bài thi cũ của học sinh!
+    // =========================================================================
     const trySendToSupabase = async () => {
         if (!client) throw new Error("Chưa kết nối Supabase Client");
 
-        // Tầng 1: Thử insert trực tiếp bản ghi với ID có timestamp
-        let { error: err1 } = await client.from('submissions').insert([dbPayload]);
+        // Đảm bảo ID duy nhất cho lần nộp bài này
+        const uniqueId = dbPayload.id || `sub_${payload.quiz_id}_${payload.sbd}_${Date.now()}`;
+        const submissionRow = { ...dbPayload, id: uniqueId };
+
+        // Tầng 1: Thử insert dòng mới độc lập
+        let { error: err1 } = await client.from('submissions').insert([submissionRow]);
         if (!err1) return true;
 
-        console.warn("Insert tầng 1 gặp lỗi, chuyển tầng 2 (onConflict quiz_id, sbd):", err1.message || err1);
-
-        // Tầng 2: Thử upsert theo cặp (quiz_id, sbd)
-        let { error: err2 } = await client.from('submissions').upsert(dbPayload, { onConflict: 'quiz_id,sbd' });
+        // Tầng 2: Nếu trong vòng lặp mạng retry lại chính ID này, upsert an toàn trên ID đó
+        let { error: err2 } = await client.from('submissions').upsert(submissionRow, { onConflict: 'id' });
         if (!err2) return true;
 
-        console.warn("Upsert tầng 2 gặp lỗi, chuyển tầng 3 (ID chuẩn):", err2.message || err2);
-
-        // Tầng 3: Thử upsert với ID chuẩn {quiz_id}_{sbd}
-        const standardPayload = { ...dbPayload, id: `${payload.quiz_id}_${payload.sbd}` };
-        let { error: err3 } = await client.from('submissions').upsert(standardPayload, { onConflict: 'id' });
-        if (!err3) return true;
-
-        console.warn("Upsert tầng 3 gặp lỗi, chuyển tầng 4 (update match):", err3.message || err3);
-
-        // Tầng 4: Update trực tiếp nếu bản ghi đã tồn tại
-        let { error: err4 } = await client.from('submissions').update(standardPayload).match({ quiz_id: payload.quiz_id, sbd: payload.sbd });
-        if (!err4) return true;
-
-        throw err4 || err3 || err2 || err1;
+        console.warn("Lỗi gửi bài lên Supabase:", err2.message || err1.message);
+        throw err2 || err1;
     };
 
     const sendLoopPromise = (async () => {
