@@ -96,7 +96,7 @@ function getSubmissionTimestamp(sub) {
     return 0;
 }
 
-// BỘ LỌC CHỐNG SPAM CLICK KÉP (CHỈ LOẠI BỎ KHI NỘP TRÙNG GẦN NHƯ TUYỆT ĐỐI < 2S)
+// BỘ LỌC CHỐNG SPAM CLICK KÉP (CHỈ LOẠI BỎ KHI NỘP TRÙNG TRONG VÒNG 2 GIÂY)
 function deduplicateAttempts(attempts) {
     if (!attempts || attempts.length <= 1) return attempts || [];
     let unique = [];
@@ -106,7 +106,6 @@ function deduplicateAttempts(attempts) {
         let isDup = unique.some(existing => {
             let exTime = getSubmissionTimestamp(existing);
             let exScore = (existing.score10 !== undefined) ? String(existing.score10) : "";
-            // Chỉ bỏ qua nếu cùng ID hoặc nộp cách nhau dưới 2 giây và cùng điểm y hệt do ấn đúp nút nộp
             if (sub.id && existing.id && sub.id === existing.id) return true;
             return (subTime > 0 && exTime > 0 && Math.abs(subTime - exTime) < 2000 && subScore === exScore);
         });
@@ -440,7 +439,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         // CHỈ COI LÀ ĐANG THI NẾU PHIÊN DIỄN RA SAU LẦN THI CUỐI VÀ PING TRONG VÒNG 90 GIÂY
         if (activeSess) {
             const sessTime = Number(activeSess.lastPing || activeSess.startTime || 0);
-            const isPingFresh = (nowMs - sessTime) < 90000; // Ping trong vòng 90 giây
+            const isPingFresh = (nowMs - sessTime) < 90000;
 
             if (matchedSubs.length === 0) {
                 if (isPingFresh) {
@@ -499,7 +498,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         }
 
         const sessTime = Number(sess.lastPing || sess.startTime || 0);
-        if ((nowMs - sessTime) >= 90000) continue; // Bỏ qua phiên đã thoát lâu
+        if ((nowMs - sessTime) >= 90000) continue;
 
         usedPendingKeys.add(cleanKey);
 
@@ -533,7 +532,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             if (!isSbdBelongsToCategory(rawSbd, categoryId)) continue;
         }
 
-        // Gom toàn bộ các lần thi của cùng 1 thí sinh tự do
         let existingFreeRow = finalRows.find(r => !r.isClassStudent && isSbdMatchedFlexibly(r.account.sbd, rawSbd));
         if (existingFreeRow) {
             existingFreeRow.allAttempts.push(sub);
