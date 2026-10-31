@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 5: exam-api.js (BẢN TÍCH HỢP BỘ LẮNG NGHE LỆNH THU ÉP TỨC THÌ 0S)
+// FILE 5: exam-api.js (BẢN TÍCH HỢP TỰ ĐỘNG PHÂN BIỆT LẦN 1, LẦN 2...)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -135,8 +135,60 @@ function applyStudentToUI(student) {
     safeLocal.setItem("saved_student_sbd", sId); 
     safeLocal.setItem("saved_student_class", sClass);
 
+    // KIỂM TRA SỐ LẦN THI ĐỂ HIỂN THỊ TRÊN MÀN HÌNH ĐĂNG NHẬP
+    checkAndDisplayAttemptNoticeOnStudentCard(sId);
+
     if (typeof renderStudentSubmissionHistoryButtons === 'function') {
         renderStudentSubmissionHistoryButtons();
+    }
+}
+
+async function checkAndDisplayAttemptNoticeOnStudentCard(sId) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
+    if (!quizId || !sId) return;
+
+    let attempt = 1;
+    if (typeof fetchStudentAttemptNumberFromCloud === 'function') {
+        attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
+    } else if (typeof getRealStudentExamAttemptNumber === 'function') {
+        attempt = getRealStudentExamAttemptNumber(quizId, sId);
+    }
+
+    window.currentStudentAttemptNumber = attempt;
+
+    let badgeEl = document.getElementById("student-card-attempt-notice");
+    if (!badgeEl) {
+        badgeEl = document.createElement("div");
+        badgeEl.id = "student-card-attempt-notice";
+        badgeEl.style.cssText = `
+            margin: 10px auto 14px auto;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-size: 13.5px;
+            font-weight: 800;
+            text-align: center;
+            display: none;
+        `;
+        const startBtn = document.getElementById("btn-start-exam");
+        if (startBtn && startBtn.parentNode) {
+            startBtn.parentNode.insertBefore(badgeEl, startBtn);
+        }
+    }
+
+    if (attempt > 1) {
+        badgeEl.style.display = "block";
+        badgeEl.style.background = "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)";
+        badgeEl.style.border = "1.5px solid #fca5a5";
+        badgeEl.style.color = "#b91c1c";
+        badgeEl.innerHTML = `🎯 <b>BẠN ĐANG DỰ THI LẦN ${attempt}</b><br><span style="font-size: 11.5px; color:#475569; font-weight:600;">(Bài thi mới tinh, đồng hồ và các câu trả lời sẽ được làm lại từ đầu)</span>`;
+
+        const startBtn = document.getElementById("btn-start-exam");
+        if (startBtn) startBtn.innerText = `Bắt Đầu Làm Bài Lần ${attempt} 🚀`;
+    } else {
+        badgeEl.style.display = "none";
+        const startBtn = document.getElementById("btn-start-exam");
+        if (startBtn) startBtn.innerText = "Vào Làm Bài 🚀";
     }
 }
 
@@ -202,9 +254,11 @@ function getExamCode() {
     return String(code).trim().replace(/\s+/g, '_'); 
 }
 
-function getStorageKey() { 
-    const sbd = document.getElementById("student-id")?.value.trim() || "guest";
-    return `exam_autosave_active_session_${EXAM_NAME}_${getMaDe()}_${sbd}`; 
+// BỘ TẠO KHÓA LƯU LOCALSTORAGE PHÂN BIỆT THEO TỪNG LẦN THI
+function getStorageKey(attempt = null) { 
+    const sbd = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "guest";
+    const att = attempt || window.currentStudentAttemptNumber || 1;
+    return `exam_autosave_session_${EXAM_NAME}_${getMaDe()}_${sbd}_lan${att}`; 
 }
 
 function applyOnlineCountVisibility() {
@@ -301,9 +355,6 @@ function startOnlineRealtimeWatcher(quizId) {
         .subscribe();
 }
 
-// =========================================================================
-// BỘ LẮNG NGHE LỆNH THU ÉP BUỘC TỪ GIÁO VIÊN QUA SUPABASE REALTIME
-// =========================================================================
 function startForceSubmitWatcher(quizId) {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
@@ -516,6 +567,7 @@ function updateTopBackupStatus(isServerConfirmed = false) {
 }
 
 async function checkPendingSubmissionOnLoad() { 
+    // KHÔNG TỰ ĐỘNG CHẶN KHI HỌC SINH VÀO DỰ THI LẦN MỚI
     try { 
         let raw = safeLocal.getItem("pending_exam_submission"); 
         if (!raw && typeof examIndexedDB !== 'undefined') {
@@ -596,3 +648,5 @@ window.handleOnlineCountClick = handleOnlineCountClick;
 window.startPresenceSystem = startPresenceSystem;
 window.clearPresence = clearPresence;
 window.checkPendingSubmissionOnLoad = checkPendingSubmissionOnLoad;
+window.getStorageKey = getStorageKey;
+window.checkAndDisplayAttemptNoticeOnStudentCard = checkAndDisplayAttemptNoticeOnStudentCard;
