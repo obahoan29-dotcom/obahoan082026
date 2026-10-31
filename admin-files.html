@@ -3,14 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trình Quản Lý Tệp & Dữ Liệu Supabase - Windows Explorer</title>
+    <title>Trình Quản Lý Tệp Supabase (Windows Explorer)</title>
     <!-- Favicon chữ P nghệ thuật -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='neonFlow' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%2300E5FF'/%3E%3Cstop offset='25%25' stop-color='%2310B981'/%3E%3Cstop offset='50%25' stop-color='%23FFEA00'/%3E%3Cstop offset='75%25' stop-color='%23FF007F'/%3E%3Cstop offset='100%25' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='%230f172a'/%3E%3Cpath d='M28,82 C34,80 32,50 33,28 C33,18 48,12 66,16 C82,20 84,40 68,52 C52,61 32,54 32,54' fill='none' stroke='url(%23neonFlow)' stroke-width='13' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&family=Be+Vietnam+Pro:wght@400;600;700;800&family=Consolas&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&family=Consolas&display=swap" rel="stylesheet">
     
+    <!-- SheetJS để xuất Excel từ Windows Explorer -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
     <!-- Supabase JS & App Config -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app-config.js"></script>
@@ -18,20 +21,20 @@
 
     <style>
         :root {
-            --win-bg: #f3f3f3;
+            --win-bg: #f3f4f6;
             --win-header: #ffffff;
             --win-border: #d1d5db;
             --win-blue: #0067b8;
             --win-hover: #e5f3ff;
             --win-select: #cce8ff;
             --win-select-border: #99d1ff;
-            --text-dark: #1f2937;
+            --text-dark: #111827;
             --text-muted: #6b7280;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body {
-            font-family: 'Segoe UI', 'Be Vietnam Pro', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, Tahoma, sans-serif;
             background: var(--win-bg);
             color: var(--text-dark);
             height: 100vh;
@@ -51,6 +54,7 @@
             justify-content: space-between;
             padding: 0 12px;
             flex-shrink: 0;
+            z-index: 50;
         }
         .title-bar-left {
             display: flex;
@@ -71,21 +75,24 @@
             background: #ffffff;
             border-radius: 4px;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            transition: all 0.1s;
+            transition: all 0.12s;
+            font-family: inherit;
         }
         .btn-win-tool:hover { background: #e2e8f0; }
         .btn-win-tool:active { transform: translateY(1px); }
         .btn-win-primary { background: #0067b8; color: #fff; border-color: #005da6; }
         .btn-win-primary:hover { background: #005da6; }
+        .btn-win-success { background: #10b981; color: #fff; border-color: #059669; }
+        .btn-win-success:hover { background: #059669; }
         .btn-win-danger { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
         .btn-win-danger:hover { background: #dc2626; color: #fff; }
 
-        /* 2. THANH CÔNG CỤ (RIBBON TOOLBAR) */
+        /* 2. THANH CÔNG CỤ (RIBBON TOOLBAR & BREADCRUMB) */
         .toolbar {
             height: 42px;
             background: #ffffff;
@@ -95,6 +102,7 @@
             padding: 0 10px;
             gap: 4px;
             flex-shrink: 0;
+            z-index: 40;
         }
         .nav-btn {
             width: 28px;
@@ -107,6 +115,7 @@
             align-items: center;
             justify-content: center;
             font-size: 14px;
+            font-weight: 900;
             color: #4b5563;
         }
         .nav-btn:hover { background: #e5e7eb; border-color: #d1d5db; }
@@ -124,16 +133,21 @@
             margin: 0 6px;
             font-size: 12px;
             gap: 4px;
+            overflow-x: auto;
+            scrollbar-width: none;
         }
+        .address-bar-wrap::-webkit-scrollbar { display: none; }
         .address-bar-wrap:focus-within { border-color: var(--win-blue); }
         .breadcrumb-item {
             display: inline-flex;
             align-items: center;
             gap: 4px;
             color: #374151;
-            padding: 2px 4px;
+            padding: 2px 5px;
             border-radius: 3px;
             cursor: pointer;
+            white-space: nowrap;
+            font-weight: 600;
         }
         .breadcrumb-item:hover { background: #e5e7eb; color: #000; }
         .breadcrumb-sep { color: #9ca3af; font-size: 10px; }
@@ -154,24 +168,61 @@
             width: 100%;
             font-size: 12px;
             color: #1f2937;
+            font-family: inherit;
         }
 
-        /* 3. KHU VỰC THÂN CHÍNH (3 CỘT) */
+        /* MENU CHỌN VIEW MODE */
+        .view-mode-selector {
+            position: relative;
+            display: inline-block;
+        }
+        .view-mode-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 4px);
+            right: 0;
+            background: #ffffff;
+            border: 1px solid var(--win-border);
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 4px;
+            z-index: 1000;
+            width: 160px;
+        }
+        .view-mode-dropdown.show { display: block; }
+        .view-opt-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .view-opt-btn:hover { background: var(--win-hover); color: var(--win-blue); }
+        .view-opt-btn.active { background: var(--win-select); font-weight: 800; color: #000; }
+
+        /* 3. KHU VỰC CHÍNH (3 CỘT) */
         .main-workspace {
             flex: 1;
             display: flex;
             overflow: hidden;
             background: #ffffff;
+            position: relative;
         }
 
         /* 3.1 CỘT TRÁI: CÂY THƯ MỤC */
         .tree-pane {
-            width: 240px;
+            width: 250px;
             border-right: 1px solid var(--win-border);
             background: #f9fafb;
             overflow-y: auto;
             padding: 8px 4px;
             flex-shrink: 0;
+            user-select: none;
         }
         .tree-node {
             display: flex;
@@ -187,11 +238,11 @@
         }
         .tree-node:hover { background: var(--win-hover); }
         .tree-node.active { background: var(--win-select); border: 1px solid var(--win-select-border); color: #000; }
-        .tree-toggle { width: 14px; text-align: center; font-size: 10px; color: #9ca3af; cursor: pointer; }
-        .tree-sub { margin-left: 16px; display: none; }
+        .tree-toggle { width: 14px; text-align: center; font-size: 10px; color: #9ca3af; cursor: pointer; flex-shrink: 0; }
+        .tree-sub { margin-left: 14px; display: none; }
         .tree-sub.open { display: block; }
 
-        /* 3.2 CỘT GIỮA: DANH SÁCH FILE & THƯ MỤC */
+        /* 3.2 CỘT GIỮA: NỘI DUNG TỆP */
         .content-pane {
             flex: 1;
             overflow-y: auto;
@@ -199,43 +250,46 @@
             background: #ffffff;
             display: flex;
             flex-direction: column;
+            position: relative;
         }
 
-        /* CHẾ ĐỘ XEM GRID */
-        .file-grid {
+        /* CHẾ ĐỘ 1: TILES / MEDIUM ICONS (NHƯ TRONG ẢNH CHỤP) */
+        .view-tiles {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
             gap: 10px;
             padding: 4px;
         }
         .file-item-card {
             border: 1px solid transparent;
             border-radius: 6px;
-            padding: 10px 6px;
+            padding: 10px 8px;
             text-align: center;
             cursor: pointer;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
-            transition: all 0.1s;
+            gap: 4px;
+            transition: all 0.12s;
+            position: relative;
         }
         .file-item-card:hover {
             background: var(--win-hover);
             border-color: #d0e7ff;
         }
         .file-item-card.selected {
-            background: var(--win-select);
-            border-color: var(--win-select-border);
+            background: var(--win-select) !important;
+            border-color: var(--win-select-border) !important;
+            box-shadow: 0 0 0 1px rgba(0, 103, 184, 0.3);
         }
-        .file-icon { font-size: 38px; line-height: 1; }
+        .file-icon { font-size: 42px; line-height: 1; margin-bottom: 2px; }
         .file-title {
             font-size: 11.5px;
-            font-weight: 600;
+            font-weight: 700;
             color: #1f2937;
             word-break: break-word;
             line-height: 1.25;
-            max-height: 30px;
+            max-height: 32px;
             overflow: hidden;
             text-overflow: ellipsis;
             display: -webkit-box;
@@ -245,9 +299,28 @@
         .file-meta-sub {
             font-size: 10px;
             color: var(--text-muted);
+            line-height: 1.2;
+            max-height: 24px;
+            overflow: hidden;
         }
 
-        /* CHẾ ĐỘ XEM DETAILS BẢNG */
+        /* CHẾ ĐỘ 2: LARGE ICONS */
+        .view-large {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 14px;
+            padding: 8px;
+        }
+        .view-large .file-item-card { padding: 14px 10px; }
+        .view-large .file-icon { font-size: 58px; }
+        .view-large .file-title { font-size: 13px; max-height: 40px; -webkit-line-clamp: 2; }
+        .view-large .file-meta-sub { font-size: 11px; }
+
+        /* CHẾ ĐỘ 3: DETAILS (BẢNG WINDOWS CÓ SORTING CỘT) */
+        .view-details-wrapper {
+            width: 100%;
+            overflow-x: auto;
+        }
         .file-table {
             width: 100%;
             border-collapse: collapse;
@@ -260,19 +333,41 @@
             top: 0;
             background: #f9fafb;
             padding: 8px 10px;
-            border-bottom: 1px solid var(--win-border);
+            border-bottom: 1.5px solid var(--win-border);
             font-weight: 700;
-            color: #4b5563;
+            color: #374151;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.1s;
         }
+        .file-table th:hover { background: #e5e7eb; color: #000; }
+        .file-table th .sort-arrow { font-size: 10px; margin-left: 4px; color: var(--win-blue); }
         .file-table td {
-            padding: 8px 10px;
+            padding: 7px 10px;
             border-bottom: 1px solid #f3f4f6;
             vertical-align: middle;
             white-space: nowrap;
         }
         .file-table tbody tr { cursor: pointer; }
-        .file-table tbody tr:hover { background: var(--win-hover); }
-        .file-table tbody tr.selected { background: var(--win-select); }
+        .file-table tbody tr:hover td { background: var(--win-hover); }
+        .file-table tbody tr.selected td { background: var(--win-select) !important; font-weight: 600; }
+
+        /* CHẾ ĐỘ 4: LIST (DANH SÁCH GỌN) */
+        .view-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .view-list .file-item-card {
+            flex-direction: row;
+            justify-content: flex-start;
+            padding: 4px 8px;
+            border-radius: 4px;
+            gap: 8px;
+        }
+        .view-list .file-icon { font-size: 20px; }
+        .view-list .file-title { font-size: 12px; max-height: none; -webkit-line-clamp: 1; flex: 1; text-align: left; }
+        .view-list .file-meta-sub { font-size: 11px; }
 
         /* 3.3 CỘT PHẢI: KHUNG XEM TRƯỚC (PREVIEW PANE) */
         .preview-pane {
@@ -283,6 +378,7 @@
             flex-direction: column;
             overflow: hidden;
             flex-shrink: 0;
+            z-index: 20;
         }
         .preview-header {
             padding: 10px 14px;
@@ -298,7 +394,7 @@
             padding: 14px;
             overflow-y: auto;
             user-select: text;
-            font-size: 12px;
+            font-size: 12.5px;
             line-height: 1.5;
         }
 
@@ -314,58 +410,114 @@
             font-size: 11.5px;
             color: #6b7280;
             flex-shrink: 0;
+            z-index: 50;
         }
 
-        /* MODAL BIÊN TẬP JSON / NỘI DUNG */
+        /* 5. MENU CHUỘT PHẢI (CONTEXT MENU WINDOWS) */
+        .context-menu {
+            position: fixed;
+            background: #ffffff;
+            border: 1px solid var(--win-border);
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+            padding: 4px;
+            z-index: 999999;
+            min-width: 190px;
+            display: none;
+            animation: fadeInMenu 0.12s ease;
+        }
+        @keyframes fadeInMenu { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1f2937;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .context-menu-item:hover { background: var(--win-hover); color: var(--win-blue); }
+        .context-menu-divider { height: 1px; background: #e5e7eb; margin: 3px 0; }
+        .context-menu-item.danger:hover { background: #fee2e2; color: #dc2626; }
+
+        /* 6. MODAL CHỈNH SỬA NHANH & JSON EDITOR */
         .editor-modal {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            position: fixed; inset: 0; background: rgba(0,0,0,0.55);
             display: none; align-items: center; justify-content: center;
             z-index: 100000; padding: 20px;
+            backdrop-filter: blur(4px);
         }
         .editor-card {
-            background: #fff; border-radius: 8px; width: 750px; max-width: 95vw;
-            height: 80vh; display: flex; flex-direction: column;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3); overflow: hidden;
+            background: #fff; border-radius: 12px; width: 750px; max-width: 95vw;
+            height: 85vh; display: flex; flex-direction: column;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.35); overflow: hidden;
+            animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
         .editor-header {
-            padding: 10px 16px; background: #0f172a; color: #fff;
+            padding: 12px 18px; background: #0f172a; color: #fff;
             display: flex; align-items: center; justify-content: space-between;
-            font-weight: 700;
+            font-weight: 800; font-size: 14px;
         }
-        .editor-body { flex: 1; padding: 12px; display: flex; flex-direction: column; }
+        .editor-tabs {
+            display: flex; gap: 4px; background: #f1f5f9; padding: 6px 12px;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .editor-tab-btn {
+            padding: 6px 14px; border: 1px solid transparent; background: transparent;
+            font-weight: 700; font-size: 12px; border-radius: 6px; cursor: pointer; color: #475569;
+        }
+        .editor-tab-btn.active { background: #ffffff; color: var(--win-blue); border-color: #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .editor-body { flex: 1; padding: 16px; display: flex; flex-direction: column; overflow-y: auto; user-select: text; }
         .editor-textarea {
             width: 100%; flex: 1; font-family: 'Consolas', monospace;
-            font-size: 13px; line-height: 1.45; border: 1px solid #cbd5e1;
-            border-radius: 6px; padding: 10px; outline: none; resize: none;
-            user-select: text;
+            font-size: 13px; line-height: 1.45; border: 1.5px solid #cbd5e1;
+            border-radius: 8px; padding: 12px; outline: none; resize: none;
+            user-select: text; background: #f8fafc; color: #0f172a;
         }
+        .editor-textarea:focus { border-color: var(--win-blue); background: #ffffff; }
         .editor-footer {
-            padding: 10px 16px; background: #f8fafc; border-top: 1px solid #e2e8f0;
+            padding: 10px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0;
             display: flex; justify-content: flex-end; gap: 8px;
         }
 
-        /* MODAL XÁC THỰC ADMIN NẾU CHƯA ĐĂNG NHẬP */
+        /* FORM SỬA NHANH BÀI NỘP */
+        .quick-form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+        }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-weight: 800; font-size: 12px; color: #374151; margin-bottom: 4px; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; font-weight: 600; font-family: inherit; outline: none;
+        }
+        .form-group input:focus, .form-group textarea:focus { border-color: var(--win-blue); }
+
+        /* MODAL BẢO VỆ MẬT KHẨU */
         .auth-gate-modal {
             position: fixed; inset: 0; background: #0f172a;
             display: flex; align-items: center; justify-content: center;
             z-index: 9999999;
         }
         .auth-gate-card {
-            background: #ffffff; border-radius: 12px; padding: 28px; width: 360px;
+            background: #ffffff; border-radius: 14px; padding: 28px; width: 360px;
             text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
         }
     </style>
 </head>
 <body>
 
-    <!-- BẢO VỆ MẬT KHẨU NẾU TRUY CẬP TRỰC TIẾP -->
+    <!-- 0. BẢO VỆ MẬT KHẨU ADMIN NẾU TRUY CẬP TRỰC TIẾP -->
     <div id="auth-gate-modal" class="auth-gate-modal" style="display: none;">
         <div class="auth-gate-card">
-            <div style="font-size: 42px; margin-bottom: 10px;">🔐</div>
-            <h3 style="margin-bottom: 6px; font-weight: 800;">QUẢN TRỊ VIÊN</h3>
+            <div style="font-size: 44px; margin-bottom: 10px;">🔐</div>
+            <h3 style="margin-bottom: 6px; font-weight: 900; font-size: 16px;">QUẢN TRỊ VIÊN</h3>
             <p style="font-size: 12px; color: #64748b; margin-bottom: 18px;">Nhập mật khẩu quản trị để mở Trình Quản Lý Tệp Supabase:</p>
             <input type="password" id="gate-pass-input" placeholder="Nhập mật khẩu Admin..." style="width: 100%; padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; margin-bottom: 12px;" onkeydown="if(event.key==='Enter') verifyAdminGate()">
-            <button onclick="verifyAdminGate()" style="width: 100%; padding: 10px; background: #0067b8; color: #fff; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">Mở Khóa</button>
+            <button onclick="verifyAdminGate()" style="width: 100%; padding: 10px; background: #0067b8; color: #fff; border: none; border-radius: 8px; font-weight: 800; cursor: pointer;">Mở Khóa</button>
         </div>
     </div>
 
@@ -377,6 +529,7 @@
         </div>
         <div class="title-bar-tools">
             <button class="btn-win-tool" onclick="refreshCurrentFolder()">🔄 Tải lại</button>
+            <button class="btn-win-tool btn-win-success" onclick="exportCurrentViewToExcel()" title="Tải bảng tính Excel của thư mục đang xem">📊 Xuất Excel</button>
             <button class="btn-win-tool btn-win-primary" onclick="openNewItemPrompt()">➕ Thêm dữ liệu</button>
             <button class="btn-win-tool btn-win-danger" onclick="deleteSelectedItem()">🗑️ Xóa</button>
             <button class="btn-win-tool" onclick="window.close()">✕ Đóng</button>
@@ -389,63 +542,72 @@
         <button class="nav-btn" id="btn-nav-forward" onclick="navigateHistory(1)" title="Tiến tới">→</button>
         <button class="nav-btn" onclick="navigateUpFolder()" title="Lên một cấp thư mục">↑</button>
 
-        <div class="address-bar-wrap" id="breadcrumb-bar">
-            <!-- Breadcrumbs được sinh tự động -->
-        </div>
+        <div class="address-bar-wrap" id="breadcrumb-bar"></div>
 
         <div class="search-box">
             <span style="color:#9ca3af; margin-right:4px;">🔍</span>
             <input type="text" id="search-input" placeholder="Tìm kiếm tệp..." oninput="onFilterSearch(this.value)">
         </div>
 
-        <div style="display:flex; gap:2px; margin-left:4px;">
-            <button class="nav-btn" onclick="switchViewMode('grid')" title="Xem dạng lưới biểu tượng">🔲</button>
-            <button class="nav-btn" onclick="switchViewMode('details')" title="Xem dạng bảng chi tiết">📑</button>
+        <!-- BỘ CHUYỂN ĐỔI CHẾ ĐỘ XEM WINDOWS -->
+        <div class="view-mode-selector">
+            <button class="nav-btn" onclick="toggleViewModeDropdown(event)" title="Chế độ xem tệp (Tiles, Details, List, Large...)">
+                <span id="current-view-mode-icon">🔲</span> ▾
+            </button>
+            <div class="view-mode-dropdown" id="view-mode-dropdown" onclick="event.stopPropagation()">
+                <div class="view-opt-btn" id="opt-view-tiles" onclick="switchViewMode('tiles')"><span>🔲</span> <span>Gạch ngói (Tiles)</span></div>
+                <div class="view-opt-btn" id="opt-view-details" onclick="switchViewMode('details')"><span>📑</span> <span>Chi tiết (Details)</span></div>
+                <div class="view-opt-btn" id="opt-view-large" onclick="switchViewMode('large')"><span>🖼️</span> <span>Biểu tượng lớn</span></div>
+                <div class="view-opt-btn" id="opt-view-list" onclick="switchViewMode('list')"><span>📋</span> <span>Danh sách (List)</span></div>
+            </div>
         </div>
     </div>
 
     <!-- 3. MAIN WORKSPACE -->
-    <div class="main-workspace">
+    <div class="main-workspace" id="main-workspace" oncontextmenu="handleWorkspaceContextMenu(event)">
         <!-- CỘT TRÁI: CÂY THƯ MỤC -->
         <div class="tree-pane" id="folder-tree-root">
-            <div class="tree-node active" onclick="selectFolder('root')">
+            <div class="tree-node active" id="tree-node-root" onclick="selectFolder('root')">
                 <span class="tree-toggle">▼</span>
                 <span>🗄️</span>
                 <span>Supabase Database</span>
             </div>
             <div class="tree-sub open" id="tree-sub-root">
-                <div class="tree-node" onclick="selectFolder('quizzes')">
+                <div class="tree-node" id="tree-node-quizzes" onclick="selectFolder('quizzes')">
                     <span class="tree-toggle">▶</span>
                     <span>📑</span>
                     <span>Đề thi (quizzes)</span>
                 </div>
-                <div class="tree-node" onclick="selectFolder('submissions')">
-                    <span class="tree-toggle">▼</span>
+                
+                <!-- BÀI NỘP THEO PHÂN CẤP LỚP -->
+                <div class="tree-node" id="tree-node-submissions" onclick="toggleSubmissionsTree(event)">
+                    <span class="tree-toggle" id="tree-toggle-submissions">▼</span>
                     <span>🎓</span>
                     <span>Bài nộp (submissions)</span>
                 </div>
                 <div class="tree-sub open" id="tree-sub-submissions">
-                    <!-- Các lớp học -->
-                    <div class="tree-node" onclick="selectFolder('sub_lop-11a')"><span>🏫</span><span>Lớp 11A</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_lop-11c')"><span>🏫</span><span>Lớp 11C</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_lop-10p')"><span>🏫</span><span>Lớp 10P</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_lop-11e')"><span>🏫</span><span>Lớp 11E</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_them-10')"><span>📐</span><span>Thêm 10</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_them-11')"><span>✍️</span><span>Thêm 11</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_them-12')"><span>🎓</span><span>Thêm 12</span></div>
-                    <div class="tree-node" onclick="selectFolder('sub_hsg-toan-11')"><span>🏆</span><span>HSG Toán 11</span></div>
+                    <div class="tree-node" id="tree-node-sub_lop-11a" onclick="selectFolder('sub_lop-11a')"><span>🏫</span><span>Lớp 11A</span></div>
+                    <div class="tree-node" id="tree-node-sub_lop-11c" onclick="selectFolder('sub_lop-11c')"><span>🏫</span><span>Lớp 11C</span></div>
+                    <div class="tree-node" id="tree-node-sub_lop-10p" onclick="selectFolder('sub_lop-10p')"><span>🏫</span><span>Lớp 10P</span></div>
+                    <div class="tree-node" id="tree-node-sub_lop-11e" onclick="selectFolder('sub_lop-11e')"><span>🏫</span><span>Lớp 11E</span></div>
+                    <div class="tree-node" id="tree-node-sub_them-10" onclick="selectFolder('sub_them-10')"><span>📐</span><span>Thêm 10</span></div>
+                    <div class="tree-node" id="tree-node-sub_them-11" onclick="selectFolder('sub_them-11')"><span>✍️</span><span>Thêm 11</span></div>
+                    <div class="tree-node" id="tree-node-sub_them-12" onclick="selectFolder('sub_them-12')"><span>🎓</span><span>Thêm 12</span></div>
+                    <div class="tree-node" id="tree-node-sub_hsg-toan-11" onclick="selectFolder('sub_hsg-toan-11')"><span>🏆</span><span>HSG Toán 11</span></div>
+                    <div class="tree-node" id="tree-node-sub_all" onclick="selectFolder('sub_all')"><span>🌐</span><span>Tất cả bài nộp</span></div>
                 </div>
-                <div class="tree-node" onclick="selectFolder('tu_luan')">
+
+                <div class="tree-node" id="tree-node-tu_luan" onclick="selectFolder('tu_luan')">
                     <span class="tree-toggle">▶</span>
                     <span>📝</span>
                     <span>Tự luận (tu_luan)</span>
                 </div>
-                <div class="tree-node" onclick="selectFolder('live_drafts')">
+                <div class="tree-node" id="tree-node-live_drafts" onclick="selectFolder('live_drafts')">
                     <span class="tree-toggle">▶</span>
                     <span>⚡</span>
                     <span>Nháp trực tiếp (live_drafts)</span>
                 </div>
-                <div class="tree-node" onclick="selectFolder('custom_links')">
+                <div class="tree-node" id="tree-node-custom_links" onclick="selectFolder('custom_links')">
                     <span class="tree-toggle">▶</span>
                     <span>🔗</span>
                     <span>Danh mục web (custom_links)</span>
@@ -453,18 +615,20 @@
             </div>
         </div>
 
-        <!-- CỘT GIỮA: NỘI DUNG THƯ MỤC -->
+        <!-- CỘT GIỮA: NỘI DUNG TỆP / THƯ MỤC -->
         <div class="content-pane" id="folder-content-container">
-            <div id="grid-view-wrapper" class="file-grid"></div>
-            <div id="details-view-wrapper" style="display: none;">
-                <table class="file-table">
+            <div id="grid-view-wrapper" class="view-tiles"></div>
+            <div id="details-view-wrapper" class="view-details-wrapper" style="display: none;">
+                <table class="file-table" id="file-table">
                     <thead>
                         <tr>
-                            <th style="width: 280px;">Tên</th>
-                            <th style="width: 140px;">Mã / ID</th>
-                            <th style="width: 110px;">Lớp / Mục</th>
-                            <th style="width: 100px; text-align:center;">Điểm / Chi tiết</th>
-                            <th style="width: 150px;">Thời gian tạo</th>
+                            <th onclick="sortDetailsByColumn('name')" style="width: 280px;">Tên <span class="sort-arrow" id="sort-name"></span></th>
+                            <th onclick="sortDetailsByColumn('sbd')" style="width: 100px;">SBD <span class="sort-arrow" id="sort-sbd"></span></th>
+                            <th onclick="sortDetailsByColumn('class')" style="width: 110px;">Lớp <span class="sort-arrow" id="sort-class"></span></th>
+                            <th onclick="sortDetailsByColumn('score')" style="width: 110px; text-align:center;">Điểm số <span class="sort-arrow" id="sort-score"></span></th>
+                            <th onclick="sortDetailsByColumn('correct')" style="width: 110px; text-align:center;">Số câu đúng <span class="sort-arrow" id="sort-correct"></span></th>
+                            <th onclick="sortDetailsByColumn('time')" style="width: 120px;">Thời gian thi <span class="sort-arrow" id="sort-time"></span></th>
+                            <th onclick="sortDetailsByColumn('date')" style="width: 150px;">Thời điểm nộp <span class="sort-arrow" id="sort-date"></span></th>
                             <th style="width: 80px; text-align:center;">Thao tác</th>
                         </tr>
                     </thead>
@@ -473,15 +637,15 @@
             </div>
         </div>
 
-        <!-- CỘT PHẢI: KHUNG XEM TRƯỚC (PREVIEW) -->
+        <!-- CỘT PHẢI: KHUNG XEM TRƯỚC (PREVIEW PANE) -->
         <div class="preview-pane">
             <div class="preview-header">
                 <span>👁️ Xem trước thông tin</span>
-                <span id="preview-type-badge" style="font-size:11px; color:#6b7280;">Trống</span>
+                <span id="preview-type-badge" style="font-size:11px; color:#6b7280; font-weight:800;">Trống</span>
             </div>
             <div class="preview-body" id="preview-content-box">
                 <div style="text-align: center; color: #9ca3af; margin-top: 50px;">
-                    <div style="font-size: 38px;">📄</div>
+                    <div style="font-size: 42px;">📄</div>
                     <p style="margin-top: 8px;">Chọn một tệp hoặc thư mục để xem trước chi tiết tại đây</p>
                 </div>
             </div>
@@ -495,39 +659,70 @@
         <span id="status-server-status">🟢 Supabase Connected</span>
     </div>
 
-    <!-- MODAL SỬA NỘI DUNG JSON TRỰC TIẾP -->
-    <div class="editor-modal" id="json-editor-modal">
-        <div class="editor-card">
+    <!-- 5. MENU CHUỘT PHẢI (WINDOWS CONTEXT MENU) -->
+    <div class="context-menu" id="windows-context-menu" onclick="event.stopPropagation()">
+        <div class="context-menu-item" onclick="openSelectedItemAction()"><span>📂</span> <b>Mở (Enter)</b></div>
+        <div class="context-menu-item" onclick="openQuickEditModalAction()"><span>✏️</span> <span>Sửa điểm & thông tin</span></div>
+        <div class="context-menu-item" onclick="openJsonEditorModalAction()"><span>💻</span> <span>Chỉnh sửa JSON</span></div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="downloadSelectedJsonAction()"><span>💾</span> <span>Tải file .json</span></div>
+        <div class="context-menu-item" onclick="copySelectedItemJsonAction()"><span>📋</span> <span>Sao chép JSON</span></div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item danger" onclick="deleteSelectedItem()"><span>🗑️</span> <span>Xóa (Delete)</span></div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" onclick="refreshCurrentFolder()"><span>🔄</span> <span>Làm mới (F5)</span></div>
+    </div>
+
+    <!-- 6. MODAL CHỈNH SỬA NHANH & BIÊN TẬP JSON -->
+    <div class="editor-modal" id="item-editor-modal" onclick="if(event.target===this) closeEditorModal()">
+        <div class="editor-card" onclick="event.stopPropagation()">
             <div class="editor-header">
-                <span id="editor-title">✏️ Chỉnh sửa tệp dữ liệu</span>
-                <button onclick="closeEditorModal()" style="background:none; border:none; color:#fff; font-size:16px; cursor:pointer;">✕</button>
+                <span id="editor-title">✏️ Chỉnh sửa bản ghi</span>
+                <button onclick="closeEditorModal()" style="background:none; border:none; color:#fff; font-size:18px; cursor:pointer; font-weight:900;">✕</button>
             </div>
-            <div class="editor-body">
+            
+            <div class="editor-tabs">
+                <button class="editor-tab-btn active" id="tab-btn-quick" onclick="switchEditorTab('quick')">📝 Sửa nhanh (Form)</button>
+                <button class="editor-tab-btn" id="tab-btn-json" onclick="switchEditorTab('json')">💻 Chỉnh sửa mã JSON</button>
+            </div>
+
+            <!-- TAB 1: FORM SỬA NHANH -->
+            <div class="editor-body" id="editor-body-quick">
+                <div class="quick-form-grid" id="quick-form-content"></div>
+            </div>
+
+            <!-- TAB 2: CODE JSON -->
+            <div class="editor-body" id="editor-body-json" style="display: none;">
                 <div style="margin-bottom: 6px; font-size: 11.5px; color: #64748b;">
-                    💡 Thầy có thể chỉnh sửa cấu trúc JSON, điểm số, hoặc nội dung của bản ghi này trực tiếp:
+                    💡 Thầy có thể chỉnh sửa cấu trúc JSON, điểm số, hoặc mảng câu trả lời trực tiếp bên dưới:
                 </div>
-                <textarea class="editor-textarea" id="editor-json-content"></textarea>
+                <textarea class="editor-textarea" id="editor-json-content" spellcheck="false"></textarea>
             </div>
+
             <div class="editor-footer">
                 <button class="btn-win-tool" onclick="closeEditorModal()">Hủy bỏ</button>
-                <button class="btn-win-tool btn-win-primary" id="btn-save-editor" onclick="saveEditorContent()">💾 Lưu thay đổi</button>
+                <button class="btn-win-tool btn-win-primary" id="btn-save-editor" onclick="saveCurrentEditor()">💾 Lưu thay đổi</button>
             </div>
         </div>
     </div>
 
     <script>
-        // ==========================================
-        // CƠ CHẾ FILE EXPLORER SUPABASE CHUYÊN NGHIỆP
-        // ==========================================
+        // =========================================================================
+        // TRÌNH QUẢN LÝ TỆP & DỮ LIỆU WINDOWS EXPLORER (SUPABASE ENGINE)
+        // =========================================================================
 
         let currentFolder = 'root';
-        let viewMode = 'grid'; // 'grid' hoặc 'details'
+        let currentSubFolderParam = null; // Khi mở 1 đề thi cụ thể trong lớp
+        let viewMode = 'tiles'; // 'tiles', 'details', 'large', 'list'
         let currentItems = [];
         let selectedItem = null;
-        let navHistory = ['root'];
+        let navHistory = [{ folder: 'root', param: null }];
         let navHistoryIndex = 0;
+        let sortColumn = 'name';
+        let sortAsc = true;
+        let activeEditorMode = 'quick';
 
-        // KIỂM TRA QUYỀN ADMIN
+        // 1. KIỂM TRA QUYỀN ADMIN
         function checkAdminAccess() {
             try {
                 const logged = safeLocal.getItem("adminLoggedInSession");
@@ -552,7 +747,7 @@
                     safeLocal.setItem("adminLoggedInSession", "true");
                     safeLocal.setItem("admin_expires_at", String(Date.now() + 24 * 3600 * 1000));
                     document.getElementById("auth-gate-modal").style.display = "none";
-                    loadFolderContents(currentFolder);
+                    loadFolderContents('root');
                 } else {
                     alert("❌ Sai mật khẩu Admin!");
                 }
@@ -569,21 +764,49 @@
             } else {
                 loadFolderContents('root');
             }
+            setupGlobalEventListeners();
         });
+
+        // 2. CHUYỂN ĐỔI CHẾ ĐỘ XEM TỆP (TILES, DETAILS, LARGE, LIST)
+        function toggleViewModeDropdown(e) {
+            e.stopPropagation();
+            const d = document.getElementById("view-mode-dropdown");
+            d.classList.toggle("show");
+        }
 
         function switchViewMode(mode) {
             viewMode = mode;
-            document.getElementById("grid-view-wrapper").style.display = (mode === 'grid') ? 'grid' : 'none';
-            document.getElementById("details-view-wrapper").style.display = (mode === 'details') ? 'block' : 'none';
+            document.querySelectorAll(".view-opt-btn").forEach(b => b.classList.remove("active"));
+            const curOpt = document.getElementById(`opt-view-${mode}`);
+            if (curOpt) curOpt.classList.add("active");
+
+            const iconMap = { tiles: '🔲', details: '📑', large: '🖼️', list: '📋' };
+            document.getElementById("current-view-mode-icon").innerText = iconMap[mode] || '🔲';
+            document.getElementById("view-mode-dropdown").classList.remove("show");
+
+            const gridWrap = document.getElementById("grid-view-wrapper");
+            const detailsWrap = document.getElementById("details-view-wrapper");
+
+            if (mode === 'details') {
+                gridWrap.style.display = 'none';
+                detailsWrap.style.display = 'block';
+            } else {
+                detailsWrap.style.display = 'none';
+                gridWrap.style.display = (mode === 'list') ? 'flex' : 'grid';
+                gridWrap.className = `view-${mode}`;
+            }
+
             renderCurrentItems();
         }
 
-        // BỘ ĐỌC DỮ LIỆU TỪ SUPABASE TÙY THEO THƯ MỤC
-        async function loadFolderContents(folderKey) {
+        // 3. ĐỌC DỮ LIỆU TỪ SUPABASE THEO PHÂN CẤP THƯ MỤC
+        async function loadFolderContents(folderKey, subParam = null) {
             currentFolder = folderKey;
+            currentSubFolderParam = subParam;
             selectedItem = null;
             clearPreviewPane();
             updateBreadcrumb();
+            updateActiveTreeNode();
 
             const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
             if (!client) return;
@@ -593,54 +816,114 @@
             try {
                 let items = [];
 
+                // CẤP 1: GỐC (ROOT)
                 if (folderKey === 'root') {
                     items = [
-                        { type: 'folder', name: 'Đề thi (quizzes)', target: 'quizzes', icon: '📁', count: 'Bảng đề trắc nghiệm' },
-                        { type: 'folder', name: 'Bài nộp học sinh (submissions)', target: 'submissions', icon: '📁', count: 'Điểm & lần thi' },
-                        { type: 'folder', name: 'Bài tự luận (tu_luan_submissions)', target: 'tu_luan', icon: '📁', count: 'Ảnh tự luận' },
-                        { type: 'folder', name: 'Nháp làm bài (live_drafts)', target: 'live_drafts', icon: '📁', count: 'Lưu tạm' },
-                        { type: 'folder', name: 'Chuyên mục hiển thị (custom_links)', target: 'custom_links', icon: '📁', count: 'Link web & báo' }
+                        { type: 'folder', name: 'Đề thi (quizzes)', target: 'quizzes', icon: '📁', count: 'Toàn bộ đề thi trắc nghiệm' },
+                        { type: 'folder', name: 'Bài nộp (submissions)', target: 'submissions', icon: '📁', count: 'Điểm & các lần thi học sinh' },
+                        { type: 'folder', name: 'Tự luận (tu_luan_submissions)', target: 'tu_luan', icon: '📁', count: 'Ảnh bài làm & chấm chéo' },
+                        { type: 'folder', name: 'Nháp trực tiếp (live_drafts)', target: 'live_drafts', icon: '📁', count: 'Dữ liệu làm bài thời gian thực' },
+                        { type: 'folder', name: 'Danh mục web (custom_links)', target: 'custom_links', icon: '📁', count: 'Link hiển thị trang chủ & báo' }
                     ];
-                } else if (folderKey === 'quizzes') {
-                    const { data, error } = await client.from('quizzes').select('id, title, made, time_limit_minutes, questions, images, created_at').order('created_at', { ascending: false });
+                }
+                // CẤP 2: THƯ MỤC ĐỀ THI
+                else if (folderKey === 'quizzes') {
+                    const { data, error } = await client.from('quizzes').select('*').order('created_at', { ascending: false });
                     if (!error && data) {
                         items = data.map(q => ({
                             type: 'file',
                             category: 'quiz',
                             id: q.id,
-                            name: `${q.title || 'Đề thi'} (Mã: ${q.made || '101'})`,
+                            name: `${q.title || 'Đề thi'} [Mã ${q.made || '101'}]`,
                             icon: '📑',
                             meta: `${q.time_limit_minutes || 90} phút • ${(q.questions || []).length} câu`,
                             raw: q
                         }));
                     }
-                } else if (folderKey === 'submissions') {
-                    // Thư mục cha bài nộp -> Hiện danh sách 8 lớp
+                }
+                // CẤP 2: THƯ MỤC BÀI NỘP CHA (HIỆN DANH SÁCH 8 LỚP)
+                else if (folderKey === 'submissions') {
                     items = [
-                        { type: 'folder', name: 'Lớp 11A', target: 'sub_lop-11a', icon: '🏫' },
-                        { type: 'folder', name: 'Lớp 11C', target: 'sub_lop-11c', icon: '🏫' },
-                        { type: 'folder', name: 'Lớp 10P', target: 'sub_lop-10p', icon: '🏫' },
-                        { type: 'folder', name: 'Lớp 11E', target: 'sub_lop-11e', icon: '🏫' },
-                        { type: 'folder', name: 'Thêm 10', target: 'sub_them-10', icon: '📐' },
-                        { type: 'folder', name: 'Thêm 11', target: 'sub_them-11', icon: '✍️' },
-                        { type: 'folder', name: 'Thêm 12', target: 'sub_them-12', icon: '🎓' },
-                        { type: 'folder', name: 'HSG Toán 11', target: 'sub_hsg-toan-11', icon: '🏆' }
+                        { type: 'folder', name: 'Lớp 11A', target: 'sub_lop-11a', icon: '🏫', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Lớp 11C', target: 'sub_lop-11c', icon: '🏫', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Lớp 10P', target: 'sub_lop-10p', icon: '🏫', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Lớp 11E', target: 'sub_lop-11e', icon: '🏫', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Thêm 10', target: 'sub_them-10', icon: '📐', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Thêm 11', target: 'sub_them-11', icon: '✍️', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Thêm 12', target: 'sub_them-12', icon: '🎓', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'HSG Toán 11', target: 'sub_hsg-toan-11', icon: '🏆', count: 'Mở xem theo từng đề thi' },
+                        { type: 'folder', name: 'Toàn bộ bài nộp (All)', target: 'sub_all', icon: '🌐', count: 'Xem tất cả không phân lớp' }
                     ];
-                } else if (folderKey.startsWith('sub_')) {
+                }
+                // CẤP 3: MỞ MỘT LỚP CỤ THỂ ➔ HIỂN THỊ CÁC ĐỀ THI CỦA LỚP ĐÓ (VÀ NÚT TẤT CẢ)
+                else if (folderKey.startsWith('sub_') && !subParam) {
                     const catId = folderKey.replace('sub_', '');
-                    const { data, error } = await client.from('submissions').select('*').eq('category_id', catId).order('created_at', { ascending: false });
+                    let query = client.from('submissions').select('*');
+                    if (catId !== 'all') query = query.eq('category_id', catId);
+                    
+                    const { data, error } = await query.order('created_at', { ascending: false });
+                    
                     if (!error && data) {
-                        items = data.map(s => ({
-                            type: 'file',
-                            category: 'submission',
-                            id: s.id,
-                            name: `[${s.sbd}] ${s.student_name} - ${s.score10}đ (${s.exam_title || 'Đề thi'})`,
-                            icon: '📄',
-                            meta: `${s.score10} điểm • Đúng ${s.correct_count} câu • ${s.completion_time || ''}`,
-                            raw: s
-                        }));
+                        // Nhóm theo từng đề thi
+                        const examGroups = {};
+                        data.forEach(sub => {
+                            const qId = sub.quiz_id || 'unknown';
+                            const title = sub.exam_title || `Đề ${qId}`;
+                            if (!examGroups[qId]) {
+                                examGroups[qId] = { qId, title, subs: [] };
+                            }
+                            examGroups[qId].subs.push(sub);
+                        });
+
+                        // Thư mục con cho từng đề thi
+                        items = Object.values(examGroups).map(g => {
+                            const avgScore = (g.subs.reduce((s, r) => s + (Number(r.score10) || 0), 0) / g.subs.length).toFixed(1);
+                            return {
+                                type: 'folder',
+                                name: `${g.title} (${g.subs.length} bài)`,
+                                target: folderKey,
+                                subParam: g.qId,
+                                icon: '📁',
+                                count: `${g.subs.length} em • ĐTB: ${avgScore}đ`
+                            };
+                        });
+
+                        // Thêm 1 thư mục xem thẳng toàn bộ bài làm của lớp này
+                        items.unshift({
+                            type: 'folder',
+                            name: `[Xem tất cả bài nộp của ${catId.toUpperCase()}]`,
+                            target: folderKey,
+                            subParam: 'all_in_class',
+                            icon: '📑',
+                            count: `Tổng cộng ${data.length} bài nộp`
+                        });
                     }
-                } else if (folderKey === 'tu_luan') {
+                }
+                // CẤP 4: MỞ MỘT ĐỀ THI CỤ THỂ TRONG LỚP ➔ HIỂN THỊ BÀI NỘP TỪNG EM HỌC SINH
+                else if (folderKey.startsWith('sub_') && subParam) {
+                    const catId = folderKey.replace('sub_', '');
+                    let query = client.from('submissions').select('*');
+                    if (catId !== 'all') query = query.eq('category_id', catId);
+                    if (subParam !== 'all_in_class') query = query.eq('quiz_id', subParam);
+
+                    const { data, error } = await query.order('created_at', { ascending: false });
+                    if (!error && data) {
+                        items = data.map(s => {
+                            const sbdTag = s.sbd ? `[${s.sbd}]` : '';
+                            return {
+                                type: 'file',
+                                category: 'submission',
+                                id: s.id,
+                                name: `${sbdTag} ${s.student_name} - ${s.score10}đ (${s.exam_title || 'Đề thi'})`,
+                                icon: '📄',
+                                meta: `${s.score10} điểm • Đúng ${s.correct_count} câu • ${s.completion_time || ''}`,
+                                raw: s
+                            };
+                        });
+                    }
+                }
+                // TỰ LUẬN
+                else if (folderKey === 'tu_luan') {
                     const { data, error } = await client.from('tu_luan_submissions').select('*').order('last_submit_time', { ascending: false });
                     if (!error && data) {
                         items = data.map(t => ({
@@ -653,7 +936,9 @@
                             raw: t
                         }));
                     }
-                } else if (folderKey === 'live_drafts') {
+                }
+                // NHÁP TRỰC TIẾP
+                else if (folderKey === 'live_drafts') {
                     const { data, error } = await client.from('live_drafts').select('*').order('last_updated', { ascending: false });
                     if (!error && data) {
                         items = data.map(d => ({
@@ -662,11 +947,13 @@
                             id: d.id,
                             name: `[${d.sbd}] ${d.student_name} - Đang làm ${d.exam_title}`,
                             icon: '⚡',
-                            meta: `Tạm tính: ${d.score10 || 0}đ • ${d.last_updated ? new Date(d.last_updated).toLocaleTimeString('vi-VN') : ''}`,
+                            meta: `Tạm tính: ${d.score10 || 0}đ • Cập nhật: ${d.last_updated ? new Date(d.last_updated).toLocaleTimeString('vi-VN') : ''}`,
                             raw: d
                         }));
                     }
-                } else if (folderKey === 'custom_links') {
+                }
+                // CUSTOM LINKS
+                else if (folderKey === 'custom_links') {
                     const { data, error } = await client.from('custom_links').select('*').order('timestamp', { ascending: false });
                     if (!error && data) {
                         items = data.map(l => ({
@@ -682,6 +969,7 @@
                 }
 
                 currentItems = items;
+                sortCurrentItems();
                 renderCurrentItems();
                 document.getElementById("status-server-status").innerText = "🟢 Supabase Connected";
             } catch(e) {
@@ -690,7 +978,53 @@
             }
         }
 
-        // RENDER DANH SÁCH FILE VÀ THƯ MỤC
+        // 4. SẮP XẾP DỮ LIỆU
+        function sortCurrentItems() {
+            currentItems.sort((a, b) => {
+                // Thư mục luôn đứng trước tệp
+                if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+
+                let valA, valB;
+                if (sortColumn === 'score') {
+                    valA = Number(a.raw?.score10) || -1;
+                    valB = Number(b.raw?.score10) || -1;
+                } else if (sortColumn === 'sbd') {
+                    valA = String(a.raw?.sbd || '').toLowerCase();
+                    valB = String(b.raw?.sbd || '').toLowerCase();
+                } else if (sortColumn === 'correct') {
+                    valA = Number(a.raw?.correct_count) || 0;
+                    valB = Number(b.raw?.correct_count) || 0;
+                } else if (sortColumn === 'date') {
+                    valA = a.raw?.created_at ? new Date(a.raw.created_at).getTime() : 0;
+                    valB = b.raw?.created_at ? new Date(b.raw.created_at).getTime() : 0;
+                } else {
+                    valA = String(a.name || '').toLowerCase();
+                    valB = String(b.name || '').toLowerCase();
+                }
+
+                if (valA < valB) return sortAsc ? -1 : 1;
+                if (valA > valB) return sortAsc ? 1 : -1;
+                return 0;
+            });
+        }
+
+        function sortDetailsByColumn(colKey) {
+            if (sortColumn === colKey) {
+                sortAsc = !sortAsc;
+            } else {
+                sortColumn = colKey;
+                sortAsc = true;
+            }
+
+            document.querySelectorAll(".sort-arrow").forEach(el => el.innerText = "");
+            const arrowEl = document.getElementById(`sort-${colKey}`);
+            if (arrowEl) arrowEl.innerText = sortAsc ? "▲" : "▼";
+
+            sortCurrentItems();
+            renderCurrentItems();
+        }
+
+        // 5. HIỂN THỊ NỘI DUNG TỆP (RENDER)
         function renderCurrentItems() {
             const gridWrap = document.getElementById("grid-view-wrapper");
             const tbody = document.getElementById("file-table-body");
@@ -701,47 +1035,57 @@
 
             if (currentItems.length === 0) {
                 gridWrap.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color:#9ca3af; font-size:13px;">Thư mục này hiện tại trống</div>`;
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#9ca3af;">Thư mục này trống</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#9ca3af;">Thư mục này trống</td></tr>`;
                 return;
             }
 
             currentItems.forEach(item => {
-                // 1. Grid Card
+                const isSelected = (selectedItem === item);
+
+                // --- 1. DẠNG CARDS / TILES / LARGE / LIST ---
                 const card = document.createElement("div");
-                card.className = "file-item-card" + (selectedItem === item ? " selected" : "");
+                card.className = "file-item-card" + (isSelected ? " selected" : "");
                 card.innerHTML = `
                     <div class="file-icon">${item.icon}</div>
                     <div class="file-title" title="${item.name}">${item.name}</div>
                     <div class="file-meta-sub">${item.meta || item.count || ''}</div>
                 `;
-                card.onclick = () => selectItem(item, card);
-                card.ondblclick = () => openItem(item);
+                card.onclick = (e) => { e.stopPropagation(); selectItem(item, card); };
+                card.ondblclick = (e) => { e.stopPropagation(); openItem(item); };
+                card.oncontextmenu = (e) => handleItemContextMenu(e, item, card);
                 gridWrap.appendChild(card);
 
-                // 2. Table Row
+                // --- 2. DẠNG CHI TIẾT (DETAILS TABLE) ---
                 const tr = document.createElement("tr");
-                tr.className = (selectedItem === item) ? "selected" : "";
+                tr.className = isSelected ? "selected" : "";
                 
-                let detailsText = item.meta || "---";
-                let dateText = item.raw?.created_at ? new Date(item.raw.created_at).toLocaleString("vi-VN") : "---";
+                const raw = item.raw || {};
+                const scoreText = (raw.score10 !== undefined) ? `<b style="color:#0284c7; font-size:13px;">${raw.score10}đ</b>` : '---';
+                const correctText = (raw.correct_count !== undefined) ? `<span style="color:#15803d; font-weight:700;">${raw.correct_count} câu</span>` : '---';
+                const dateText = raw.created_at ? new Date(raw.created_at).toLocaleString("vi-VN") : (raw.last_submit || '---');
 
                 tr.innerHTML = `
-                    <td><b>${item.icon} ${item.name}</b></td>
-                    <td style="font-family:monospace; color:#0284c7;">${item.id || '---'}</td>
-                    <td>${item.raw?.category_id || item.raw?.class_name || '---'}</td>
-                    <td style="text-align:center;">${detailsText}</td>
+                    <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis;">
+                        <b>${item.icon} ${item.name}</b>
+                    </td>
+                    <td style="font-family:monospace; color:#0284c7; font-weight:700;">${raw.sbd || item.id || '---'}</td>
+                    <td>${raw.category_id || raw.class_name || '---'}</td>
+                    <td style="text-align:center;">${scoreText}</td>
+                    <td style="text-align:center;">${correctText}</td>
+                    <td>${raw.completion_time || '---'}</td>
                     <td>${dateText}</td>
                     <td style="text-align:center;">
-                        ${item.type === 'file' ? `<button onclick="editItem('${item.id}', event)" style="padding:2px 6px; font-size:11px; cursor:pointer;">✏️</button>` : ''}
+                        <button onclick="handleActionEditInline('${item.id}', event)" style="padding:2px 6px; font-size:11px; cursor:pointer; border-radius:4px; border:1px solid #cbd5e1; background:#fff;">✏️ Sửa</button>
                     </td>
                 `;
-                tr.onclick = () => selectItem(item, tr);
-                tr.ondblclick = () => openItem(item);
+                tr.onclick = (e) => { e.stopPropagation(); selectItem(item, tr); };
+                tr.ondblclick = (e) => { e.stopPropagation(); openItem(item); };
+                tr.oncontextmenu = (e) => handleItemContextMenu(e, item, tr);
                 tbody.appendChild(tr);
             });
         }
 
-        // CHỌN MỘT TỆP
+        // 6. CHỌN & MỞ TỆP
         function selectItem(item, el) {
             selectedItem = item;
             document.querySelectorAll(".file-item-card.selected, .file-table tr.selected").forEach(e => e.classList.remove("selected"));
@@ -751,17 +1095,16 @@
             renderPreview(item);
         }
 
-        // MỞ TỆP HOẶC THƯ MỤC
         function openItem(item) {
             if (item.type === 'folder') {
-                pushNavigation(item.target);
-                loadFolderContents(item.target);
+                pushNavigation(item.target, item.subParam);
+                loadFolderContents(item.target, item.subParam);
             } else {
-                openEditorModal(item);
+                openQuickEditModal(item);
             }
         }
 
-        // XEM TRƯỚC BÊN CỘT PHẢI
+        // 7. XEM TRƯỚC (PREVIEW PANE CỘT PHẢI)
         function renderPreview(item) {
             const box = document.getElementById("preview-content-box");
             const badge = document.getElementById("preview-type-badge");
@@ -771,10 +1114,10 @@
 
             if (item.type === 'folder') {
                 box.innerHTML = `
-                    <div style="text-align:center; padding:10px 0;">
-                        <div style="font-size:48px;">${item.icon}</div>
-                        <h4 style="margin-top:6px;">${item.name}</h4>
-                        <p style="color:#64748b; margin-top:4px;">Thư mục dữ liệu Supabase</p>
+                    <div style="text-align:center; padding:20px 0;">
+                        <div style="font-size:54px;">${item.icon}</div>
+                        <h3 style="margin-top:8px; font-size:14px; font-weight:800;">${item.name}</h3>
+                        <p style="color:#64748b; margin-top:4px;">${item.count || 'Thư mục dữ liệu Supabase'}</p>
                     </div>
                 `;
                 return;
@@ -785,51 +1128,53 @@
 
             if (item.category === 'submission') {
                 detailsHtml = `
-                    <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:8px 10px; border-radius:6px; margin-bottom:10px;">
-                        <div style="font-size:15px; font-weight:800; color:#15803d;">Điểm: ${raw.score10} / ${raw.max_scale || 10}</div>
-                        <div style="color:#166534; font-size:11.5px; margin-top:2px;">Đúng: ${raw.correct_count} câu • Sai: ${raw.wrong_count} câu</div>
+                    <div style="background:#f0fdf4; border:1.5px solid #86efac; padding:10px 12px; border-radius:8px; margin-bottom:12px;">
+                        <div style="font-size:17px; font-weight:900; color:#15803d;">Điểm: ${raw.score10} / ${raw.max_scale || 10}</div>
+                        <div style="color:#166534; font-size:12px; margin-top:3px; font-weight:700;">Đúng: ${raw.correct_count} câu • Sai: ${raw.wrong_count} câu</div>
                     </div>
-                    <p><b>Học sinh:</b> ${raw.student_name}</p>
-                    <p><b>SBD:</b> <code style="color:#0284c7;">${raw.sbd}</code></p>
-                    <p><b>Lớp:</b> ${raw.class_name}</p>
-                    <p><b>Đề thi:</b> ${raw.exam_title}</p>
-                    <p><b>Thời gian làm:</b> ${raw.completion_time}</p>
-                    <p><b>Chuyển tab:</b> ${raw.tab_switch_count}</p>
-                    <p><b>Thời điểm nộp:</b> ${raw.created_at ? new Date(raw.created_at).toLocaleString("vi-VN") : '---'}</p>
-                    
-                    <div style="margin-top:10px;">
-                        <b>Chi tiết đúng sai:</b>
-                        <div style="font-family:monospace; font-size:10.5px; background:#fff; padding:6px; border:1px solid #e2e8f0; border-radius:4px; max-height:140px; overflow-y:auto; margin-top:4px;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <p><b>👤 Thí sinh:</b> ${raw.student_name}</p>
+                        <p><b>🔢 SBD:</b> <code style="color:#0284c7; font-weight:800;">${raw.sbd}</code></p>
+                        <p><b>🏫 Lớp:</b> ${raw.class_name}</p>
+                        <p><b>📑 Đề thi:</b> ${raw.exam_title}</p>
+                        <p><b>⏱ Thời gian làm:</b> ${raw.completion_time || '---'}</p>
+                        <p><b>⚠️ Chuyển tab:</b> ${raw.tab_switch_count || '0 lần'}</p>
+                        <p><b>📅 Lúc nộp:</b> ${raw.created_at ? new Date(raw.created_at).toLocaleString("vi-VN") : '---'}</p>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <b>📋 Chi tiết từng câu:</b>
+                        <div style="font-family:monospace; font-size:11px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:160px; overflow-y:auto; margin-top:4px; line-height:1.4;">
                             ${(raw.data_string || '').replace(/ \| /g, '<br>')}
                         </div>
                     </div>
                 `;
             } else if (item.category === 'quiz') {
                 detailsHtml = `
-                    <p><b>Tên đề:</b> ${raw.title}</p>
+                    <p><b>📑 Tên đề:</b> ${raw.title}</p>
                     <p><b>Mã đề:</b> ${raw.made}</p>
-                    <p><b>Thời lượng:</b> ${raw.time_limit_minutes} phút</p>
+                    <p><b>⏱ Thời lượng:</b> ${raw.time_limit_minutes} phút</p>
                     <p><b>Số câu hỏi:</b> ${(raw.questions || []).length} câu</p>
-                    <p><b>Số hình minh họa:</b> ${Object.keys(raw.images || {}).length} ảnh</p>
+                    <p><b>Hình vẽ:</b> ${Object.keys(raw.images || {}).length} ảnh</p>
                 `;
             } else if (item.category === 'tu_luan') {
                 detailsHtml = `
-                    <p><b>Học sinh:</b> ${raw.student_name} (SBD: ${raw.sbd})</p>
+                    <p><b>👤 Học sinh:</b> ${raw.student_name} (SBD: ${raw.sbd})</p>
                     <p><b>Lớp:</b> ${raw.class_name}</p>
-                    <p><b>Điểm chấm chéo:</b> <b style="color:#dc2626;">${raw.cross_score || 'Chưa có'}</b></p>
-                    <p><b>Nhận xét:</b> ${raw.feedback || '(Chưa có)'}</p>
-                    <p><b>Số ảnh nộp:</b> ${(raw.images || []).length} trang</p>
+                    <p><b>🎯 Điểm chấm chéo:</b> <b style="color:#dc2626; font-size:14px;">${raw.cross_score || 'Chưa chấm'}</b></p>
+                    <p><b>💬 Nhận xét:</b> ${raw.feedback || '(Chưa có nhận xét)'}</p>
+                    <p><b>Số ảnh nộp:</b> ${(raw.images || []).length} ảnh</p>
                 `;
             }
 
             box.innerHTML = `
-                <div style="margin-bottom:12px;">
-                    <h4 style="font-size:13px; font-weight:800; color:#0f172a; margin-bottom:4px;">${item.name}</h4>
-                    <span style="font-size:11px; color:#64748b;">ID: ${item.id}</span>
+                <div style="margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+                    <h4 style="font-size:13.5px; font-weight:800; color:#0f172a; line-height:1.3;">${item.name}</h4>
+                    <span style="font-size:11px; color:#64748b; font-family:monospace;">ID: ${item.id}</span>
                 </div>
                 ${detailsHtml}
-                <div style="margin-top:14px; display:flex; gap:6px;">
-                    <button class="btn-win-tool btn-win-primary" style="flex:1;" onclick="openEditorModal(selectedItem)">✏️ Chỉnh sửa</button>
+                <div style="margin-top:16px; display:flex; gap:6px;">
+                    <button class="btn-win-tool btn-win-primary" style="flex:1;" onclick="openQuickEditModal(selectedItem)">✏️ Sửa điểm</button>
+                    <button class="btn-win-tool" onclick="downloadSelectedJsonAction()">💾 Tải JSON</button>
                     <button class="btn-win-tool btn-win-danger" onclick="deleteSelectedItem()">🗑️ Xóa</button>
                 </div>
             `;
@@ -838,42 +1183,72 @@
         function clearPreviewPane() {
             document.getElementById("preview-content-box").innerHTML = `
                 <div style="text-align: center; color: #9ca3af; margin-top: 50px;">
-                    <div style="font-size: 38px;">📄</div>
+                    <div style="font-size: 42px;">📄</div>
                     <p style="margin-top: 8px;">Chọn một tệp hoặc thư mục để xem trước</p>
                 </div>
             `;
             document.getElementById("preview-type-badge").innerText = "Trống";
         }
 
-        // BREADCRUMB
+        // 8. ĐIỀU HƯỚNG BREADCRUMB
         function updateBreadcrumb() {
             const bar = document.getElementById("breadcrumb-bar");
-            let parts = [{ name: "🗄️ Supabase", target: "root" }];
+            let parts = [{ name: "🗄️ Supabase", folder: "root", param: null }];
 
-            if (currentFolder === 'quizzes') parts.push({ name: "Đề thi", target: "quizzes" });
-            else if (currentFolder === 'submissions') parts.push({ name: "Bài nộp", target: "submissions" });
+            if (currentFolder === 'quizzes') parts.push({ name: "Đề thi", folder: "quizzes", param: null });
+            else if (currentFolder === 'submissions') parts.push({ name: "Bài nộp", folder: "submissions", param: null });
             else if (currentFolder.startsWith('sub_')) {
-                parts.push({ name: "Bài nộp", target: "submissions" });
-                parts.push({ name: currentFolder.replace('sub_', '').toUpperCase(), target: currentFolder });
-            } else if (currentFolder === 'tu_luan') parts.push({ name: "Tự luận", target: "tu_luan" });
-            else if (currentFolder === 'live_drafts') parts.push({ name: "Bản nháp", target: "live_drafts" });
-            else if (currentFolder === 'custom_links') parts.push({ name: "Danh mục", target: "custom_links" });
+                parts.push({ name: "Bài nộp", folder: "submissions", param: null });
+                const classCode = currentFolder.replace('sub_', '').toUpperCase();
+                parts.push({ name: classCode, folder: currentFolder, param: null });
+                if (currentSubFolderParam) {
+                    parts.push({ name: `Đề: ${currentSubFolderParam}`, folder: currentFolder, param: currentSubFolderParam });
+                }
+            } else if (currentFolder === 'tu_luan') parts.push({ name: "Tự luận", folder: "tu_luan", param: null });
+            else if (currentFolder === 'live_drafts') parts.push({ name: "Bản nháp", folder: "live_drafts", param: null });
+            else if (currentFolder === 'custom_links') parts.push({ name: "Danh mục", folder: "custom_links", param: null });
 
             bar.innerHTML = parts.map((p, idx) => `
-                <span class="breadcrumb-item" onclick="selectFolder('${p.target}')">${p.name}</span>
+                <span class="breadcrumb-item" onclick="navigateBreadcrumb('${p.folder}', ${p.param ? `'${p.param}'` : 'null'})">${p.name}</span>
                 ${idx < parts.length - 1 ? '<span class="breadcrumb-sep">›</span>' : ''}
             `).join('');
         }
 
-        function selectFolder(folderKey) {
-            pushNavigation(folderKey);
-            loadFolderContents(folderKey);
+        function navigateBreadcrumb(folder, param) {
+            pushNavigation(folder, param);
+            loadFolderContents(folder, param);
         }
 
-        function pushNavigation(folderKey) {
-            if (navHistory[navHistoryIndex] !== folderKey) {
+        function selectFolder(folderKey) {
+            pushNavigation(folderKey, null);
+            loadFolderContents(folderKey, null);
+        }
+
+        function toggleSubmissionsTree(e) {
+            e.stopPropagation();
+            const subTree = document.getElementById("tree-sub-submissions");
+            const toggle = document.getElementById("tree-toggle-submissions");
+            const isOpen = subTree.classList.contains("open");
+            if (isOpen) {
+                subTree.classList.remove("open");
+                toggle.innerText = "▶";
+            } else {
+                subTree.classList.add("open");
+                toggle.innerText = "▼";
+            }
+            selectFolder('submissions');
+        }
+
+        function updateActiveTreeNode() {
+            document.querySelectorAll(".tree-node").forEach(n => n.classList.remove("active"));
+            const targetNode = document.getElementById(`tree-node-${currentFolder}`);
+            if (targetNode) targetNode.classList.add("active");
+        }
+
+        function pushNavigation(folder, param) {
+            if (navHistory[navHistoryIndex]?.folder !== folder || navHistory[navHistoryIndex]?.param !== param) {
                 navHistory = navHistory.slice(0, navHistoryIndex + 1);
-                navHistory.push(folderKey);
+                navHistory.push({ folder, param });
                 navHistoryIndex++;
             }
             updateNavButtons();
@@ -884,13 +1259,19 @@
             if (newIdx >= 0 && newIdx < navHistory.length) {
                 navHistoryIndex = newIdx;
                 updateNavButtons();
-                loadFolderContents(navHistory[navHistoryIndex]);
+                const item = navHistory[navHistoryIndex];
+                loadFolderContents(item.folder, item.param);
             }
         }
 
         function navigateUpFolder() {
-            if (currentFolder.startsWith('sub_')) selectFolder('submissions');
-            else if (currentFolder !== 'root') selectFolder('root');
+            if (currentSubFolderParam) {
+                navigateBreadcrumb(currentFolder, null);
+            } else if (currentFolder.startsWith('sub_')) {
+                navigateBreadcrumb('submissions', null);
+            } else if (currentFolder !== 'root') {
+                navigateBreadcrumb('root', null);
+            }
         }
 
         function updateNavButtons() {
@@ -899,34 +1280,203 @@
         }
 
         function refreshCurrentFolder() {
-            loadFolderContents(currentFolder);
+            loadFolderContents(currentFolder, currentSubFolderParam);
         }
 
-        // TÌM KIẾM
+        // 9. TÌM KIẾM TỨC THÌ
         function onFilterSearch(query) {
             const q = query.trim().toLowerCase();
             if (!q) { renderCurrentItems(); return; }
 
             const filtered = currentItems.filter(item => 
-                item.name.toLowerCase().includes(q) || 
+                (item.name && item.name.toLowerCase().includes(q)) || 
                 (item.id && String(item.id).toLowerCase().includes(q)) ||
-                (item.meta && item.meta.toLowerCase().includes(q))
+                (item.raw?.student_name && item.raw.student_name.toLowerCase().includes(q)) ||
+                (item.raw?.sbd && String(item.raw.sbd).toLowerCase().includes(q))
             );
             
-            // Vẽ lại danh sách lọc
-            const gridWrap = document.getElementById("grid-view-wrapper");
-            gridWrap.innerHTML = "";
-            filtered.forEach(item => {
-                const card = document.createElement("div");
-                card.className = "file-item-card";
-                card.innerHTML = `<div class="file-icon">${item.icon}</div><div class="file-title">${item.name}</div><div class="file-meta-sub">${item.meta || ''}</div>`;
-                card.onclick = () => selectItem(item, card);
-                card.ondblclick = () => openItem(item);
-                gridWrap.appendChild(card);
-            });
+            currentItems = filtered;
+            renderCurrentItems();
         }
 
-        // XÓA TỆP / BẢN GHI ĐƯỢC CHỌN
+        // 10. MODAL CHỈNH SỬA NHANH & JSON EDITOR
+        function switchEditorTab(mode) {
+            activeEditorMode = mode;
+            document.getElementById("tab-btn-quick").classList.toggle("active", mode === 'quick');
+            document.getElementById("tab-btn-json").classList.toggle("active", mode === 'json');
+            document.getElementById("editor-body-quick").style.display = (mode === 'quick') ? 'block' : 'none';
+            document.getElementById("editor-body-json").style.display = (mode === 'json') ? 'flex' : 'none';
+        }
+
+        function openQuickEditModal(item) {
+            if (!item || !item.raw) return;
+            selectedItem = item;
+            const raw = item.raw;
+
+            document.getElementById("editor-title").innerText = `✏️ Chỉnh sửa: ${item.name}`;
+            document.getElementById("editor-json-content").value = JSON.stringify(raw, null, 2);
+
+            // Dựng Form sửa nhanh
+            const formContainer = document.getElementById("quick-form-content");
+            formContainer.innerHTML = "";
+
+            if (item.category === 'submission') {
+                formContainer.innerHTML = `
+                    <div class="form-group">
+                        <label>Họ và tên thí sinh:</label>
+                        <input type="text" id="edit-st-name" value="${raw.student_name || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Số báo danh (SBD):</label>
+                        <input type="text" id="edit-st-sbd" value="${raw.sbd || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Lớp học:</label>
+                        <input type="text" id="edit-st-class" value="${raw.class_name || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Điểm số (Thang 10):</label>
+                        <input type="number" step="0.1" id="edit-st-score10" value="${raw.score10 ?? 0}">
+                    </div>
+                    <div class="form-group">
+                        <label>Số câu đúng:</label>
+                        <input type="number" id="edit-st-correct" value="${raw.correct_count ?? 0}">
+                    </div>
+                    <div class="form-group">
+                        <label>Số câu sai:</label>
+                        <input type="number" id="edit-st-wrong" value="${raw.wrong_count ?? 0}">
+                    </div>
+                    <div class="form-group">
+                        <label>Thời gian làm bài:</label>
+                        <input type="text" id="edit-st-time" value="${raw.completion_time || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Số lần chuyển tab:</label>
+                        <input type="text" id="edit-st-tabs" value="${raw.tab_switch_count || '0 lần'}">
+                    </div>
+                    <div class="form-group" style="grid-column: 1/-1;">
+                        <label>Chuỗi đáp án chi tiết (data_string):</label>
+                        <textarea rows="4" id="edit-st-data">${raw.data_string || ''}</textarea>
+                    </div>
+                `;
+            } else if (item.category === 'quiz') {
+                formContainer.innerHTML = `
+                    <div class="form-group" style="grid-column: 1/-1;">
+                        <label>Tên đề thi:</label>
+                        <input type="text" id="edit-quiz-title" value="${raw.title || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Mã đề:</label>
+                        <input type="text" id="edit-quiz-made" value="${raw.made || '101'}">
+                    </div>
+                    <div class="form-group">
+                        <label>Thời lượng làm bài (phút):</label>
+                        <input type="number" id="edit-quiz-time" value="${raw.time_limit_minutes || 90}">
+                    </div>
+                `;
+            } else if (item.category === 'tu_luan') {
+                formContainer.innerHTML = `
+                    <div class="form-group">
+                        <label>Họ và tên học sinh:</label>
+                        <input type="text" id="edit-tl-name" value="${raw.student_name || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>SBD:</label>
+                        <input type="text" id="edit-tl-sbd" value="${raw.sbd || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Điểm chấm chéo:</label>
+                        <input type="text" id="edit-tl-cross" value="${raw.cross_score || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Người chấm:</label>
+                        <input type="text" id="edit-tl-grader" value="${raw.cross_score_by || ''}">
+                    </div>
+                    <div class="form-group" style="grid-column: 1/-1;">
+                        <label>Nhận xét bài làm:</label>
+                        <textarea rows="3" id="edit-tl-feedback">${raw.feedback || ''}</textarea>
+                    </div>
+                `;
+            } else {
+                switchEditorTab('json');
+            }
+
+            document.getElementById("item-editor-modal").style.display = "flex";
+        }
+
+        function closeEditorModal() {
+            document.getElementById("item-editor-modal").style.display = "none";
+        }
+
+        async function saveCurrentEditor() {
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            if (!client || !selectedItem) return;
+
+            const btn = document.getElementById("btn-save-editor");
+            btn.disabled = true; btn.innerText = "⏳ Đang lưu...";
+
+            try {
+                let payload = {};
+
+                if (activeEditorMode === 'quick') {
+                    payload = { ...selectedItem.raw };
+                    if (selectedItem.category === 'submission') {
+                        payload.student_name = document.getElementById("edit-st-name").value.trim();
+                        payload.sbd = document.getElementById("edit-st-sbd").value.trim();
+                        payload.class_name = document.getElementById("edit-st-class").value.trim();
+                        payload.score10 = parseFloat(document.getElementById("edit-st-score10").value) || 0;
+                        payload.correct_count = parseInt(document.getElementById("edit-st-correct").value, 10) || 0;
+                        payload.wrong_count = parseInt(document.getElementById("edit-st-wrong").value, 10) || 0;
+                        payload.completion_time = document.getElementById("edit-st-time").value.trim();
+                        payload.tab_switch_count = document.getElementById("edit-st-tabs").value.trim();
+                        payload.data_string = document.getElementById("edit-st-data").value.trim();
+                    } else if (selectedItem.category === 'quiz') {
+                        payload.title = document.getElementById("edit-quiz-title").value.trim();
+                        payload.made = document.getElementById("edit-quiz-made").value.trim();
+                        payload.time_limit_minutes = parseInt(document.getElementById("edit-quiz-time").value, 10) || 90;
+                    } else if (selectedItem.category === 'tu_luan') {
+                        payload.student_name = document.getElementById("edit-tl-name").value.trim();
+                        payload.sbd = document.getElementById("edit-tl-sbd").value.trim();
+                        payload.cross_score = document.getElementById("edit-tl-cross").value.trim();
+                        payload.cross_score_by = document.getElementById("edit-tl-grader").value.trim();
+                        payload.feedback = document.getElementById("edit-tl-feedback").value.trim();
+                    }
+                } else {
+                    const rawJson = document.getElementById("editor-json-content").value;
+                    try {
+                        payload = JSON.parse(rawJson);
+                    } catch(jsonErr) {
+                        alert("❌ Lỗi cú pháp JSON! Vui lòng kiểm tra lại dấu ngoặc và phẩy.");
+                        btn.disabled = false; btn.innerText = "💾 Lưu thay đổi";
+                        return;
+                    }
+                }
+
+                // Cập nhật Supabase
+                if (selectedItem.category === 'submission') {
+                    await client.from('submissions').upsert(payload);
+                } else if (selectedItem.category === 'quiz') {
+                    await client.from('quizzes').upsert(payload);
+                    await client.from('custom_links').update({ title: payload.title, time_limit_minutes: payload.time_limit_minutes }).eq('id', payload.id);
+                } else if (selectedItem.category === 'tu_luan') {
+                    await client.from('tu_luan_submissions').upsert(payload);
+                } else if (selectedItem.category === 'draft') {
+                    await client.from('live_drafts').upsert(payload);
+                } else if (selectedItem.category === 'link') {
+                    await client.from('custom_links').upsert(payload);
+                }
+
+                alert("💾 ĐÃ LƯU THAY ĐỔI LÊN SUPABASE THÀNH CÔNG!");
+                closeEditorModal();
+                refreshCurrentFolder();
+            } catch(err) {
+                alert("❌ Lỗi khi lưu: " + err.message);
+            } finally {
+                btn.disabled = false; btn.innerText = "💾 Lưu thay đổi";
+            }
+        }
+
+        // 11. XÓA BẢN GHI ĐÃ CHỌN
         async function deleteSelectedItem() {
             if (!selectedItem || selectedItem.type === 'folder') {
                 return alert("⚠️ Vui lòng chọn một tệp cụ thể để xóa!");
@@ -956,62 +1506,108 @@
                     await client.from('custom_links').delete().eq('id', item.id);
                 }
 
-                alert(`🗑️ Đã xóa thành công tệp "${item.name}"!`);
+                alert(`🗑️ Đã xóa thành công "${item.name}"!`);
                 refreshCurrentFolder();
             } catch(e) {
                 alert("❌ Lỗi xóa tệp: " + e.message);
             }
         }
 
-        // BIÊN TẬP JSON TRỰC TIẾP
-        function openEditorModal(item) {
-            if (!item || !item.raw) return;
-            selectedItem = item;
-            document.getElementById("editor-title").innerText = `✏️ Chỉnh sửa: ${item.name}`;
-            document.getElementById("editor-json-content").value = JSON.stringify(item.raw, null, 2);
-            document.getElementById("json-editor-modal").style.display = "flex";
+        // 12. THAO TÁC CONTEXT MENU
+        function handleItemContextMenu(e, item, el) {
+            e.preventDefault(); e.stopPropagation();
+            selectItem(item, el);
+
+            const menu = document.getElementById("windows-context-menu");
+            menu.style.display = 'block';
+            menu.style.left = `${Math.min(e.clientX, window.innerWidth - 200)}px`;
+            menu.style.top = `${Math.min(e.clientY, window.innerHeight - 250)}px`;
         }
 
-        function closeEditorModal() {
-            document.getElementById("json-editor-modal").style.display = "none";
+        function handleWorkspaceContextMenu(e) {
+            e.preventDefault();
+            const menu = document.getElementById("windows-context-menu");
+            menu.style.display = 'block';
+            menu.style.left = `${Math.min(e.clientX, window.innerWidth - 200)}px`;
+            menu.style.top = `${Math.min(e.clientY, window.innerHeight - 250)}px`;
         }
 
-        async function saveEditorContent() {
-            const rawVal = document.getElementById("editor-json-content").value;
-            let parsed;
-            try {
-                parsed = JSON.parse(rawVal);
-            } catch(e) {
-                return alert("❌ Lỗi cú pháp JSON! Vui lòng kiểm tra lại dấu ngoặc và dấu phẩy.");
+        function openSelectedItemAction() {
+            document.getElementById("windows-context-menu").style.display = 'none';
+            if (selectedItem) openItem(selectedItem);
+        }
+
+        function openQuickEditModalAction() {
+            document.getElementById("windows-context-menu").style.display = 'none';
+            if (selectedItem) openQuickEditModal(selectedItem);
+        }
+
+        function openJsonEditorModalAction() {
+            document.getElementById("windows-context-menu").style.display = 'none';
+            if (selectedItem) {
+                openQuickEditModal(selectedItem);
+                switchEditorTab('json');
             }
+        }
 
-            const btn = document.getElementById("btn-save-editor");
-            btn.disabled = true; btn.innerText = "⏳ Đang lưu...";
+        function handleActionEditInline(id, e) {
+            e.stopPropagation();
+            const found = currentItems.find(i => i.id === id);
+            if (found) openQuickEditModal(found);
+        }
 
-            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-            if (!client || !selectedItem) return;
+        function downloadSelectedJsonAction() {
+            document.getElementById("windows-context-menu").style.display = 'none';
+            if (!selectedItem || !selectedItem.raw) return alert("Vui lòng chọn một tệp để tải về!");
 
-            try {
-                const item = selectedItem;
-                if (item.category === 'submission') {
-                    await client.from('submissions').upsert(parsed);
-                } else if (item.category === 'quiz') {
-                    await client.from('quizzes').upsert(parsed);
-                } else if (item.category === 'tu_luan') {
-                    await client.from('tu_luan_submissions').upsert(parsed);
-                } else if (item.category === 'draft') {
-                    await client.from('live_drafts').upsert(parsed);
-                } else if (item.category === 'link') {
-                    await client.from('custom_links').upsert(parsed);
-                }
+            const jsonStr = JSON.stringify(selectedItem.raw, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${(selectedItem.name || 'data').replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
 
-                alert("💾 ĐÃ LƯU THAY ĐỔI LÊN SUPABASE THÀNH CÔNG!");
-                closeEditorModal();
-                refreshCurrentFolder();
-            } catch(e) {
-                alert("❌ Lỗi lưu dữ liệu: " + e.message);
-            } finally {
-                btn.disabled = false; btn.innerText = "💾 Lưu thay đổi";
+        function copySelectedItemJsonAction() {
+            document.getElementById("windows-context-menu").style.display = 'none';
+            if (!selectedItem || !selectedItem.raw) return;
+            navigator.clipboard.writeText(JSON.stringify(selectedItem.raw, null, 2)).then(() => {
+                alert("📋 Đã sao chép mã JSON vào Clipboard!");
+            });
+        }
+
+        // 13. XUẤT EXCEL TỪ WINDOWS EXPLORER
+        function exportCurrentViewToExcel() {
+            if (!currentItems || currentItems.length === 0) return alert("Thư mục hiện tại không có dữ liệu để xuất Excel!");
+
+            const rows = [];
+            currentItems.forEach((item, idx) => {
+                const r = item.raw || {};
+                rows.push({
+                    "STT": idx + 1,
+                    "Tên mục": item.name,
+                    "ID": item.id || '',
+                    "Lớp": r.class_name || r.category_id || '',
+                    "SBD": r.sbd || '',
+                    "Điểm thang 10": r.score10 ?? '',
+                    "Số câu đúng": r.correct_count ?? '',
+                    "Thời gian làm": r.completion_time || '',
+                    "Số lần chuyển tab": r.tab_switch_count || '',
+                    "Thời điểm nộp": r.created_at ? new Date(r.created_at).toLocaleString("vi-VN") : ''
+                });
+            });
+
+            if (typeof XLSX !== "undefined") {
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "ExplorerExport");
+                XLSX.writeFile(wb, `Supabase_${currentFolder}_${Date.now()}.xlsx`);
+            } else {
+                alert("Đang tải thư viện Excel... vui lòng thử lại!");
             }
         }
 
@@ -1019,8 +1615,35 @@
             if (currentFolder === 'quizzes') {
                 window.open('./index.html', '_blank');
             } else {
-                alert("💡 Thầy hãy vào một thư mục bảng cụ thể (như Đề thi hoặc Bài nộp) để chỉnh sửa hoặc thêm bài nộp!");
+                alert("💡 Hãy mở một tệp bất kỳ và bấm [Chỉnh sửa] để xem và sửa nội dung trực tiếp!");
             }
+        }
+
+        // 14. BẮT SỰ KIỆN PHÍM TẮT & CLICK NGOÀI
+        function setupGlobalEventListeners() {
+            document.addEventListener("click", () => {
+                document.getElementById("windows-context-menu").style.display = 'none';
+                document.getElementById("view-mode-dropdown").classList.remove("show");
+            });
+
+            window.addEventListener("keydown", (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                if (e.key === "Enter") {
+                    if (selectedItem) openItem(selectedItem);
+                } else if (e.key === "Delete") {
+                    if (selectedItem) deleteSelectedItem();
+                } else if (e.key === "F2") {
+                    if (selectedItem) openQuickEditModal(selectedItem);
+                } else if (e.key === "F5") {
+                    e.preventDefault(); refreshCurrentFolder();
+                } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowUp")) {
+                    e.preventDefault(); navigateUpFolder();
+                } else if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
+                    e.preventDefault();
+                    document.getElementById("search-input").focus();
+                }
+            });
         }
     </script>
 </body>
