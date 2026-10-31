@@ -89,6 +89,8 @@
         .btn-win-primary:hover { background: #005da6; }
         .btn-win-success { background: #10b981; color: #fff; border-color: #059669; }
         .btn-win-success:hover { background: #059669; }
+        .btn-win-warning { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+        .btn-win-warning:hover { background: #f59e0b; color: #fff; }
         .btn-win-danger { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
         .btn-win-danger:hover { background: #dc2626; color: #fff; }
 
@@ -523,6 +525,7 @@
         </div>
         <div class="title-bar-tools">
             <button class="btn-win-tool" onclick="refreshCurrentFolder()">🔄 Tải lại</button>
+            <button class="btn-win-tool btn-win-warning" onclick="cleanOfflineActiveSessions()" title="Xóa toàn bộ các phiên bị treo mất kết nối quá 60 phút">🧹 Dọn phiên treo (>1h)</button>
             <button class="btn-win-tool btn-win-success" onclick="exportCurrentViewToExcel()" title="Tải bảng tính Excel của thư mục đang xem">📊 Xuất Excel</button>
             <button class="btn-win-tool btn-win-primary" onclick="openNewItemPrompt()">➕ Thêm dữ liệu</button>
             <button class="btn-win-tool btn-win-danger" onclick="deleteSelectedItem()">🗑️ Xóa</button>
@@ -799,7 +802,7 @@
             renderCurrentItems();
         }
 
-        // 3. ĐỌC DỮ LIỆU TỪ SUPABASE (ĐÃ THÊM THƯ MỤC ACTIVE_SESSIONS)
+        // 3. ĐỌC DỮ LIỆU TỪ SUPABASE
         async function loadFolderContents(folderKey, subParam = null) {
             currentFolder = folderKey;
             currentSubFolderParam = subParam;
@@ -816,7 +819,7 @@
             try {
                 let items = [];
 
-                // CẤP 1: GỐC (ROOT) -> BỔ SUNG THƯ MỤC VÀO THI (ACTIVE_SESSIONS) LÊN ĐẦU
+                // CẤP 1: GỐC (ROOT)
                 if (folderKey === 'root') {
                     items = [
                         { type: 'folder', name: 'Đang trong phòng thi (active_sessions)', target: 'active_sessions', icon: '🟢', count: 'Thí sinh đã đăng nhập vào thi' },
@@ -827,7 +830,7 @@
                         { type: 'folder', name: 'Danh mục web (custom_links)', target: 'custom_links', icon: '📁', count: 'Link hiển thị trang chủ & báo' }
                     ];
                 }
-                // CẤP 2: THƯ MỤC ACTIVE_SESSIONS (DANH SÁCH THÍ SINH ĐANG VÀO THI)
+                // CẤP 2: THƯ MỤC ACTIVE_SESSIONS
                 else if (folderKey === 'active_sessions') {
                     const { data, error } = await client.from('active_sessions').select('*').order('start_time', { ascending: false });
                     if (!error && data) {
@@ -839,7 +842,7 @@
                             return {
                                 type: 'file',
                                 category: 'active_session',
-                                id: s.id || `${s.quiz_id}_${s.sbd}`,
+                                id: `${s.quiz_id}_${s.sbd}`,
                                 name: `[${s.sbd}] ${s.name} - ${s.class_name}`,
                                 icon: isOnline ? '🟢' : '⚪',
                                 meta: `${s.exam_title || 'Đang thi'} • ${durationStr} • ${statusStr}`,
@@ -1525,18 +1528,32 @@
 
                 // Cập nhật Supabase
                 if (selectedItem.category === 'active_session') {
-                    await client.from('active_sessions').upsert(payload);
+                    const raw = selectedItem.raw || {};
+                    const { error } = await client.from('active_sessions')
+                        .update({
+                            name: payload.name,
+                            sbd: payload.sbd,
+                            class_name: payload.class_name,
+                            exam_title: payload.exam_title
+                        })
+                        .match({ quiz_id: raw.quiz_id, sbd: raw.sbd });
+                    if (error) throw error;
                 } else if (selectedItem.category === 'submission') {
-                    await client.from('submissions').upsert(payload);
+                    const { error } = await client.from('submissions').upsert(payload);
+                    if (error) throw error;
                 } else if (selectedItem.category === 'quiz') {
-                    await client.from('quizzes').upsert(payload);
+                    const { error } = await client.from('quizzes').upsert(payload);
+                    if (error) throw error;
                     await client.from('custom_links').update({ title: payload.title, time_limit_minutes: payload.time_limit_minutes }).eq('id', payload.id);
                 } else if (selectedItem.category === 'tu_luan') {
-                    await client.from('tu_luan_submissions').upsert(payload);
+                    const { error } = await client.from('tu_luan_submissions').upsert(payload);
+                    if (error) throw error;
                 } else if (selectedItem.category === 'draft') {
-                    await client.from('live_drafts').upsert(payload);
+                    const { error } = await client.from('live_drafts').upsert(payload);
+                    if (error) throw error;
                 } else if (selectedItem.category === 'link') {
-                    await client.from('custom_links').upsert(payload);
+                    const { error } = await client.from('custom_links').upsert(payload);
+                    if (error) throw error;
                 }
 
                 alert("💾 ĐÃ LƯU THAY ĐỔI LÊN SUPABASE THÀNH CÔNG!");
@@ -1549,7 +1566,9 @@
             }
         }
 
-        // 11. XÓA BẢN GHI
+        // =========================================================================
+        // 11. XÓA BẢN GHI ĐÃ SỬA CHUẨN XÁC THEO MATCH (quiz_id, sbd) CHO active_sessions
+        // =========================================================================
         async function deleteSelectedItem() {
             if (!selectedItem || selectedItem.type === 'folder') {
                 return alert("⚠️ Vui lòng chọn một tệp cụ thể để xóa!");
@@ -1561,30 +1580,89 @@
             }
 
             const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-            if (!client) return;
+            if (!client) return alert("Chưa kết nối được Supabase!");
 
             try {
                 if (item.category === 'active_session') {
-                    await client.from('active_sessions').delete().eq('id', item.id);
+                    const raw = item.raw || {};
+                    let { error: delErr } = await client.from('active_sessions')
+                        .delete()
+                        .match({ quiz_id: raw.quiz_id, sbd: raw.sbd });
+
+                    if (delErr) {
+                        const resFallback = await client.from('active_sessions').delete().eq('sbd', raw.sbd);
+                        delErr = resFallback.error;
+                    }
+
+                    if (delErr) throw delErr;
                 } else if (item.category === 'submission') {
-                    await client.from('submissions').delete().eq('id', item.id);
+                    const { error } = await client.from('submissions').delete().eq('id', item.id);
+                    if (error) throw error;
                 } else if (item.category === 'quiz') {
-                    await client.from('quizzes').delete().eq('id', item.id);
+                    const { error: errQ } = await client.from('quizzes').delete().eq('id', item.id);
+                    if (errQ) throw errQ;
                     await client.from('custom_links').delete().eq('id', item.id);
                     await client.from('submissions').delete().eq('quiz_id', item.id);
                 } else if (item.category === 'tu_luan') {
                     const raw = item.raw || {};
-                    await client.from('tu_luan_submissions').delete().eq('quiz_id', raw.quiz_id).eq('sbd', raw.sbd);
+                    const { error } = await client.from('tu_luan_submissions').delete().eq('quiz_id', raw.quiz_id).eq('sbd', raw.sbd);
+                    if (error) throw error;
                 } else if (item.category === 'draft') {
-                    await client.from('live_drafts').delete().eq('id', item.id);
+                    const { error } = await client.from('live_drafts').delete().eq('id', item.id);
+                    if (error) throw error;
                 } else if (item.category === 'link') {
-                    await client.from('custom_links').delete().eq('id', item.id);
+                    const { error } = await client.from('custom_links').delete().eq('id', item.id);
+                    if (error) throw error;
                 }
 
                 alert(`🗑️ Đã xóa thành công "${item.name}"!`);
                 refreshCurrentFolder();
             } catch(e) {
                 alert("❌ Lỗi xóa tệp: " + e.message);
+            }
+        }
+
+        // =========================================================================
+        // HÀM MỚI: DỌN SẠCH TẤT CẢ CÁC PHIÊN BỊ TREO QUÁ 60 PHÚT
+        // =========================================================================
+        async function cleanOfflineActiveSessions() {
+            if (!confirm("🧹 XÁC NHẬN DỌN PHIÊN TREO:\n\nBạn có muốn XÓA TẤT CẢ các phiên thi đã mất kết nối (treo trên 60 phút) không?\n\n(Các em đang thi trực tuyến màu xanh '🟢 Online' sẽ được giữ nguyên 100%)")) {
+                return;
+            }
+
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            if (!client) return alert("Chưa kết nối được Supabase!");
+
+            try {
+                const now = Date.now();
+                const timeoutMs = 60 * 60 * 1000; // 60 phút
+                const threshold = now - timeoutMs;
+
+                // Đọc danh sách hiện tại để lọc các phiên đã mất kết nối
+                const { data, error: fetchErr } = await client.from('active_sessions').select('*');
+                if (fetchErr) throw fetchErr;
+
+                if (!data || data.length === 0) {
+                    return alert("ℹ️ Hiện tại không có phiên thi nào trong bảng!");
+                }
+
+                let deleteCount = 0;
+                for (const row of data) {
+                    const lastPing = Number(row.last_ping || row.start_time || 0);
+                    // Nếu quá 60 phút không ping thì xóa
+                    if (lastPing < threshold) {
+                        await client.from('active_sessions').delete().match({
+                            quiz_id: row.quiz_id,
+                            sbd: row.sbd
+                        });
+                        deleteCount++;
+                    }
+                }
+
+                alert(`🎉 ĐÃ DỌN SẠCH ${deleteCount} PHIÊN TREO THÀNH CÔNG!\n\nChỉ giữ lại những thí sinh đang thực sự làm bài.`);
+                refreshCurrentFolder();
+            } catch(e) {
+                alert("❌ Lỗi khi dọn phiên treo: " + e.message);
             }
         }
 
