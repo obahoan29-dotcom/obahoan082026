@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (BẢN TỐI ƯU MƯỢT 100% PHẦN II & ĐỒNG BỘ REALTIME)
+// FILE 3: exam-engine-core.js (BẢN TỐI ƯU THI LẦN 2 MỚI TINH - KHÔNG BỊ KHÓA NHẦM)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -15,7 +15,7 @@ let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
 
-// BỘ HẸN GIỜ TRÌ HOÃN THÔNG MINH ĐỂ KHÔNG BLOCKING UI KHI TÍCH NHANH
+// BỘ HẸN GIỜ TRÌ HOÃN THÔNG MINH
 let _autoSaveDebounceTimer = null;
 let _statementDebounceTimer = null;
 let _storageDebounceTimer = null;
@@ -29,7 +29,6 @@ let _gasTempSheetDebounceTimer = null;
     style.innerHTML = `
         .quiz-content-locked { pointer-events: none !important; user-select: none !important; opacity: 0.88; }
         .quiz-content-locked input, .quiz-content-locked textarea, .quiz-content-locked select, .quiz-content-locked button { cursor: not-allowed !important; }
-        /* Hiệu ứng chọn nhanh mượt mà cho ô Đúng/Sai */
         .tf-table input[type="radio"] {
             transition: transform 0.08s ease;
             cursor: pointer;
@@ -41,7 +40,6 @@ let _gasTempSheetDebounceTimer = null;
     document.head.appendChild(style);
 })();
 
-// HÀM CHẤM TẠM THỜI TỨC THÌ TRÊN TRÌNH DUYỆT HỌC SINH
 function calculateTemporaryDraftScore() {
     if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData && Array.isArray(examData.questions)) {
         return calculateExamScoreWithConfig(
@@ -61,7 +59,6 @@ function calculateTemporaryDraftScore() {
     };
 }
 
-// BẢO ĐẢM PHIÊN ĐANG THI VÀ BẢN NHÁP REALTIME LUÔN HIỆN DIỆN TRÊN SUPABASE CLOUD
 async function ensureActiveSessionAndDraft() {
     if (isSubmitted) return;
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
@@ -118,7 +115,6 @@ async function ensureActiveSessionAndDraft() {
     }
 }
 
-// BỘ ĐÓNG GÓI BẢN LƯU NHÁP MỚI NHẤT 100% TẠI ĐÚNG THỜI ĐIỂM GỬI
 function buildCurrentLiveDraftPayload() {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
     if (!sId) return null;
@@ -171,7 +167,6 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
-// LƯU TỨC THÌ TỪNG CÂU VÀO SUPABASE + TỰ ĐỘNG CHẤM TẠM GỬI ĐẾN SHEET THU TẠM
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -185,7 +180,6 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const draftData = buildCurrentLiveDraftPayload();
     if (!draftData) return;
 
-    // 1. Lưu tức thì vào IndexedDB offline
     if (typeof examIndexedDB !== 'undefined') {
         examIndexedDB.setItem('live_drafts', {
             key: draftData.id,
@@ -193,7 +187,6 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         }).catch(() => {});
     }
 
-    // 2. Lưu trực tiếp lên Supabase Cloud
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (client) {
         try {
@@ -202,7 +195,6 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         } catch(e) {}
     }
 
-    // 3. TỰ ĐỘNG GỬI VỀ SHEET THU TẠM (Debounce 3.5s)
     if (_gasTempSheetDebounceTimer) clearTimeout(_gasTempSheetDebounceTimer);
     _gasTempSheetDebounceTimer = setTimeout(() => {
         const freshDraftData = buildCurrentLiveDraftPayload();
@@ -212,7 +204,6 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     }, 3500);
 }
 
-// HÀM GỬI BẢN NHÁP VỀ GOOGLE SHEET THU TẠM
 function sendDraftToGoogleSheetTemp(draftData) {
     if (!draftData) return;
     const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
@@ -354,7 +345,6 @@ async function initExamEngine() {
             try { requestWakeLock(); } catch(e) {}
         }
         
-        checkPendingSubmissionOnLoad();
         await checkSessionStatus(isAutostart);
         startTimeWatcherRealtime(quizId);
     } catch (error) {
@@ -404,28 +394,34 @@ function toggleSubPadlet(qId) {
 }
 
 function resetToFreshLoginScreen() { 
+    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
+
     safeLocal.removeItem(getStorageKey()); 
+    if (typeof getStorageKey === 'function') {
+        safeLocal.removeItem(getStorageKey(1));
+        safeLocal.removeItem(getStorageKey(2));
+        safeLocal.removeItem(getStorageKey(3));
+    }
     safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
-    safeLocal.removeItem("saved_student_sbd");
-    safeLocal.removeItem("saved_student_name");
-    safeLocal.removeItem("saved_student_class");
-    safeLocal.removeItem("current_exam_student");
     safeLocal.removeItem("pending_exam_submission");
-    safeLocal.setItem("last_submission_cleared", "true");
+    safeLocal.removeItem("last_submission_cleared");
 
     if (typeof examIndexedDB !== 'undefined') {
         examIndexedDB.removeItem('exam_states', getStorageKey()).catch(() => {});
     }
 
-    const sName = document.getElementById("student-name");
-    const sId = document.getElementById("student-id");
-    const sClass = document.getElementById("student-class");
-    if (sName) sName.value = "";
-    if (sId) sId.value = "";
-    if (sClass) sClass.value = "";
+    // Tự động nhận diện lần thi tiếp theo (Lần 2, 3...)
+    if (quizId && sId) {
+        const nextAttempt = getRealStudentExamAttemptNumber(quizId, sId);
+        window.currentStudentAttemptNumber = nextAttempt;
+    }
+
     window.location.reload(); 
 }
 
+// BỘ KIỂM TRA PHIÊN THI ĐÃ FIX: KHÔNG BỊ KHÓA DO LẦN 1 CŨ
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -433,16 +429,36 @@ async function checkSessionStatus(isAutostart = false) {
         if (gl) gl.style.display = 'none';
     };
 
+    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
+
     if (typeof renderStudentSubmissionHistoryButtons === 'function') {
         renderStudentSubmissionHistoryButtons();
+    }
+
+    // Kiểm tra số lần thi hiện tại của học sinh
+    let attempt = 1;
+    if (quizId && sId) {
+        attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
+        window.currentStudentAttemptNumber = attempt;
+        checkAndDisplayAttemptNoticeOnStudentCard(sId);
+    }
+
+    // Nếu học sinh đã nộp lần trước (có cờ last_submission_cleared) và vừa vào lại trang thi:
+    // Tuyệt đối không khôi phục bài thi cũ của lần 1, để học sinh sẵn sàng cho Lần 2 mới tinh!
+    const isCleared = (safeLocal.getItem("last_submission_cleared") === "true");
+    if (isCleared && !isAutostart) {
+        hideLoading();
+        return;
     }
 
     let isRestored = restoreExamStateFromStorage();
     if (!isRestored && typeof examIndexedDB !== 'undefined') {
         try {
-            const idbState = await examIndexedDB.getItem('exam_states', getStorageKey());
+            const idbState = await examIndexedDB.getItem('exam_states', getStorageKey(attempt));
             if (idbState && idbState.data) {
-                safeLocal.setItem(getStorageKey(), JSON.stringify(idbState.data));
+                safeLocal.setItem(getStorageKey(attempt), JSON.stringify(idbState.data));
                 isRestored = restoreExamStateFromStorage();
             }
         } catch(e) {}
@@ -450,10 +466,9 @@ async function checkSessionStatus(isAutostart = false) {
 
     if (isRestored) { 
         const sName = document.getElementById("student-name").value.trim() || "Thí sinh"; 
-        const sId = document.getElementById("student-id").value.trim() || "---"; 
         const sClass = document.getElementById("student-class").value.trim() || "---"; 
         document.getElementById("nav-student-name").innerText = sName; 
-        document.getElementById("nav-student-id").innerText = sId; 
+        document.getElementById("nav-student-id").innerText = (attempt > 1) ? `${sId} (Lần ${attempt})` : sId; 
         document.getElementById("nav-student-class").innerText = sClass; 
         document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
         
@@ -481,7 +496,7 @@ async function checkSessionStatus(isAutostart = false) {
 
         if (timeRemaining <= 0) {
             if (elapsedTimeSec > totalTimeSeconds + 3600) {
-                safeLocal.removeItem(getStorageKey());
+                safeLocal.removeItem(getStorageKey(attempt));
                 alert("⚠️ Phát hiện phiên làm bài cũ đã hết hạn. Hệ thống đang tải lại phiên mới...");
                 window.location.reload();
                 return;
@@ -500,9 +515,9 @@ async function checkSessionStatus(isAutostart = false) {
     }
 
     if (isAutostart) {
-        const sId = document.getElementById("student-id").value.trim();
-        const sName = document.getElementById("student-name").value.trim();
-        if (sId && sName) {
+        const sIdVal = document.getElementById("student-id").value.trim();
+        const sNameVal = document.getElementById("student-name").value.trim();
+        if (sIdVal && sNameVal) {
             document.getElementById("login-box").style.display = "none";
             document.getElementById("student-card").style.display = "none";
             if (typeof startExamAction === 'function') await startExamAction(true);
@@ -590,7 +605,6 @@ function showError(title, msg) {
     errCard.style.display = "block"; 
 }
 
-// BỘ XỬ LÝ CHỌN ĐÁP ÁN PHẦN I (MƯỢT 100%)
 function selectOption(qId, letter) { 
     if (isSubmitted || isExamLocked) return; 
     const letters = ["A", "B", "C", "D"]; 
@@ -604,10 +618,8 @@ function selectOption(qId, letter) {
     if (radio) radio.checked = true; 
     window.SECURE_VAULT.userAnswers[`q${qId}`] = letter; 
     
-    // Cập nhật tiến độ tức thì trên giao diện
     updateProgress(); 
 
-    // Trì hoãn lưu để giảm tải CPU
     if (_storageDebounceTimer) clearTimeout(_storageDebounceTimer);
     _storageDebounceTimer = setTimeout(() => {
         saveExamStateToStorage();
@@ -615,19 +627,14 @@ function selectOption(qId, letter) {
     }, 180);
 }
 
-// BỘ XỬ LÝ TÍCH CHỌN PHẦN II (ĐÚNG / SAI) - TỐI ƯU CỰC MƯỢT, 0MS DELAY
 function onStatementChange(subKey) { 
     if (isSubmitted || isExamLocked) return; 
     const selected = document.querySelector(`input[name="${subKey}"]:checked`); 
     if (!selected) return;
 
-    // 1. Ghi nhận tức thì vào RAM bộ nhớ đệm (0ms)
     window.SECURE_VAULT.userAnswers[subKey] = selected.value; 
-
-    // 2. Cập nhật ngay tiến độ và màu thanh điều hướng câu
     updateProgress(); 
 
-    // 3. Debounce thông minh cho các thao tác nặng (ghi localStorage, IndexedDB, tính điểm nháp và đẩy Supabase)
     if (_statementDebounceTimer) clearTimeout(_statementDebounceTimer);
     _statementDebounceTimer = setTimeout(() => {
         saveExamStateToStorage(); 
@@ -756,6 +763,7 @@ function startCountdownTimer() {
 
 function saveExamStateToStorage() { 
     if (!examStartTime || isSubmitted) return; 
+    const currentAttempt = window.currentStudentAttemptNumber || 1;
     const dataToSave = { 
         userAnswers: window.SECURE_VAULT.userAnswers, 
         padletClickedMap: window.SECURE_VAULT.padletClicked, 
@@ -766,14 +774,15 @@ function saveExamStateToStorage() {
         studentName: document.getElementById("student-name").value.trim(), 
         studentClass: document.getElementById("student-class").value.trim(), 
         isStarted: true,
+        attemptNumber: currentAttempt,
         isExamLocked: isExamLocked,
         lockedDurationSec: lockedDurationSec
     }; 
-    safeLocal.setItem(getStorageKey(), JSON.stringify(dataToSave)); 
+    safeLocal.setItem(getStorageKey(currentAttempt), JSON.stringify(dataToSave)); 
 
     if (typeof examIndexedDB !== 'undefined') {
         examIndexedDB.setItem('exam_states', {
-            key: getStorageKey(),
+            key: getStorageKey(currentAttempt),
             data: dataToSave,
             updatedAt: Date.now()
         }).catch(() => {});
@@ -782,27 +791,16 @@ function saveExamStateToStorage() {
 
 function restoreExamStateFromStorage() { 
     try { 
-        const raw = safeLocal.getItem(getStorageKey()); 
-        const hasPending = safeLocal.getItem("pending_exam_submission");
-        if (!raw && !hasPending) return false; 
+        const currentAttempt = window.currentStudentAttemptNumber || 1;
+        const raw = safeLocal.getItem(getStorageKey(currentAttempt)); 
+        if (!raw) return false; 
         
-        let parsed = raw ? JSON.parse(raw) : null;
-        if (!parsed && hasPending) {
-            const pend = JSON.parse(hasPending);
-            parsed = {
-                isStarted: true,
-                isExamLocked: true,
-                studentId: pend.studentId || pend.sbd,
-                studentName: pend.studentName || pend.student_name,
-                studentClass: pend.studentClass || pend.class_name,
-                userAnswers: pend.userAnswers || pend.user_answers || {}
-            };
-        }
+        let parsed = JSON.parse(raw);
         
         const urlParams = new URLSearchParams(window.location.search);
         const currentUrlSbd = urlParams.get('sbd');
         if (currentUrlSbd && parsed && parsed.studentId && currentUrlSbd.toLowerCase() !== String(parsed.studentId).toLowerCase()) {
-            safeLocal.removeItem(getStorageKey());
+            safeLocal.removeItem(getStorageKey(currentAttempt));
             return false;
         }
 
@@ -811,8 +809,8 @@ function restoreExamStateFromStorage() {
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
 
-            if (elapsed > limitSec + 3600 && !hasPending && !parsed.isExamLocked) {
-                safeLocal.removeItem(getStorageKey());
+            if (elapsed > limitSec + 3600 && !parsed.isExamLocked) {
+                safeLocal.removeItem(getStorageKey(currentAttempt));
                 return false;
             }
 
@@ -829,7 +827,7 @@ function restoreExamStateFromStorage() {
             if (parsed.studentName) document.getElementById("student-name").value = parsed.studentName; 
             if (parsed.studentClass) document.getElementById("student-class").value = parsed.studentClass; 
             
-            if (parsed.isExamLocked || hasPending) {
+            if (parsed.isExamLocked) {
                 isExamLocked = true;
                 lockedDurationSec = parsed.lockedDurationSec || 0;
             }
@@ -854,9 +852,10 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
     const resExamTitle = document.getElementById("res-exam-title");
     if (resExamTitle) resExamTitle.innerText = EXAM_NAME || "BÀI THI TRẮC NGHIỆM";
 
+    const currentAttempt = window.currentStudentAttemptNumber || 1;
     const scoreTitle = (maxScale && maxScale !== 10.0)
-        ? `Đúng ${correct}/${totalQuestionsCount} câu (${finalScore} / ${maxScale} điểm)`
-        : `Đúng ${correct}/${totalQuestionsCount} câu (${finalScore} điểm)`;
+        ? `Lần ${currentAttempt}: Đúng ${correct}/${totalQuestionsCount} câu (${finalScore} / ${maxScale} điểm)`
+        : `Lần ${currentAttempt}: Đúng ${correct}/${totalQuestionsCount} câu (${finalScore} điểm)`;
 
     document.getElementById("res-score-overview").innerText = scoreTitle; 
     document.getElementById("res-stat-correct").innerText = correct; 
