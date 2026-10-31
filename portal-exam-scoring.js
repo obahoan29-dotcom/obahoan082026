@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-exam-scoring.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
+// FILE: portal-exam-scoring.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG & NHẬN DIỆN PHẦN IV CHUẨN XÁC)
 // =========================================================
 
 let currentScoringQuizId = null;
@@ -88,12 +88,35 @@ function ensureScoringModalInDOM() {
     document.body.appendChild(modalDiv);
 }
 
+// HÀM BỔ TRỢ: NHẬN DIỆN CÂU HỎI THUỘC PHẦN IV ĐỒNG BỘ 100% VỚI PHÒNG THI & SOI ĐỀ
+function isPart4QuestionScoring(q) {
+    if (!q) return false;
+    if (typeof isPart4Question === 'function') return isPart4Question(q);
+    if (q.part === 4 || q.isPart4 === true) return true;
+    if (q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return true;
+    const txt = String(q.question || "").toUpperCase();
+    if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) {
+        return true;
+    }
+    return false;
+}
+
+// BỘ ĐẾM SỐ CÂU TỪNG PHẦN ĐÃ ĐƯỢC SỬA LỖI: TÁCH RIÊNG P3 VÀ P4 CHÍNH XÁC
 function countQuestionsByPart(questions) {
     if (!Array.isArray(questions)) return { p1: 0, p2: 0, p3: 0, p4: 0, total: 0 };
-    let p1 = questions.filter(q => q && q.type === "multiple_choice").length;
-    let p2 = questions.filter(q => q && q.type === "true_false").length;
-    let p3 = questions.filter(q => q && q.type === "short_answer").length;
-    let p4 = questions.filter(q => q && (q.type === "essay" || q.type === "essay_answer")).length;
+    let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+    questions.forEach(q => {
+        if (!q) return;
+        if (isPart4QuestionScoring(q)) {
+            p4++;
+        } else if (q.type === "multiple_choice") {
+            p1++;
+        } else if (q.type === "true_false") {
+            p2++;
+        } else {
+            p3++;
+        }
+    });
     return { p1, p2, p3, p4, total: questions.length };
 }
 
@@ -125,7 +148,7 @@ async function openGradingScaleModal(quizId, categoryId, event) {
         document.getElementById("score-input-p1").value = cfg.p1Total !== undefined ? cfg.p1Total : 3.0;
         document.getElementById("score-input-p2").value = cfg.p2Total !== undefined ? cfg.p2Total : 4.0;
         document.getElementById("score-input-p3").value = cfg.p3Total !== undefined ? cfg.p3Total : 3.0;
-        document.getElementById("score-input-p4").value = cfg.p4Total !== undefined ? cfg.p4Total : 0;
+        document.getElementById("score-input-p4").value = cfg.p4Total !== undefined ? cfg.p4Total : (counts.p4 > 0 ? 1.0 : 0);
 
         handleScoringModeChange(cfg.mode || 'option1');
         updateScoringPreview();
@@ -228,6 +251,7 @@ async function saveGradingScaleConfig() {
     }
 }
 
+// BỘ CHẤM ĐIỂM CHÍNH XÁC THEO BIỂU ĐIỂM ĐÃ SỬA: PHÂN BIỆT RÕ RÀNG P3 VÀ P4
 function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scoringConfig) {
     const cfg = scoringConfig || { mode: "option1" };
     const mode = cfg.mode || "option1";
@@ -245,7 +269,9 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
     let correctCount = 0; let wrongCount = 0; let totalScore = 0; let maxScoreOfExam = 0; let dataDetails = [];
 
     questions.forEach(q => {
-        if (q.type === "multiple_choice") {
+        const isP4 = isPart4QuestionScoring(q);
+        
+        if (q.type === "multiple_choice" && !isP4) {
             maxScoreOfExam += isOption1 ? 1.0 : p1PerQ;
             const uVal = userAnswers[`q${q.id}`] || "Chưa chọn";
             const cVal = answerVault[`q${q.id}`];
@@ -254,7 +280,7 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
             } else {
                 wrongCount++; dataDetails.push(`${q.id}-${uVal} [SAI: ${cVal || "---"}]`);
             }
-        } else if (q.type === "true_false") {
+        } else if (q.type === "true_false" && !isP4) {
             maxScoreOfExam += isOption1 ? 1.0 : p2PerQ;
             let cSt = 0;
             (q.statements || []).forEach(st => {
@@ -274,7 +300,19 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
             else if (cSt === 4) qScore = 1.0 * (isOption1 ? 1.0 : p2PerQ);
             totalScore += qScore;
             if (cSt === (q.statements ? q.statements.length : 4)) correctCount++; else wrongCount++;
+        } else if (isP4) {
+            // XỬ LÝ CHẤM RIÊNG CHO PHẦN IV
+            maxScoreOfExam += isOption1 ? 1.0 : p4PerQ;
+            const uVal = String(userAnswers[`q${q.id}`] || "").trim().replace(',', '.');
+            const cVal = String(answerVault[`q${q.id}`] || "").trim().replace(',', '.');
+            const isRight = (uVal !== "" && cVal !== "" && (uVal === cVal || Number(uVal) === Number(cVal)));
+            if (isRight) {
+                correctCount++; totalScore += isOption1 ? 1.0 : p4PerQ; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
+            } else {
+                wrongCount++; dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal}]`);
+            }
         } else {
+            // XỬ LÝ CHẤM CHO PHẦN III
             maxScoreOfExam += isOption1 ? 1.0 : p3PerQ;
             const uVal = String(userAnswers[`q${q.id}`] || "").trim().replace(',', '.');
             const cVal = String(answerVault[`q${q.id}`] || "").trim().replace(',', '.');
