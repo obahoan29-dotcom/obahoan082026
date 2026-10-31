@@ -1,6 +1,6 @@
 // =========================================================
 // FILE 3: exam-engine-core.js (BẢN TỐI ƯU THI LẦN 2 MỚI TINH - KHÔNG BỊ KHÓA NHẦM)
-// NÂNG CẤP: SELF-HEALING UPSERT - NẾU RỚT ACTIVE_SESSION SẼ TỰ ĐỘNG PHỤC HỒI NGAY
+// NÂNG CẤP: SELF-HEALING UPSERT THEO (quiz_id, sbd) - KHÔNG PHỤ THUỘC CỘT 'id'
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -78,39 +78,67 @@ async function ensureActiveSessionAndDraft() {
         ? getStrictStandardClassName(sClass || currentCat, sId) 
         : sClass;
 
-    const primaryDocId = `${quizId}_${cleanSbd}`;
     const nowMs = Date.now();
-
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) return;
 
     try {
-        await client.from('active_sessions').upsert({
-            id: primaryDocId,
-            quiz_id: quizId,
-            sbd: cleanSbd,
-            name: sName,
-            class_name: strictClassName,
-            category_id: currentCat,
-            is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
-            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-            start_time: examStartTime || nowMs,
-            last_ping: nowMs
-        }, { onConflict: 'id' });
+        // Cập nhật ping phiên active_sessions theo match (quiz_id, sbd)
+        const { data: updatedAct } = await client.from('active_sessions')
+            .update({
+                name: sName,
+                class_name: strictClassName,
+                category_id: currentCat,
+                is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                last_ping: nowMs
+            })
+            .match({ quiz_id: quizId, sbd: cleanSbd })
+            .select();
 
-        await client.from('live_drafts').upsert({
-            id: primaryDocId,
-            quiz_id: quizId,
-            sbd: cleanSbd,
-            student_name: sName,
-            class_name: strictClassName,
-            category_id: currentCat,
-            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-            exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-            user_answers: window.SECURE_VAULT.userAnswers || {},
-            last_updated: new Date().toISOString()
-        }, { onConflict: 'id' });
+        if (!updatedAct || updatedAct.length === 0) {
+            await client.from('active_sessions').insert([{
+                quiz_id: quizId,
+                sbd: cleanSbd,
+                name: sName,
+                class_name: strictClassName,
+                category_id: currentCat,
+                is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                start_time: examStartTime || nowMs,
+                last_ping: nowMs
+            }]);
+        }
+
+        // Cập nhật live_drafts theo match (quiz_id, sbd)
+        const { data: updatedDraft } = await client.from('live_drafts')
+            .update({
+                student_name: sName,
+                class_name: strictClassName,
+                category_id: currentCat,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                user_answers: window.SECURE_VAULT.userAnswers || {},
+                last_updated: new Date().toISOString()
+            })
+            .match({ quiz_id: quizId, sbd: cleanSbd })
+            .select();
+
+        if (!updatedDraft || updatedDraft.length === 0) {
+            await client.from('live_drafts').insert([{
+                quiz_id: quizId,
+                sbd: cleanSbd,
+                student_name: sName,
+                class_name: strictClassName,
+                category_id: currentCat,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                user_answers: window.SECURE_VAULT.userAnswers || {},
+                last_updated: new Date().toISOString()
+            }]);
+        }
     } catch(err) {
         console.warn("Lỗi đồng bộ phiên đang thi:", err);
     }
@@ -192,22 +220,42 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (client) {
         try {
-            // Lưu bản nháp thời gian thực
-            client.from('live_drafts').upsert(draftData, { onConflict: 'id' }).then();
+            // Cập nhật live_drafts theo match (quiz_id, sbd)
+            client.from('live_drafts')
+                .update({
+                    user_answers: draftData.user_answers,
+                    score10: draftData.score10,
+                    raw_score: draftData.raw_score,
+                    correct_count: draftData.correct_count,
+                    wrong_count: draftData.wrong_count,
+                    completion_time: draftData.completion_time,
+                    spent_mins: draftData.spent_mins,
+                    data_string: draftData.data_string,
+                    last_updated: new Date().toISOString()
+                })
+                .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
+                .then();
 
-            // TỰ PHỤC HỒI ACTIVE_SESSIONS: Dùng UPSERT thay vì UPDATE để nếu dòng bị mất sẽ tự mọc lại ngay!
-            client.from('active_sessions').upsert({
-                id: draftData.id,
-                quiz_id: draftData.quiz_id,
-                sbd: draftData.sbd,
-                name: draftData.student_name,
-                class_name: draftData.class_name,
-                category_id: draftData.category_id,
-                ma_de: draftData.ma_de,
-                exam_title: draftData.exam_title,
-                start_time: examStartTime || Date.now(),
-                last_ping: Date.now()
-            }, { onConflict: 'id' }).then();
+            // TỰ PHỤC HỒI ACTIVE_SESSIONS: cập nhật ping, nếu chưa có thì tự động insert
+            client.from('active_sessions')
+                .update({ last_ping: Date.now() })
+                .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
+                .select()
+                .then(res => {
+                    if (!res.data || res.data.length === 0) {
+                        client.from('active_sessions').insert([{
+                            quiz_id: draftData.quiz_id,
+                            sbd: draftData.sbd,
+                            name: draftData.student_name,
+                            class_name: draftData.class_name,
+                            category_id: draftData.category_id,
+                            ma_de: draftData.ma_de,
+                            exam_title: draftData.exam_title,
+                            start_time: examStartTime || Date.now(),
+                            last_ping: Date.now()
+                        }]).then();
+                    }
+                });
         } catch(e) {}
     }
 
@@ -537,7 +585,6 @@ async function checkSessionStatus(isAutostart = false) {
                     document.getElementById("login-box").style.display = "none";
                     document.getElementById("student-card").style.display = "none";
                 } else {
-                    // Nếu lỗi mạng / Supabase chưa nhận: hiển thị lại thẻ thông tin để học sinh bấm thử lại
                     document.getElementById("student-card").style.display = "block";
                 }
             }
