@@ -253,7 +253,7 @@
             position: relative;
         }
 
-        /* CHẾ ĐỘ 1: TILES / MEDIUM ICONS (NHƯ TRONG ẢNH CHỤP) */
+        /* CHẾ ĐỘ 1: TILES */
         .view-tiles {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -316,7 +316,7 @@
         .view-large .file-title { font-size: 13px; max-height: 40px; -webkit-line-clamp: 2; }
         .view-large .file-meta-sub { font-size: 11px; }
 
-        /* CHẾ ĐỘ 3: DETAILS (BẢNG WINDOWS CÓ SORTING CỘT) */
+        /* CHẾ ĐỘ 3: DETAILS TABLE */
         .view-details-wrapper {
             width: 100%;
             overflow-x: auto;
@@ -352,7 +352,7 @@
         .file-table tbody tr:hover td { background: var(--win-hover); }
         .file-table tbody tr.selected td { background: var(--win-select) !important; font-weight: 600; }
 
-        /* CHẾ ĐỘ 4: LIST (DANH SÁCH GỌN) */
+        /* CHẾ ĐỘ 4: LIST */
         .view-list {
             display: flex;
             flex-direction: column;
@@ -369,7 +369,7 @@
         .view-list .file-title { font-size: 12px; max-height: none; -webkit-line-clamp: 1; flex: 1; text-align: left; }
         .view-list .file-meta-sub { font-size: 11px; }
 
-        /* 3.3 CỘT PHẢI: KHUNG XEM TRƯỚC (PREVIEW PANE) */
+        /* 3.3 CỘT PHẢI: PREVIEW PANE */
         .preview-pane {
             width: 320px;
             border-left: 1px solid var(--win-border);
@@ -413,7 +413,7 @@
             z-index: 50;
         }
 
-        /* 5. MENU CHUỘT PHẢI (CONTEXT MENU WINDOWS) */
+        /* 5. MENU CHUỘT PHẢI */
         .context-menu {
             position: fixed;
             background: #ffffff;
@@ -443,12 +443,11 @@
         .context-menu-divider { height: 1px; background: #e5e7eb; margin: 3px 0; }
         .context-menu-item.danger:hover { background: #fee2e2; color: #dc2626; }
 
-        /* 6. MODAL CHỈNH SỬA NHANH & JSON EDITOR */
+        /* 6. MODAL CHỈNH SỬA & JSON */
         .editor-modal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.55);
             display: none; align-items: center; justify-content: center;
-            z-index: 100000; padding: 20px;
-            backdrop-filter: blur(4px);
+            z-index: 100000; padding: 20px; backdrop-filter: blur(4px);
         }
         .editor-card {
             background: #fff; border-radius: 12px; width: 750px; max-width: 95vw;
@@ -483,20 +482,15 @@
             padding: 10px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0;
             display: flex; justify-content: flex-end; gap: 8px;
         }
-
-        /* FORM SỬA NHANH BÀI NỘP */
-        .quick-form-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-        }
+        .quick-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         .form-group { margin-bottom: 10px; }
         .form-group label { display: block; font-weight: 800; font-size: 12px; color: #374151; margin-bottom: 4px; }
         .form-group input, .form-group textarea, .form-group select {
             width: 100%; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 6px;
             font-size: 13px; font-weight: 600; font-family: inherit; outline: none;
         }
-        .form-group input:focus, .form-group textarea:focus { border-color: var(--win-blue); }
 
-        /* MODAL BẢO VỆ MẬT KHẨU */
+        /* 0. AUTH GATE MODAL */
         .auth-gate-modal {
             position: fixed; inset: 0; background: #0f172a;
             display: flex; align-items: center; justify-content: center;
@@ -510,7 +504,7 @@
 </head>
 <body>
 
-    <!-- 0. BẢO VỆ MẬT KHẨU ADMIN NẾU TRUY CẬP TRỰC TIẾP -->
+    <!-- 0. BẢO VỆ MẬT KHẨU ADMIN -->
     <div id="auth-gate-modal" class="auth-gate-modal" style="display: none;">
         <div class="auth-gate-card">
             <div style="font-size: 44px; margin-bottom: 10px;">🔐</div>
@@ -549,7 +543,6 @@
             <input type="text" id="search-input" placeholder="Tìm kiếm tệp..." oninput="onFilterSearch(this.value)">
         </div>
 
-        <!-- BỘ CHUYỂN ĐỔI CHẾ ĐỘ XEM WINDOWS -->
         <div class="view-mode-selector">
             <button class="nav-btn" onclick="toggleViewModeDropdown(event)" title="Chế độ xem tệp (Tiles, Details, List, Large...)">
                 <span id="current-view-mode-icon">🔲</span> ▾
@@ -573,6 +566,13 @@
                 <span>Supabase Database</span>
             </div>
             <div class="tree-sub open" id="tree-sub-root">
+                <!-- THƯ MỤC MỚI: DANH SÁCH ĐANG TRONG PHÒNG THI -->
+                <div class="tree-node" id="tree-node-active_sessions" onclick="selectFolder('active_sessions')" style="color: #059669; font-weight: 800;">
+                    <span class="tree-toggle">▶</span>
+                    <span>🟢</span>
+                    <span>Vào thi (active_sessions)</span>
+                </div>
+
                 <div class="tree-node" id="tree-node-quizzes" onclick="selectFolder('quizzes')">
                     <span class="tree-toggle">▶</span>
                     <span>📑</span>
@@ -625,10 +625,10 @@
                             <th onclick="sortDetailsByColumn('name')" style="width: 280px;">Tên <span class="sort-arrow" id="sort-name"></span></th>
                             <th onclick="sortDetailsByColumn('sbd')" style="width: 100px;">SBD <span class="sort-arrow" id="sort-sbd"></span></th>
                             <th onclick="sortDetailsByColumn('class')" style="width: 110px;">Lớp <span class="sort-arrow" id="sort-class"></span></th>
-                            <th onclick="sortDetailsByColumn('score')" style="width: 110px; text-align:center;">Điểm số <span class="sort-arrow" id="sort-score"></span></th>
-                            <th onclick="sortDetailsByColumn('correct')" style="width: 110px; text-align:center;">Số câu đúng <span class="sort-arrow" id="sort-correct"></span></th>
+                            <th onclick="sortDetailsByColumn('score')" style="width: 110px; text-align:center;">Điểm / Trạng thái <span class="sort-arrow" id="sort-score"></span></th>
+                            <th onclick="sortDetailsByColumn('correct')" style="width: 110px; text-align:center;">Số câu / Chi tiết <span class="sort-arrow" id="sort-correct"></span></th>
                             <th onclick="sortDetailsByColumn('time')" style="width: 120px;">Thời gian thi <span class="sort-arrow" id="sort-time"></span></th>
-                            <th onclick="sortDetailsByColumn('date')" style="width: 150px;">Thời điểm nộp <span class="sort-arrow" id="sort-date"></span></th>
+                            <th onclick="sortDetailsByColumn('date')" style="width: 150px;">Thời điểm kết nối <span class="sort-arrow" id="sort-date"></span></th>
                             <th style="width: 80px; text-align:center;">Thao tác</th>
                         </tr>
                     </thead>
@@ -637,7 +637,7 @@
             </div>
         </div>
 
-        <!-- CỘT PHẢI: KHUNG XEM TRƯỚC (PREVIEW PANE) -->
+        <!-- CỘT PHẢI: PREVIEW PANE -->
         <div class="preview-pane">
             <div class="preview-header">
                 <span>👁️ Xem trước thông tin</span>
@@ -659,7 +659,7 @@
         <span id="status-server-status">🟢 Supabase Connected</span>
     </div>
 
-    <!-- 5. MENU CHUỘT PHẢI (WINDOWS CONTEXT MENU) -->
+    <!-- 5. CONTEXT MENU -->
     <div class="context-menu" id="windows-context-menu" onclick="event.stopPropagation()">
         <div class="context-menu-item" onclick="openSelectedItemAction()"><span>📂</span> <b>Mở (Enter)</b></div>
         <div class="context-menu-item" onclick="openQuickEditModalAction()"><span>✏️</span> <span>Sửa điểm & thông tin</span></div>
@@ -673,7 +673,7 @@
         <div class="context-menu-item" onclick="refreshCurrentFolder()"><span>🔄</span> <span>Làm mới (F5)</span></div>
     </div>
 
-    <!-- 6. MODAL CHỈNH SỬA NHANH & BIÊN TẬP JSON -->
+    <!-- 6. MODAL CHỈNH SỬA NHANH & JSON EDITOR -->
     <div class="editor-modal" id="item-editor-modal" onclick="if(event.target===this) closeEditorModal()">
         <div class="editor-card" onclick="event.stopPropagation()">
             <div class="editor-header">
@@ -694,7 +694,7 @@
             <!-- TAB 2: CODE JSON -->
             <div class="editor-body" id="editor-body-json" style="display: none;">
                 <div style="margin-bottom: 6px; font-size: 11.5px; color: #64748b;">
-                    💡 Thầy có thể chỉnh sửa cấu trúc JSON, điểm số, hoặc mảng câu trả lời trực tiếp bên dưới:
+                    💡 Thầy có thể chỉnh sửa cấu trúc JSON trực tiếp bên dưới:
                 </div>
                 <textarea class="editor-textarea" id="editor-json-content" spellcheck="false"></textarea>
             </div>
@@ -712,8 +712,8 @@
         // =========================================================================
 
         let currentFolder = 'root';
-        let currentSubFolderParam = null; // Khi mở 1 đề thi cụ thể trong lớp
-        let viewMode = 'tiles'; // 'tiles', 'details', 'large', 'list'
+        let currentSubFolderParam = null;
+        let viewMode = 'tiles';
         let currentItems = [];
         let selectedItem = null;
         let navHistory = [{ folder: 'root', param: null }];
@@ -767,7 +767,7 @@
             setupGlobalEventListeners();
         });
 
-        // 2. CHUYỂN ĐỔI CHẾ ĐỘ XEM TỆP (TILES, DETAILS, LARGE, LIST)
+        // 2. CHUYỂN ĐỔI CHẾ ĐỘ XEM TỆP
         function toggleViewModeDropdown(e) {
             e.stopPropagation();
             const d = document.getElementById("view-mode-dropdown");
@@ -799,7 +799,7 @@
             renderCurrentItems();
         }
 
-        // 3. ĐỌC DỮ LIỆU TỪ SUPABASE THEO PHÂN CẤP THƯ MỤC
+        // 3. ĐỌC DỮ LIỆU TỪ SUPABASE (ĐÃ THÊM THƯ MỤC ACTIVE_SESSIONS)
         async function loadFolderContents(folderKey, subParam = null) {
             currentFolder = folderKey;
             currentSubFolderParam = subParam;
@@ -816,15 +816,37 @@
             try {
                 let items = [];
 
-                // CẤP 1: GỐC (ROOT)
+                // CẤP 1: GỐC (ROOT) -> BỔ SUNG THƯ MỤC VÀO THI (ACTIVE_SESSIONS) LÊN ĐẦU
                 if (folderKey === 'root') {
                     items = [
+                        { type: 'folder', name: 'Đang trong phòng thi (active_sessions)', target: 'active_sessions', icon: '🟢', count: 'Thí sinh đã đăng nhập vào thi' },
                         { type: 'folder', name: 'Đề thi (quizzes)', target: 'quizzes', icon: '📁', count: 'Toàn bộ đề thi trắc nghiệm' },
                         { type: 'folder', name: 'Bài nộp (submissions)', target: 'submissions', icon: '📁', count: 'Điểm & các lần thi học sinh' },
                         { type: 'folder', name: 'Tự luận (tu_luan_submissions)', target: 'tu_luan', icon: '📁', count: 'Ảnh bài làm & chấm chéo' },
                         { type: 'folder', name: 'Nháp trực tiếp (live_drafts)', target: 'live_drafts', icon: '📁', count: 'Dữ liệu làm bài thời gian thực' },
                         { type: 'folder', name: 'Danh mục web (custom_links)', target: 'custom_links', icon: '📁', count: 'Link hiển thị trang chủ & báo' }
                     ];
+                }
+                // CẤP 2: THƯ MỤC ACTIVE_SESSIONS (DANH SÁCH THÍ SINH ĐANG VÀO THI)
+                else if (folderKey === 'active_sessions') {
+                    const { data, error } = await client.from('active_sessions').select('*').order('start_time', { ascending: false });
+                    if (!error && data) {
+                        const now = Date.now();
+                        items = data.map(s => {
+                            const isOnline = (now - Number(s.last_ping || s.start_time || 0)) < 90000;
+                            const statusStr = isOnline ? '🟢 Đang làm (Online)' : '⚪ Mất kết nối';
+                            const durationStr = s.start_time ? formatElapsedDuration(s.start_time) : '---';
+                            return {
+                                type: 'file',
+                                category: 'active_session',
+                                id: s.id || `${s.quiz_id}_${s.sbd}`,
+                                name: `[${s.sbd}] ${s.name} - ${s.class_name}`,
+                                icon: isOnline ? '🟢' : '⚪',
+                                meta: `${s.exam_title || 'Đang thi'} • ${durationStr} • ${statusStr}`,
+                                raw: s
+                            };
+                        });
+                    }
                 }
                 // CẤP 2: THƯ MỤC ĐỀ THI
                 else if (folderKey === 'quizzes') {
@@ -841,7 +863,7 @@
                         }));
                     }
                 }
-                // CẤP 2: THƯ MỤC BÀI NỘP CHA (HIỆN DANH SÁCH 8 LỚP)
+                // CẤP 2: THƯ MỤC BÀI NỘP CHA
                 else if (folderKey === 'submissions') {
                     items = [
                         { type: 'folder', name: 'Lớp 11A', target: 'sub_lop-11a', icon: '🏫', count: 'Mở xem theo từng đề thi' },
@@ -855,7 +877,7 @@
                         { type: 'folder', name: 'Toàn bộ bài nộp (All)', target: 'sub_all', icon: '🌐', count: 'Xem tất cả không phân lớp' }
                     ];
                 }
-                // CẤP 3: MỞ MỘT LỚP CỤ THỂ ➔ HIỂN THỊ CÁC ĐỀ THI CỦA LỚP ĐÓ (VÀ NÚT TẤT CẢ)
+                // CẤP 3: MỞ LỚP CỤ THỂ
                 else if (folderKey.startsWith('sub_') && !subParam) {
                     const catId = folderKey.replace('sub_', '');
                     let query = client.from('submissions').select('*');
@@ -864,7 +886,6 @@
                     const { data, error } = await query.order('created_at', { ascending: false });
                     
                     if (!error && data) {
-                        // Nhóm theo từng đề thi
                         const examGroups = {};
                         data.forEach(sub => {
                             const qId = sub.quiz_id || 'unknown';
@@ -875,7 +896,6 @@
                             examGroups[qId].subs.push(sub);
                         });
 
-                        // Thư mục con cho từng đề thi
                         items = Object.values(examGroups).map(g => {
                             const avgScore = (g.subs.reduce((s, r) => s + (Number(r.score10) || 0), 0) / g.subs.length).toFixed(1);
                             return {
@@ -888,7 +908,6 @@
                             };
                         });
 
-                        // Thêm 1 thư mục xem thẳng toàn bộ bài làm của lớp này
                         items.unshift({
                             type: 'folder',
                             name: `[Xem tất cả bài nộp của ${catId.toUpperCase()}]`,
@@ -899,7 +918,7 @@
                         });
                     }
                 }
-                // CẤP 4: MỞ MỘT ĐỀ THI CỤ THỂ TRONG LỚP ➔ HIỂN THỊ BÀI NỘP TỪNG EM HỌC SINH
+                // CẤP 4: BÀI NỘP HỌC SINH TỪNG ĐỀ
                 else if (folderKey.startsWith('sub_') && subParam) {
                     const catId = folderKey.replace('sub_', '');
                     let query = client.from('submissions').select('*');
@@ -981,7 +1000,6 @@
         // 4. SẮP XẾP DỮ LIỆU
         function sortCurrentItems() {
             currentItems.sort((a, b) => {
-                // Thư mục luôn đứng trước tệp
                 if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
 
                 let valA, valB;
@@ -995,8 +1013,8 @@
                     valA = Number(a.raw?.correct_count) || 0;
                     valB = Number(b.raw?.correct_count) || 0;
                 } else if (sortColumn === 'date') {
-                    valA = a.raw?.created_at ? new Date(a.raw.created_at).getTime() : 0;
-                    valB = b.raw?.created_at ? new Date(b.raw.created_at).getTime() : 0;
+                    valA = a.raw?.created_at ? new Date(a.raw.created_at).getTime() : (a.raw?.start_time || 0);
+                    valB = b.raw?.created_at ? new Date(b.raw.created_at).getTime() : (b.raw?.start_time || 0);
                 } else {
                     valA = String(a.name || '').toLowerCase();
                     valB = String(b.name || '').toLowerCase();
@@ -1024,7 +1042,7 @@
             renderCurrentItems();
         }
 
-        // 5. HIỂN THỊ NỘI DUNG TỆP (RENDER)
+        // 5. HIỂN THỊ NỘI DUNG TỆP
         function renderCurrentItems() {
             const gridWrap = document.getElementById("grid-view-wrapper");
             const tbody = document.getElementById("file-table-body");
@@ -1042,7 +1060,7 @@
             currentItems.forEach(item => {
                 const isSelected = (selectedItem === item);
 
-                // --- 1. DẠNG CARDS / TILES / LARGE / LIST ---
+                // CARDS / TILES VIEW
                 const card = document.createElement("div");
                 card.className = "file-item-card" + (isSelected ? " selected" : "");
                 card.innerHTML = `
@@ -1055,14 +1073,25 @@
                 card.oncontextmenu = (e) => handleItemContextMenu(e, item, card);
                 gridWrap.appendChild(card);
 
-                // --- 2. DẠNG CHI TIẾT (DETAILS TABLE) ---
+                // DETAILS TABLE
                 const tr = document.createElement("tr");
                 tr.className = isSelected ? "selected" : "";
                 
                 const raw = item.raw || {};
-                const scoreText = (raw.score10 !== undefined) ? `<b style="color:#0284c7; font-size:13px;">${raw.score10}đ</b>` : '---';
-                const correctText = (raw.correct_count !== undefined) ? `<span style="color:#15803d; font-weight:700;">${raw.correct_count} câu</span>` : '---';
-                const dateText = raw.created_at ? new Date(raw.created_at).toLocaleString("vi-VN") : (raw.last_submit || '---');
+                let scoreText = '---';
+                let correctText = '---';
+                let dateText = '---';
+
+                if (item.category === 'active_session') {
+                    const isOnline = (Date.now() - Number(raw.last_ping || raw.start_time || 0)) < 90000;
+                    scoreText = isOnline ? `<b style="color:#16a34a;">🟢 Online</b>` : `<span style="color:#94a3b8;">⚪ Mất kết nối</span>`;
+                    correctText = `<span style="color:#0284c7; font-weight:700;">${raw.exam_title || 'Đang thi'}</span>`;
+                    dateText = raw.start_time ? new Date(raw.start_time).toLocaleString("vi-VN") : '---';
+                } else {
+                    scoreText = (raw.score10 !== undefined) ? `<b style="color:#0284c7; font-size:13px;">${raw.score10}đ</b>` : '---';
+                    correctText = (raw.correct_count !== undefined) ? `<span style="color:#15803d; font-weight:700;">${raw.correct_count} câu</span>` : '---';
+                    dateText = raw.created_at ? new Date(raw.created_at).toLocaleString("vi-VN") : (raw.last_submit || '---');
+                }
 
                 tr.innerHTML = `
                     <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis;">
@@ -1072,7 +1101,7 @@
                     <td>${raw.category_id || raw.class_name || '---'}</td>
                     <td style="text-align:center;">${scoreText}</td>
                     <td style="text-align:center;">${correctText}</td>
-                    <td>${raw.completion_time || '---'}</td>
+                    <td>${raw.completion_time || (raw.start_time ? formatElapsedDuration(raw.start_time) : '---')}</td>
                     <td>${dateText}</td>
                     <td style="text-align:center;">
                         <button onclick="handleActionEditInline('${item.id}', event)" style="padding:2px 6px; font-size:11px; cursor:pointer; border-radius:4px; border:1px solid #cbd5e1; background:#fff;">✏️ Sửa</button>
@@ -1104,7 +1133,7 @@
             }
         }
 
-        // 7. XEM TRƯỚC (PREVIEW PANE CỘT PHẢI)
+        // 7. XEM TRƯỚC (PREVIEW PANE)
         function renderPreview(item) {
             const box = document.getElementById("preview-content-box");
             const badge = document.getElementById("preview-type-badge");
@@ -1126,7 +1155,24 @@
             const raw = item.raw || {};
             let detailsHtml = "";
 
-            if (item.category === 'submission') {
+            if (item.category === 'active_session') {
+                const isOnline = (Date.now() - Number(raw.last_ping || raw.start_time || 0)) < 90000;
+                detailsHtml = `
+                    <div style="background:#f0fdf4; border:1.5px solid #86efac; padding:10px 12px; border-radius:8px; margin-bottom:12px;">
+                        <div style="font-size:16px; font-weight:900; color:#15803d;">${isOnline ? '🟢 ĐANG TRONG PHÒNG THI' : '⚪ MẤT KẾT NỐI / ĐÃ THOÁT'}</div>
+                        <div style="color:#166534; font-size:12px; margin-top:3px; font-weight:700;">Đã làm được: ${raw.start_time ? formatElapsedDuration(raw.start_time) : '---'}</div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <p><b>👤 Thí sinh:</b> ${raw.name}</p>
+                        <p><b>🔢 SBD:</b> <code style="color:#0284c7; font-weight:800;">${raw.sbd}</code></p>
+                        <p><b>🏫 Lớp:</b> ${raw.class_name}</p>
+                        <p><b>📑 Đề thi:</b> ${raw.exam_title || 'Đề thi'}</p>
+                        <p><b>Mã đề:</b> ${raw.ma_de || '101'}</p>
+                        <p><b>🕐 Vào thi lúc:</b> ${raw.start_time ? new Date(raw.start_time).toLocaleString("vi-VN") : '---'}</p>
+                        <p><b>📡 Ping gần nhất:</b> ${raw.last_ping ? new Date(raw.last_ping).toLocaleTimeString("vi-VN") : '---'}</p>
+                    </div>
+                `;
+            } else if (item.category === 'submission') {
                 detailsHtml = `
                     <div style="background:#f0fdf4; border:1.5px solid #86efac; padding:10px 12px; border-radius:8px; margin-bottom:12px;">
                         <div style="font-size:17px; font-weight:900; color:#15803d;">Điểm: ${raw.score10} / ${raw.max_scale || 10}</div>
@@ -1173,7 +1219,7 @@
                 </div>
                 ${detailsHtml}
                 <div style="margin-top:16px; display:flex; gap:6px;">
-                    <button class="btn-win-tool btn-win-primary" style="flex:1;" onclick="openQuickEditModal(selectedItem)">✏️ Sửa điểm</button>
+                    <button class="btn-win-tool btn-win-primary" style="flex:1;" onclick="openQuickEditModal(selectedItem)">✏️ Chỉnh sửa</button>
                     <button class="btn-win-tool" onclick="downloadSelectedJsonAction()">💾 Tải JSON</button>
                     <button class="btn-win-tool btn-win-danger" onclick="deleteSelectedItem()">🗑️ Xóa</button>
                 </div>
@@ -1195,7 +1241,8 @@
             const bar = document.getElementById("breadcrumb-bar");
             let parts = [{ name: "🗄️ Supabase", folder: "root", param: null }];
 
-            if (currentFolder === 'quizzes') parts.push({ name: "Đề thi", folder: "quizzes", param: null });
+            if (currentFolder === 'active_sessions') parts.push({ name: "🟢 Vào thi (active_sessions)", folder: "active_sessions", param: null });
+            else if (currentFolder === 'quizzes') parts.push({ name: "Đề thi", folder: "quizzes", param: null });
             else if (currentFolder === 'submissions') parts.push({ name: "Bài nộp", folder: "submissions", param: null });
             else if (currentFolder.startsWith('sub_')) {
                 parts.push({ name: "Bài nộp", folder: "submissions", param: null });
@@ -1283,7 +1330,7 @@
             loadFolderContents(currentFolder, currentSubFolderParam);
         }
 
-        // 9. TÌM KIẾM TỨC THÌ
+        // 9. TÌM KIẾM
         function onFilterSearch(query) {
             const q = query.trim().toLowerCase();
             if (!q) { renderCurrentItems(); return; }
@@ -1292,6 +1339,7 @@
                 (item.name && item.name.toLowerCase().includes(q)) || 
                 (item.id && String(item.id).toLowerCase().includes(q)) ||
                 (item.raw?.student_name && item.raw.student_name.toLowerCase().includes(q)) ||
+                (item.raw?.name && item.raw.name.toLowerCase().includes(q)) ||
                 (item.raw?.sbd && String(item.raw.sbd).toLowerCase().includes(q))
             );
             
@@ -1299,7 +1347,7 @@
             renderCurrentItems();
         }
 
-        // 10. MODAL CHỈNH SỬA NHANH & JSON EDITOR
+        // 10. FORM & JSON MODAL
         function switchEditorTab(mode) {
             activeEditorMode = mode;
             document.getElementById("tab-btn-quick").classList.toggle("active", mode === 'quick');
@@ -1316,11 +1364,29 @@
             document.getElementById("editor-title").innerText = `✏️ Chỉnh sửa: ${item.name}`;
             document.getElementById("editor-json-content").value = JSON.stringify(raw, null, 2);
 
-            // Dựng Form sửa nhanh
             const formContainer = document.getElementById("quick-form-content");
             formContainer.innerHTML = "";
 
-            if (item.category === 'submission') {
+            if (item.category === 'active_session') {
+                formContainer.innerHTML = `
+                    <div class="form-group">
+                        <label>Họ và tên thí sinh:</label>
+                        <input type="text" id="edit-act-name" value="${raw.name || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Số báo danh (SBD):</label>
+                        <input type="text" id="edit-act-sbd" value="${raw.sbd || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Lớp học:</label>
+                        <input type="text" id="edit-act-class" value="${raw.class_name || ''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Đề thi đang làm:</label>
+                        <input type="text" id="edit-act-title" value="${raw.exam_title || ''}">
+                    </div>
+                `;
+            } else if (item.category === 'submission') {
                 formContainer.innerHTML = `
                     <div class="form-group">
                         <label>Họ và tên thí sinh:</label>
@@ -1420,7 +1486,12 @@
 
                 if (activeEditorMode === 'quick') {
                     payload = { ...selectedItem.raw };
-                    if (selectedItem.category === 'submission') {
+                    if (selectedItem.category === 'active_session') {
+                        payload.name = document.getElementById("edit-act-name").value.trim();
+                        payload.sbd = document.getElementById("edit-act-sbd").value.trim();
+                        payload.class_name = document.getElementById("edit-act-class").value.trim();
+                        payload.exam_title = document.getElementById("edit-act-title").value.trim();
+                    } else if (selectedItem.category === 'submission') {
                         payload.student_name = document.getElementById("edit-st-name").value.trim();
                         payload.sbd = document.getElementById("edit-st-sbd").value.trim();
                         payload.class_name = document.getElementById("edit-st-class").value.trim();
@@ -1453,7 +1524,9 @@
                 }
 
                 // Cập nhật Supabase
-                if (selectedItem.category === 'submission') {
+                if (selectedItem.category === 'active_session') {
+                    await client.from('active_sessions').upsert(payload);
+                } else if (selectedItem.category === 'submission') {
                     await client.from('submissions').upsert(payload);
                 } else if (selectedItem.category === 'quiz') {
                     await client.from('quizzes').upsert(payload);
@@ -1476,14 +1549,14 @@
             }
         }
 
-        // 11. XÓA BẢN GHI ĐÃ CHỌN
+        // 11. XÓA BẢN GHI
         async function deleteSelectedItem() {
             if (!selectedItem || selectedItem.type === 'folder') {
                 return alert("⚠️ Vui lòng chọn một tệp cụ thể để xóa!");
             }
 
             const item = selectedItem;
-            if (!confirm(`⚠️ XÁC NHẬN XÓA (ADMIN):\n\nBạn có chắc chắn muốn xóa vĩnh viễn tệp này khỏi Supabase không?\n"${item.name}"`)) {
+            if (!confirm(`⚠️ XÁC NHẬN XÓA (ADMIN):\n\nBạn có chắc chắn muốn xóa bản ghi này khỏi Supabase không?\n"${item.name}"`)) {
                 return;
             }
 
@@ -1491,7 +1564,9 @@
             if (!client) return;
 
             try {
-                if (item.category === 'submission') {
+                if (item.category === 'active_session') {
+                    await client.from('active_sessions').delete().eq('id', item.id);
+                } else if (item.category === 'submission') {
                     await client.from('submissions').delete().eq('id', item.id);
                 } else if (item.category === 'quiz') {
                     await client.from('quizzes').delete().eq('id', item.id);
@@ -1513,7 +1588,7 @@
             }
         }
 
-        // 12. THAO TÁC CONTEXT MENU
+        // 12. CONTEXT MENU & SHORTCUTS
         function handleItemContextMenu(e, item, el) {
             e.preventDefault(); e.stopPropagation();
             selectItem(item, el);
@@ -1595,9 +1670,9 @@
                     "SBD": r.sbd || '',
                     "Điểm thang 10": r.score10 ?? '',
                     "Số câu đúng": r.correct_count ?? '',
-                    "Thời gian làm": r.completion_time || '',
+                    "Thời gian làm": r.completion_time || (r.start_time ? formatElapsedDuration(r.start_time) : ''),
                     "Số lần chuyển tab": r.tab_switch_count || '',
-                    "Thời điểm nộp": r.created_at ? new Date(r.created_at).toLocaleString("vi-VN") : ''
+                    "Thời điểm nộp / Vào thi": r.created_at ? new Date(r.created_at).toLocaleString("vi-VN") : (r.start_time ? new Date(r.start_time).toLocaleString("vi-VN") : '')
                 });
             });
 
