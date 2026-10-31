@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-core.js 
-// (BẢN FIX ĐỒNG BỘ 100% MỌI LẦN THI KHÔNG BỊ NUỐT & GỠ BỎ THU ÉP)
+// (BẢN FIX ĐỒNG BỘ 100% MỌI LẦN THI KHÔNG BỊ NUỐT & BẢO LƯU TẤT CẢ LẦN THI)
 // =========================================================
 
 let currentExamResultData = {
@@ -461,8 +461,8 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         let cheatLogsTabCount = maxCheatCountBySbd[accSbdClean] || cheatDurations.length;
         let cheatTimeString = cheatDurations.length > 0 ? cheatDurations.join(" | ") : "0s";
 
-        // Khôi phục lần thi mà giáo viên đang chọn xem (không bị reset về cuối khi refresh)
-        let selectedAttemptIndex = matchedSubs.length > 0 ? (matchedSubs.length - 1) : 0;
+        // Mặc định hiển thị Lần 1 (chỉ mục 0) như ảnh mẫu, trừ khi giáo viên chọn xem lần khác
+        let selectedAttemptIndex = 0;
         const savedAttemptIdx = window._userSelectedAttemptsBySbd[accSbdClean];
         if (savedAttemptIdx !== undefined && savedAttemptIdx >= 0 && savedAttemptIdx < matchedSubs.length) {
             selectedAttemptIndex = savedAttemptIdx;
@@ -539,7 +539,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             if (savedAttemptIdx !== undefined && savedAttemptIdx >= 0 && savedAttemptIdx < existingFreeRow.allAttempts.length) {
                 existingFreeRow.selectedAttemptIndex = savedAttemptIdx;
             } else {
-                existingFreeRow.selectedAttemptIndex = existingFreeRow.allAttempts.length - 1;
+                existingFreeRow.selectedAttemptIndex = 0;
             }
             usedSubIds.add(sub.id);
             continue;
