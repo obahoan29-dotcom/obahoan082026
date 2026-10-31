@@ -60,14 +60,13 @@ function isSafeAdminBypass() {
 
 // HÀM THỰC HIỆN CHUYỂN HƯỚNG SANG WEB DỰ PHÒNG CHO HỌC SINH
 function executeStudentRedirect(targetUrl) {
-    if (isSafeAdminBypass()) return; // Tuyệt đối không chuyển hướng Admin
+    if (isSafeAdminBypass()) return;
     
     let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
     if (!destination.startsWith("http://") && !destination.startsWith("https://")) {
         destination = "https://" + destination;
     }
     
-    // Nếu học sinh đang mở đề thi cụ thể, tự đính kèm lại tham số truy vấn
     try {
         const currentSearch = window.location.search;
         if (currentSearch && destination.endsWith('/')) {
@@ -84,7 +83,6 @@ function executeStudentRedirect(targetUrl) {
 async function initGlobalSiteRedirectWatcher() {
     const client = getSupabaseClient();
 
-    // Nếu đã kích hoạt chuyển hướng từ trước thì chuyển ngay
     if (SITE_REDIRECT_CONFIG && SITE_REDIRECT_CONFIG.enabled) {
         executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
     }
@@ -113,7 +111,6 @@ async function initGlobalSiteRedirectWatcher() {
         }
     } catch(e) {}
 
-    // Lắng nghe Realtime: khi Admin bật công tắc, học sinh lập tức bị chuyển hướng
     try {
         client.channel('realtime_redirect_watcher')
             .on('postgres_changes', {
@@ -148,7 +145,7 @@ async function initGlobalSiteRedirectWatcher() {
 
 initGlobalSiteRedirectWatcher();
 
-// CẤU HÌNH GOOGLE DRIVE & IMGBB (ĐÃ CẬP NHẬT LINK GAS MỚI)
+// CẤU HÌNH GOOGLE DRIVE & IMGBB
 const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const GOOGLE_DRIVE_TULUAN_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const IMGBB_API_KEY = "548b05b895acef8ad88e645fd274c574"; 
