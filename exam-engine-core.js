@@ -1,5 +1,6 @@
 // =========================================================
 // FILE 3: exam-engine-core.js (BẢN TỐI ƯU THI LẦN 2 MỚI TINH - KHÔNG BỊ KHÓA NHẦM)
+// NÂNG CẤP: SELF-HEALING UPSERT - NẾU RỚT ACTIVE_SESSION SẼ TỰ ĐỘNG PHỤC HỒI NGAY
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -167,6 +168,7 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
+// BỘ TỰ ĐỘNG PHỤC HỒI ACTIVE_SESSIONS KHI HỌC SINH THAO TÁC (SELF-HEALING)
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -190,8 +192,22 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (client) {
         try {
+            // Lưu bản nháp thời gian thực
             client.from('live_drafts').upsert(draftData, { onConflict: 'id' }).then();
-            client.from('active_sessions').update({ last_ping: Date.now() }).match({ id: draftData.id }).then();
+
+            // TỰ PHỤC HỒI ACTIVE_SESSIONS: Dùng UPSERT thay vì UPDATE để nếu dòng bị mất sẽ tự mọc lại ngay!
+            client.from('active_sessions').upsert({
+                id: draftData.id,
+                quiz_id: draftData.quiz_id,
+                sbd: draftData.sbd,
+                name: draftData.student_name,
+                class_name: draftData.class_name,
+                category_id: draftData.category_id,
+                ma_de: draftData.ma_de,
+                exam_title: draftData.exam_title,
+                start_time: examStartTime || Date.now(),
+                last_ping: Date.now()
+            }, { onConflict: 'id' }).then();
         } catch(e) {}
     }
 
@@ -412,7 +428,6 @@ function resetToFreshLoginScreen() {
         examIndexedDB.removeItem('exam_states', getStorageKey()).catch(() => {});
     }
 
-    // Tự động nhận diện lần thi tiếp theo (Lần 2, 3...)
     if (quizId && sId) {
         const nextAttempt = getRealStudentExamAttemptNumber(quizId, sId);
         window.currentStudentAttemptNumber = nextAttempt;
@@ -421,7 +436,7 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
-// BỘ KIỂM TRA PHIÊN THI ĐÃ FIX: KHÔNG BỊ KHÓA DO LẦN 1 CŨ
+// BỘ KIỂM TRA PHIÊN THI: AUTOSTART AN TOÀN - CHỈ MỞ KHI HANDSHAKE SUPABASE THÀNH CÔNG
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -437,7 +452,6 @@ async function checkSessionStatus(isAutostart = false) {
         renderStudentSubmissionHistoryButtons();
     }
 
-    // Kiểm tra số lần thi hiện tại của học sinh
     let attempt = 1;
     if (quizId && sId) {
         attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
@@ -445,8 +459,6 @@ async function checkSessionStatus(isAutostart = false) {
         checkAndDisplayAttemptNoticeOnStudentCard(sId);
     }
 
-    // Nếu học sinh đã nộp lần trước (có cờ last_submission_cleared) và vừa vào lại trang thi:
-    // Tuyệt đối không khôi phục bài thi cũ của lần 1, để học sinh sẵn sàng cho Lần 2 mới tinh!
     const isCleared = (safeLocal.getItem("last_submission_cleared") === "true");
     if (isCleared && !isAutostart) {
         hideLoading();
@@ -514,13 +526,21 @@ async function checkSessionStatus(isAutostart = false) {
         return; 
     }
 
+    // NẾU TỰ ĐỘNG BẮT ĐẦU (AUTOSTART): PHẢI QUA CHỐT CHẶN HANDSHAKE THÀNH CÔNG MỚI ĐƯỢC VÀO
     if (isAutostart) {
         const sIdVal = document.getElementById("student-id").value.trim();
         const sNameVal = document.getElementById("student-name").value.trim();
         if (sIdVal && sNameVal) {
-            document.getElementById("login-box").style.display = "none";
-            document.getElementById("student-card").style.display = "none";
-            if (typeof startExamAction === 'function') await startExamAction(true);
+            if (typeof startExamAction === 'function') {
+                const success = await startExamAction(true);
+                if (success) {
+                    document.getElementById("login-box").style.display = "none";
+                    document.getElementById("student-card").style.display = "none";
+                } else {
+                    // Nếu lỗi mạng / Supabase chưa nhận: hiển thị lại thẻ thông tin để học sinh bấm thử lại
+                    document.getElementById("student-card").style.display = "block";
+                }
+            }
             hideLoading();
             return;
         }
