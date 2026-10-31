@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: NỘP ĐA LẦN THI KHÔNG BỊ CHẶN UNIQUE CONSTRAINT)
+// (BẢN CHUẨN XÁC: HANDSHAKE 2 CHIỀU BẮT BUỘC - KHÔNG GHI ĐƯỢC SUPABASE KHÔNG CHO VÀO THI)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -307,7 +307,7 @@ async function startExamAction(isAutostart = false) {
 
     if (!sId || !sName || !sClass) {
         if (!isAutostart) alert("⚠️ Vui lòng nhập đầy đủ Số báo danh, Họ và tên, Lớp!");
-        return;
+        return false;
     }
 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
@@ -326,22 +326,54 @@ async function startExamAction(isAutostart = false) {
             const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
             alert(`⛔ Số báo danh "${sId}" thuộc danh sách học sinh của ${otherCatName}!\nBạn không thể sử dụng tài khoản này để làm đề thi của ${currentCatName}.\nVui lòng quay lại trang chủ và chọn đúng đề thi của lớp bạn!`);
             window.location.href = `./index.html`;
-            return;
+            return false;
         }
 
         const allowFree = typeof isCurrentExamAllowFree === 'function' ? isCurrentExamAllowFree() : true;
         if (!allowFree) {
             alert(`⛔ Đề thi này chỉ dành riêng cho học sinh lớp ${currentCatName}!\nThí sinh tự do hoặc học sinh lớp khác không được phép tham gia.`);
             window.location.href = `./index.html`;
-            return;
+            return false;
         }
     }
 
-    await executeStartExamAPI(sId, sName, sClass, isFree);
+    return await executeStartExamAPI(sId, sName, sClass, isFree, isAutostart);
 }
 
-// KHỞI TẠO BÀI THI MỚI TINH KHI BƯỚC VÀO LẦN 2, 3, 4
-async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
+// BỘ GỬI TỨC THÌ GÓI KHỞI ĐỘNG VÀO GOOGLE DRIVE DỰ PHÒNG
+function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, attempt) {
+    try {
+        const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+            ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+            : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : "");
+
+        if (!gasUrl || gasUrl.includes("DÁN_URL")) return;
+
+        const payload = {
+            action: "logStudentExamStart",
+            sbd: sId,
+            student_name: sName,
+            className: sClass,
+            quizId: quizId,
+            examTitle: examTitle,
+            attempt: attempt,
+            startTime: new Date().toLocaleString("vi-VN")
+        };
+
+        fetch(gasUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload),
+            keepalive: true
+        }).catch(() => null);
+    } catch(e) {}
+}
+
+// =========================================================================
+// CHỐT CHẶN BẮT BUỘC (TWO-WAY HANDSHAKE BARRIER):
+// PHẢI GHI THÀNH CÔNG VÀO SUPABASE THÌ MỚI MỞ ĐỀ, GẶP LỖI THÌ CHẶN ĐỨNG VÀ BÁO RÕ
+// =========================================================================
+async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
@@ -351,19 +383,133 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     if (startBtn) { 
         startBtn.disabled = true; 
-        startBtn.innerText = "⏳ Đang kết nối phòng thi..."; 
+        startBtn.innerText = "⏳ Đang kết nối và đăng ký phòng thi với máy chủ..."; 
     }
 
+    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
+    const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
+        ? EXAM_NAME 
+        : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
+
     // 1. TÍNH TOÁN LẦN THI HIỆN TẠI
-    const currentAttempt = await fetchStudentAttemptNumberFromCloud(currentQuizId, sId);
+    let currentAttempt = 1;
+    try {
+        currentAttempt = await fetchStudentAttemptNumberFromCloud(currentQuizId, sId);
+    } catch(e) {
+        currentAttempt = getRealStudentExamAttemptNumber(currentQuizId, sId);
+    }
     window.currentStudentAttemptNumber = currentAttempt;
 
-    // 2. DỌN SẠCH DỮ LIỆU ĐỂ BÀI MỚI TINH
+    // 2. KẾT NỐI VÀ GHI BẮT BUỘC VÀO SUPABASE (CHỐNG LỌT HỌC SINH 100%)
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) {
+        const errMsg = "❌ Lỗi: Chưa thể kết nối máy chủ Supabase. Vui lòng tải lại trang!";
+        alert(errMsg);
+        if (startBtn) { startBtn.disabled = false; startBtn.innerText = "Vào Làm Bài 🚀"; }
+        document.getElementById("student-card").style.display = "block";
+        return false;
+    }
+
+    const nowMs = Date.now();
+    let handshakeSuccess = false;
+    let handshakeErrorMsg = "";
+
+    // Thử gửi tối đa 2 lần để đảm bảo không bị rớt do lag mạng tạm thời
+    for (let attemptIdx = 1; attemptIdx <= 2; attemptIdx++) {
+        try {
+            // A. ĐĂNG KÝ VÀO ACTIVE_SESSIONS (BẮT BUỘC BẰNG UPSERT)
+            const { error: activeErr } = await client.from('active_sessions').upsert({
+                id: `${currentQuizId}_${cleanSbd}`,
+                quiz_id: currentQuizId,
+                sbd: cleanSbd,
+                name: sName,
+                class_name: strictClassName,
+                category_id: currentCat,
+                is_free: isFreeStudent,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: exactExamTitle,
+                start_time: nowMs,
+                last_ping: nowMs
+            }, { onConflict: 'id' });
+
+            if (activeErr) throw new Error("Ghi active_sessions thất bại: " + (activeErr.message || "Lỗi máy chủ"));
+
+            // B. ĐĂNG KÝ VÀO LIVE_DRAFTS (BẢN LƯU NHÁP REALTIME BẮT BUỘC)
+            const { error: draftErr } = await client.from('live_drafts').upsert({
+                id: `${currentQuizId}_${cleanSbd}`,
+                quiz_id: currentQuizId,
+                sbd: cleanSbd,
+                student_name: sName,
+                class_name: strictClassName,
+                category_id: currentCat,
+                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                exam_title: exactExamTitle,
+                user_answers: {},
+                last_updated: new Date().toISOString()
+            }, { onConflict: 'id' });
+
+            if (draftErr) throw new Error("Ghi live_drafts thất bại: " + (draftErr.message || "Lỗi máy chủ"));
+
+            // C. GHI NHẬT KÝ BẮT ĐẦU VÀO CHEATING_LOGS
+            client.from('cheating_logs').insert([{
+                quiz_id: currentQuizId,
+                sbd: cleanSbd,
+                student_name: sName,
+                student_class: strictClassName,
+                category_id: currentCat,
+                switch_count: 0,
+                duration_str: `Bắt đầu Lần ${currentAttempt}`,
+                duration_sec: 0
+            }]).then();
+
+            handshakeSuccess = true;
+            break; // Đã thành công, thoát vòng lặp retry
+        } catch (err) {
+            handshakeErrorMsg = err.message || "Lỗi mạng";
+            console.warn(`Lần thử handshake ${attemptIdx} thất bại:`, err);
+            if (attemptIdx < 2) {
+                await new Promise(r => setTimeout(r, 800)); // Chờ 800ms thử lại
+            }
+        }
+    }
+
+    // NẾU SUPABASE KHÔNG XÁC NHẬN THÀNH CÔNG: CHẶN LẠI NGAY LẬP TỨC!
+    if (!handshakeSuccess) {
+        if (startBtn) { 
+            startBtn.disabled = false; 
+            startBtn.innerText = `Thử Vào Bài Thi Lại 🚀`; 
+        }
+
+        // BẢO ĐẢM GIAO DIỆN ĐĂNG NHẬP VẪN HIỂN THỊ, KHÔNG CHO VÀO ĐỀ
+        document.getElementById("student-card").style.display = "block";
+        document.getElementById("top-navbar").style.display = "none";
+        document.getElementById("quiz-content").style.display = "none";
+
+        alert(`⛔ KHÔNG THỂ BẮT ĐẦU BÀI THI DO MÁY CHỦ CHƯA PHẢN HỒI XÁC NHẬN!\n\nChi tiết lỗi: ${handshakeErrorMsg}\n\n👉 Em vui lòng kiểm tra lại kết nối mạng Wifi/4G và bấm lại nút "Vào Làm Bài" để hệ thống ghi tên em vào danh sách thi của Thầy nhé!`);
+        return false;
+    }
+
+    // ĐỒNG THỜI GỬI DỰ PHÒNG TỨC THÌ SANG GOOGLE DRIVE
+    sendStartExamBackupLogToDrive(cleanSbd, sName, strictClassName, currentQuizId, exactExamTitle, currentAttempt);
+
+    // DỌN SẠCH DỮ LIỆU ĐỂ BÀI MỚI TINH TRÊN TRÌNH DUYỆT
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem("last_submission_cleared");
     if (typeof getStorageKey === 'function') {
         safeLocal.removeItem(getStorageKey());
         safeLocal.removeItem(getStorageKey(currentAttempt));
+    }
+
+    if (typeof examIndexedDB !== 'undefined') {
+        examIndexedDB.setItem('live_drafts', {
+            key: `${currentQuizId}_${cleanSbd}`,
+            quiz_id: currentQuizId,
+            sbd: cleanSbd,
+            student_name: sName,
+            class_name: strictClassName,
+            user_answers: {},
+            updatedAt: nowMs
+        }).catch(() => {});
     }
 
     if (window.SECURE_VAULT) {
@@ -383,75 +529,13 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     const allOpts = document.querySelectorAll('.opt-label.selected');
     allOpts.forEach(o => o.classList.remove('selected'));
 
-    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-    const nowMs = Date.now();
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-
-    if (client && currentQuizId) {
-        try {
-            await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
-
-            await client.from('active_sessions').insert([{
-                id: `${currentQuizId}_${cleanSbd}`,
-                quiz_id: currentQuizId,
-                sbd: cleanSbd,
-                name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                is_free: isFreeStudent,
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                start_time: nowMs,
-                last_ping: nowMs
-            }]);
-
-            await client.from('live_drafts').upsert({
-                id: `${currentQuizId}_${cleanSbd}`,
-                quiz_id: currentQuizId,
-                sbd: cleanSbd,
-                student_name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                user_answers: {},
-                last_updated: new Date().toISOString()
-            }, { onConflict: 'id' });
-
-            if (typeof examIndexedDB !== 'undefined') {
-                examIndexedDB.setItem('live_drafts', {
-                    key: `${currentQuizId}_${cleanSbd}`,
-                    quiz_id: currentQuizId,
-                    sbd: cleanSbd,
-                    student_name: sName,
-                    class_name: strictClassName,
-                    user_answers: {},
-                    updatedAt: nowMs
-                }).catch(() => {});
-            }
-
-            client.from('cheating_logs').insert([{
-                quiz_id: currentQuizId,
-                sbd: cleanSbd,
-                student_name: sName,
-                student_class: strictClassName,
-                category_id: currentCat,
-                switch_count: 0,
-                duration_str: `Bắt đầu Lần ${currentAttempt}`,
-                duration_sec: 0
-            }]).then();
-
-        } catch (err) {
-            console.warn("Cảnh báo ghi nhận phòng thi:", err);
-        }
-    }
-
+    // ĐÃ XÁC THỰC HANDSHAKE THÀNH CÔNG -> MỞ KHÓA BÀI THI CHO HỌC SINH
     document.getElementById("nav-student-name").innerText = sName; 
     document.getElementById("nav-student-id").innerText = (currentAttempt > 1) ? `${sId} (Lần ${currentAttempt})` : sId; 
     document.getElementById("nav-student-class").innerText = strictClassName; 
     document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
-    document.getElementById("student-card").style.display = "none"; 
     
+    document.getElementById("student-card").style.display = "none"; 
     const waitingCard = document.getElementById("waiting-room-card"); 
     if (waitingCard) waitingCard.style.display = "none"; 
     
@@ -476,8 +560,10 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
 
     if (startBtn) { 
         startBtn.disabled = false; 
-        startBtn.innerText = "Vào Làm Bài"; 
+        startBtn.innerText = "Vào Làm Bài 🚀"; 
     }
+
+    return true;
 }
 
 // BỘ ĐÓNG GÓI BÀI NỘP CHUẨN XÁC
@@ -832,7 +918,7 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     if (client) {
         try {
-            // 1. Thử gửi INSERT bình thường (Khi Thầy đã chạy lệnh SQL xóa constraint)
+            // 1. Thử gửi INSERT bình thường
             let { error: err1 } = await client.from('submissions').insert([payload]);
             if (!err1) {
                 submitOk = true;
@@ -840,15 +926,14 @@ async function executeSubmitExam(isForceSubmit = false) {
                 console.warn("Lệnh Insert thông thường gặp lỗi:", err1);
                 serverErrorMessage = err1.message || "";
 
-                // 2. NẾU BỊ CHẶN BỞI UNIQUE CONSTRAINT: KÍCH HOẠT CƠ CHẾ DỰ PHÒNG THÔNG MINH
+                // 2. NẾU BỊ CHẶN BỞI UNIQUE CONSTRAINT: KÍCH HOẠT CƠ CHẾ DỰ PHÒNG
                 const isConstraintError = String(serverErrorMessage).includes("idx_submissions_quiz_sbd") || 
                                           String(serverErrorMessage).includes("unique constraint") ||
                                           String(serverErrorMessage).includes("duplicate key");
 
                 if (isConstraintError) {
-                    console.log("⚡ Phát hiện constraint idx_submissions_quiz_sbd, thực hiện lưu đè lên bản ghi cũ hoặc lưu mã SBD kèm số lần thi...");
+                    console.log("⚡ Phát hiện constraint idx_submissions_quiz_sbd, thực hiện cập nhật hoặc đổi nhánh SBD...");
                     
-                    // Thử phương án A: Tự động cập nhật bản ghi hiện có với điểm Lần mới nhất
                     let { error: errUpdate } = await client.from('submissions')
                         .update({
                             score10: payload.score10,
@@ -869,7 +954,6 @@ async function executeSubmitExam(isForceSubmit = false) {
                     if (!errUpdate) {
                         submitOk = true;
                     } else {
-                        // Thử phương án B: Lưu với mã SBD nhánh: sbd_lan2, sbd_lan3 để không bao giờ bị đụng constraint
                         let fallbackPayload = {
                             ...payload,
                             sbd: `${payload.sbd}_lan${currentAttemptNumber}`
