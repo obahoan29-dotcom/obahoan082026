@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-regrade.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
-// BỔ SUNG: XỬ LÝ NẠP FILE JSON NỘP SÓT VÀ CHẤM BÙ TỰ ĐỘNG
+// BỔ SUNG: XỬ LÝ NẠP FILE JSON NỘP SÓT VÀ CHẤM BÙ TỰ ĐỘNG KHÔNG BỊ ĐÈ LẦN THI
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
@@ -10,7 +10,6 @@ function closeResultModal(triggerHistoryBack = true) {
     if (modal) modal.style.display = "none";
     closeRegradeModal();
     
-    // FIX LỖI: Nhả khóa cuộn màn hình để chuột có thể lăn được trang chính
     document.body.classList.remove("modal-backdrop-locked");
     
     if (triggerHistoryBack && window.location.hash.startsWith("#bang-ket-qua")) { window.history.back(); }
@@ -19,7 +18,6 @@ function closeResultModal(triggerHistoryBack = true) {
 function startAutoRefreshResult() {
     stopAutoRefreshResult();
     if (!isAutoRefreshEnabled) return;
-    // Chu kỳ hẹn giờ an toàn 60 giây dự phòng (Realtime đã xử lý tức thì 0s)
     autoRefreshTimer = setInterval(async () => {
         const modal = document.getElementById("result-fullscreen-modal");
         if (modal && modal.style.display === "flex" && currentExamResultData.item) {
@@ -95,7 +93,6 @@ async function previewRegradeFile(input) {
     }
 }
 
-// BỘ MÁY CHẤM LẠI BÀI QUA SUPABASE
 async function processRegradeWithAnswers() {
     const btn = document.getElementById("btn-confirm-regrade");
     const currentItem = currentExamResultData.item;
@@ -129,7 +126,6 @@ async function processRegradeWithAnswers() {
 
         const scoringConfig = quizObj.scoring_config || { mode: 'option1' };
 
-        // Lấy danh sách bài đã nộp của đề này
         const { data: subs } = await client.from('submissions').select('*').eq('quiz_id', quizId);
         let updatedCount = 0;
 
@@ -161,7 +157,7 @@ async function processRegradeWithAnswers() {
 }
 
 // =========================================================================
-// BỘ XỬ LÝ UPLOAD BÀI THI TỪ FILE JSON DỰ PHÒNG NỘP SÓT (BẢO TOÀN 100%)
+// BỘ XỬ LÝ UPLOAD BÀI THI TỪ FILE JSON DỰ PHÒNG NỘP SÓT (BẢO VỆ MỌI LẦN THI)
 // =========================================================================
 
 function triggerUploadBackupJson(event) {
@@ -198,7 +194,6 @@ async function handleBackupJsonFileInput(input) {
         let parsed = parseScriptOrJson(text);
         if (!parsed) throw new Error("Tệp chọn không đúng định dạng JSON chuẩn!");
 
-        // Hỗ trợ cả file chứa 1 bài nộp (Object) hoặc nhiều bài nộp gộp chung (Array)
         const itemsToProcess = Array.isArray(parsed) ? parsed : [parsed];
         let successCount = 0;
 
@@ -207,7 +202,10 @@ async function handleBackupJsonFileInput(input) {
 
             const effectiveQuizId = targetQuizId || data.quiz_id || data.quizId || "exam";
             const sbdClean = String(data.sbd || data.studentId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-            const subId = data.id || `${effectiveQuizId}_${sbdClean}`;
+            
+            // TẠO ID MỚI KÈM TIMESTAMP ĐỂ KHÔNG BAO GIỜ GHI ĐÈ LẦN THI CŨ
+            const uniqueSubId = data.id || `sub_${effectiveQuizId}_${sbdClean}_${Date.now()}`;
+            
             const studentName = data.student_name || data.studentName || data.name || "Học sinh";
             const className = data.class_name || data.className || data.studentClass || "Lớp";
             const currentCat = data.category_id || data.categoryId || currentExamResultData.categoryId || "them-11";
@@ -221,7 +219,7 @@ async function handleBackupJsonFileInput(input) {
             let wrongCount = (data.wrong_count !== undefined || data.wrongCount !== undefined) ? parseInt(data.wrong_count || data.wrongCount, 10) : null;
             let dataString = data.data_string || data.dataString || "";
 
-            // Nếu file JSON là bản lưu nháp chưa kịp tính điểm, tự động chấm điểm ngay theo đáp án đề gốc
+            // Tự chấm điểm từ đáp án gốc nếu file json là bản lưu nháp
             if ((score10 === null || isNaN(score10)) && Object.keys(userAnswers).length > 0) {
                 try {
                     const { data: quizObj } = await client.from('quizzes').select('*').eq('id', effectiveQuizId).single();
@@ -259,7 +257,7 @@ async function handleBackupJsonFileInput(input) {
             if (!dataString) dataString = "[NỘP BỔ SUNG TỪ FILE JSON]";
 
             const payloadRow = {
-                id: subId,
+                id: uniqueSubId,
                 quiz_id: effectiveQuizId,
                 sbd: sbdClean,
                 student_name: studentName,
@@ -281,10 +279,9 @@ async function handleBackupJsonFileInput(input) {
                 created_at: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString()
             };
 
-            const { error: upsertErr } = await client.from('submissions').upsert(payloadRow);
+            const { error: upsertErr } = await client.from('submissions').upsert(payloadRow, { onConflict: 'id' });
             if (upsertErr) throw upsertErr;
 
-            // Xóa phiên dở dang và bản nháp (nếu có)
             client.from('live_drafts').delete().match({ quiz_id: effectiveQuizId, sbd: sbdClean }).then();
             client.from('active_sessions').delete().match({ quiz_id: effectiveQuizId, sbd: sbdClean }).then();
 
@@ -292,7 +289,7 @@ async function handleBackupJsonFileInput(input) {
         }
 
         if (successCount > 0) {
-            alert(`🎉 NẠP THÀNH CÔNG ${successCount} BÀI THI TỪ FILE JSON!\n\nDữ liệu đã được lưu chính thức lên máy chủ.`);
+            alert(`🎉 NẠP THÀNH CÔNG ${successCount} BÀI THI TỪ FILE JSON!\n\nDữ liệu đã được lưu thành một lần thi riêng biệt lên máy chủ.`);
             await refreshCurrentExamResults();
         } else {
             alert("⚠️ Không tìm thấy bài làm hợp lệ trong file JSON!");
@@ -309,7 +306,6 @@ async function handleBackupJsonFileInput(input) {
     }
 }
 
-// Đăng ký toàn cục để các nút trên giao diện gọi trực tiếp
 window.closeResultModal = closeResultModal;
 window.startAutoRefreshResult = startAutoRefreshResult;
 window.stopAutoRefreshResult = stopAutoRefreshResult;
