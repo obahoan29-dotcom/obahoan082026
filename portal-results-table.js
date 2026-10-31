@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI CHE KHUẤT - HIỂN THỊ ĐỦ 100% CÁC LẦN THI)
+// (BẢN CHUẨN XÁC THEO ẢNH: NÚT "2 LẦN" + DROPDOWN CHỌN LẦN THI ĐẦY ĐỦ ĐIỂM SỐ & THỜI GIAN)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -9,8 +9,9 @@ let _liveDoingTickerInterval = null;
 let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 
-(function injectHeartbeatDoingStyles() {
-    const styleId = "status-doing-heartbeat-styles";
+// TIÊM STYLE CHO CỘT "SỐ LẦN THI" VÀ DROPDOWN "CHỌN LẦN THI" CHUẨN XÁC THEO ẢNH
+(function injectAttemptDropdownStyles() {
+    const styleId = "status-attempt-dropdown-styles";
     if (document.getElementById(styleId)) return;
     const style = document.createElement("style");
     style.id = styleId;
@@ -230,14 +231,6 @@ let isFitAllRowsActive = false;
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25); }
         }
 
-        @keyframes heartIconRotate {
-            0%, 100% { transform: scale(1) rotate(0deg); }
-            14% { transform: scale(1.3) rotate(-12deg); }
-            28% { transform: scale(1.05) rotate(0deg); }
-            42% { transform: scale(1.35) rotate(12deg); }
-            70% { transform: scale(1) rotate(0deg); }
-        }
-
         .status-doing-heartbeat {
             display: inline-flex !important;
             align-items: center !important;
@@ -267,8 +260,6 @@ let isFitAllRowsActive = false;
             display: inline-block !important;
             font-size: 15px !important;
             line-height: 1 !important;
-            animation: heartIconRotate 1.35s infinite ease-in-out !important;
-            filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.85)) !important;
         }
 
         tr.row-student-is-doing td { background-color: #faf5ff !important; }
@@ -293,126 +284,179 @@ let isFitAllRowsActive = false;
             box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2) !important;
             white-space: nowrap !important;
         }
-        .live-doing-timer-pill .timer-clock-icon {
-            font-size: 12.5px !important;
-            line-height: 1 !important;
-            animation: heartIconRotate 2s infinite ease-in-out !important;
-        }
-        .live-doing-timer-val {
-            font-variant-numeric: tabular-nums !important;
-            letter-spacing: 0.2px !important;
-        }
-
-        .attempt-badge-doing {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            background: #faf5ff !important;
-            color: #7c3aed !important;
-            border: 1.2px solid #c084fc !important;
-            padding: 2px 7px !important;
-            border-radius: 10px !important;
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-            white-space: nowrap !important;
-            animation: heartbeatDoing 1.8s infinite ease-in-out !important;
-        }
 
         /* ========================================================= */
-        /* CỘT SỐ LẦN THI: KHÔNG CÒN DROPDOWN - HIỆN ĐỦ 100% CÁC NÚT */
+        /* CỘT SỐ LẦN THI: NÚT VÀ POPUP DROPDOWN THEO ĐÚNG ẢNH MẪU */
         /* ========================================================= */
-        .result-table thead th:nth-child(3) {
-            width: 145px !important;
-            min-width: 130px !important;
-            text-align: center !important;
-        }
-
         .td-attempt-cell-wrap {
             text-align: center !important;
-            white-space: normal !important;
             overflow: visible !important;
+            position: relative !important;
             padding: 4px 6px !important;
-            width: 145px !important;
-            min-width: 130px !important;
         }
 
-        .td-attempts-list {
+        /* Nút màu hồng/đỏ khi có từ 2 lần thi trở lên (y hệt ảnh chụp) */
+        .btn-attempt-badge-multi {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 4px !important;
-            flex-wrap: wrap !important;
-            max-width: 100% !important;
-            margin: 0 auto !important;
-        }
-
-        /* Nút huy hiệu từng lần thi */
-        .btn-attempt-pill {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            padding: 3px 8px !important;
+            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 3px 12px !important;
             border-radius: 14px !important;
-            font-size: 11px !important;
+            font-size: 12px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            border: 1.4px solid #cbd5e1 !important;
-            background: #ffffff !important;
-            color: #334155 !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
+            box-shadow: 0 2px 7px rgba(225, 29, 72, 0.35) !important;
             transition: all 0.15s ease !important;
-            white-space: nowrap !important;
             user-select: none !important;
-            line-height: 1.2 !important;
+            white-space: nowrap !important;
             font-family: inherit !important;
         }
-
-        .btn-attempt-pill:hover {
-            border-color: #818cf8 !important;
-            background: #f0fdf4 !important;
-            color: #166534 !important;
-            transform: translateY(-1px) !important;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+        .btn-attempt-badge-multi:hover {
+            filter: brightness(1.1) !important;
+            transform: scale(1.05) !important;
         }
-
-        .btn-attempt-pill:active {
+        .btn-attempt-badge-multi:active {
             transform: translateY(1px) scale(0.96) !important;
         }
 
-        /* Lần thi đang chọn xem */
-        .btn-attempt-pill.active {
-            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-            border-color: #4338ca !important;
-            color: #ffffff !important;
-            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4) !important;
+        /* Nút xám viền mảnh khi chỉ thi 1 lần (y hệt ảnh chụp ở dòng 5, 6) */
+        .btn-attempt-badge-single {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: #ffffff !important;
+            color: #1e293b !important;
+            border: 1.2px solid #cbd5e1 !important;
+            padding: 3px 12px !important;
+            border-radius: 14px !important;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+            transition: all 0.15s ease !important;
+            user-select: none !important;
+            white-space: nowrap !important;
+            font-family: inherit !important;
         }
-
-        .btn-attempt-pill.active .attempt-pill-score {
-            background: rgba(255, 255, 255, 0.28) !important;
-            color: #ffffff !important;
-            border-color: rgba(255, 255, 255, 0.5) !important;
-        }
-
-        .attempt-pill-score {
-            font-size: 10px !important;
-            font-weight: 900 !important;
+        .btn-attempt-badge-single:hover {
             background: #f1f5f9 !important;
-            color: #0284c7 !important;
-            padding: 1px 4px !important;
-            border-radius: 6px !important;
-            border: 1px solid #bae6fd !important;
-            margin-left: 2px !important;
+            border-color: #94a3b8 !important;
+        }
+
+        /* KHUNG DROPDOWN "CHỌN LẦN THI:" NỔI LÊN (Y HỆT HÌNH ẢNH) */
+        .attempt-picker-wrapper {
+            position: relative !important;
+            display: inline-block !important;
+        }
+
+        .attempt-dropdown-menu {
+            display: none;
+            position: absolute !important;
+            top: calc(100% + 4px) !important;
+            left: 0 !important;
+            min-width: 255px !important;
+            background: #ffffff !important;
+            border-radius: 12px !important;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.22), 0 0 0 1px #cbd5e1 !important;
+            border: 1.5px solid #cbd5e1 !important;
+            padding: 8px 10px !important;
+            z-index: 9999999 !important;
+            animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            text-align: left !important;
+            white-space: nowrap !important;
+        }
+        .attempt-dropdown-menu.show {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 4px !important;
+        }
+
+        .attempt-dropdown-header {
+            font-size: 11px !important;
+            font-weight: 900 !important;
+            color: #334155 !important;
+            text-align: center !important;
+            margin-bottom: 5px !important;
+            letter-spacing: 0.3px !important;
+            user-select: none !important;
+        }
+
+        .attempt-menu-item {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            padding: 6px 10px !important;
+            border-radius: 8px !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            color: #1e293b !important;
+            cursor: pointer !important;
+            transition: background 0.15s ease !important;
+            user-select: none !important;
+        }
+        .attempt-menu-item:hover {
+            background: #f1f5f9 !important;
+        }
+
+        /* Lần thi đang được chọn: màu tím có dấu tick ✓ */
+        .attempt-menu-item.selected {
+            background: #ede9fe !important;
+            color: #6d28d9 !important;
+            font-weight: 900 !important;
+        }
+        .attempt-menu-item.selected .attempt-check-icon {
+            color: #7c3aed !important;
+            font-weight: 900 !important;
+        }
+        .attempt-menu-item.selected .attempt-item-score {
+            color: #6d28d9 !important;
+        }
+
+        .attempt-item-left {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
         }
 
         .attempt-check-icon {
-            font-size: 10.5px !important;
+            font-size: 12px !important;
             font-weight: 900 !important;
-            color: #4ade80 !important;
-            line-height: 1 !important;
+            width: 14px !important;
+            display: inline-block !important;
+            text-align: center !important;
+        }
+
+        .attempt-item-score {
+            font-size: 12px !important;
+            font-weight: 900 !important;
+            color: #0284c7 !important;
+            margin-left: 8px !important;
+        }
+
+        /* Đảm bảo dòng bảng chứa dropdown luôn nổi lên trên cùng */
+        tr.has-active-attempt-menu {
+            position: relative !important;
+            z-index: 1000 !important;
         }
     `;
     document.head.appendChild(style);
 })();
+
+function formatAttemptDateTime(timestamp) {
+    if (!timestamp) return "---";
+    let d = new Date(timestamp);
+    if (isNaN(d.getTime())) {
+        let parsed = (typeof parseDateString === 'function') ? parseDateString(timestamp) : 0;
+        if (parsed) d = new Date(parsed);
+        else return String(timestamp);
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
 
 function applyModalZoomLevel(newLevel) {
     modalCustomZoomLevel = Math.min(1.8, Math.max(0.40, Math.round(newLevel * 100) / 100));
@@ -832,7 +876,7 @@ function calculateRanksForRows(rows) {
     const scores = [];
     rows.forEach(r => {
         if (r.allAttempts.length > 0) {
-            let curSub = r.allAttempts[r.selectedAttemptIndex] || r.allAttempts[r.allAttempts.length - 1];
+            let curSub = r.allAttempts[r.selectedAttemptIndex] || r.allAttempts[0];
             if (curSub && curSub.score10 !== undefined) {
                 let sc = parseFloat(curSub.score10);
                 if (!isNaN(sc)) scores.push(sc);
@@ -843,7 +887,7 @@ function calculateRanksForRows(rows) {
     rows.forEach(r => {
         r.rank = null;
         if (r.allAttempts.length > 0) {
-            let curSub = r.allAttempts[r.selectedAttemptIndex] || r.allAttempts[r.allAttempts.length - 1];
+            let curSub = r.allAttempts[r.selectedAttemptIndex] || r.allAttempts[0];
             if (curSub && curSub.score10 !== undefined) {
                 let sc = parseFloat(curSub.score10);
                 if (!isNaN(sc)) r.rank = scores.filter(s => s > sc).length + 1;
@@ -852,7 +896,25 @@ function calculateRanksForRows(rows) {
     });
 }
 
-// BỘ CHỌN LẦN THI TRỰC TIẾP (BẤM VÀO LÀ CẢ DÒNG ĐỔI THEO LẦN ĐÓ)
+// BẬT / TẮT MENU POPUP "CHỌN LẦN THI"
+function toggleAttemptMenu(rowUid, event) {
+    if (event) { event.stopPropagation(); event.preventDefault(); }
+    const targetMenu = document.getElementById(`attempt-menu-${rowUid}`);
+    if (!targetMenu) return;
+    const isShown = targetMenu.classList.contains("show");
+    
+    // Đóng tất cả dropdown đang mở
+    document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
+    document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
+    
+    if (!isShown) {
+        targetMenu.classList.add("show");
+        const tr = targetMenu.closest('tr');
+        if (tr) tr.classList.add('has-active-attempt-menu');
+    }
+}
+
+// CHỌN LẦN THI ĐỂ XEM (LẦN 1, LẦN 2...)
 function selectStudentAttempt(rowUid, attemptIdx, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
@@ -865,11 +927,6 @@ function selectStudentAttempt(rowUid, attemptIdx, event) {
         calculateRanksForRows(currentExamResultData.rawRows); 
         filterResultTable(); 
     }
-}
-
-function toggleAttemptMenu(rowUid, event) {
-    if (event) { event.stopPropagation(); event.preventDefault(); }
-    // Giữ hàm để tương thích nếu có code ngoài gọi
 }
 
 function deleteResultRowPermanently(rowUid, event) {
@@ -916,7 +973,7 @@ function startLiveDoingTicker() {
 }
 
 // =========================================================================
-// BỘ VẼ BẢNG: HIỂN THỊ ĐỦ 100% CÁC LẦN THI TRỰC TIẾP - HOÀN TOÀN KHÔNG BỊ CHE
+// BỘ VẼ BẢNG: HIỂN THỊ CỘT "SỐ LẦN THI" VỚI POPUP DROPDOWN Y HỆT HÌNH ẢNH MẪU
 // =========================================================================
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
@@ -955,7 +1012,7 @@ function renderFilteredResultTable(rows) {
         // Đảm bảo selectedAttemptIndex luôn hợp lệ
         if (attCount > 0) {
             if (row.selectedAttemptIndex === undefined || row.selectedAttemptIndex === null || row.selectedAttemptIndex >= attCount || row.selectedAttemptIndex < 0) {
-                row.selectedAttemptIndex = attCount - 1;
+                row.selectedAttemptIndex = 0;
             }
         } else {
             row.selectedAttemptIndex = 0;
@@ -970,45 +1027,52 @@ function renderFilteredResultTable(rows) {
 
         let col1_stt = row.stt;
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
-        let col_attemptCount = `<span class="status-not-submitted">Chưa thi</span>`;
+        let col_attemptCount = `<span class="status-not-submitted">---</span>`;
 
         // -------------------------------------------------------------
-        // XỬ LÝ CỘT "SỐ LẦN THI": HIỂN THỊ ĐỦ BẤY NHIÊU LẦN THI DƯỚI DẠNG NÚT PILL
+        // XỬ LÝ CỘT "SỐ LẦN THI": NÚT "2 LẦN" + DROPDOWN THEO ĐÚNG ẢNH MẪU
         // -------------------------------------------------------------
         if (attCount === 0) {
             if (row.isDoing) {
-                col_attemptCount = `<span class="attempt-badge-doing" title="Học sinh đang trong phòng thi">💓 Đang thi Lần 1</span>`;
+                col_attemptCount = `<span class="status-doing-heartbeat" style="font-size:11px; padding:3px 8px;" title="Học sinh đang trong phòng thi">💓 Đang thi</span>`;
             } else {
-                col_attemptCount = `<span class="status-not-submitted">Chưa thi</span>`;
+                col_attemptCount = `<span class="status-not-submitted">---</span>`;
             }
         } else {
-            let attemptsHtml = '<div class="td-attempts-list">';
+            // Nút bấm: Nếu >= 2 lần thì màu đỏ/hồng, nếu 1 lần thì màu xám nhạt như trong ảnh
+            const isMulti = attCount >= 2;
+            const btnClass = isMulti ? 'btn-attempt-badge-multi' : 'btn-attempt-badge-single';
+            const btnText = `${attCount} lần`;
+
+            let dropdownItemsHtml = "";
             row.allAttempts.forEach((at, aIdx) => {
-                let sc = (at.score10 !== undefined && at.score10 !== null) ? Number(at.score10).toFixed(1) : "--";
-                let isSel = (aIdx === row.selectedAttemptIndex);
-                let tm = at.timestamp || (at.createdAt ? formatDateTimeFull(at.createdAt) : `Lần ${aIdx + 1}`);
-                let tooltip = `Lần ${aIdx + 1}: ${sc} điểm\nThời gian nộp: ${tm}\n(Bấm để xem chi tiết kết quả lần này)`;
-                
-                attemptsHtml += `
-                    <button type="button" 
-                            class="btn-attempt-pill ${isSel ? 'active' : ''}" 
-                            onclick="selectStudentAttempt('${uid}', ${aIdx}, event)" 
-                            title="${tooltip}">
-                        ${isSel ? '<span class="attempt-check-icon">✓</span>' : ''}<b>Lần ${aIdx + 1}</b><span class="attempt-pill-score">${sc}đ</span>
-                    </button>
+                const isSelected = (aIdx === row.selectedAttemptIndex);
+                const subDateMs = getSubmissionTimestamp(at);
+                const timeFormatted = formatAttemptDateTime(subDateMs);
+                let scoreText = (at.score10 !== undefined && at.score10 !== null) ? `${Number(at.score10)}đ` : "--đ";
+
+                dropdownItemsHtml += `
+                    <div class="attempt-menu-item ${isSelected ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)">
+                        <span class="attempt-item-left">
+                            <span class="attempt-check-icon">${isSelected ? '✓' : ''}</span>
+                            <span>Lần ${aIdx + 1} (${timeFormatted})</span>
+                        </span>
+                        <span class="attempt-item-score">${scoreText}</span>
+                    </div>
                 `;
             });
 
-            if (row.isDoing) {
-                attemptsHtml += `
-                    <span class="attempt-badge-doing" title="Học sinh đang làm bài lần ${attCount + 1}">
-                        💓 Đang thi L${attCount + 1}
-                    </span>
-                `;
-            }
-
-            attemptsHtml += '</div>';
-            col_attemptCount = attemptsHtml;
+            col_attemptCount = `
+                <div class="attempt-picker-wrapper">
+                    <button type="button" class="${btnClass}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi">
+                        ${btnText}
+                    </button>
+                    <div class="attempt-dropdown-menu" id="attempt-menu-${uid}" onclick="event.stopPropagation()">
+                        <div class="attempt-dropdown-header">CHỌN LẦN THI:</div>
+                        ${dropdownItemsHtml}
+                    </div>
+                </div>
+            `;
         }
 
         let col2_inTime = `<span class="status-not-submitted">---</span>`; 
@@ -1027,8 +1091,7 @@ function renderFilteredResultTable(rows) {
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
             col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || `${currentSub.spentMins || 0} phút`}</span>`;
             
-            const attemptLabel = attCount > 1 ? ` (Lần ${row.selectedAttemptIndex + 1})` : "";
-            col6_status = `<span class="status-pill status-done">✓ Đã nộp${attemptLabel}</span>`;
+            col6_status = `<span class="status-pill status-done">✓ Đã nộp bài</span>`;
             
             let cCount = (currentSub.correctCount !== undefined) ? currentSub.correctCount : 0;
             col7_correct = `<span style="font-weight:900; color:#15803d;">${cCount} câu</span>`;
@@ -1036,7 +1099,7 @@ function renderFilteredResultTable(rows) {
             let sc = (currentSub.score10 !== undefined) ? currentSub.score10 : 0;
             let scNum = parseFloat(sc) || 0;
             let pillClass = scNum >= 8.0 ? 'score-pill-high' : (scNum >= 5.0 ? 'score-pill-mid' : 'score-pill-low');
-            col8_score = `<span class="${pillClass}">${scNum.toFixed(1)}</span>`;
+            col8_score = `<span class="${pillClass}">${scNum}</span>`;
 
             if (row.rank !== null && row.rank !== undefined) {
                 let rankNum = row.rank; 
@@ -1131,17 +1194,17 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
-// BỘ ĐÓNG DROPDOWN KHI CLICK RA NGOÀI BẢNG (Giữ an toàn)
+// BỘ ĐÓNG DROPDOWN KHI BẤM RA NGOÀI VÙNG CHỌN
 document.addEventListener("click", function(event) {
-    if (!event.target.closest('.td-attempt-cell-wrap')) {
+    if (!event.target.closest('.attempt-picker-wrapper')) {
         document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
-        document.querySelectorAll('.btn-attempt-trigger.active').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
     }
 });
 
 // ĐĂNG KÝ HÀM TOÀN CỤC
-window.selectStudentAttempt = selectStudentAttempt;
 window.toggleAttemptMenu = toggleAttemptMenu;
+window.selectStudentAttempt = selectStudentAttempt;
 window.adjustModalZoomStep = adjustModalZoomStep;
 window.resetModalZoom = resetModalZoom;
 window.applyModalZoomLevel = applyModalZoomLevel;
