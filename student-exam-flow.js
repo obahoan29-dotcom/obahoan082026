@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN CHUẨN HÓA LƯU RIÊNG TỪNG LẦN THI TRÊN SUPABASE & BẢO LƯU 100%)
+// (BẢN CHUẨN HÓA THI NHIỀU LẦN: LẦN 2 MỚI TINH & LƯU SONG SONG CẠNH LẦN 1)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -22,7 +22,7 @@ function getStrictStandardClassName(rawClass, rawSbd) {
     return "Thêm 11";
 }
 
-// XÁC ĐỊNH CHÍNH XÁC HỌC SINH ĐANG THI LẦN MẤY
+// XÁC ĐỊNH CHÍNH XÁC HỌC SINH ĐANG THI LẦN MẤY (ĐỌC TỪ LOCALSTORAGE + SUPABASE)
 function getRealStudentExamAttemptNumber(quizId, sbd) {
     try {
         const cleanSbd = String(sbd || "").replace(/[^a-zA-Z0-9]/g, '_');
@@ -34,6 +34,28 @@ function getRealStudentExamAttemptNumber(quizId, sbd) {
         }
     } catch(e) {}
     return 1;
+}
+
+// LẤY SỐ LẦN THI ĐỒNG BỘ TỪ SUPABASE
+async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
+    const localAttempt = getRealStudentExamAttemptNumber(quizId, sbd);
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client || !quizId || !sbd) return localAttempt;
+
+    try {
+        const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
+        const { data, error } = await client
+            .from('submissions')
+            .select('id, created_at')
+            .eq('quiz_id', quizId)
+            .eq('sbd', cleanSbd);
+
+        if (!error && Array.isArray(data)) {
+            const cloudCount = data.length;
+            return Math.max(localAttempt, cloudCount + 1);
+        }
+    } catch(e) {}
+    return localAttempt;
 }
 
 function openStudentLoginModal(item, categoryId, event) {
@@ -318,6 +340,7 @@ async function startExamAction(isAutostart = false) {
     await executeStartExamAPI(sId, sName, sClass, isFree);
 }
 
+// KHỞI TẠO BÀI THI MỚI TINH KHI BƯỚC VÀO LẦN 2
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -331,7 +354,35 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
         startBtn.innerText = "⏳ Đang kết nối phòng thi..."; 
     }
 
-    safeLocal.removeItem(getStorageKey());
+    // 1. TÍNH TOÁN LẦN THI HIỆN TẠI (LẦN 1, LẦN 2...)
+    const currentAttempt = await fetchStudentAttemptNumberFromCloud(currentQuizId, sId);
+    window.currentStudentAttemptNumber = currentAttempt;
+
+    // 2. DỌN SẠCH TRIỆT ĐỂ BỘ NHỚ LẦN THI CŨ ĐỂ LẦN 2 MỚI TINH 100%
+    safeLocal.removeItem("pending_exam_submission");
+    safeLocal.removeItem("last_submission_cleared");
+    if (typeof getStorageKey === 'function') {
+        safeLocal.removeItem(getStorageKey());
+        safeLocal.removeItem(getStorageKey(currentAttempt));
+    }
+
+    // Dọn sạch biến lưu câu trả lời trong RAM
+    if (window.SECURE_VAULT) {
+        window.SECURE_VAULT.userAnswers = {};
+        window.SECURE_VAULT.padletClicked = {};
+    }
+    tabSwitchCount = 0;
+    isExamLocked = false;
+    lockedDurationSec = 0;
+    isSubmitted = false;
+
+    // Bỏ tích tất cả ô chọn Đúng/Sai, Trắc nghiệm và ô nhập trên giao diện
+    const allRadios = document.querySelectorAll('#quiz-content input[type="radio"]');
+    allRadios.forEach(r => { r.checked = false; });
+    const allTexts = document.querySelectorAll('#quiz-content input[type="text"]');
+    allTexts.forEach(t => { t.value = ""; });
+    const allOpts = document.querySelectorAll('.opt-label.selected');
+    allOpts.forEach(o => o.classList.remove('selected'));
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const nowMs = Date.now();
@@ -355,6 +406,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 last_ping: nowMs
             }]);
 
+            // Cập nhật live draft mới tinh rỗng cho lần 2
             await client.from('live_drafts').upsert({
                 id: `${currentQuizId}_${cleanSbd}`,
                 quiz_id: currentQuizId,
@@ -364,7 +416,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 category_id: currentCat,
                 ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                 exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
+                user_answers: {},
                 last_updated: new Date().toISOString()
             }, { onConflict: 'id' });
 
@@ -375,7 +427,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                     sbd: cleanSbd,
                     student_name: sName,
                     class_name: strictClassName,
-                    user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
+                    user_answers: {},
                     updatedAt: nowMs
                 }).catch(() => {});
             }
@@ -387,7 +439,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
                 student_class: strictClassName,
                 category_id: currentCat,
                 switch_count: 0,
-                duration_str: "Bắt đầu",
+                duration_str: `Bắt đầu Lần ${currentAttempt}`,
                 duration_sec: 0
             }]).then();
 
@@ -396,8 +448,9 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
         }
     }
 
+    // Hiển thị thông tin học sinh kèm lần thi
     document.getElementById("nav-student-name").innerText = sName; 
-    document.getElementById("nav-student-id").innerText = sId; 
+    document.getElementById("nav-student-id").innerText = (currentAttempt > 1) ? `${sId} (Lần ${currentAttempt})` : sId; 
     document.getElementById("nav-student-class").innerText = strictClassName; 
     document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
     document.getElementById("student-card").style.display = "none"; 
@@ -408,7 +461,13 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false) {
     document.getElementById("top-navbar").style.display = "block"; 
     document.getElementById("quiz-content").style.display = "block"; 
     
+    // ĐẶT LẠI ĐỒNG HỒ ĐẾM NGƯỢC TỪ ĐẦU
     examStartTime = Date.now(); 
+    if (typeof TIME_LIMIT_MINUTES !== 'undefined') {
+        totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
+        remainingSeconds = totalTimeSeconds;
+    }
+    
     if (typeof window.__saveExamState === 'function') window.__saveExamState();
     if (typeof window.__updateProgress === 'function') window.__updateProgress(); 
     
@@ -465,8 +524,10 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
 
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionTimestampMs = Date.now();
-    // MÃ ID DUY NHẤT KÈM TIMESTAMP -> MỖI LẦN THI ĐỀU LƯU THÀNH 1 BẢN GHI RIÊNG BIỆT
-    const submissionId = `sub_${currentQuizId}_${cleanSbd}_${submissionTimestampMs}`;
+    const currentAttempt = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(currentQuizId, cleanSbd);
+
+    // MÃ ID DUY NHẤT KÈM LẦN THI VÀ TIMESTAMP -> KHÔNG BAO GIỜ BỊ ĐÈ HAY TỪ CHỐI
+    const submissionId = `sub_${currentQuizId}_${cleanSbd}_lan${currentAttempt}_${submissionTimestampMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
@@ -496,7 +557,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// GỬI BẢN SAO LƯU NGẦM LÊN GOOGLE DRIVE (CHẠY NỀN)
+// GỬI BẢN SAO LƯU NGẦM LÊN GOOGLE DRIVE
 function sendSubmissionJsonToGoogleDriveFolder(payload) {
     setTimeout(() => {
         try {
@@ -540,12 +601,7 @@ function sendSubmissionJsonToGoogleDriveFolder(payload) {
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: payloadText,
                 keepalive: true
-            }).catch(() => {
-                if (navigator.sendBeacon) {
-                    const blob = new Blob([payloadText], { type: "text/plain;charset=utf-8" });
-                    navigator.sendBeacon(gasUrl, blob);
-                }
-            });
+            }).catch(() => null);
         } catch(e) {}
     }, 100);
 }
@@ -576,7 +632,6 @@ function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
 
         return fileName;
     } catch (e) {
-        console.error("Lỗi tự động tải JSON:", e);
         return "BaiLam_DuPhong.json";
     }
 }
@@ -601,11 +656,7 @@ async function shareSubmissionFileNative(payload, attemptNumber = 1) {
             return;
         }
     } catch (err) {
-        if (err.name !== 'AbortError') {
-            console.warn("Web Share API không khả dụng:", err);
-        } else {
-            return;
-        }
+        if (err.name === 'AbortError') return;
     }
 
     downloadSubmissionJsonSilently(payload, attemptNumber);
@@ -730,7 +781,7 @@ window.triggerShareFromHistory = function(attemptNumber) {
 };
 
 // =========================================================================
-// HÀM NỘP BÀI: DỨT KHOÁT, BẢO LƯU 100% MỌI LẦN THI (HỌC TẬP WEB CŨ)
+// HÀM NỘP BÀI: GỬI LÊN SUPABASE LẦN 1, LẦN 2 BÌNH ĐẲNG - LƯU TẤT CẢ
 // =========================================================================
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
@@ -749,7 +800,7 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (actionsBox) actionsBox.innerHTML = "";
 
     const payload = buildCompleteSubmissionPayload(isForceSubmit);
-    const currentAttemptNumber = getRealStudentExamAttemptNumber(payload.quiz_id, payload.sbd);
+    const currentAttemptNumber = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(payload.quiz_id, payload.sbd);
 
     // Lưu ngay bản sao vào bộ nhớ máy tính & IndexedDB
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
@@ -769,7 +820,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // Sao lưu ngầm lên Google Drive chạy nền
+    // Sao lưu ngầm lên Google Drive
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const updateProgressStatus = (text) => {
@@ -786,24 +837,32 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     let submitOk = false;
+    let serverErrorMessage = "";
 
-    // GỬI LÊN SUPABASE: Thử insert ID riêng, nếu xung đột thì upsert theo id
+    // GỬI LÊN SUPABASE: DÙNG INSERT VỚI ID RIÊNG BIỆT CHO MỖI LẦN THI
     if (client) {
         try {
             let { error: err1 } = await client.from('submissions').insert([payload]);
             if (!err1) {
                 submitOk = true;
             } else {
+                console.warn("Insert lần 1 trả về lỗi, thử upsert:", err1);
+                serverErrorMessage = err1.message || "";
                 let { error: err2 } = await client.from('submissions').upsert(payload, { onConflict: 'id' });
-                if (!err2) submitOk = true;
-                else console.warn("Lỗi gửi bài Supabase:", err2.message || err1.message);
+                if (!err2) {
+                    submitOk = true;
+                } else {
+                    serverErrorMessage = err2.message || err1.message;
+                    console.error("Lỗi Supabase:", serverErrorMessage);
+                }
             }
         } catch(err) {
+            serverErrorMessage = err.message || "";
             console.error("Lỗi kết nối Supabase:", err);
         }
     }
 
-    // THÀNH CÔNG: Xóa ngay phiên đang thi để không bị kẹt "Đang thi"
+    // NỘP THÀNH CÔNG LÊN MÁY CHỦ
     if (submitOk) {
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
@@ -812,8 +871,12 @@ async function executeSubmitExam(isForceSubmit = false) {
         if (typeof clearPresence === 'function') clearPresence(payload.sbd);
         if (timerInterval) clearInterval(timerInterval); 
 
+        // Xóa sạch trạng thái tạm thời để lần sau học sinh vào thi tiếp sẽ có đề mới tinh
         safeLocal.removeItem("pending_exam_submission");
         safeLocal.removeItem(getStorageKey()); 
+        if (typeof getStorageKey === 'function') {
+            safeLocal.removeItem(getStorageKey(currentAttemptNumber));
+        }
         safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
         safeLocal.setItem("last_submission_cleared", "true");
 
@@ -841,7 +904,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
-    // NẾU MẤT MẠNG THẬT SỰ: Tự động tải file JSON dự phòng đúng lần thi & cho phép nộp lại
+    // NẾU MẠNG BỊ LỖI HOẶC SUPABASE TỪ CHỐI
     isSubmittingInProgress = false;
     const savedFileName = downloadSubmissionJsonSilently(payload, currentAttemptNumber);
     recordSubmissionToHistory(payload);
@@ -851,6 +914,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         progressView.innerHTML = `
             <div style="font-size:38px; margin-bottom:8px;">📶⚠️</div>
             <div style="font-weight:900; color:#ef4444; font-size:1.15rem;">CHƯA THỂ NỘP LÊN MÁY CHỦ!</div>
+            ${serverErrorMessage ? `<div style="font-size:11px; color:#b91c1c; font-family:monospace; margin-top:4px;">(Chi tiết: ${serverErrorMessage})</div>` : ''}
             <div style="font-size:0.92rem; color:#334155; margin-top:8px; font-weight:700; line-height:1.45; text-align:left; background:#f0fdf4; padding:10px 14px; border-radius:10px; border:1px solid #86efac;">
                 ✅ <b>ĐÃ BẢO LƯU BÀI THI LẦN ${currentAttemptNumber}:</b><br>
                 📁 Tên tệp: <b>${savedFileName}</b><br>
@@ -950,6 +1014,7 @@ function closeSubmitConfirmModal() {
 // ĐĂNG KÝ CÁC HÀM TOÀN CỤC
 window.getStrictStandardClassName = getStrictStandardClassName;
 window.getRealStudentExamAttemptNumber = getRealStudentExamAttemptNumber;
+window.fetchStudentAttemptNumberFromCloud = fetchStudentAttemptNumberFromCloud;
 window.openStudentLoginModal = openStudentLoginModal;
 window.closeStudentLoginModal = closeStudentLoginModal;
 window.switchStudentLoginMode = switchStudentLoginMode;
