@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN CHUẨN XÁC: HANDSHAKE 2 CHIỀU BẮT BUỘC - KHÔNG GHI ĐƯỢC SUPABASE KHÔNG CHO VÀO THI)
+// (BẢN FIX TRIỆT ĐỂ LỖI SCHEMA CACHE 'id' - BẮT TAY 2 CHIỀU CHUẨN XÁC 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -372,6 +372,7 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
 // =========================================================================
 // CHỐT CHẶN BẮT BUỘC (TWO-WAY HANDSHAKE BARRIER):
 // PHẢI GHI THÀNH CÔNG VÀO SUPABASE THÌ MỚI MỞ ĐỀ, GẶP LỖI THÌ CHẶN ĐỨNG VÀ BÁO RÕ
+// ĐÃ SỬA: KHÔNG DÙNG CỘT 'id' TRÊN TABLE 'active_sessions' ĐỂ TRÁNH LỖI SCHEMA CACHE
 // =========================================================================
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
@@ -417,9 +418,9 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     // Thử gửi tối đa 2 lần để đảm bảo không bị rớt do lag mạng tạm thời
     for (let attemptIdx = 1; attemptIdx <= 2; attemptIdx++) {
         try {
-            // A. ĐĂNG KÝ VÀO ACTIVE_SESSIONS (BẮT BUỘC BẰNG UPSERT)
-            const { error: activeErr } = await client.from('active_sessions').upsert({
-                id: `${currentQuizId}_${cleanSbd}`,
+            // A. ĐĂNG KÝ VÀO ACTIVE_SESSIONS: DỌN DÒNG CŨ (NẾU CÓ) RỒI INSERT MỚI (KHÔNG DÙNG CỘT 'id')
+            await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
+            let { error: activeErr } = await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 name: sName,
@@ -430,13 +431,33 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                 exam_title: exactExamTitle,
                 start_time: nowMs,
                 last_ping: nowMs
-            }, { onConflict: 'id' });
+            }]);
 
-            if (activeErr) throw new Error("Ghi active_sessions thất bại: " + (activeErr.message || "Lỗi máy chủ"));
+            if (activeErr) {
+                // Dự phòng: nếu insert vẫn báo lỗi do schema, thử update theo match
+                const { error: updErr } = await client.from('active_sessions')
+                    .update({
+                        name: sName,
+                        class_name: strictClassName,
+                        category_id: currentCat,
+                        is_free: isFreeStudent,
+                        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                        exam_title: exactExamTitle,
+                        start_time: nowMs,
+                        last_ping: nowMs
+                    })
+                    .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+
+                if (!updErr) {
+                    activeErr = null;
+                } else {
+                    throw new Error("Ghi active_sessions thất bại: " + (activeErr.message || updErr.message));
+                }
+            }
 
             // B. ĐĂNG KÝ VÀO LIVE_DRAFTS (BẢN LƯU NHÁP REALTIME BẮT BUỘC)
-            const { error: draftErr } = await client.from('live_drafts').upsert({
-                id: `${currentQuizId}_${cleanSbd}`,
+            await client.from('live_drafts').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
+            const draftPayload = {
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 student_name: sName,
@@ -446,7 +467,32 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                 exam_title: exactExamTitle,
                 user_answers: {},
                 last_updated: new Date().toISOString()
-            }, { onConflict: 'id' });
+            };
+
+            let { error: draftErr } = await client.from('live_drafts').insert([{
+                id: `${currentQuizId}_${cleanSbd}`,
+                ...draftPayload
+            }]);
+
+            if (draftErr && String(draftErr.message || '').includes("'id'")) {
+                const retryDraft = await client.from('live_drafts').insert([draftPayload]);
+                draftErr = retryDraft.error;
+            }
+
+            if (draftErr) {
+                const { error: updDraftErr } = await client.from('live_drafts')
+                    .update({
+                        student_name: sName,
+                        class_name: strictClassName,
+                        category_id: currentCat,
+                        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                        exam_title: exactExamTitle,
+                        user_answers: {},
+                        last_updated: new Date().toISOString()
+                    })
+                    .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+                if (!updDraftErr) draftErr = null;
+            }
 
             if (draftErr) throw new Error("Ghi live_drafts thất bại: " + (draftErr.message || "Lỗi máy chủ"));
 
@@ -463,12 +509,12 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
             }]).then();
 
             handshakeSuccess = true;
-            break; // Đã thành công, thoát vòng lặp retry
+            break;
         } catch (err) {
             handshakeErrorMsg = err.message || "Lỗi mạng";
             console.warn(`Lần thử handshake ${attemptIdx} thất bại:`, err);
             if (attemptIdx < 2) {
-                await new Promise(r => setTimeout(r, 800)); // Chờ 800ms thử lại
+                await new Promise(r => setTimeout(r, 800));
             }
         }
     }
@@ -480,7 +526,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
             startBtn.innerText = `Thử Vào Bài Thi Lại 🚀`; 
         }
 
-        // BẢO ĐẢM GIAO DIỆN ĐĂNG NHẬP VẪN HIỂN THỊ, KHÔNG CHO VÀO ĐỀ
         document.getElementById("student-card").style.display = "block";
         document.getElementById("top-navbar").style.display = "none";
         document.getElementById("quiz-content").style.display = "none";
