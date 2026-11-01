@@ -725,8 +725,93 @@ async function changeAvatarSize(categoryId, itemId, sizePx, event) {
     } catch(e) { alert("❌ Lỗi đổi cỡ avatar: " + e.message); }
 }
 
+// =========================================================
+// QUẢN LÝ CẤU HÌNH LẮNG NGHE REALTIME (TIẾT KIỆM BĂNG THÔNG)
+// =========================================================
+
+const DEFAULT_REALTIME_CONFIG = {
+    watchOnlineCount: true,
+    watchForceSubmit: true,
+    watchTimeConfig: true,
+    watchImageSync: true,
+    pingIntervalSec: 30
+};
+
+async function openRealtimeConfigModal(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const modal = document.getElementById("realtime-config-modal");
+    if (!modal) return;
+
+    modal.style.display = "flex";
+
+    let cfg = { ...DEFAULT_REALTIME_CONFIG };
+    try {
+        const raw = localStorage.getItem("exam_realtime_config");
+        if (raw) cfg = { ...cfg, ...JSON.parse(raw) };
+    } catch(e) {}
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (client) {
+        try {
+            const { data } = await client.from('app_key_values').select('value').eq('key', 'exam_realtime_config').single();
+            if (data && data.value) cfg = { ...cfg, ...data.value };
+        } catch(e) {}
+    }
+
+    const chkOnline = document.getElementById("cfg-watch-online");
+    const chkForce = document.getElementById("cfg-watch-forcesubmit");
+    const chkTime = document.getElementById("cfg-watch-timeconfig");
+    const chkImg = document.getElementById("cfg-watch-imagesync");
+    const selPing = document.getElementById("cfg-ping-interval");
+
+    if (chkOnline) chkOnline.checked = !!cfg.watchOnlineCount;
+    if (chkForce) chkForce.checked = !!cfg.watchForceSubmit;
+    if (chkTime) chkTime.checked = !!cfg.watchTimeConfig;
+    if (chkImg) chkImg.checked = !!cfg.watchImageSync;
+    if (selPing) selPing.value = String(cfg.pingIntervalSec !== undefined ? cfg.pingIntervalSec : 30);
+}
+
+function closeRealtimeConfigModal() {
+    const modal = document.getElementById("realtime-config-modal");
+    if (modal) modal.style.display = "none";
+}
+
+async function saveRealtimeConfigToCloud() {
+    const btn = document.getElementById("btn-save-rt-cfg");
+    if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang lưu..."; }
+
+    const newConfig = {
+        watchOnlineCount: document.getElementById("cfg-watch-online").checked,
+        watchForceSubmit: document.getElementById("cfg-watch-forcesubmit").checked,
+        watchTimeConfig: document.getElementById("cfg-watch-timeconfig").checked,
+        watchImageSync: document.getElementById("cfg-watch-imagesync").checked,
+        pingIntervalSec: parseInt(document.getElementById("cfg-ping-interval").value, 10),
+        updatedAt: Date.now()
+    };
+
+    try {
+        localStorage.setItem("exam_realtime_config", JSON.stringify(newConfig));
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (client) {
+            await client.from('app_key_values').upsert({
+                key: 'exam_realtime_config',
+                value: newConfig
+            });
+        }
+        alert("🎉 ĐÃ LƯU CẤU HÌNH LẮNG NGHE THÀNH CÔNG!\n\nToàn bộ máy học sinh khi vào thi sẽ tự động áp dụng cấu hình này.");
+        closeRealtimeConfigModal();
+    } catch(err) {
+        alert("❌ Lỗi khi lưu cấu hình: " + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "💾 Lưu cài đặt"; }
+    }
+}
+
 window.handleSiteRedirectToggle = handleSiteRedirectToggle;
 window.saveSiteRedirectUrl = saveSiteRedirectUrl;
 window.updateRedirectUIElements = updateRedirectUIElements;
 window.openEditMinutesModal = openEditMinutesModal;
 window.openEditScheduleModal = openEditScheduleModal;
+window.openRealtimeConfigModal = openRealtimeConfigModal;
+window.closeRealtimeConfigModal = closeRealtimeConfigModal;
+window.saveRealtimeConfigToCloud = saveRealtimeConfigToCloud;
