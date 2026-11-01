@@ -1,23 +1,72 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI SCHEMA CACHE 'id' - BẮT TAY 2 CHIỀU CHUẨN XÁC 100%)
+// (BẢN FIX TRIỆT ĐỂ: PHÂN LOẠI LỚP 100% THEO ĐỊNH DẠNG SỐ BÁO DANH)
+// BẢO VỆ DỮ LIỆU ĐA TẦNG, CHỐNG ĐÈ LẦN THI, LƯU GOOGLE DRIVE & SHEET CHUẨN XÁC
 // =========================================================
 
 let submissionCountdownTimer = null;
 
-// HÀM ÁNH XẠ CHÍNH XÁC VỀ ĐÚNG 1 TRONG CÁC TÊN LỚP CHUẨN
+// =========================================================================
+// HÀM ÁNH XẠ CHÍNH XÁC TÊN LỚP DỰA TRÊN SỐ BÁO DANH (ƯU TIÊN TUYỆT ĐỐI)
+// =========================================================================
 function getStrictStandardClassName(rawClass, rawSbd) {
-    const s = String(rawClass || "").toLowerCase().trim();
-    const sbd = String(rawSbd || "").toLowerCase().trim();
+    const sbd = String(rawSbd || "").trim().toLowerCase();
+    const s = String(rawClass || "").trim().toLowerCase();
 
-    if (s.includes("11a") || sbd.includes("11a")) return "Lớp 11A";
-    if (s.includes("11c") || sbd.includes("11c")) return "Lớp 11C";
-    if (s.includes("11e") || sbd.includes("11e")) return "Lớp 11E";
-    if (s.includes("10p") || sbd.includes("10p")) return "Lớp 10P";
+    // 1. ƯU TIÊN SỐ 1: NHẬN DIỆN CHÍNH XÁC THEO ĐỊNH DẠNG SỐ BÁO DANH (SBD)
+    // A. Nhận diện SBD 4 chữ số của các lớp học thêm:
+    if (/^11\d{2}$/.test(sbd)) return "Thêm 11"; // 1101 đến 1143 (Luôn luôn là Thêm 11)
+    if (/^10\d{2}$/.test(sbd)) return "Thêm 10"; // 1001 đến 1049 (hoặc 1099)
+    if (/^12\d{2}$/.test(sbd)) return "Thêm 12"; // 1201 đến 1236
 
-    if (s.includes("them-10") || s.includes("thêm 10") || s.includes("them 10") || /^10\d{2}$/.test(sbd)) return "Thêm 10";
-    if (s.includes("them-11") || s.includes("thêm 11") || s.includes("them 11") || /^11\d{2}$/.test(sbd)) return "Thêm 11";
-    if (s.includes("them-12") || s.includes("thêm 12") || s.includes("them 12") || /^12\d{2}$/.test(sbd)) return "Thêm 12";
+    // B. Nhận diện SBD bắt đầu bằng mã lớp chính khóa:
+    if (sbd.startsWith("11a") || sbd.startsWith("11a_")) return "Lớp 11A";
+    if (sbd.startsWith("11c") || sbd.startsWith("11c_")) return "Lớp 11C";
+    if (sbd.startsWith("11e") || sbd.startsWith("11e_")) return "Lớp 11E";
+    if (sbd.startsWith("10p") || sbd.startsWith("10p_")) return "Lớp 10P";
+    if (sbd.startsWith("hsg")) return "HSG Toán 11";
+
+    // C. Tra cứu đối chiếu ngược từ bảng tài khoản STUDENT_ACCOUNTS:
+    if (window.STUDENT_ACCOUNTS) {
+        for (let cat in window.STUDENT_ACCOUNTS) {
+            const list = window.STUDENT_ACCOUNTS[cat];
+            if (Array.isArray(list)) {
+                const found = list.find(acc => acc.sbd && String(acc.sbd).trim().toLowerCase() === sbd);
+                if (found) {
+                    if (cat === "them-11") return "Thêm 11";
+                    if (cat === "them-10") return "Thêm 10";
+                    if (cat === "them-12") return "Thêm 12";
+                    if (cat === "lop-11a") return "Lớp 11A";
+                    if (cat === "lop-11c") return "Lớp 11C";
+                    if (cat === "lop-11e") return "Lớp 11E";
+                    if (cat === "lop-10p") return "Lớp 10P";
+                    if (cat === "hsg-toan-11") return "HSG Toán 11";
+                }
+            }
+        }
+    }
+
+    // 2. ƯU TIÊN SỐ 2: NẾU SBD LÀ TỰ DO (TD01, 999...) -> LẤY THEO CHUYÊN MỤC ĐỀ ĐANG MỞ
+    if (typeof getExamCategory === 'function') {
+        const cat = getExamCategory();
+        if (cat === "them-11") return "Thêm 11";
+        if (cat === "them-10") return "Thêm 10";
+        if (cat === "them-12") return "Thêm 12";
+        if (cat === "lop-11a") return "Lớp 11A";
+        if (cat === "lop-11c") return "Lớp 11C";
+        if (cat === "lop-11e") return "Lớp 11E";
+        if (cat === "lop-10p") return "Lớp 10P";
+        if (cat === "hsg-toan-11") return "HSG Toán 11";
+    }
+
+    // 3. DỰ PHÒNG CUỐI CÙNG: XÉT THEO CHUỖI TÊN LỚP NHẬP TAY
+    if (s.includes("them-11") || s.includes("thêm 11") || s.includes("them 11")) return "Thêm 11";
+    if (s.includes("them-10") || s.includes("thêm 10") || s.includes("them 10")) return "Thêm 10";
+    if (s.includes("them-12") || s.includes("thêm 12") || s.includes("them 12")) return "Thêm 12";
+    if (s.includes("11a")) return "Lớp 11A";
+    if (s.includes("11c")) return "Lớp 11C";
+    if (s.includes("11e")) return "Lớp 11E";
+    if (s.includes("10p")) return "Lớp 10P";
 
     return "Thêm 11";
 }
@@ -1165,6 +1214,7 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
+// ĐĂNG KÝ TOÀN CỤC CÁC HÀM
 window.getStrictStandardClassName = getStrictStandardClassName;
 window.getRealStudentExamAttemptNumber = getRealStudentExamAttemptNumber;
 window.fetchStudentAttemptNumberFromCloud = fetchStudentAttemptNumberFromCloud;
