@@ -1,5 +1,7 @@
 // =========================================================
-// FILE 5: exam-api.js (BẢN TÍCH HỢP TỰ ĐỘNG PHÂN BIỆT LẦN 1, LẦN 2...)
+// FILE: exam-api.js
+// QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
+// TÍCH HỢP: BỘ ĐIỀU TIẾT 5 CÔNG TẮC LẮNG NGHE & TẦN SUẤT PING
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -30,6 +32,39 @@ let onlineRealtimeChannel = null;
 let forceSubmitRealtimeChannel = null;
 
 window.localOnlineCount = 1; 
+
+// =========================================================
+// CẤU HÌNH LẮNG NGHE REALTIME TOÀN CỤC (ĐỒNG BỘ TỪ ADMIN)
+// =========================================================
+window.CURRENT_RT_CONFIG = {
+    watchOnlineCount: true,
+    watchForceSubmit: true,
+    watchTimeConfig: true,
+    watchImageSync: true,
+    pingIntervalSec: 30
+};
+
+// ĐỌC CẤU HÌNH LẮNG NGHE TỪ SUPABASE HOẶC LOCAL CACHE
+async function loadRealtimeExamConfig() {
+    try {
+        const rawLocal = safeLocal.getItem("exam_realtime_config");
+        if (rawLocal) {
+            window.CURRENT_RT_CONFIG = { ...window.CURRENT_RT_CONFIG, ...JSON.parse(rawLocal) };
+        }
+
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+        if (client) {
+            const { data } = await client.from('app_key_values').select('value').eq('key', 'exam_realtime_config').maybeSingle();
+            if (data && data.value) {
+                window.CURRENT_RT_CONFIG = { ...window.CURRENT_RT_CONFIG, ...data.value };
+                safeLocal.setItem("exam_realtime_config", JSON.stringify(window.CURRENT_RT_CONFIG));
+            }
+        }
+    } catch(e) {}
+}
+
+// Khởi chạy nạp ngay khi tải trang
+loadRealtimeExamConfig();
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -264,6 +299,13 @@ function getStorageKey(attempt = null) {
 function applyOnlineCountVisibility() {
     const onlineBox = document.getElementById("nav-online-box");
     if (!onlineBox) return;
+
+    const cfg = window.CURRENT_RT_CONFIG || {};
+    if (cfg.watchOnlineCount === false) {
+        onlineBox.style.display = "none";
+        return;
+    }
+
     if (typeof examData !== 'undefined' && examData && examData.show_online_count !== undefined) {
         isShowOnlineCountEnabled = (examData.show_online_count !== false);
     }
@@ -280,6 +322,9 @@ function triggerOnlineBoxAnimation() {
 }
 
 async function refreshOnlineCount() {
+    const cfg = window.CURRENT_RT_CONFIG || {};
+    if (cfg.watchOnlineCount === false) return;
+
     try {
         const urlParams = new URLSearchParams(window.location.search); 
         const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? (examData.id || "") : "");
@@ -331,7 +376,14 @@ async function handleOnlineCountClick() {
     }
 }
 
+// 1. KÊNH ĐẾM NGƯỜI CÙNG THI: KIỂM TRA CÔNG TẮC watchOnlineCount
 function startOnlineRealtimeWatcher(quizId) {
+    const cfg = window.CURRENT_RT_CONFIG || {};
+    if (cfg.watchOnlineCount === false) {
+        console.log("ℹ️ Đã tắt kênh đếm người cùng thi theo cấu hình Admin");
+        return;
+    }
+
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
     if (onlineRealtimeChannel) {
@@ -355,7 +407,14 @@ function startOnlineRealtimeWatcher(quizId) {
         .subscribe();
 }
 
+// 2. KÊNH THU BÀI ÉP BUỘC: KIỂM TRA CÔNG TẮC watchForceSubmit
 function startForceSubmitWatcher(quizId) {
+    const cfg = window.CURRENT_RT_CONFIG || {};
+    if (cfg.watchForceSubmit === false) {
+        console.log("ℹ️ Đã tắt kênh thu bài ép buộc từ xa theo cấu hình Admin");
+        return;
+    }
+
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
 
@@ -391,22 +450,44 @@ function startForceSubmitWatcher(quizId) {
         .subscribe();
 }
 
-function startPresenceSystem(sId) {
-    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-    updatePresence(cleanSbd);
-    refreshOnlineCount();
+// 5. CẤU HÌNH NHỊP TIM VÀ TẤT CẢ KÊNH REALTIME THEO CẤU HÌNH ADMIN
+async function startPresenceSystem(sId) {
+    await loadRealtimeExamConfig();
+    const cfg = window.CURRENT_RT_CONFIG || {};
 
+    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
-    if (currentQuizId) { 
-        startOnlineRealtimeWatcher(currentQuizId); 
+
+    // Kênh 1: Đếm người cùng thi
+    if (cfg.watchOnlineCount !== false && currentQuizId) {
+        startOnlineRealtimeWatcher(currentQuizId);
+        refreshOnlineCount();
+    } else {
+        const onlineBox = document.getElementById("nav-online-box");
+        if (onlineBox) onlineBox.style.display = "none";
+    }
+
+    // Kênh 2: Thu bài ép buộc
+    if (cfg.watchForceSubmit !== false && currentQuizId) {
         startForceSubmitWatcher(currentQuizId);
     }
 
-    if (presenceInterval) clearInterval(presenceInterval);
-    presenceInterval = setInterval(() => { 
-        updatePresence(cleanSbd); 
-    }, 30000);
+    // Kênh 5: Tần suất Ping nhịp tim: 30s / 60s / 90s hoặc tắt hẳn (0)
+    const intervalSec = (cfg.pingIntervalSec !== undefined) ? parseInt(cfg.pingIntervalSec, 10) : 30;
+    if (presenceInterval) {
+        clearInterval(presenceInterval);
+        presenceInterval = null;
+    }
+
+    if (intervalSec > 0) {
+        updatePresence(cleanSbd);
+        presenceInterval = setInterval(() => { 
+            updatePresence(cleanSbd); 
+        }, intervalSec * 1000);
+    } else {
+        console.log("ℹ️ Đã tắt Ping nhịp tim định kỳ theo cấu hình Admin");
+    }
 }
 
 async function updatePresence(cleanSbd) {
@@ -444,7 +525,10 @@ async function updatePresence(cleanSbd) {
 }
 
 function clearPresence(sId) {
-    if (presenceInterval) clearInterval(presenceInterval);
+    if (presenceInterval) {
+        clearInterval(presenceInterval);
+        presenceInterval = null;
+    }
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     
     if (onlineRealtimeChannel && client) {
@@ -474,7 +558,14 @@ function showTimeChangeToast(message) {
     setTimeout(() => { toast.classList.remove("show"); }, 4500);
 }
 
+// 3. KÊNH CẬP NHẬT GIỜ THI TRỰC TIẾP: KIỂM TRA CÔNG TẮC watchTimeConfig
 function startTimeWatcherRealtime(quizId) {
+    const cfg = window.CURRENT_RT_CONFIG || {};
+    if (cfg.watchTimeConfig === false) {
+        console.log("ℹ️ Đã tắt lắng nghe đổi giờ thi thời gian thực theo cấu hình Admin");
+        return;
+    }
+
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
     if (realtimeConfigChannel) { client.removeChannel(realtimeConfigChannel); }
@@ -567,7 +658,6 @@ function updateTopBackupStatus(isServerConfirmed = false) {
 }
 
 async function checkPendingSubmissionOnLoad() { 
-    // KHÔNG TỰ ĐỘNG CHẶN KHI HỌC SINH VÀO DỰ THI LẦN MỚI
     try { 
         let raw = safeLocal.getItem("pending_exam_submission"); 
         if (!raw && typeof examIndexedDB !== 'undefined') {
@@ -650,3 +740,4 @@ window.clearPresence = clearPresence;
 window.checkPendingSubmissionOnLoad = checkPendingSubmissionOnLoad;
 window.getStorageKey = getStorageKey;
 window.checkAndDisplayAttemptNoticeOnStudentCard = checkAndDisplayAttemptNoticeOnStudentCard;
+window.loadRealtimeExamConfig = loadRealtimeExamConfig;
