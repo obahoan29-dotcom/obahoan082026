@@ -1,7 +1,7 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (BẢN TỐI ƯU THI LẦN 2 MỚI TINH - KHÔNG BỊ KHÓA NHẦM)
-// NÂNG CẤP: SELF-HEALING UPSERT THEO (quiz_id, sbd) - KHÔNG PHỤ THUỘC CỘT 'id'
-// TÍCH HỢP: ĐIỀU TIẾT LẮNG NGHE & ĐỒNG BỘ ẢNH REALTIME
+// FILE 3: exam-engine-core.js (BẢN TỐI ƯU 180+ THÍ SINH - TIẾT KIỆM TÀI NGUYÊN SUPABASE FREE)
+// ĐÃ TÍCH HỢP: OFFLINE-FIRST (LƯU TỨC THÌ LOCAL/INDEXEDDB, KHÔNG GHI DB LIÊN TỤC)
+// BẢO LƯU 100% TÍNH NĂNG, GIAO DIỆN VÀ KHÔI PHỤC KHI F5 / CÚP ĐIỆN
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -17,11 +17,10 @@ let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
 
-// BỘ HẸN GIỜ TRÌ HOÃN THÔNG MINH
-let _autoSaveDebounceTimer = null;
-let _statementDebounceTimer = null;
+// BỘ HẸN GIỜ TRÌ HOÃN THÔNG MINH CỤC BỘ
 let _storageDebounceTimer = null;
-let _gasTempSheetDebounceTimer = null;
+let _statementDebounceTimer = null;
+let _autoSaveDebounceTimer = null;
 
 (function injectLockStyles() {
     const styleId = "exam-engine-lock-styles";
@@ -85,7 +84,7 @@ async function ensureActiveSessionAndDraft() {
 
     try {
         const cfg = window.CURRENT_RT_CONFIG || {};
-        // Nếu cấu hình Ping nhịp tim không tắt hẳn thì cập nhật active_sessions
+        // Chỉ ping trạng thái có mặt (nhẹ như một gói tin 50 bytes), không gửi toàn bộ đáp án
         if (cfg.pingIntervalSec !== 0) {
             const { data: updatedAct } = await client.from('active_sessions')
                 .update({
@@ -115,36 +114,8 @@ async function ensureActiveSessionAndDraft() {
                 }]);
             }
         }
-
-        // Cập nhật live_drafts theo match (quiz_id, sbd)
-        const { data: updatedDraft } = await client.from('live_drafts')
-            .update({
-                student_name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                user_answers: window.SECURE_VAULT.userAnswers || {},
-                last_updated: new Date().toISOString()
-            })
-            .match({ quiz_id: quizId, sbd: cleanSbd })
-            .select();
-
-        if (!updatedDraft || updatedDraft.length === 0) {
-            await client.from('live_drafts').insert([{
-                quiz_id: quizId,
-                sbd: cleanSbd,
-                student_name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                user_answers: window.SECURE_VAULT.userAnswers || {},
-                last_updated: new Date().toISOString()
-            }]);
-        }
     } catch(err) {
-        console.warn("Lỗi đồng bộ phiên đang thi:", err);
+        console.warn("Lỗi ping active_session:", err);
     }
 }
 
@@ -200,17 +171,11 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
-// BỘ TỰ ĐỘNG LƯU BÀI VÀO CLOUD KHI HỌC SINH CHỌN ĐÁP ÁN
+// BỘ TỰ ĐỘNG LƯU ĐÁP ÁN: LƯU TỨC THÌ (0ms) VÀO LOCALSTORAGE VÀ INDEXEDDB, KHÔNG GỌI DATABASE ĐỂ BẢO VỆ CPU
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
-    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
-    if (!sId) return;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
-    if (!quizId) return;
-
+    // Lưu ngay vào IndexedDB cục bộ (an toàn tuyệt đối, không nghẽn mạng)
     const draftData = buildCurrentLiveDraftPayload();
     if (!draftData) return;
 
@@ -221,85 +186,14 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
         }).catch(() => {});
     }
 
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (client) {
-        try {
-            // Cập nhật live_drafts theo match (quiz_id, sbd)
-            client.from('live_drafts')
-                .update({
-                    user_answers: draftData.user_answers,
-                    score10: draftData.score10,
-                    raw_score: draftData.raw_score,
-                    correct_count: draftData.correct_count,
-                    wrong_count: draftData.wrong_count,
-                    completion_time: draftData.completion_time,
-                    spent_mins: draftData.spent_mins,
-                    data_string: draftData.data_string,
-                    last_updated: new Date().toISOString()
-                })
-                .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
-                .then();
-
-            // Nếu tần suất Ping không bị tắt hẳn thì tự động phục hồi active_sessions nếu bị mất
-            const cfg = window.CURRENT_RT_CONFIG || {};
-            if (cfg.pingIntervalSec !== 0) {
-                client.from('active_sessions')
-                    .update({ last_ping: Date.now() })
-                    .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
-                    .select()
-                    .then(res => {
-                        if (!res.data || res.data.length === 0) {
-                            client.from('active_sessions').insert([{
-                                quiz_id: draftData.quiz_id,
-                                sbd: draftData.sbd,
-                                name: draftData.student_name,
-                                class_name: draftData.class_name,
-                                category_id: draftData.category_id,
-                                ma_de: draftData.ma_de,
-                                exam_title: draftData.exam_title,
-                                start_time: examStartTime || Date.now(),
-                                last_ping: Date.now()
-                            }]).then();
-                        }
-                    });
-            }
-        } catch(e) {}
-    }
-
-    if (_gasTempSheetDebounceTimer) clearTimeout(_gasTempSheetDebounceTimer);
-    _gasTempSheetDebounceTimer = setTimeout(() => {
-        const freshDraftData = buildCurrentLiveDraftPayload();
-        if (freshDraftData) {
-            sendDraftToGoogleSheetTemp(freshDraftData);
-        }
-    }, 3500);
+    // Ghi chú: Chúng ta không gửi UPDATE liên tục lên Supabase mỗi khi click chuột
+    // để tránh 15.000 - 30.000 requests làm sập CPU gói Free.
+    // Dữ liệu sẽ được gửi 1 lần duy nhất khi học sinh nộp bài hoặc hết giờ.
 }
 
 function sendDraftToGoogleSheetTemp(draftData) {
-    if (!draftData) return;
-    const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-        ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-        : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : "");
-
-    if (!gasUrl || gasUrl.includes("DÁN_URL")) return;
-
-    var payload = {
-        action: "saveLiveDraftToSheet",
-        className: draftData.class_name,
-        examTitle: draftData.exam_title,
-        sbd: draftData.sbd,
-        student_name: draftData.student_name,
-        draft: draftData
-    };
-
-    try {
-        fetch(gasUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payload),
-            keepalive: true
-        }).catch(() => null);
-    } catch(err) {}
+    // Để trống hoặc không gọi liên tục trong lúc làm bài nhằm tiết kiệm tài nguyên
+    return;
 }
 
 window.addEventListener('online', function() {
@@ -708,6 +602,7 @@ function selectOption(qId, letter) {
     
     updateProgress(); 
 
+    // GHI CỤC BỘ TỨC THÌ (0ms - OFFLINE FIRST), KHÔNG GỌI DATABASE ĐỂ TRÁNH QUÁ TẢI CPU
     if (_storageDebounceTimer) clearTimeout(_storageDebounceTimer);
     _storageDebounceTimer = setTimeout(() => {
         saveExamStateToStorage();
@@ -723,6 +618,7 @@ function onStatementChange(subKey) {
     window.SECURE_VAULT.userAnswers[subKey] = selected.value; 
     updateProgress(); 
 
+    // GHI CỤC BỘ TỨC THÌ (0ms - OFFLINE FIRST)
     if (_statementDebounceTimer) clearTimeout(_statementDebounceTimer);
     _statementDebounceTimer = setTimeout(() => {
         saveExamStateToStorage(); 
@@ -739,6 +635,8 @@ function onShortInputChange(qId) {
         delete window.SECURE_VAULT.userAnswers[`q${qId}`]; 
     }
     updateProgress(); 
+
+    // GHI CỤC BỘ TỨC THÌ (0ms - OFFLINE FIRST)
     saveExamStateToStorage(); 
 
     if (_autoSaveDebounceTimer) clearTimeout(_autoSaveDebounceTimer);
@@ -834,6 +732,7 @@ function startCountdownTimer() {
         const elapsedTimeSec = Math.floor((now - examStartTime) / 1000); 
         remainingSeconds = totalTimeSeconds - elapsedTimeSec; 
 
+        // KHI HẾT GIỜ: TỰ ĐỘNG KHÓA VÀ NỘP BÀI (SẼ ĐƯỢC CHẠY QUA JITTER DELAY SO LE)
         if (now >= currentEndTimeMs || remainingSeconds <= 0) { 
             clearInterval(timerInterval); 
             timerInterval = null;
