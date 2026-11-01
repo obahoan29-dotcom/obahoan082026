@@ -77,35 +77,75 @@
             filter: brightness(0.92);
         }
 
-        /* KHỐI CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG CHO ADMIN */
-        .admin-redirect-control-box {
-            background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
-            border: 1.5px solid #fecdd3;
-            border-radius: 12px;
-            padding: 9px 12px;
-            margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(225, 29, 72, 0.08);
+        /* NÚT THAO TÁC ADMIN TRÊN PANEL */
+        .btn-open-file-explorer {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 5px 11px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 2px 6px rgba(2, 132, 199, 0.32);
+            transition: all 0.15s ease;
+            text-decoration: none;
         }
-        .admin-redirect-toggle-row {
+        .btn-open-file-explorer:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(2, 132, 199, 0.4);
+        }
+        .btn-open-file-explorer:active {
+            transform: translateY(2px) scale(0.96);
+        }
+
+        .btn-admin-header-tool {
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 5px 11px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+        .btn-admin-header-tool:hover {
+            filter: brightness(1.12);
+            transform: translateY(-1px);
+        }
+        .btn-admin-header-tool:active {
+            transform: translateY(2px) scale(0.96);
+        }
+
+        .btn-cat-quick {
+            background: #ffffff;
+            border: 1.2px solid #cbd5e1;
+            color: #334155;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .btn-cat-quick:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+        .cat-quick-actions {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
-        }
-        .admin-redirect-title {
-            font-size: 12px;
-            font-weight: 800;
-            color: #991b1b;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .admin-redirect-subhint {
-            font-size: 10.5px;
-            color: #64748b;
-            font-weight: 600;
-            margin-top: 4px;
-            line-height: 1.35;
+            margin-bottom: 4px;
         }
 
         /* TỐI ƯU CÔNG TẮC CHO PHÉP CLICK TRỰC TIẾP NHẠY 100% */
@@ -132,30 +172,6 @@
         }
         .mini-switch .slider-toggle {
             pointer-events: none;
-        }
-
-        .btn-open-file-explorer {
-            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-            color: #ffffff;
-            border: none;
-            border-radius: 9px;
-            padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 800;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            box-shadow: 0 2px 5px rgba(2, 132, 199, 0.35);
-            transition: all 0.15s ease;
-            text-decoration: none;
-        }
-        .btn-open-file-explorer:hover {
-            filter: brightness(1.1);
-            transform: translateY(-1px);
-        }
-        .btn-open-file-explorer:active {
-            transform: translateY(2px) scale(0.96);
         }
 
         @media (max-width: 640px) {
@@ -285,20 +301,21 @@
             
             <div class="admin-gear-btn" id="gear-btn" onclick="toggleAdminPanel(event)" title="Quản trị viên">⚙️</div>
 
-            <!-- BẢNG QUẢN TRỊ XÒE RA -->
+            <!-- BẢNG QUẢN TRỊ XÒE RA: NÂNG CẤP KÍNH MỜ, RỘNG 570PX, NỔI KHỐI RÕ NÉT -->
             <div class="admin-popover-panel" id="admin-popover-panel">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 4px; flex-wrap: wrap;">
+                <!-- KHỐI 1: HEADER PANEL -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 6px; flex-wrap: wrap;">
                     <div class="admin-popover-title" style="margin-bottom: 0;">🚀 Bảng Điều Khiển Quản Trị</div>
                     <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
-                        <button type="button" onclick="changeAdminPassword(event)" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #fff; border: none; border-radius: 9px; padding: 4px 10px; font-size: 11px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 2px 5px rgba(245, 158, 11, 0.3); transition: 0.15s;" onmouseover="this.style.filter='brightness(1.1)'; this.style.transform='translateY(-1px)';" onmouseout="this.style.filter='none'; this.style.transform='none';">🔑 Đổi MK</button>
+                        <button type="button" class="btn-admin-header-tool" onclick="changeAdminPassword(event)" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow: 0 2px 6px rgba(245, 158, 11, 0.32);">🔑 Đổi MK</button>
                         
                         <!-- NÚT MỞ TRANG RIÊNG QUẢN LÝ TỆP (FILE EXPLORER) -->
                         <a href="./admin-files.html" target="_blank" class="btn-open-file-explorer" title="Mở trang quản lý tệp và cấu trúc thư mục Supabase như Windows Explorer">
                             📂 Quản lý tệp
                         </a>
 
-                        <!-- NÚT MỚI: CHỈNH LẮNG NGHE REALTIME TIẾT KIỆM BĂNG THÔNG -->
-                        <button type="button" onclick="openRealtimeConfigModal(event)" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; border: none; border-radius: 9px; padding: 4px 10px; font-size: 11px; font-weight: 800; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 5px rgba(2, 132, 199, 0.35); transition: 0.15s;" onmouseover="this.style.filter='brightness(1.1)'; this.style.transform='translateY(-1px)';" onmouseout="this.style.filter='none'; this.style.transform='none';" title="Bật/tắt các kênh kết nối Realtime & điều chỉnh tần suất Ping để tiết kiệm băng thông">
+                        <!-- NÚT CHỈNH LẮNG NGHE REALTIME TIẾT KIỆM BĂNG THÔNG -->
+                        <button type="button" class="btn-admin-header-tool" onclick="openRealtimeConfigModal(event)" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); box-shadow: 0 2px 6px rgba(2, 132, 199, 0.32);" title="Bật/tắt các kênh kết nối Realtime & điều chỉnh tần suất Ping để tiết kiệm băng thông">
                             📡 Chỉnh lắng nghe
                         </button>
                         
@@ -306,7 +323,7 @@
                     </div>
                 </div>
 
-                <!-- KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG -->
+                <!-- KHỐI 2: KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG (NỔI KHỐI) -->
                 <div class="admin-redirect-control-box">
                     <div class="admin-redirect-toggle-row">
                         <span class="admin-redirect-title" onclick="document.getElementById('admin-redirect-toggle').click();" style="cursor: pointer;">
@@ -321,142 +338,150 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 6px; margin-top: 6px;">
-                        <input type="text" id="admin-redirect-url-input" placeholder="https://obahoan2026.vercel.app/" style="flex:1; padding: 5px 8px; font-size: 11.5px; border: 1px solid #cbd5e1; border-radius: 7px; outline: none; background: #fff;">
-                        <button type="button" onclick="saveSiteRedirectUrl()" style="background: #0284c7; color:#fff; border:none; border-radius:7px; padding:5px 9px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap;">Lưu link</button>
+                        <input type="text" id="admin-redirect-url-input" placeholder="https://obahoan2026.vercel.app/" style="flex:1; padding: 5px 8px; font-size: 11.5px; border: 1.2px solid #cbd5e1; border-radius: 7px; outline: none; background: #fff;">
+                        <button type="button" onclick="saveSiteRedirectUrl()" style="background: #0284c7; color:#fff; border:none; border-radius:7px; padding:5px 10px; font-size:11px; font-weight:800; cursor:pointer; white-space:nowrap; box-shadow: 0 2px 5px rgba(2, 132, 199, 0.3);">Lưu link</button>
                     </div>
                     <div class="admin-redirect-subhint">
                         💡 <b>BẬT:</b> Học sinh ấn vào web này sẽ tự động chuyển sang link dự phòng trên. Thầy là Admin được giữ lại trang chính an toàn 100%.
                     </div>
                 </div>
-                
-                <div class="admin-tabs">
-                    <button class="admin-tab-btn active" id="tab-btn-quiz" onclick="switchAdminTab('quiz')">📝 Đề thi (JS)</button>
-                    <button class="admin-tab-btn" id="tab-btn-drive" onclick="switchAdminTab('drive')">📤 Tải PDF/Word/Ảnh</button>
-                    <button class="admin-tab-btn" id="tab-btn-doc" onclick="switchAdminTab('doc')">🔗 Link web</button>
-                </div>
 
-                <!-- KHU VỰC Ô VUÔNG TÍCH CHỌN NHIỀU LỚP CÙNG LÚC -->
-                <div class="admin-input-group">
-                    <div class="cat-quick-actions">
-                        <label style="margin-bottom:0;">Lớp / Chuyên mục đăng vào:</label>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(true)">Tất cả</button>
-                            <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(false)">Bỏ chọn</button>
-                            <!-- NÚT SOI ĐỀ MÀU XANH LÁ CÂY VÔ CÙNG THÚ VỊ Ở BÊN PHẢI CÙNG HÀNG -->
-                            <button type="button" class="btn-cat-quick btn-soi-de" onclick="openSoiDeModal(event)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: 1px solid #34d399; font-weight: 900; margin-left: 4px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);">
-                                🔍 Soi đề
-                            </button>
+                <!-- KHỐI 3: Ô VUÔNG TÍCH CHỌN LỚP CÙNG LÚC (NỔI KHỐI CARD, LƯỚI 3 CỘT RỘNG GỌN) -->
+                <div class="admin-section-card">
+                    <div class="admin-input-group" style="margin-bottom: 0;">
+                        <div class="cat-quick-actions">
+                            <label style="margin-bottom:0; font-size: 12px; color: #0f172a;">🏫 Lớp / Chuyên mục đăng vào:</label>
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(true)">Tất cả</button>
+                                <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(false)">Bỏ chọn</button>
+                                <!-- NÚT SOI ĐỀ MÀU XANH LÁ CÂY NỔI BẬT -->
+                                <button type="button" class="btn-cat-quick btn-soi-de" onclick="openSoiDeModal(event)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: 1px solid #34d399; font-weight: 900; margin-left: 2px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);">
+                                    🔍 Soi đề
+                                </button>
+                            </div>
+                        </div>
+                        <div class="category-checkbox-grid" id="admin-category-checkbox-list">
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="lop-11a" onchange="handleCatCheckboxChange(this)">
+                                <span>🏫 Lớp 11A</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="lop-11c" onchange="handleCatCheckboxChange(this)">
+                                <span>🏫 Lớp 11C</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="lop-10p" onchange="handleCatCheckboxChange(this)">
+                                <span>🏫 Lớp 10P</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="lop-11e" onchange="handleCatCheckboxChange(this)">
+                                <span>🏫 Lớp 11E</span>
+                            </label>
+                            <label class="cat-checkbox-item checked">
+                                <input type="checkbox" name="admin-cat-checkbox" value="them-11" checked onchange="handleCatCheckboxChange(this)">
+                                <span>✍️ Thêm 11</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="them-10" onchange="handleCatCheckboxChange(this)">
+                                <span>📐 Thêm 10</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="them-12" onchange="handleCatCheckboxChange(this)">
+                                <span>🎓 Thêm 12</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="hsg-toan-11" onchange="handleCatCheckboxChange(this)">
+                                <span>🏆 HSG Toán 11</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="kho-tai-lieu" onchange="handleCatCheckboxChange(this)">
+                                <span>📚 Kho tài liệu</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="nhac-nho" onchange="handleCatCheckboxChange(this)">
+                                <span>📌 Nhắc nhở</span>
+                            </label>
+                            <label class="cat-checkbox-item">
+                                <input type="checkbox" name="admin-cat-checkbox" value="tu-luan-padlet" onchange="handleCatCheckboxChange(this)">
+                                <span>💜 Nộp Padlet</span>
+                            </label>
                         </div>
                     </div>
-                    <div class="category-checkbox-grid" id="admin-category-checkbox-list">
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="lop-11a" onchange="handleCatCheckboxChange(this)">
-                            <span>🏫 Lớp 11A</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="lop-11c" onchange="handleCatCheckboxChange(this)">
-                            <span>🏫 Lớp 11C</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="lop-10p" onchange="handleCatCheckboxChange(this)">
-                            <span>🏫 Lớp 10P</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="lop-11e" onchange="handleCatCheckboxChange(this)">
-                            <span>🏫 Lớp 11E</span>
-                        </label>
-                        <label class="cat-checkbox-item checked">
-                            <input type="checkbox" name="admin-cat-checkbox" value="them-11" checked onchange="handleCatCheckboxChange(this)">
-                            <span>✍️ Thêm 11</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="them-10" onchange="handleCatCheckboxChange(this)">
-                            <span>📐 Thêm 10</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="them-12" onchange="handleCatCheckboxChange(this)">
-                            <span>🎓 Thêm 12</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="hsg-toan-11" onchange="handleCatCheckboxChange(this)">
-                            <span>🏆 HSG Toán 11</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="kho-tai-lieu" onchange="handleCatCheckboxChange(this)">
-                            <span>📚 Kho tài liệu</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="nhac-nho" onchange="handleCatCheckboxChange(this)">
-                            <span>📌 Nhắc nhở</span>
-                        </label>
-                        <label class="cat-checkbox-item">
-                            <input type="checkbox" name="admin-cat-checkbox" value="tu-luan-padlet" onchange="handleCatCheckboxChange(this)">
-                            <span>💜 Nộp Padlet</span>
-                        </label>
+                </div>
+
+                <!-- KHỐI 4: CHỌN ICON ĐẠI DIỆN (NỔI KHỐI CARD, LƯỚI 8 CỘT RỘNG GỌN) -->
+                <div class="admin-section-card">
+                    <div class="admin-input-group" style="margin-bottom: 0;">
+                        <label style="font-size: 12px; color: #0f172a;">🎨 Chọn icon đại diện:</label>
+                        <div class="avatar-picker-grid" id="avatar-grid"></div>
                     </div>
                 </div>
 
-                <div class="admin-input-group">
-                    <label>Chọn icon đại diện:</label>
-                    <div class="avatar-picker-grid" id="avatar-grid"></div>
-                </div>
-
-                <!-- TAB 1: ĐĂNG ĐỀ THI (JS) -->
-                <div id="admin-tab-quiz">
-                    <div class="admin-input-group">
-                        <label>Đặt tên đề thi (để trống sẽ tự lấy tên trong file questions):</label>
-                        <input type="text" id="admin-quiz-custom-title" placeholder="VD: ĐỀ 101 GIỮA HỌC KỲ I TOÁN 11...">
+                <!-- KHỐI 5: TABS CHỨC NĂNG & FORM ĐĂNG BÀI (NỔI KHỐI CARD) -->
+                <div class="admin-section-card">
+                    <div class="admin-tabs">
+                        <button class="admin-tab-btn active" id="tab-btn-quiz" onclick="switchAdminTab('quiz')">📝 Đề thi (JS)</button>
+                        <button class="admin-tab-btn" id="tab-btn-drive" onclick="switchAdminTab('drive')">📤 Tải PDF/Word/Ảnh</button>
+                        <button class="admin-tab-btn" id="tab-btn-doc" onclick="switchAdminTab('doc')">🔗 Link web</button>
                     </div>
 
-                    <div class="admin-input-group">
-                        <label>Tải lên file câu hỏi đề thi (questions.js / .txt / .json):</label>
-                        <input type="file" id="admin-file-upload" accept="*/*">
-                    </div>
+                    <!-- TAB 1: ĐĂNG ĐỀ THI (JS) -->
+                    <div id="admin-tab-quiz">
+                        <div class="admin-input-group">
+                            <label>Đặt tên đề thi (để trống sẽ tự lấy tên trong file questions):</label>
+                            <input type="text" id="admin-quiz-custom-title" placeholder="VD: ĐỀ 101 GIỮA HỌC KỲ I TOÁN 11...">
+                        </div>
 
-                    <div class="admin-input-group">
-                        <label>Tải lên file đáp án & giải thích (dapan.js / .txt / .json - nếu tách riêng):</label>
-                        <input type="file" id="admin-answer-file-upload" accept="*/*">
-                        <div style="font-size:11.5px; color:#64748b; margin-top:4px; font-style:italic;">
-                            * Nếu file đề questions đã có sẵn đáp án thì có thể để trống ô này.
+                        <div class="admin-input-group">
+                            <label>Tải lên file câu hỏi đề thi (questions.js / .txt / .json):</label>
+                            <input type="file" id="admin-file-upload" accept="*/*">
+                        </div>
+
+                        <div class="admin-input-group">
+                            <label>Tải lên file đáp án & giải thích (dapan.js / .txt / .json - nếu tách riêng):</label>
+                            <input type="file" id="admin-answer-file-upload" accept="*/*">
+                            <div style="font-size:11.5px; color:#64748b; margin-top:4px; font-style:italic;">
+                                * Nếu file đề questions đã có sẵn đáp án thì có thể để trống ô này.
+                            </div>
+                        </div>
+
+                        <div class="admin-btn-row">
+                            <button class="btn-admin btn-cancel" onclick="closeAdminPanel()">Thoát</button>
+                            <button class="btn-admin btn-submit" id="btn-create-quiz" onclick="processUpload()">✨ Đăng đề thi</button>
                         </div>
                     </div>
 
-                    <div class="admin-btn-row">
-                        <button class="btn-admin btn-cancel" onclick="closeAdminPanel()">Thoát</button>
-                        <button class="btn-admin btn-submit" id="btn-create-quiz" onclick="processUpload()">✨ Đăng đề thi</button>
+                    <!-- TAB 2: TẢI FILE PDF / WORD / ẢNH TRỰC TIẾP LÊN GOOGLE DRIVE -->
+                    <div id="admin-tab-drive" style="display: none;">
+                        <div class="admin-input-group">
+                            <label>Chọn file PDF / Word / Ảnh / Excel từ máy tính:</label>
+                            <input type="file" id="admin-drive-file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onchange="autoFillDriveTitle(this)">
+                        </div>
+                        <div class="admin-input-group">
+                            <label>Tên hiển thị tài liệu (để trống sẽ tự lấy tên file):</label>
+                            <input type="text" id="admin-drive-title" placeholder="VD: Đề cương ôn tập Toán 11 GK1, Ảnh bảng công thức...">
+                        </div>
+                        <div id="drive-upload-status" style="display: none; margin-bottom: 10px; font-size: 12.5px; font-weight: 700; color: #0284c7; text-align: center;"></div>
+                        <div class="admin-btn-row">
+                            <button class="btn-admin btn-cancel" onclick="closeAdminPanel()">Thoát</button>
+                            <button class="btn-admin btn-submit" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);" id="btn-upload-drive" onclick="processUploadToGoogleDrive()">📤 Tải lên Drive</button>
+                        </div>
                     </div>
-                </div>
 
-                <!-- TAB 2: TẢI FILE PDF / WORD / ẢNH TRỰC TIẾP LÊN GOOGLE DRIVE -->
-                <div id="admin-tab-drive" style="display: none;">
-                    <div class="admin-input-group">
-                        <label>Chọn file PDF / Word / Ảnh / Excel từ máy tính:</label>
-                        <input type="file" id="admin-drive-file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onchange="autoFillDriveTitle(this)">
-                    </div>
-                    <div class="admin-input-group">
-                        <label>Tên hiển thị tài liệu (để trống sẽ tự lấy tên file):</label>
-                        <input type="text" id="admin-drive-title" placeholder="VD: Đề cương ôn tập Toán 11 GK1, Ảnh bảng công thức...">
-                    </div>
-                    <div id="drive-upload-status" style="display: none; margin-bottom: 10px; font-size: 12.5px; font-weight: 700; color: #0284c7; text-align: center;"></div>
-                    <div class="admin-btn-row">
-                        <button class="btn-admin btn-cancel" onclick="closeAdminPanel()">Thoát</button>
-                        <button class="btn-admin btn-submit" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);" id="btn-upload-drive" onclick="processUploadToGoogleDrive()">📤 Tải lên Drive</button>
-                    </div>
-                </div>
-
-                <!-- TAB 3: ĐĂNG LINK TÀI LIỆU CÓ SẴN -->
-                <div id="admin-tab-doc" style="display: none;">
-                    <div class="admin-input-group">
-                        <label>Tên tài liệu / Video:</label>
-                        <input type="text" id="admin-doc-title" placeholder="VD: File ôn tập, Video bài giảng...">
-                    </div>
-                    <div class="admin-input-group">
-                        <label>Link gốc (Google Drive, Youtube...):</label>
-                        <input type="text" id="admin-doc-url" placeholder="Dán đường link vào đây...">
-                    </div>
-                    <div class="admin-btn-row">
-                        <button class="btn-admin btn-cancel" onclick="closeAdminPanel()">Thoát</button>
-                        <button class="btn-admin btn-submit" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);" id="btn-create-doc" onclick="processAddDocument()">🔗 Đăng tài liệu</button>
+                    <!-- TAB 3: ĐĂNG LINK TÀI LIỆU CÓ SẴN -->
+                    <div id="admin-tab-doc" style="display: none;">
+                        <div class="admin-input-group">
+                            <label>Tên tài liệu / Video:</label>
+                            <input type="text" id="admin-doc-title" placeholder="VD: File ôn tập, Video bài giảng...">
+                        </div>
+                        <div class="admin-input-group">
+                            <label>Link gốc (Google Drive, Youtube...):</label>
+                            <input type="text" id="admin-doc-url" placeholder="Dán đường link vào đây...">
+                        </div>
+                        <div class="admin-btn-row">
+                            <button class="btn-admin btn-cancel" onclick="closeAdminPanel()">Thoát</button>
+                            <button class="btn-admin btn-submit" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);" id="btn-create-doc" onclick="processAddDocument()">🔗 Đăng tài liệu</button>
+                        </div>
                     </div>
                 </div>
 
