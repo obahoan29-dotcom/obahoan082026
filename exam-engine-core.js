@@ -1,6 +1,7 @@
 // =========================================================
 // FILE 3: exam-engine-core.js (BẢN TỐI ƯU THI LẦN 2 MỚI TINH - KHÔNG BỊ KHÓA NHẦM)
 // NÂNG CẤP: SELF-HEALING UPSERT THEO (quiz_id, sbd) - KHÔNG PHỤ THUỘC CỘT 'id'
+// TÍCH HỢP: ĐIỀU TIẾT LẮNG NGHE & ĐỒNG BỘ ẢNH REALTIME
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -83,33 +84,36 @@ async function ensureActiveSessionAndDraft() {
     if (!client) return;
 
     try {
-        // Cập nhật ping phiên active_sessions theo match (quiz_id, sbd)
-        const { data: updatedAct } = await client.from('active_sessions')
-            .update({
-                name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                last_ping: nowMs
-            })
-            .match({ quiz_id: quizId, sbd: cleanSbd })
-            .select();
+        const cfg = window.CURRENT_RT_CONFIG || {};
+        // Nếu cấu hình Ping nhịp tim không tắt hẳn thì cập nhật active_sessions
+        if (cfg.pingIntervalSec !== 0) {
+            const { data: updatedAct } = await client.from('active_sessions')
+                .update({
+                    name: sName,
+                    class_name: strictClassName,
+                    category_id: currentCat,
+                    is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
+                    ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                    exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                    last_ping: nowMs
+                })
+                .match({ quiz_id: quizId, sbd: cleanSbd })
+                .select();
 
-        if (!updatedAct || updatedAct.length === 0) {
-            await client.from('active_sessions').insert([{
-                quiz_id: quizId,
-                sbd: cleanSbd,
-                name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                start_time: examStartTime || nowMs,
-                last_ping: nowMs
-            }]);
+            if (!updatedAct || updatedAct.length === 0) {
+                await client.from('active_sessions').insert([{
+                    quiz_id: quizId,
+                    sbd: cleanSbd,
+                    name: sName,
+                    class_name: strictClassName,
+                    category_id: currentCat,
+                    is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
+                    ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                    exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
+                    start_time: examStartTime || nowMs,
+                    last_ping: nowMs
+                }]);
+            }
         }
 
         // Cập nhật live_drafts theo match (quiz_id, sbd)
@@ -196,7 +200,7 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
-// BỘ TỰ ĐỘNG PHỤC HỒI ACTIVE_SESSIONS KHI HỌC SINH THAO TÁC (SELF-HEALING)
+// BỘ TỰ ĐỘNG LƯU BÀI VÀO CLOUD KHI HỌC SINH CHỌN ĐÁP ÁN
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -236,26 +240,29 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
                 .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
                 .then();
 
-            // TỰ PHỤC HỒI ACTIVE_SESSIONS: cập nhật ping, nếu chưa có thì tự động insert
-            client.from('active_sessions')
-                .update({ last_ping: Date.now() })
-                .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
-                .select()
-                .then(res => {
-                    if (!res.data || res.data.length === 0) {
-                        client.from('active_sessions').insert([{
-                            quiz_id: draftData.quiz_id,
-                            sbd: draftData.sbd,
-                            name: draftData.student_name,
-                            class_name: draftData.class_name,
-                            category_id: draftData.category_id,
-                            ma_de: draftData.ma_de,
-                            exam_title: draftData.exam_title,
-                            start_time: examStartTime || Date.now(),
-                            last_ping: Date.now()
-                        }]).then();
-                    }
-                });
+            // Nếu tần suất Ping không bị tắt hẳn thì tự động phục hồi active_sessions nếu bị mất
+            const cfg = window.CURRENT_RT_CONFIG || {};
+            if (cfg.pingIntervalSec !== 0) {
+                client.from('active_sessions')
+                    .update({ last_ping: Date.now() })
+                    .match({ quiz_id: draftData.quiz_id, sbd: draftData.sbd })
+                    .select()
+                    .then(res => {
+                        if (!res.data || res.data.length === 0) {
+                            client.from('active_sessions').insert([{
+                                quiz_id: draftData.quiz_id,
+                                sbd: draftData.sbd,
+                                name: draftData.student_name,
+                                class_name: draftData.class_name,
+                                category_id: draftData.category_id,
+                                ma_de: draftData.ma_de,
+                                exam_title: draftData.exam_title,
+                                start_time: examStartTime || Date.now(),
+                                last_ping: Date.now()
+                            }]).then();
+                        }
+                    });
+            }
         } catch(e) {}
     }
 
@@ -400,6 +407,11 @@ async function initExamEngine() {
             safeLocal.setItem(`exam_allow_free_${quizId}`, String(examData.allowFree !== false));
         }
 
+        // Tải cấu hình Realtime Admin trước khi dựng phòng thi
+        if (typeof loadRealtimeExamConfig === 'function') {
+            await loadRealtimeExamConfig();
+        }
+
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
         if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
 
@@ -410,7 +422,16 @@ async function initExamEngine() {
         }
         
         await checkSessionStatus(isAutostart);
-        startTimeWatcherRealtime(quizId);
+
+        // Kênh 3: Lắng nghe đổi giờ thi thời gian thực
+        if (typeof startTimeWatcherRealtime === 'function') {
+            startTimeWatcherRealtime(quizId);
+        }
+
+        // Kênh 4: Lắng nghe đồng bộ ảnh câu hỏi thời gian thực
+        if (typeof startImageSyncWatcher === 'function') {
+            startImageSyncWatcher(quizId);
+        }
     } catch (error) {
         hideLoading();
         showError("Lỗi tải đề thi", error.message);
