@@ -2,6 +2,7 @@
 // FILE: student-exam-flow.js 
 // (BẢN TỐI ƯU 180+ THÍ SINH - NỘP BÀI SO LE JITTER DELAY CHỐNG NGHẼN POOL)
 // BẢO VỆ DỮ LIỆU ĐA TẦNG, CHỐNG ĐÈ LẦN THI, LƯU GOOGLE DRIVE & SHEET CHUẨN XÁC
+// ĐÃ BỔ SUNG: KHI BỊ THU ÉP TỪ XA GHI ĐÚNG 'Thu ép XpYs' VÀO THỜI GIAN THI
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -618,7 +619,11 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const durationSec = Math.min(Math.max(1, actualElapsedSec), maxAllowedSec);
     const spentMins = Math.floor(durationSec / 60);
     const spentSecs = durationSec % 60;
-    const completionTimeStr = `${spentMins} phút ${spentSecs} giây`;
+    
+    // NẾU BỊ THU BÀI ÉP BUỘC THÌ GHI RÕ 'Thu ép XpYs'
+    const completionTimeStr = isForceSubmit 
+        ? `Thu ép ${spentMins}p${spentSecs}s` 
+        : `${spentMins} phút ${spentSecs} giây`;
 
     let scoreResult = null;
     if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData) {
@@ -634,6 +639,9 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
 
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
+    if (isForceSubmit) {
+        dataDetails.push(`[THU BÀI ÉP BUỘC TỪ XA]`);
+    }
 
     const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionTimestampMs = Date.now();
