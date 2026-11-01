@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN CHUẨN XÁC THEO ẢNH: NÚT "2 LẦN" + DROPDOWN CHỌN LẦN THI ĐẦY ĐỦ ĐIỂM SỐ & THỜI GIAN)
+// (BẢN SIÊU HẸP HEADER - THU HIỆN ĐỦ DÒNG CHỮ TO NHẤT - CỘT DÒNG SÁT NHAU TỐI ĐA)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -9,7 +9,7 @@ let _liveDoingTickerInterval = null;
 let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 
-// TIÊM STYLE CHO CỘT "SỐ LẦN THI" VÀ DROPDOWN "CHỌN LẦN THI" CHUẨN XÁC THEO ẢNH
+// TIÊM STYLE CHO CỘT "SỐ LẦN THI", HEADER SIÊU HẸP VÀ CHẾ ĐỘ THU HIỆN ĐỦ DÒNG
 (function injectAttemptDropdownStyles() {
     const styleId = "status-attempt-dropdown-styles";
     if (document.getElementById(styleId)) return;
@@ -32,135 +32,192 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
+        /* 1. THANH TIÊU ĐỀ HEADER SIÊU HẸP */
         .result-modal-header {
-            padding: 4px 12px !important;
-            min-height: 36px !important;
-            gap: 6px !important;
+            padding: 2px 8px !important;
+            min-height: 28px !important;
+            height: 28px !important;
+            max-height: 28px !important;
+            gap: 4px !important;
             background: #ffffff !important;
             border-bottom: 1.5px solid #e2e8f0 !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
         }
 
         .result-modal-title-box {
-            gap: 6px !important;
+            gap: 5px !important;
             min-width: 0 !important;
-            flex: 1 !important;
+            flex: 1 1 auto !important;
+            height: 24px !important;
+            display: flex !important;
+            align-items: center !important;
         }
 
         #btn-result-back-action {
-            padding: 3px 8px !important;
-            font-size: 11px !important;
-            border-radius: 7px !important;
-            height: 26px !important;
+            padding: 1px 7px !important;
+            font-size: 10.5px !important;
+            border-radius: 5px !important;
+            height: 22px !important;
+            line-height: 1 !important;
+            flex-shrink: 0 !important;
         }
 
         .result-modal-icon {
-            width: 26px !important;
-            height: 26px !important;
-            font-size: 14px !important;
-            border-radius: 6px !important;
+            display: none !important;
+        }
+
+        .result-modal-title-box > div:last-child {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 5px !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            text-overflow: ellipsis !important;
+        }
+
+        .result-modal-title-box > div:last-child > div:first-child {
+            font-size: 11px !important;
+            white-space: nowrap !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 3px !important;
+            color: #64748b !important;
+            flex-shrink: 0 !important;
         }
 
         .result-modal-heading {
-            font-size: 13px !important;
+            font-size: 11.5px !important;
             line-height: 1.2 !important;
             margin: 0 !important;
-            font-weight: 900 !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            max-width: 280px !important;
+            display: inline-block !important;
         }
 
         .result-modal-subheading {
-            font-size: 10px !important;
-            line-height: 1.15 !important;
-            margin-top: 1px !important;
-            color: #64748b !important;
+            display: none !important;
         }
 
         .result-modal-tools {
-            gap: 4px !important;
+            gap: 3px !important;
+            height: 24px !important;
+            display: flex !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
         }
 
         .result-search-input {
-            padding: 3px 8px !important;
-            height: 26px !important;
+            padding: 2px 7px !important;
+            height: 22px !important;
             font-size: 11px !important;
-            width: 125px !important;
-            border-radius: 14px !important;
+            width: 105px !important;
+            border-radius: 11px !important;
         }
         .result-search-input:focus {
-            width: 150px !important;
+            width: 130px !important;
         }
 
         #btn-toggle-autorefresh,
         .btn-refresh-result,
         .btn-regrade-exam,
         .btn-upload-json-backup,
-        .btn-export-excel {
-            padding: 3px 8px !important;
-            font-size: 11px !important;
-            height: 26px !important;
-            border-radius: 14px !important;
+        .btn-export-excel,
+        .btn-fit-all-rows {
+            padding: 2px 7px !important;
+            font-size: 10.5px !important;
+            height: 22px !important;
+            border-radius: 11px !important;
+            line-height: 1 !important;
+        }
+
+        /* Triệt tiêu lỗi đúp chữ Cập nhậtCập nhật */
+        .btn-refresh-result::before,
+        .btn-refresh-result::after {
+            display: none !important;
+            content: none !important;
+        }
+        .btn-refresh-result {
+            font-size: 10.5px !important;
         }
 
         .btn-table-settings,
         .btn-close-result-modal {
-            width: 26px !important;
-            height: 26px !important;
-            font-size: 14px !important;
+            width: 22px !important;
+            height: 22px !important;
+            font-size: 12px !important;
+            line-height: 1 !important;
+            padding: 0 !important;
         }
 
+        /* THANH THỐNG KÊ PHÂN LOẠI SIÊU HẸP */
         .result-modal-stats-bar {
-            padding: 2px 10px !important;
-            font-size: 10.5px !important;
-            min-height: 24px !important;
-            gap: 4px !important;
+            padding: 1px 8px !important;
+            font-size: 10px !important;
+            min-height: 20px !important;
+            height: 22px !important;
+            gap: 3px !important;
             background: #f8fafc !important;
             border-bottom: 1px solid #e2e8f0 !important;
+            box-sizing: border-box !important;
         }
 
         .result-modal-stats-bar .stat-badge-item {
-            padding: 1px 5px !important;
-            font-size: 10px !important;
-            border-radius: 6px !important;
+            padding: 0px 4px !important;
+            font-size: 9.5px !important;
+            border-radius: 4px !important;
+            height: 18px !important;
+            display: inline-flex !important;
+            align-items: center !important;
         }
 
         #btn-view-detailed-stats {
-            padding: 2px 8px !important;
-            font-size: 10px !important;
-            border-radius: 10px !important;
+            padding: 1px 6px !important;
+            font-size: 9.5px !important;
+            height: 18px !important;
+            border-radius: 9px !important;
         }
 
         .result-modal-body {
-            padding: 4px 6px !important;
+            padding: 2px 4px !important;
             transform-origin: top center !important;
             transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
 
         .result-table-card {
-            border-radius: 8px !important;
+            border-radius: 6px !important;
         }
 
         .btn-fit-all-rows {
             background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
             color: #ffffff !important;
             border: 1px solid #5eead4 !important;
-            border-radius: 14px !important;
-            padding: 3px 9px !important;
-            font-size: 11px !important;
+            border-radius: 11px !important;
+            padding: 2px 7px !important;
+            font-size: 10.5px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
             display: inline-flex !important;
             align-items: center !important;
             gap: 3px !important;
-            box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25) !important;
+            box-shadow: 0 1px 4px rgba(13, 148, 136, 0.25) !important;
             transition: all 0.15s ease !important;
             white-space: nowrap !important;
             user-select: none !important;
-            height: 26px !important;
+            height: 22px !important;
             font-family: inherit !important;
         }
         .btn-fit-all-rows:hover {
             filter: brightness(1.12) !important;
             transform: translateY(-1px) !important;
-            box-shadow: 0 4px 10px rgba(13, 148, 136, 0.4) !important;
         }
         .btn-fit-all-rows:active {
             transform: translateY(1.5px) scale(0.96) !important;
@@ -174,24 +231,23 @@ let isFitAllRowsActive = false;
         .modal-independent-zoom-control {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 2px !important;
+            gap: 1px !important;
             background: #1e293b !important;
-            border: 1.5px solid #475569 !important;
-            border-radius: 20px !important;
-            padding: 2px 4px !important;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+            border: 1px solid #475569 !important;
+            border-radius: 11px !important;
+            padding: 1px 2px !important;
             user-select: none !important;
-            height: 26px !important;
+            height: 22px !important;
             box-sizing: border-box !important;
         }
         .btn-modal-zoom-step {
-            width: 20px !important;
-            height: 20px !important;
+            width: 18px !important;
+            height: 18px !important;
             border-radius: 50% !important;
             border: none !important;
             background: #334155 !important;
             color: #ffffff !important;
-            font-size: 12px !important;
+            font-size: 11px !important;
             font-weight: 900 !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -205,21 +261,106 @@ let isFitAllRowsActive = false;
             background: #0284c7 !important;
             transform: scale(1.1) !important;
         }
-        .btn-modal-zoom-step:active {
-            transform: scale(0.92) !important;
-        }
         .modal-zoom-val-badge {
-            font-size: 10.5px !important;
+            font-size: 10px !important;
             font-weight: 800 !important;
             color: #38bdf8 !important;
-            padding: 0 5px !important;
-            min-width: 38px !important;
+            padding: 0 3px !important;
+            min-width: 32px !important;
             text-align: center !important;
             font-family: 'Be Vietnam Pro', monospace !important;
             cursor: pointer !important;
         }
-        .modal-zoom-val-badge:hover {
-            text-decoration: underline !important;
+
+        /* 2. BẢNG KHI BẬT "THU HIỆN ĐỦ DÒNG": DÒNG SÁT TỐI ĐA, CỘT SÁT TỐI ĐA, CHỮ TO RÕ */
+        .result-table.table-fitted-compact {
+            --table-row-padding-y: 0px !important;
+            --table-row-padding-x: 2px !important;
+            width: 100% !important;
+        }
+        .result-table.table-fitted-compact thead th {
+            padding: 2px 2px !important;
+            font-size: calc(var(--table-font-size, 12px) - 1px) !important;
+            line-height: 1.15 !important;
+            border-right: 1px solid #334155 !important;
+            border-bottom: 1.5px solid #0284c7 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        .result-table.table-fitted-compact tbody tr {
+            height: auto !important;
+        }
+        .result-table.table-fitted-compact tbody td {
+            padding: 0px 2px !important;
+            font-size: var(--table-font-size, 12px) !important;
+            line-height: 1.15 !important;
+            border-right: 1px solid #cbd5e1 !important;
+            border-bottom: 1px solid #cbd5e1 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
+        /* Co hẹp các cột khi thu hiện đủ dòng để các cột sát nhau tối đa */
+        .result-table.table-fitted-compact th.td-stt { width: 34px !important; }
+        .result-table.table-fitted-compact th.td-exam-col,
+        .result-table.table-fitted-compact th:nth-child(2) { width: 125px !important; }
+        .result-table.table-fitted-compact th:nth-child(3) { width: 66px !important; }
+        .result-table.table-fitted-compact th:nth-child(4) { width: 110px !important; }
+        .result-table.table-fitted-compact th:nth-child(5) { width: 85px !important; }
+        .result-table.table-fitted-compact th:nth-child(6) { width: 125px !important; }
+        .result-table.table-fitted-compact th:nth-child(7) { width: 55px !important; }
+        .result-table.table-fitted-compact th:nth-child(8) { width: 50px !important; }
+        .result-table.table-fitted-compact th:nth-child(9) { width: 82px !important; }
+        .result-table.table-fitted-compact th:nth-child(10) { width: 68px !important; }
+        .result-table.table-fitted-compact th:nth-child(11) { width: 50px !important; }
+        .result-table.table-fitted-compact th:nth-child(12) { width: 72px !important; }
+        .result-table.table-fitted-compact th:nth-child(13) { width: 65px !important; }
+        .result-table.table-fitted-compact th:nth-child(14) { width: 78px !important; }
+        .result-table.table-fitted-compact th:nth-child(15) { width: 120px !important; }
+        .result-table.table-fitted-compact th.th-row-action-col { width: 42px !important; }
+
+        .result-table.table-fitted-compact .btn-exam-picker {
+            padding: 1px 3px !important;
+            font-size: inherit !important;
+            border-radius: 4px !important;
+            height: auto !important;
+            line-height: 1.15 !important;
+        }
+        .result-table.table-fitted-compact .btn-rank-picker {
+            padding: 1px 3px !important;
+            font-size: inherit !important;
+            border-radius: 4px !important;
+            height: auto !important;
+            line-height: 1.15 !important;
+        }
+        .result-table.table-fitted-compact .status-pill,
+        .result-table.table-fitted-compact .status-doing-heartbeat,
+        .result-table.table-fitted-compact .btn-attempt-badge-single,
+        .result-table.table-fitted-compact .btn-attempt-badge-multi,
+        .result-table.table-fitted-compact .score-pill-high,
+        .result-table.table-fitted-compact .score-pill-mid,
+        .result-table.table-fitted-compact .score-pill-low,
+        .result-table.table-fitted-compact .class-badge,
+        .result-table.table-fitted-compact .live-doing-timer-pill,
+        .result-table.table-fitted-compact .tabs-warn,
+        .result-table.table-fitted-compact .tabs-ok {
+            padding: 0px 3px !important;
+            font-size: inherit !important;
+            line-height: 1.15 !important;
+            border-radius: 4px !important;
+            box-shadow: none !important;
+        }
+        .result-table.table-fitted-compact .btn-delete-result-row {
+            padding: 0px 4px !important;
+            font-size: 9.5px !important;
+            line-height: 1.1 !important;
+            border-radius: 3px !important;
+            box-shadow: none !important;
+        }
+        .result-table.table-fitted-compact .td-attempt-cell-wrap {
+            padding: 0px 2px !important;
         }
 
         @keyframes heartbeatDoing {
@@ -285,9 +426,6 @@ let isFitAllRowsActive = false;
             white-space: nowrap !important;
         }
 
-        /* ========================================================= */
-        /* CỘT SỐ LẦN THI: NÚT VÀ POPUP DROPDOWN THEO ĐÚNG ẢNH MẪU */
-        /* ========================================================= */
         .td-attempt-cell-wrap {
             text-align: center !important;
             overflow: visible !important;
@@ -295,7 +433,6 @@ let isFitAllRowsActive = false;
             padding: 4px 6px !important;
         }
 
-        /* Nút màu hồng/đỏ khi có từ 2 lần thi trở lên (y hệt ảnh chụp) */
         .btn-attempt-badge-multi {
             display: inline-flex !important;
             align-items: center !important;
@@ -322,7 +459,6 @@ let isFitAllRowsActive = false;
             transform: translateY(1px) scale(0.96) !important;
         }
 
-        /* Nút xám viền mảnh khi chỉ thi 1 lần (y hệt ảnh chụp ở dòng 5, 6) */
         .btn-attempt-badge-single {
             display: inline-flex !important;
             align-items: center !important;
@@ -346,7 +482,6 @@ let isFitAllRowsActive = false;
             border-color: #94a3b8 !important;
         }
 
-        /* KHUNG DROPDOWN "CHỌN LẦN THI:" NỔI LÊN (Y HỆT HÌNH ẢNH) */
         .attempt-picker-wrapper {
             position: relative !important;
             display: inline-block !important;
@@ -402,7 +537,6 @@ let isFitAllRowsActive = false;
             background: #f1f5f9 !important;
         }
 
-        /* Lần thi đang được chọn: màu tím có dấu tick ✓ */
         .attempt-menu-item.selected {
             background: #ede9fe !important;
             color: #6d28d9 !important;
@@ -437,7 +571,6 @@ let isFitAllRowsActive = false;
             margin-left: 8px !important;
         }
 
-        /* Đảm bảo dòng bảng chứa dropdown luôn nổi lên trên cùng */
         tr.has-active-attempt-menu {
             position: relative !important;
             z-index: 1000 !important;
@@ -491,6 +624,8 @@ function adjustModalZoomStep(step) {
         fitBtn.classList.remove("is-fitted");
         fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
     }
+    const table = document.getElementById("admin-result-table");
+    if (table) table.classList.remove("table-fitted-compact");
     applyModalZoomLevel(modalCustomZoomLevel + step);
 }
 
@@ -501,9 +636,15 @@ function resetModalZoom() {
         fitBtn.classList.remove("is-fitted");
         fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
     }
+    const table = document.getElementById("admin-result-table");
+    if (table) table.classList.remove("table-fitted-compact");
     applyModalZoomLevel(1.0);
 }
 
+// =========================================================================
+// THUẬT TOÁN THU HIỆN ĐỦ DÒNG THÔNG MINH:
+// DÒNG & CỘT SÁT TỐI ĐA, TỰ TÍNH TOÁN CỠ CHỮ LỚN NHẤT CÓ THỂ
+// =========================================================================
 function fitAllRowsInView(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
@@ -517,30 +658,71 @@ function fitAllRowsInView(event) {
             fitBtn.classList.remove("is-fitted");
             fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
         }
+        table.classList.remove("table-fitted-compact");
         resetTableSettings();
         applyModalZoomLevel(1.0);
         return;
     }
 
-    tableDisplaySettings.rowPadding = 2;
-    tableDisplaySettings.fontSize = 11;
-    applyTableSettings();
+    // BẬT CHẾ ĐỘ THU HIỆN ĐỦ DÒNG CỰC KỲ GỌN GÀNG
+    table.classList.add("table-fitted-compact");
+    tableDisplaySettings.rowPadding = 0;
+    
+    // Đặt zoom tạm về 1.0 để đo đạc chính xác
+    applyModalZoomLevel(1.0);
 
     setTimeout(() => {
         const availH = scrollWrap.clientHeight;
-        const currentZoom = modalCustomZoomLevel || 1.0;
-        const unscaledH = table.scrollHeight / currentZoom;
+        if (availH <= 0) return;
 
-        if (availH > 0 && unscaledH > 0) {
-            let targetZoom = Math.floor(((availH - 4) / unscaledH) * 100) / 100;
-            targetZoom = Math.min(1.0, Math.max(0.40, targetZoom));
-            applyModalZoomLevel(targetZoom);
-            scrollWrap.scrollTop = 0;
-            isFitAllRowsActive = true;
-            if (fitBtn) {
-                fitBtn.classList.add("is-fitted");
-                fitBtn.innerHTML = "↺ Hiện 100%";
+        // Quét thử các cỡ chữ từ lớn xuống nhỏ để tìm font to nhất vẫn lọt đủ màn hình
+        const fontCandidates = [14, 13.5, 13, 12.5, 12, 11.5, 11, 10.5, 10];
+        let chosenFs = 11;
+        let chosenZoom = 1.0;
+        let foundPerfect = false;
+
+        for (let fs of fontCandidates) {
+            table.style.setProperty("--table-font-size", fs + "px");
+            table.style.fontSize = fs + "px";
+
+            const unscaledH = table.scrollHeight;
+            if (unscaledH <= availH) {
+                chosenFs = fs;
+                chosenZoom = 1.0;
+                foundPerfect = true;
+                break;
             }
+        }
+
+        // Nếu ngay cả font 10px vẫn cao hơn availH (màn hình nhỏ hoặc rất đông học sinh),
+        // tính toán zoom sao cho kích thước thực tế hiển thị (fs * zoom) là lớn nhất
+        if (!foundPerfect) {
+            let maxEffectiveSize = 0;
+            for (let fs of [12.5, 12, 11.5, 11, 10.5, 10]) {
+                table.style.setProperty("--table-font-size", fs + "px");
+                table.style.fontSize = fs + "px";
+                const unscaledH = table.scrollHeight;
+                const reqZoom = Math.floor(((availH - 2) / unscaledH) * 100) / 100;
+                const effectiveSize = fs * reqZoom;
+                if (effectiveSize > maxEffectiveSize) {
+                    maxEffectiveSize = effectiveSize;
+                    chosenFs = fs;
+                    chosenZoom = Math.min(1.0, Math.max(0.40, reqZoom));
+                }
+            }
+        }
+
+        tableDisplaySettings.fontSize = chosenFs;
+        table.style.setProperty("--table-font-size", chosenFs + "px");
+        table.style.fontSize = chosenFs + "px";
+        applyModalZoomLevel(chosenZoom);
+
+        scrollWrap.scrollTop = 0;
+        isFitAllRowsActive = true;
+
+        if (fitBtn) {
+            fitBtn.classList.add("is-fitted");
+            fitBtn.innerHTML = "↺ Hiện 100%";
         }
     }, 40);
 }
@@ -951,7 +1133,7 @@ function ensureActionColumnHeaders() {
     if (!thDel) {
         thDel = document.createElement("th");
         thDel.className = "th-row-action-col";
-        thDel.style.width = "75px";
+        thDel.style.width = "42px";
         thDel.style.textAlign = "center";
         thDel.innerText = "XÓA";
         theadTr.appendChild(thDel);
@@ -978,9 +1160,14 @@ function startLiveDoingTicker() {
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
     ensureModalZoomControlsInHeader();
+    const table = document.getElementById("admin-result-table");
     const tbody = document.getElementById("result-table-tbody"); 
-    if (!tbody) return; 
+    if (!tbody || !table) return; 
     tbody.innerHTML = "";
+
+    if (isFitAllRowsActive) {
+        table.classList.add("table-fitted-compact");
+    }
 
     if (!rows || rows.length === 0) {
         tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">Không tìm thấy dữ liệu học sinh nào!</td></tr>`;
@@ -1029,9 +1216,7 @@ function renderFilteredResultTable(rows) {
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
         let col_attemptCount = `<span class="status-not-submitted">---</span>`;
 
-        // -------------------------------------------------------------
         // XỬ LÝ CỘT "SỐ LẦN THI": NÚT "2 LẦN" + DROPDOWN THEO ĐÚNG ẢNH MẪU
-        // -------------------------------------------------------------
         if (attCount === 0) {
             if (row.isDoing) {
                 col_attemptCount = `<span class="status-doing-heartbeat" style="font-size:11px; padding:3px 8px;" title="Học sinh đang trong phòng thi">💓 Đang thi</span>`;
@@ -1039,7 +1224,6 @@ function renderFilteredResultTable(rows) {
                 col_attemptCount = `<span class="status-not-submitted">---</span>`;
             }
         } else {
-            // Nút bấm: Nếu >= 2 lần thì màu đỏ/hồng, nếu 1 lần thì màu xám nhạt như trong ảnh
             const isMulti = attCount >= 2;
             const btnClass = isMulti ? 'btn-attempt-badge-multi' : 'btn-attempt-badge-single';
             const btnText = `${attCount} lần`;
@@ -1104,10 +1288,10 @@ function renderFilteredResultTable(rows) {
             if (row.rank !== null && row.rank !== undefined) {
                 let rankNum = row.rank; 
                 let rankBadge = "";
-                if (rankNum === 1) { rankBadge = `<span style="background: linear-gradient(135deg, #fef08a, #fde047); color: #854d0e; border: 1.5px solid #eab308; padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 0.95em; box-shadow: 0 2px 6px rgba(234,179,8,0.25);">🥇 Hạng 1</span>`; } 
-                else if (rankNum === 2) { rankBadge = `<span style="background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #334155; border: 1.5px solid #94a3b8; padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 0.95em; box-shadow: 0 2px 6px rgba(148,163,184,0.2);">🥈 Hạng 2</span>`; } 
-                else if (rankNum === 3) { rankBadge = `<span style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #9a3412; border: 1.5px solid #fb923c; padding: 3px 8px; border-radius: 12px; font-weight: 900; font-size: 0.95em; box-shadow: 0 2px 6px rgba(251,146,60,0.2);">🥉 Hạng 3</span>`; } 
-                else { rankBadge = `<span style="background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 10px; font-weight: 800; font-size: 0.92em;">Hạng ${rankNum}</span>`; }
+                if (rankNum === 1) { rankBadge = `<span style="background: linear-gradient(135deg, #fef08a, #fde047); color: #854d0e; border: 1.5px solid #eab308; padding: 2px 6px; border-radius: 10px; font-weight: 900; font-size: 0.95em; box-shadow: 0 1px 4px rgba(234,179,8,0.25);">🥇 Hạng 1</span>`; } 
+                else if (rankNum === 2) { rankBadge = `<span style="background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #334155; border: 1.5px solid #94a3b8; padding: 2px 6px; border-radius: 10px; font-weight: 900; font-size: 0.95em;">🥈 Hạng 2</span>`; } 
+                else if (rankNum === 3) { rankBadge = `<span style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #9a3412; border: 1.5px solid #fb923c; padding: 2px 6px; border-radius: 10px; font-weight: 900; font-size: 0.95em;">🥉 Hạng 3</span>`; } 
+                else { rankBadge = `<span style="background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 8px; font-weight: 800; font-size: 0.92em;">Hạng ${rankNum}</span>`; }
                 col_rank = rankBadge;
             }
 
@@ -1153,7 +1337,7 @@ function renderFilteredResultTable(rows) {
         let col_class = `<span class="class-badge">${rawClass}</span>`;
         let col5_sbd = acc.sbd || (currentSub ? (currentSub.sbd || currentSub.studentId) : "---");
         let safeTitleCol10 = stripHtml(col10_cheatTime);
-        let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:8px; padding:3px 8px; font-size:11.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s; box-shadow:0 1px 3px rgba(239,68,68,0.15);">🗑️ Xóa</button>`;
+        let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; padding:2px 6px; font-size:10.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s;">🗑️</button>`;
 
         tr.innerHTML = `
             <td class="td-stt">${col1_stt}</td>
