@@ -1,125 +1,426 @@
 /* ========================================================= */
 /* FILE: style-modals.css                                    */
-/* QUẢN TRỊ, POPOVER AVATAR, TẤT CẢ CÁC MODAL, BẢNG ĐIỂM,   */
-/* MODAL TỰ LUẬN DRIVE (90% LAPTOP, MOBILE STICKY) & LIGHTBOX*/
+/* BẢNG ĐIỀU KHIỂN ADMIN NÂNG CẤP: KÍNH MỜ TRONG SUỐT,      */
+/* MỞ RỘNG BỀ NGANG 570PX, THU GỌN CHIỀU CAO, NỔI KHỐI RÕ NÉT */
 /* ========================================================= */
 
 /* 1. KHU VỰC ĐIỀU KHIỂN QUẢN TRỊ VIÊN */
-.admin-controls-wrapper { position: absolute; bottom: 10px; right: 12px; z-index: 10; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.auth-container { display: flex; align-items: center; gap: 6px; background: rgba(15, 23, 42, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 5px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.4); opacity: 0; transform: translateX(15px); pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-.auth-container.show { opacity: 1; transform: translateX(0); pointer-events: all; }
+.admin-controls-wrapper { 
+    position: absolute; 
+    bottom: 10px; 
+    right: 12px; 
+    z-index: 10; 
+    display: flex; 
+    align-items: center; 
+    justify-content: flex-end; 
+    gap: 8px; 
+}
+
+.auth-container { 
+    display: flex; 
+    align-items: center; 
+    gap: 6px; 
+    background: rgba(15, 23, 42, 0.88); 
+    backdrop-filter: blur(14px); 
+    -webkit-backdrop-filter: blur(14px); 
+    padding: 5px 8px; 
+    border-radius: 12px; 
+    border: 1px solid rgba(255,255,255,0.4); 
+    opacity: 0; 
+    transform: translateX(15px); 
+    pointer-events: none; 
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4); 
+}
+.auth-container.show { 
+    opacity: 1; 
+    transform: translateX(0); 
+    pointer-events: all; 
+}
 .auth-input-wrapper { position: relative; display: flex; align-items: center; }
-.auth-input { background: rgba(255,255,255,0.95); border: none; outline: none; padding: 7px 30px 7px 14px; border-radius: 10px; font-size: 13.5px; font-family: inherit; width: 130px; font-weight: 700; color: #0f172a; }
-.eye-toggle-btn { position: absolute; right: 9px; background: transparent; border: none; cursor: pointer; font-size: 15px; padding: 0; line-height: 1; opacity: 0.65; transition: 0.2s; user-select: none; }
+.auth-input { 
+    background: rgba(255,255,255,0.95); 
+    border: none; 
+    outline: none; 
+    padding: 7px 30px 7px 14px; 
+    border-radius: 10px; 
+    font-size: 13.5px; 
+    font-family: inherit; 
+    width: 130px; 
+    font-weight: 700; 
+    color: #0f172a; 
+}
+.eye-toggle-btn { 
+    position: absolute; 
+    right: 9px; 
+    background: transparent; 
+    border: none; 
+    cursor: pointer; 
+    font-size: 15px; 
+    padding: 0; 
+    line-height: 1; 
+    opacity: 0.65; 
+    transition: 0.2s; 
+    user-select: none; 
+}
 
 .admin-duration-select {
-    background: rgba(255,255,255,0.95); border: none; outline: none;
-    padding: 7px 10px; border-radius: 10px; font-size: 12.5px; font-weight: 700;
-    color: #0369a1; cursor: pointer; font-family: inherit;
+    background: rgba(255,255,255,0.95); 
+    border: none; 
+    outline: none;
+    padding: 7px 10px; 
+    border-radius: 10px; 
+    font-size: 12.5px; 
+    font-weight: 700;
+    color: #0369a1; 
+    cursor: pointer; 
+    font-family: inherit;
 }
 .admin-duration-select:focus { box-shadow: 0 0 0 2px #38bdf8; }
-.auth-btn { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 10px; padding: 8px 16px; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.15s; white-space: nowrap; }
+
+.auth-btn { 
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+    color: white; 
+    border: none; 
+    border-radius: 10px; 
+    padding: 8px 16px; 
+    font-size: 13px; 
+    font-weight: 800; 
+    cursor: pointer; 
+    transition: 0.15s; 
+    white-space: nowrap; 
+}
 .auth-btn:active { transform: translateY(2px) scale(0.96); }
 
 .admin-logout-btn {
     background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    color: #ffffff; border: none; border-radius: 9px; padding: 4px 10px;
-    font-size: 11px; font-weight: 800; cursor: pointer; transition: 0.15s;
-    display: inline-flex; align-items: center; gap: 3px; box-shadow: 0 2px 5px rgba(239, 68, 68, 0.3);
+    color: #ffffff; 
+    border: none; 
+    border-radius: 8px; 
+    padding: 5px 11px;
+    font-size: 11px; 
+    font-weight: 800; 
+    cursor: pointer; 
+    transition: all 0.15s ease;
+    display: inline-flex; 
+    align-items: center; 
+    gap: 3px; 
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3);
 }
-.admin-logout-btn:hover { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); }
+.admin-logout-btn:hover { 
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
+}
 .admin-logout-btn:active { transform: translateY(2px) scale(0.96); }
 
 .admin-gear-btn { 
-    background: rgba(255, 255, 255, 0.3); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); 
-    border: 1px solid rgba(255,255,255,0.6); border-radius: 12px; width: 38px; height: 38px; 
-    display: flex; align-items: center; justify-content: center; cursor: pointer; 
-    transition: 0.25s cubic-bezier(0.16, 1, 0.3, 1); color: white; font-size: 18px; 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 11; 
+    background: rgba(255, 255, 255, 0.3); 
+    backdrop-filter: blur(8px); 
+    -webkit-backdrop-filter: blur(8px); 
+    border: 1px solid rgba(255,255,255,0.6); 
+    border-radius: 12px; 
+    width: 38px; 
+    height: 38px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    cursor: pointer; 
+    transition: 0.25s cubic-bezier(0.16, 1, 0.3, 1); 
+    color: white; 
+    font-size: 18px; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4); 
+    z-index: 11; 
 }
-.admin-gear-btn:hover { background: rgba(255, 255, 255, 0.5); transform: rotate(90deg) scale(1.06); }
+.admin-gear-btn:hover { 
+    background: rgba(255, 255, 255, 0.5); 
+    transform: rotate(90deg) scale(1.06); 
+}
 .admin-gear-btn:active { transform: scale(0.92); }
-.admin-gear-btn.active-gear { background: linear-gradient(135deg, #0284c7 0%, #3b82f6 100%); border-color: #fff; box-shadow: 0 0 16px rgba(2, 132, 199, 0.85); }
-
-.admin-popover-panel { 
-    position: absolute; top: calc(100% + 8px); right: 0; 
-    width: min(440px, calc(100vw - 20px)); 
-    max-height: calc(100vh - 170px);
-    overflow-y: auto; overflow-x: hidden;
-    background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); 
-    border-radius: 16px; padding: 12px 14px; 
-    box-shadow: 0 18px 42px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.9); 
-    z-index: 99999; border: var(--glass-border);
-    visibility: hidden; opacity: 0; pointer-events: none;
-    transform: translateY(-6px) scale(0.97); transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1); transform-origin: top right;
+.admin-gear-btn.active-gear { 
+    background: linear-gradient(135deg, #0284c7 0%, #3b82f6 100%); 
+    border-color: #fff; 
+    box-shadow: 0 0 16px rgba(2, 132, 199, 0.85); 
 }
-.admin-popover-panel::-webkit-scrollbar { width: 4px; }
-.admin-popover-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-.admin-popover-panel.show { visibility: visible; opacity: 1; pointer-events: all; transform: translateY(0) scale(1); }
+
+/* ========================================================= */
+/* BẢNG ĐIỀU KHIỂN ADMIN: RỘNG 570PX, KÍNH MỜ TRONG SUỐT, NỔI KHỐI */
+/* ========================================================= */
+.admin-popover-panel { 
+    position: absolute; 
+    top: calc(100% + 10px); 
+    right: 0; 
+    width: min(570px, calc(100vw - 20px)); 
+    max-height: calc(100vh - 150px);
+    overflow-y: auto; 
+    overflow-x: hidden;
+    background: rgba(255, 255, 255, 0.88); 
+    backdrop-filter: blur(22px); 
+    -webkit-backdrop-filter: blur(22px); 
+    border-radius: 20px; 
+    padding: 14px 16px; 
+    box-shadow: 0 25px 60px -10px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.95); 
+    z-index: 99999; 
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    visibility: hidden; 
+    opacity: 0; 
+    pointer-events: none;
+    transform: translateY(-8px) scale(0.97); 
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1); 
+    transform-origin: top right;
+}
+.admin-popover-panel::-webkit-scrollbar { width: 5px; }
+.admin-popover-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+.admin-popover-panel.show { 
+    visibility: visible; 
+    opacity: 1; 
+    pointer-events: all; 
+    transform: translateY(0) scale(1); 
+}
 
 .admin-popover-title { 
-    font-size: 1.02rem; font-weight: 900; color: transparent; background-clip: text; 
-    -webkit-background-clip: text; background-image: linear-gradient(135deg, #0284c7 0%, #be123c 100%); 
-    display: flex; align-items: center; gap: 6px;
+    font-size: 1.08rem; 
+    font-weight: 900; 
+    color: transparent; 
+    background-clip: text; 
+    -webkit-background-clip: text; 
+    background-image: linear-gradient(135deg, #0284c7 0%, #be123c 100%); 
+    display: flex; 
+    align-items: center; 
+    gap: 6px;
+    letter-spacing: -0.2px;
 }
 
+/* KHỐI CARD CON BỌC TỪNG KHU CHỨC NĂNG NỔI BẬT */
+.admin-section-card {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1.2px solid #e2e8f0;
+    border-radius: 13px;
+    padding: 9px 12px;
+    margin-bottom: 9px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    box-sizing: border-box;
+}
+
+/* KHỐI CARD WEB DỰ PHÒNG */
+.admin-redirect-control-box {
+    background: linear-gradient(135deg, rgba(254, 242, 242, 0.95) 0%, rgba(255, 241, 242, 0.95) 100%);
+    border: 1.5px solid #fecdd3;
+    border-radius: 13px;
+    padding: 9px 12px;
+    margin-bottom: 9px;
+    box-shadow: 0 3px 10px rgba(225, 29, 72, 0.08);
+}
+.admin-redirect-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.admin-redirect-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: #991b1b;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.admin-redirect-subhint {
+    font-size: 10.5px;
+    color: #64748b;
+    font-weight: 600;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+/* TABS QUẢN TRỊ DẠNG SEGMENTED CONTROL */
 .admin-tabs { 
-    display: flex; gap: 3px; margin-bottom: 8px; 
-    background: rgba(226, 232, 240, 0.7); padding: 3px; border-radius: 11px;
-    width: 100%; box-sizing: border-box;
+    display: flex; 
+    gap: 4px; 
+    margin-bottom: 9px; 
+    background: rgba(226, 232, 240, 0.85); 
+    padding: 3px; 
+    border-radius: 11px;
+    width: 100%; 
+    box-sizing: border-box;
 }
 .admin-tab-btn { 
-    flex: 1 1 0; min-width: 0; padding: 6px 3px; border: none; border-radius: 8px; 
-    font-weight: 800; font-size: 0.76rem; cursor: pointer; color: #475569; 
-    background: transparent; transition: 0.15s; font-family: inherit; 
-    white-space: nowrap; text-align: center; text-overflow: ellipsis; overflow: hidden;
+    flex: 1 1 0; 
+    min-width: 0; 
+    padding: 7px 4px; 
+    border: none; 
+    border-radius: 8px; 
+    font-weight: 800; 
+    font-size: 0.82rem; 
+    cursor: pointer; 
+    color: #475569; 
+    background: transparent; 
+    transition: all 0.15s ease; 
+    font-family: inherit; 
+    white-space: nowrap; 
+    text-align: center; 
+    text-overflow: ellipsis; 
+    overflow: hidden;
 }
-.admin-tab-btn.active { background: #ffffff; color: var(--primary-blue); box-shadow: 0 2px 7px rgba(0,0,0,0.08); }
+.admin-tab-btn.active { 
+    background: #ffffff; 
+    color: #0284c7; 
+    box-shadow: 0 2px 7px rgba(0,0,0,0.08); 
+}
 
-.admin-input-group { margin-bottom: 7px; width: 100%; }
-.admin-input-group label { display: block; font-weight: 700; margin-bottom: 3px; font-size: 0.8rem; color: #1e293b; line-height: 1.25; }
+.admin-input-group { 
+    margin-bottom: 7px; 
+    width: 100%; 
+}
+.admin-input-group label { 
+    display: block; 
+    font-weight: 800; 
+    margin-bottom: 4px; 
+    font-size: 0.82rem; 
+    color: #1e293b; 
+    line-height: 1.25; 
+}
 .admin-input-group select, 
 .admin-input-group input[type="text"], 
 .admin-input-group input[type="file"], 
 .admin-input-group input[type="number"], 
 .admin-input-group input[type="datetime-local"] { 
-    width: 100%; max-width: 100%; padding: 7px 10px; border: 1.5px solid #cbd5e1; 
-    border-radius: 9px; outline: none; background: #ffffff; font-family: inherit; 
-    font-size: 12.5px; font-weight: 600; color: #0f172a; box-sizing: border-box;
+    width: 100%; 
+    max-width: 100%; 
+    padding: 7px 11px; 
+    border: 1.5px solid #cbd5e1; 
+    border-radius: 9px; 
+    outline: none; 
+    background: #ffffff; 
+    font-family: inherit; 
+    font-size: 12.5px; 
+    font-weight: 600; 
+    color: #0f172a; 
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
-.admin-input-group select:focus, .admin-input-group input:focus { border-color: var(--primary-blue); background: #fff; }
+.admin-input-group select:focus, 
+.admin-input-group input:focus { 
+    border-color: #0284c7; 
+    background: #fff; 
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
+}
 
+/* LƯỚI CHECKBOX 3 CỘT RỘNG THOÁNG & THU GỌN CHIỀU CAO */
 .category-checkbox-grid { 
-    display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; 
-    max-height: 110px; overflow-y: auto; padding: 5px; 
-    background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 10px; 
-    width: 100%; box-sizing: border-box;
+    display: grid; 
+    grid-template-columns: repeat(3, 1fr); 
+    gap: 5px; 
+    max-height: 110px; 
+    overflow-y: auto; 
+    padding: 5px; 
+    background: #f8fafc; 
+    border: 1.5px solid #cbd5e1; 
+    border-radius: 10px; 
+    width: 100%; 
+    box-sizing: border-box;
 }
 .cat-checkbox-item { 
-    display: flex; align-items: center; gap: 5px; background: #ffffff; 
-    border: 1.5px solid #e2e8f0; border-radius: 7px; padding: 4px 6px; 
-    cursor: pointer; font-size: 11.5px; font-weight: 700; color: #1e293b; 
-    user-select: none; transition: all 0.15s ease; min-width: 0;
+    display: flex; 
+    align-items: center; 
+    gap: 5px; 
+    background: #ffffff; 
+    border: 1.5px solid #e2e8f0; 
+    border-radius: 8px; 
+    padding: 4px 6px; 
+    cursor: pointer; 
+    font-size: 11px; 
+    font-weight: 700; 
+    color: #1e293b; 
+    user-select: none; 
+    transition: all 0.15s ease; 
+    min-width: 0;
 }
-.cat-checkbox-item:hover { border-color: #38bdf8; background: #f0f9ff; }
-.cat-checkbox-item.checked { border-color: #0284c7; background: #e0f2fe; color: #0369a1; }
-.cat-checkbox-item input[type="checkbox"] { width: 14px; height: 14px; accent-color: #0284c7; cursor: pointer; flex-shrink: 0; margin: 0; }
-.cat-checkbox-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cat-checkbox-item:hover { 
+    border-color: #38bdf8; 
+    background: #f0f9ff; 
+    transform: translateY(-1px);
+}
+.cat-checkbox-item.checked { 
+    border-color: #0284c7; 
+    background: #e0f2fe; 
+    color: #0369a1; 
+}
+.cat-checkbox-item input[type="checkbox"] { 
+    width: 14px; 
+    height: 14px; 
+    accent-color: #0284c7; 
+    cursor: pointer; 
+    flex-shrink: 0; 
+    margin: 0; 
+}
+.cat-checkbox-item span { 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap; 
+    min-width: 0; 
+}
 
+/* LƯỚI AVATAR 8 CỘT HIỂN THỊ ĐỦ TRONG 2 HÀNG KHÔNG CẦN CUỘN */
 .avatar-picker-grid { 
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; 
-    max-height: 85px; overflow-y: auto; padding: 4px; 
-    background: rgba(241, 245, 249, 0.75); border-radius: 10px; border: 1px solid #e2e8f0; 
-    width: 100%; box-sizing: border-box;
+    display: grid; 
+    grid-template-columns: repeat(8, 1fr); 
+    gap: 5px; 
+    max-height: 85px; 
+    overflow-y: auto; 
+    padding: 5px; 
+    background: rgba(241, 245, 249, 0.85); 
+    border-radius: 10px; 
+    border: 1px solid #e2e8f0; 
+    width: 100%; 
+    box-sizing: border-box;
 }
-.avatar-option { width: 100%; aspect-ratio: 1; border-radius: 6px; object-fit: cover; cursor: pointer; border: 1.5px solid transparent; transition: 0.15s; background: #fff; padding: 1.5px;}
-.avatar-option:hover { transform: scale(1.08); }
-.avatar-option.selected { border-color: var(--primary-blue); box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25); transform: scale(1.04); background: #f0f9ff;}
+.avatar-option { 
+    width: 100%; 
+    aspect-ratio: 1; 
+    border-radius: 8px; 
+    object-fit: cover; 
+    cursor: pointer; 
+    border: 2px solid transparent; 
+    transition: all 0.15s ease; 
+    background: #fff; 
+    padding: 1.5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.avatar-option:hover { 
+    transform: scale(1.15); 
+    border-color: #38bdf8;
+    z-index: 2;
+}
+.avatar-option.selected { 
+    border-color: #0284c7; 
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.35); 
+    transform: scale(1.08); 
+    background: #e0f2fe;
+}
 
-.admin-btn-row { display: flex; gap: 6px; margin-top: 9px; width: 100%; }
-.btn-admin { flex: 1; padding: 8px 10px; border-radius: 9px; border: none; font-weight: 800; cursor: pointer; color: #fff; font-family: inherit; transition: 0.15s; font-size: 0.86rem; text-align: center; }
+.admin-btn-row { 
+    display: flex; 
+    gap: 8px; 
+    margin-top: 10px; 
+    width: 100%; 
+}
+.btn-admin { 
+    flex: 1; 
+    padding: 8px 12px; 
+    border-radius: 9px; 
+    border: none; 
+    font-weight: 800; 
+    cursor: pointer; 
+    color: #fff; 
+    font-family: inherit; 
+    transition: 0.15s; 
+    font-size: 0.88rem; 
+    text-align: center; 
+}
 .btn-cancel { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
 .btn-submit { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); }
+.btn-admin:hover { filter: brightness(1.08); transform: translateY(-1px); }
 .btn-admin:active { transform: translateY(2px) scale(0.96); }
 
 /* 2. KHUNG ẢNH AVATAR THẺ & POPOVER CHỌN AVATAR */
@@ -214,21 +515,6 @@
 }
 .avatar-mini-thumb {
     width: 100%; height: 100%; object-fit: cover; border-radius: 6px;
-}
-
-.avatar-upload-pc-box {
-    border-top: 1px solid #f1f5f9; padding-top: 8px;
-}
-.btn-upload-pc-avatar {
-    width: 100%; padding: 8px 10px; background: linear-gradient(135deg, #0284c7, #0369a1);
-    color: #ffffff; border: none; border-radius: 10px; font-size: 12px; font-weight: 800;
-    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
-    transition: 0.15s; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
-}
-.btn-upload-pc-avatar:hover { filter: brightness(1.08); transform: translateY(-1px); }
-.avatar-upload-note {
-    font-size: 10.5px; line-height: 1.45; color: #64748b; margin-top: 6px;
-    background: #fffbeb; border: 1px solid #fed7aa; padding: 6px 8px; border-radius: 8px;
 }
 
 /* 3. MODAL THỐNG KÊ LƯỢT TRUY CẬP */
@@ -788,7 +1074,7 @@
 .switch-mode-link { color: var(--primary-blue); font-weight: 800; text-decoration: none; cursor: pointer; }
 .switch-mode-link:hover { text-decoration: underline; }
 
-/* 8. MODAL NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB & LIGHTBOX (TỐI ƯU 90% LAPTOP, THU GỌN HEADER, MOBILE STICKY) */
+/* 8. MODAL NỘP BÀI TỰ LUẬN GOOGLE DRIVE 5TB & LIGHTBOX */
 .btn-tuluan-modal-trigger {
     background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
     color: #ffffff !important;
@@ -816,7 +1102,6 @@
     transform: translateY(2px) scale(0.96);
 }
 
-/* YÊU CẦU 1: HIỂN THỊ TO GẦN HẾT = 90% MÀN HÌNH LAPTOP WINDOWS */
 .tuluan-modal-card {
     background: #ffffff;
     border-radius: 18px;
@@ -833,7 +1118,6 @@
     box-sizing: border-box;
 }
 
-/* YÊU CẦU 3: THU GỌN ĐỘ CAO HEADER VÀ CÁC THANH CÔNG CỤ SÁT NHAU */
 .tuluan-modal-header {
     display: flex;
     align-items: center;
@@ -874,7 +1158,6 @@
     line-height: 1.2 !important;
 }
 
-/* THANH CHỌN LỚP, CHỌN ĐỀ & ADMIN THÊM ĐỀ THU GỌN CHIỀU CAO */
 .tuluan-select-bar {
     display: flex;
     align-items: center;
@@ -930,7 +1213,6 @@
     justify-content: center !important;
 }
 
-/* THANH TÌM KIẾM VÀ BỘ LỌC THU GỌN */
 .tuluan-toolbar-bar {
     display: flex;
     align-items: center;
@@ -990,7 +1272,6 @@
     box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
 }
 
-/* KHUNG DANH SÁCH BẢNG HỌC SINH TỐI ĐA KHÔNG GIAN */
 .tuluan-table-wrap {
     flex: 1 !important;
     height: 100% !important;
@@ -1059,7 +1340,6 @@
     border: 1px solid #fca5a5;
 }
 
-/* CỘT PHÊ DUYỆT */
 .approve-switch-wrapper {
     display: inline-flex;
     align-items: center;
@@ -1093,7 +1373,6 @@
     border: 1px solid #fecaca;
 }
 
-/* THUMBNAIL BẢO VỆ CHỐNG CHÉP BÀI */
 .tuluan-thumb-row {
     display: flex;
     align-items: center;
@@ -1192,7 +1471,6 @@
     flex-shrink: 0;
 }
 
-/* LIGHTBOX OVERLAY */
 .tuluan-lightbox-overlay {
     position: fixed;
     inset: 0;
@@ -1278,333 +1556,28 @@
     .admin-popover-panel { 
         position: fixed !important; 
         top: 48px !important; 
-        right: 6px !important; 
-        left: auto !important; 
-        width: 70vw !important; 
-        max-width: 70vw !important; 
+        right: 8px !important; 
+        left: 8px !important; 
+        width: calc(100vw - 16px) !important; 
+        max-width: calc(100vw - 16px) !important; 
         max-height: calc(100vh - 58px) !important; 
-        border-radius: 14px; 
-        padding: 9px 8px !important;
+        border-radius: 16px; 
+        padding: 10px 10px !important;
         transform: translateY(-6px) scale(0.97); 
         transform-origin: top right;
         box-shadow: 0 16px 40px rgba(0,0,0,0.38);
     }
     .admin-popover-panel.show { transform: translateY(0) scale(1) !important; }
 
-    .admin-popover-title { 
-        font-size: 12px !important; 
-        margin-bottom: 5px !important; 
-        gap: 4px !important; 
-    }
-    .admin-logout-btn { 
-        padding: 2.5px 6px !important; 
-        font-size: 9.5px !important; 
-        border-radius: 7px !important; 
-    }
-
-    .admin-tabs { 
-        gap: 2px !important; 
-        padding: 2px !important; 
-        margin-bottom: 6px !important; 
-        border-radius: 9px !important; 
-    }
-    .admin-tab-btn { 
-        font-size: 9.5px !important; 
-        padding: 4px 1px !important; 
-        border-radius: 7px !important; 
-    }
-
-    .admin-input-group { 
-        margin-bottom: 5px !important; 
-    }
-    .admin-input-group label { 
-        font-size: 10.5px !important; 
-        margin-bottom: 2px !important; 
-        line-height: 1.2 !important; 
-    }
-    .admin-input-group select, 
-    .admin-input-group input[type="text"], 
-    .admin-input-group input[type="file"], 
-    .admin-input-group input[type="number"], 
-    .admin-input-group input[type="datetime-local"] { 
-        padding: 5px 7px !important; 
-        font-size: 11px !important; 
-        border-radius: 7px !important; 
-    }
-
     .category-checkbox-grid {
-        grid-template-columns: 1fr 1fr !important;
-        gap: 3px !important;
-        max-height: 95px !important;
-        padding: 4px !important;
-    }
-    .cat-checkbox-item {
-        padding: 3px 4px !important;
-        font-size: 10px !important;
+        grid-template-columns: repeat(2, 1fr) !important;
         gap: 4px !important;
-        border-radius: 6px !important;
-    }
-    .cat-checkbox-item input[type="checkbox"] {
-        width: 13px !important; height: 13px !important;
+        max-height: 100px !important;
     }
 
     .avatar-picker-grid {
-        grid-template-columns: repeat(5, 1fr) !important;
-        gap: 3px !important;
-        max-height: 65px !important;
-        padding: 3px !important;
-    }
-
-    .admin-btn-row { 
-        margin-top: 6px !important; 
-        gap: 5px !important; 
-    }
-    .btn-admin { 
-        padding: 6px 4px !important; 
-        font-size: 11px !important; 
-        border-radius: 7px !important; 
-    }
-
-    .exam-card.admin-card-mode {
-        padding: 9px 8px;
-        width: 100% !important;
-        max-width: 100% !important;
-    }
-
-    .admin-card-top-row {
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 6px !important;
-        width: 100% !important;
-        padding-bottom: 7px !important;
-    }
-
-    .left-admin-actions-col {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        align-items: center !important;
+        grid-template-columns: repeat(6, 1fr) !important;
         gap: 4px !important;
-        width: 100% !important;
-    }
-
-    .free-student-toggle-wrap {
-        padding: 2px 4px !important;
-        font-size: 9.5px !important;
-    }
-    .free-toggle-lbl { font-size: 9.5px !important; }
-    .mini-switch { width: 25px !important; height: 14px !important; }
-    .mini-switch .slider-toggle:before { height: 10px !important; width: 10px !important; }
-    .mini-switch input:checked + .slider-toggle:before { transform: translateX(11px) !important; }
-
-    .left-sub-btns-row {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        gap: 3px !important;
-        width: 100% !important;
-        margin-top: 2px !important;
-    }
-
-    .admin-link-tools {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-start !important;
-        flex-wrap: wrap !important;
-        gap: 4px !important;
-        width: 100% !important;
-        padding-top: 5px !important;
-        border-top: 1px dotted #e2e8f0 !important;
-    }
-
-    .tool-btn {
-        width: 25px !important;
-        height: 25px !important;
-        font-size: 11px !important;
-    }
-
-    .banner-title { font-size: 12px; padding: 5px 12px; }
-    .banner-watermark { font-size: 17px; letter-spacing: 1.5px; }
-    #dantri-nav-bar .dantri-nav-btn { min-height: 40px; padding: 5px 9px; font-size: 12px; border-radius: 10px; }
-    .full-width-nav-row .dantri-nav-btn { font-size: 13.5px; padding: 8px 4px; min-height: 44px; border-radius: 11px; }
-    .news-img-box { width: 68px; height: 46px; }
-    .auth-input { width: 95px; }
-    .admin-duration-select { font-size: 11px; padding: 6px 5px; }
-    
-    .exam-title-text { font-size: 13.5px; }
-    .result-search-input { width: 110px; }
-    .result-search-input:focus { width: 140px; }
-    .btn-regrade-exam { font-size: 11px; padding: 6px 10px; }
-    .table-settings-popover { width: 280px; right: -50px; }
-    
-    .mid-autumn-badge { right: 2px; }
-    .lantern-stick { width: 34px; height: 3.5px; }
-    .lantern-string { height: 12px; }
-    .mid-autumn-icon { font-size: 34px; }
-
-    .site-visit-badge { top: 6px; left: 6px; transform: scale(0.7); transform-origin: top left; }
-    .visit-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-    .visit-stats-modal-box { padding: 16px; border-radius: 16px; }
-    .kpi-val { font-size: 19px; }
-
-    .dantri-article-card { padding: 16px 14px; min-height: 320px; }
-    .dantri-view-title { font-size: 18.5px; }
-    .dantri-sapo-text { font-size: 14px; }
-    .avatar-selection-popover { width: 285px; max-width: calc(100vw - 28px); }
-
-    .btn-export-exam-trigger {
-        font-size: 10px !important;
-        padding: 3px 7px !important;
-    }
-    .exam-export-menu {
-        width: 250px !important;
-    }
-    .export-item-text b {
-        font-size: 11px !important;
-    }
-    .export-item-text span {
-        font-size: 9.5px !important;
-    }
-
-    /* YÊU CẦU 2: TỐI ƯU GIAO DIỆN NỘP TỰ LUẬN TRÊN ĐIỆN THOẠI CHO HỌC SINH */
-    .tuluan-modal-card {
-        padding: 0 !important;
-        border-radius: 14px !important;
-        width: 96vw !important;
-        max-width: 98vw !important;
-        height: 94vh !important;
-        max-height: 95vh !important;
-    }
-    .tuluan-modal-header {
-        padding: 6px 10px !important;
-    }
-    .tuluan-select-bar {
-        padding: 6px 10px !important;
-        gap: 5px !important;
-    }
-    .tuluan-select-group {
-        flex: 1 1 auto;
-    }
-    .tuluan-select-group select {
-        width: 100%;
-        max-width: 100%;
-    }
-    .tuluan-toolbar-bar {
-        padding: 6px 10px !important;
-        gap: 6px !important;
-    }
-    .tuluan-search-box {
-        width: 100% !important;
-        height: 32px !important;
-        font-size: 12.5px !important;
-    }
-    .tuluan-filter-tabs {
-        width: 100% !important;
-        display: flex;
-        gap: 4px;
-    }
-    .tuluan-tab-pill {
-        flex: 1;
-        text-align: center;
-        padding: 5px 2px !important;
-        font-size: 10.5px !important;
-    }
-
-    /* ĐÃ SỬA: BỎ GHIM CỘT THAO TÁC TRÊN ĐIỆN THOẠI THEO YÊU CẦU */
-    /* Cột Thao tác (cuối cùng) giờ đây sẽ cuộn tự nhiên cùng bảng, không bị kẹt cố định nữa */
-
-    /* NÚT TẢI ẢNH TO, NỔI BẬT DỄ BẤM VỚI NGÓN TAY TRÊN ĐIỆN THOẠI */
-    .btn-tuluan-upload-row {
-        padding: 7px 12px !important;
-        font-size: 12px !important;
-        font-weight: 800 !important;
-        min-height: 32px !important;
-    }
-    .btn-tuluan-change-pass,
-    .btn-tuluan-reset-pass {
-        padding: 6px 8px !important;
-        font-size: 10.5px !important;
-        min-height: 32px !important;
-    }
-
-    /* ĐÃ SỬA: Đưa các Popover đổi mật khẩu & nhận xét ra giữa màn hình để không bị che khuất */
-    .student-pass-popover, .student-feedback-popover, .dapan-schedule-popover, .component-score-popover {
-        position: fixed !important;
-        top: 50% !important;
-        left: 50% !important;
-        right: auto !important;
-        bottom: auto !important;
-        transform: translate(-50%, -50%) !important;
-        width: min(360px, calc(100vw - 24px)) !important;
-        max-width: calc(100vw - 24px) !important;
-        max-height: 88vh !important;
-        border-radius: 16px !important;
-        z-index: 100000000 !important;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 2000px rgba(0, 0, 0, 0.45) !important;
-        padding: 16px !important;
-    }
-
-    /* FIX CHO IPHONE: Đảm bảo header không bị tràn lên trên và bị che bởi viền/tai thỏ */
-    .tuluan-lightbox-overlay {
-        padding: 0 !important; /* Tràn viền trên mobile */
-        align-items: flex-start !important; /* Không dùng center để tránh bị cắt phần đầu trên Safari */
-    }
-    .tuluan-lightbox-content {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100% !important; /* Dùng 100% thay vì 95vh */
-        max-height: -webkit-fill-available !important; /* Sửa lỗi thanh địa chỉ Safari */
-        border-radius: 0 !important;
-        border: none !important;
-    }
-    .tuluan-lightbox-header {
-        padding-top: max(8px, env(safe-area-inset-top)) !important; /* Cách tai thỏ/Dynamic Island */
-        padding-left: 8px !important;
-        padding-right: 8px !important;
-    }
-    .lightbox-bottom-bar {
-        padding-bottom: max(6px, env(safe-area-inset-bottom)) !important; /* Cách thanh Home ảo */
+        max-height: 70px !important;
     }
 }
-
-@media (max-width: 380px) {
-    .category-checkbox-grid { grid-template-columns: 1fr; }
-    .admin-tab-btn { font-size: 9px; }
-}
-
-@supports (-webkit-touch-callout: none) {
-    html, body {
-        background-attachment: scroll !important;
-    }
-    .st-input-field,
-    .input-group input,
-    .short-input-box,
-    .auth-input,
-    .result-search-input,
-    .article-edit-input-group input,
-    .article-edit-input-group textarea,
-    .admin-input-group input,
-    .admin-input-group select,
-    .move-modal-box select,
-    .tuluan-search-box {
-        font-size: 16px !important;
-    }
-    .move-modal-overlay,
-    .visit-stats-modal-overlay,
-    .dantri-article-modal,
-    .result-fullscreen-modal,
-    .modal-overlay,
-    .tuluan-lightbox-overlay {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        background: rgba(15, 23, 42, 0.78) !important;
-    }
-    .student-login-box,
-    .move-modal-box,
-    .modal-box,
-    .visit-stats-modal-box,
-    .dantri-article-card,
-    .tuluan-modal-card {
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        background: #ffffff !important;
-        transform: translateZ(0);
-    }
