@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-results-table.js 
 // (BẢN SIÊU HẸP HEADER - THU HIỆN ĐỦ DÒNG CHỮ TO NHẤT - CỘT DÒNG SÁT NHAU TỐI ĐA)
+// ĐÃ TÍCH HỢP: CỘT THU ÉP TỪ XA CHO TỪNG THÍ SINH HOẶC TOÀN BỘ PHÒNG THI
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -139,7 +140,6 @@ let isFitAllRowsActive = false;
             line-height: 1 !important;
         }
 
-        /* Triệt tiêu lỗi đúp chữ Cập nhậtCập nhật */
         .btn-refresh-result::before,
         .btn-refresh-result::after {
             display: none !important;
@@ -319,6 +319,7 @@ let isFitAllRowsActive = false;
         .result-table.table-fitted-compact th:nth-child(13) { width: 65px !important; }
         .result-table.table-fitted-compact th:nth-child(14) { width: 78px !important; }
         .result-table.table-fitted-compact th:nth-child(15) { width: 120px !important; }
+        .result-table.table-fitted-compact th.th-force-submit-col { width: 68px !important; }
         .result-table.table-fitted-compact th.th-row-action-col { width: 42px !important; }
 
         .result-table.table-fitted-compact .btn-exam-picker {
@@ -359,8 +360,59 @@ let isFitAllRowsActive = false;
             border-radius: 3px !important;
             box-shadow: none !important;
         }
+        .result-table.table-fitted-compact .btn-force-submit-item {
+            padding: 1px 4px !important;
+            font-size: 10px !important;
+            line-height: 1.1 !important;
+            border-radius: 4px !important;
+        }
         .result-table.table-fitted-compact .td-attempt-cell-wrap {
             padding: 0px 2px !important;
+        }
+
+        /* NÚT THU ÉP TỪ XA TRONG BẢNG */
+        .btn-force-submit-item {
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #f87171 !important;
+            border-radius: 6px !important;
+            padding: 2px 7px !important;
+            font-size: 11px !important;
+            font-weight: 900 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            box-shadow: 0 1px 4px rgba(239, 68, 68, 0.28) !important;
+            transition: all 0.15s ease !important;
+            user-select: none !important;
+            white-space: nowrap !important;
+        }
+        .btn-force-submit-item:hover {
+            filter: brightness(1.15) !important;
+            transform: scale(1.04) !important;
+        }
+        .btn-force-submit-item:active {
+            transform: translateY(1.5px) scale(0.96) !important;
+        }
+
+        .btn-force-submit-all-header {
+            background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #fdba74 !important;
+            border-radius: 6px !important;
+            padding: 2px 5px !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            transition: 0.15s !important;
+            margin-top: 2px !important;
+        }
+        .btn-force-submit-all-header:hover {
+            filter: brightness(1.1) !important;
         }
 
         @keyframes heartbeatDoing {
@@ -642,8 +694,7 @@ function resetModalZoom() {
 }
 
 // =========================================================================
-// THUẬT TOÁN THU HIỆN ĐỦ DÒNG THÔNG MINH:
-// DÒNG & CỘT SÁT TỐI ĐA, TỰ TÍNH TOÁN CỠ CHỮ LỚN NHẤT CÓ THỂ
+// THUẬT TOÁN THU HIỆN ĐỦ DÒNG THÔNG MINH
 // =========================================================================
 function fitAllRowsInView(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -664,18 +715,14 @@ function fitAllRowsInView(event) {
         return;
     }
 
-    // BẬT CHẾ ĐỘ THU HIỆN ĐỦ DÒNG CỰC KỲ GỌN GÀNG
     table.classList.add("table-fitted-compact");
     tableDisplaySettings.rowPadding = 0;
-    
-    // Đặt zoom tạm về 1.0 để đo đạc chính xác
     applyModalZoomLevel(1.0);
 
     setTimeout(() => {
         const availH = scrollWrap.clientHeight;
         if (availH <= 0) return;
 
-        // Quét thử các cỡ chữ từ lớn xuống nhỏ để tìm font to nhất vẫn lọt đủ màn hình
         const fontCandidates = [14, 13.5, 13, 12.5, 12, 11.5, 11, 10.5, 10];
         let chosenFs = 11;
         let chosenZoom = 1.0;
@@ -694,8 +741,6 @@ function fitAllRowsInView(event) {
             }
         }
 
-        // Nếu ngay cả font 10px vẫn cao hơn availH (màn hình nhỏ hoặc rất đông học sinh),
-        // tính toán zoom sao cho kích thước thực tế hiển thị (fs * zoom) là lớn nhất
         if (!foundPerfect) {
             let maxEffectiveSize = 0;
             for (let fs of [12.5, 12, 11.5, 11, 10.5, 10]) {
@@ -1078,14 +1123,12 @@ function calculateRanksForRows(rows) {
     });
 }
 
-// BẬT / TẮT MENU POPUP "CHỌN LẦN THI"
 function toggleAttemptMenu(rowUid, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const targetMenu = document.getElementById(`attempt-menu-${rowUid}`);
     if (!targetMenu) return;
     const isShown = targetMenu.classList.contains("show");
     
-    // Đóng tất cả dropdown đang mở
     document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
     document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
     
@@ -1096,7 +1139,6 @@ function toggleAttemptMenu(rowUid, event) {
     }
 }
 
-// CHỌN LẦN THI ĐỂ XEM (LẦN 1, LẦN 2...)
 function selectStudentAttempt(rowUid, attemptIdx, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
@@ -1120,15 +1162,86 @@ function deleteResultRowPermanently(rowUid, event) {
     updateStatsAndRenderTable(currentExamResultData.rawRows);
 }
 
+// =========================================================================
+// HÀM GỬI LỆNH THU BÀI ÉP BUỘC TỪ XA QUA SUPABASE REALTIME (BROADCAST)
+// =========================================================================
+async function sendForceSubmitCommand(targetSbd = 'all', studentName = '') {
+    const currentItem = currentExamResultData.item;
+    const quizId = currentItem ? (extractQuizIdFromItem(currentItem) || currentItem.id) : "";
+    if (!quizId) {
+        alert("⚠️ Không xác định được mã đề thi hiện tại!");
+        return;
+    }
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) {
+        alert("❌ Chưa kết nối máy chủ Supabase!");
+        return;
+    }
+
+    const isAll = (targetSbd === 'all');
+    const confirmPrompt = isAll
+        ? "⚠️ CẢNH BÁO: BẠN CÓ CHẮC CHẮN MUỐN THU BÀI ÉP BUỘC TOÀN BỘ PHÒNG THI?\n\nTất cả học sinh đang làm bài sẽ tự động chấm điểm và nộp bài ngay lập tức!"
+        : `⚡ BẠN CÓ MUỐN THU BÀI ÉP BUỘC ĐỐI VỚI:\n\n[${targetSbd}] - ${studentName || "Thí sinh"}?`;
+
+    if (!confirm(confirmPrompt)) return;
+
+    try {
+        const cleanTarget = isAll ? 'all' : String(targetSbd).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        
+        // Tạo kênh broadcast gửi lệnh tới máy học sinh
+        const channelName = `exam_force_submit_${quizId}`;
+        const tempChannel = client.channel(channelName);
+        
+        tempChannel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await tempChannel.send({
+                    type: 'broadcast',
+                    event: 'FORCE_SUBMIT',
+                    payload: {
+                        targetSbd: cleanTarget,
+                        sbd: cleanTarget,
+                        quizId: quizId,
+                        timestamp: Date.now()
+                    }
+                });
+
+                try { client.removeChannel(tempChannel); } catch(e) {}
+
+                alert(`🚀 ĐÃ GỬI LỆNH THU BÀI ÉP BUỘC TỚI ${isAll ? 'TẤT CẢ THÍ SINH' : `[${targetSbd}] ${studentName}`}!\n\nMáy học sinh sẽ tự động tính điểm và lưu kết quả là 'Thu ép' về máy chủ.`);
+                setTimeout(refreshCurrentExamResults, 1200);
+            }
+        });
+    } catch(err) {
+        alert("❌ Lỗi khi gửi lệnh thu ép: " + err.message);
+    }
+}
+
+// BỔ SUNG CỘT TIÊU ĐỀ: THU ÉP VÀ NÚT XÓA
 function ensureActionColumnHeaders() {
     const table = document.getElementById("admin-result-table");
     if (!table) return; 
     const theadTr = table.querySelector("thead tr"); 
     if (!theadTr) return;
 
-    const oldThForce = theadTr.querySelector(".th-force-submit-col");
-    if (oldThForce) oldThForce.remove();
+    // 1. CỘT THU ÉP
+    let thForce = theadTr.querySelector(".th-force-submit-col");
+    if (!thForce) {
+        thForce = document.createElement("th");
+        thForce.className = "th-force-submit-col";
+        thForce.style.width = "72px";
+        thForce.style.textAlign = "center";
+        thForce.innerHTML = `
+            <div>THU ÉP</div>
+            <button type="button" class="btn-force-submit-all-header" onclick="sendForceSubmitCommand('all')" title="Gửi lệnh thu bài ép buộc tất cả các em đang thi trong phòng">
+                ⚡ Thu hết
+            </button>
+        `;
+        // Chèn trước cột XÓA nếu có, hoặc thêm vào cuối
+        theadTr.appendChild(thForce);
+    }
 
+    // 2. CỘT XÓA
     let thDel = theadTr.querySelector(".th-row-action-col");
     if (!thDel) {
         thDel = document.createElement("th");
@@ -1155,7 +1268,7 @@ function startLiveDoingTicker() {
 }
 
 // =========================================================================
-// BỘ VẼ BẢNG: HIỂN THỊ CỘT "SỐ LẦN THI" VỚI POPUP DROPDOWN Y HỆT HÌNH ẢNH MẪU
+// BỘ VẼ BẢNG: ĐÃ BỔ SUNG CỘT "THU ÉP" VÀO TỪNG HÀNG
 // =========================================================================
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
@@ -1170,7 +1283,7 @@ function renderFilteredResultTable(rows) {
     }
 
     if (!rows || rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">Không tìm thấy dữ liệu học sinh nào!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">Không tìm thấy dữ liệu học sinh nào!</td></tr>`;
         return;
     }
 
@@ -1196,7 +1309,6 @@ function renderFilteredResultTable(rows) {
         const acc = row.account; 
         const attCount = Array.isArray(row.allAttempts) ? row.allAttempts.length : 0;
         
-        // Đảm bảo selectedAttemptIndex luôn hợp lệ
         if (attCount > 0) {
             if (row.selectedAttemptIndex === undefined || row.selectedAttemptIndex === null || row.selectedAttemptIndex >= attCount || row.selectedAttemptIndex < 0) {
                 row.selectedAttemptIndex = 0;
@@ -1216,7 +1328,6 @@ function renderFilteredResultTable(rows) {
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
         let col_attemptCount = `<span class="status-not-submitted">---</span>`;
 
-        // XỬ LÝ CỘT "SỐ LẦN THI": NÚT "2 LẦN" + DROPDOWN THEO ĐÚNG ẢNH MẪU
         if (attCount === 0) {
             if (row.isDoing) {
                 col_attemptCount = `<span class="status-doing-heartbeat" style="font-size:11px; padding:3px 8px;" title="Học sinh đang trong phòng thi">💓 Đang thi</span>`;
@@ -1269,11 +1380,14 @@ function renderFilteredResultTable(rows) {
         let col10_cheatTime = `<span class="status-not-submitted">---</span>`;
         let col11_details = `<span class="status-not-submitted">---</span>`;
 
-        // HIỂN THỊ DỮ LIỆU CỦA LẦN THI ĐANG ĐƯỢC CHỌN (selectedAttemptIndex)
         if (currentSub) {
             let subDateMs = getSubmissionTimestamp(currentSub);
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
-            col3_spentTime = `<span style="color:#0f766e; font-weight:700;">${currentSub.completionTime || `${currentSub.spentMins || 0} phút`}</span>`;
+            
+            // HIỂN THỊ THỜI GIAN THI: NẾU BỊ THU ÉP SẼ HIỆN 'Thu ép XpYs'
+            const spentText = currentSub.completionTime || `${currentSub.spentMins || 0} phút`;
+            const isForceSubmittedText = String(spentText).includes("Thu ép");
+            col3_spentTime = `<span style="color:${isForceSubmittedText ? '#dc2626' : '#0f766e'}; font-weight:800;">${spentText}</span>`;
             
             col6_status = `<span class="status-pill status-done">✓ Đã nộp bài</span>`;
             
@@ -1309,7 +1423,6 @@ function renderFilteredResultTable(rows) {
             }
         }
 
-        // TRẠNG THÁI NẾU ĐANG THI
         if (row.isDoing) {
             let startMs = row.doingStartTime || Date.now();
             let formattedIn = formatDateTimeFull(startMs);
@@ -1337,6 +1450,16 @@ function renderFilteredResultTable(rows) {
         let col_class = `<span class="class-badge">${rawClass}</span>`;
         let col5_sbd = acc.sbd || (currentSub ? (currentSub.sbd || currentSub.studentId) : "---");
         let safeTitleCol10 = stripHtml(col10_cheatTime);
+        
+        // CỘT NÚT THU ÉP TỪNG HÀNG
+        let col_force_submit = `
+            <button type="button" class="btn-force-submit-item" 
+                    onclick="sendForceSubmitCommand('${col5_sbd}', '${rawName.replace(/'/g, "\\'")}')" 
+                    title="Gửi lệnh ép nộp bài ngay lập tức tới máy em này">
+                ⚡ Thu ép
+            </button>
+        `;
+
         let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; padding:2px 6px; font-size:10.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s;">🗑️</button>`;
 
         tr.innerHTML = `
@@ -1355,6 +1478,7 @@ function renderFilteredResultTable(rows) {
             <td class="td-tabs">${col9_tabs}</td>
             <td class="td-tab-times td-truncate" title="${safeTitleCol10}">${col10_cheatTime}</td>
             <td class="td-truncate">${col11_details}</td>
+            <td style="text-align:center;">${col_force_submit}</td>
             <td style="text-align:center;">${col_action}</td>
         `;
         tbody.appendChild(tr);
@@ -1395,3 +1519,4 @@ window.applyModalZoomLevel = applyModalZoomLevel;
 window.fitAllRowsInView = fitAllRowsInView;
 window.renderFilteredResultTable = renderFilteredResultTable;
 window.filterResultTable = filterResultTable;
+window.sendForceSubmitCommand = sendForceSubmitCommand;
