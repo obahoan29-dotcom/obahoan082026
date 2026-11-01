@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: exam-img-uploader.js (BẢN SUPABASE HOÀN TOÀN)
 // QUẢN LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V), TỰ ĐỘNG UPLOAD & ĐỒNG BỘ SUPABASE
+// TÍCH HỢP: CÔNG TẮC LẮNG NGHE ĐỒNG BỘ ẢNH (watchImageSync)
 // =========================================================
 
 let imageSyncChannel = null;
@@ -120,9 +121,16 @@ function buildImgHtml(imgUrl, qId) {
     </div>`;
 }
 
-// THEO DÕI ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL
+// 4. KÊNH ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL: KIỂM TRA CÔNG TẮC watchImageSync
 function startImageSyncWatcher(quizId) {
     if (!quizId) return;
+
+    const cfg = window.CURRENT_RT_CONFIG || {};
+    if (cfg.watchImageSync === false) {
+        console.log("ℹ️ Đã tắt kênh đồng bộ ảnh realtime theo cấu hình Admin");
+        return;
+    }
+
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) return;
 
@@ -534,4 +542,5 @@ window.handleAdminFileSelected = function(input, qId, imgKey, qIdx) {
     }
 };
 
+window.startImageSyncWatcher = startImageSyncWatcher;
 window.deleteQuestionImage = deleteQuestionImage;
