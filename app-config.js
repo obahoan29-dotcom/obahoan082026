@@ -1,7 +1,5 @@
 // =========================================================
-// FILE: app-config.js
-// CẤU HÌNH HỆ THỐNG VÀ KẾT NỐI SUPABASE CHÍNH XÁC 100%
-// ĐÃ SỬA: THAY LINK AVATAR ĐẦU TIÊN BỊ VỠ BẰNG LINK FLATICON SẮC NÉT
+// FILE: app-config.js (BẢN FIX TRIỆT ĐỂ CHUYỂN HƯỚNG VÀ BẢO VỆ PHÒNG THI)
 // =========================================================
 
 // THÔNG SỐ DỰ ÁN SUPABASE CỦA THẦY
@@ -14,20 +12,6 @@ let SITE_REDIRECT_CONFIG = {
     enabled: false,
     targetUrl: DEFAULT_BACKUP_WEB_URL
 };
-
-// Đọc ngay cấu hình đã lưu trong LocalStorage để tránh độ trễ mạng
-try {
-    const rawRedirect = localStorage.getItem("site_redirect_config");
-    if (rawRedirect) {
-        const parsed = JSON.parse(rawRedirect);
-        if (parsed) {
-            SITE_REDIRECT_CONFIG = {
-                enabled: !!parsed.enabled,
-                targetUrl: parsed.targetUrl || DEFAULT_BACKUP_WEB_URL
-            };
-        }
-    }
-} catch(e) {}
 
 // Khởi tạo Supabase Client an toàn
 let supabaseClient = null;
@@ -43,7 +27,7 @@ function getSupabaseClient() {
 }
 getSupabaseClient();
 
-// HÀM KIỂM TRA QUYỀN ADMIN AN TOÀN TRƯỚC KHI CHUYỂN HƯỚNG
+// HÀM KIỂM TRA QUYỀN ADMIN (ADMIN KHÔNG BAO GIỜ BỊ CHUYỂN HƯỚNG)
 function isSafeAdminBypass() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -59,9 +43,26 @@ function isSafeAdminBypass() {
     return false;
 }
 
+// HÀM KIỂM TRA HỌC SINH CÓ ĐANG TRONG PHÒNG THI HAY KHÔNG
+// (Bảo vệ tuyệt đối: Học sinh đang thi dở ở thi.html KHÔNG BAO GIỜ bị chuyển hướng làm hỏng bài thi)
+function isExamInProgress() {
+    try {
+        const currentPath = window.location.pathname.toLowerCase();
+        const currentHref = window.location.href.toLowerCase();
+        if (currentPath.includes("thi.html") || currentHref.includes("thi.html")) {
+            return true;
+        }
+    } catch(e) {}
+    return false;
+}
+
 // HÀM THỰC HIỆN CHUYỂN HƯỚNG SANG WEB DỰ PHÒNG CHO HỌC SINH
 function executeStudentRedirect(targetUrl) {
+    // 1. Thầy là Admin -> Không chuyển
     if (isSafeAdminBypass()) return;
+    
+    // 2. Học sinh đang trong phòng thi thi.html -> Không chuyển để không làm mất bài thi
+    if (isExamInProgress()) return;
     
     let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
     if (!destination.startsWith("http://") && !destination.startsWith("https://")) {
@@ -80,38 +81,74 @@ function executeStudentRedirect(targetUrl) {
     window.location.replace(destination);
 }
 
-// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE
+// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE (ĐÃ FIX: KHÔNG BỊ KẸT LOCALSTORAGE CŨ)
 async function initGlobalSiteRedirectWatcher() {
-    const client = getSupabaseClient();
-
-    if (SITE_REDIRECT_CONFIG && SITE_REDIRECT_CONFIG.enabled) {
-        executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
+    // Nếu không phải là Admin: Xóa ngay cache redirect cũ trong localStorage của học sinh
+    // để tránh việc máy học sinh tự chuyển hướng khi Thầy đã tắt trên Supabase
+    if (!isSafeAdminBypass()) {
+        try {
+            localStorage.removeItem("site_redirect_config");
+        } catch(e) {}
+    } else {
+        // Nếu là Admin: đọc để hiển thị đúng vị trí công tắc trên bảng điều khiển
+        try {
+            const rawRedirect = localStorage.getItem("site_redirect_config");
+            if (rawRedirect) {
+                const parsed = JSON.parse(rawRedirect);
+                if (parsed) {
+                    SITE_REDIRECT_CONFIG = {
+                        enabled: !!parsed.enabled,
+                        targetUrl: parsed.targetUrl || DEFAULT_BACKUP_WEB_URL
+                    };
+                }
+            }
+        } catch(e) {}
     }
 
+    const client = getSupabaseClient();
     if (!client) return;
 
+    // Luôn truy vấn trực tiếp từ Supabase để lấy trạng thái mới nhất 100%
     try {
-        const { data } = await client.from('app_key_values').select('value').eq('key', 'site_redirect_config').single();
-        if (data && data.value) {
+        const { data, error } = await client
+            .from('app_key_values')
+            .select('value')
+            .eq('key', 'site_redirect_config')
+            .single();
+
+        if (!error && data && data.value) {
             SITE_REDIRECT_CONFIG = {
                 enabled: !!data.value.enabled,
                 targetUrl: data.value.targetUrl || DEFAULT_BACKUP_WEB_URL
             };
 
-            try {
-                localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
-            } catch(e) {}
+            // Lưu cache chỉ khi là Admin
+            if (isSafeAdminBypass()) {
+                try {
+                    localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                } catch(e) {}
+            }
 
             if (typeof updateRedirectUIElements === 'function') {
                 updateRedirectUIElements();
             }
 
-            if (SITE_REDIRECT_CONFIG.enabled) {
+            // CHỈ CHUYỂN HƯỚNG KHI MÁY CHỦ SUPABASE XÁC NHẬN LÀ ENABLED = TRUE
+            if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                 executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
             }
+        } else {
+            // Nếu không có dữ liệu hoặc Thầy chưa cấu hình -> Luôn coi là TẮT
+            SITE_REDIRECT_CONFIG.enabled = false;
+            if (typeof updateRedirectUIElements === 'function') {
+                updateRedirectUIElements();
+            }
         }
-    } catch(e) {}
+    } catch(e) {
+        SITE_REDIRECT_CONFIG.enabled = false;
+    }
 
+    // Lắng nghe Realtime: Khi Thầy gạt BẬT hoặc TẮT, máy học sinh cập nhật ngay
     try {
         client.channel('realtime_redirect_watcher')
             .on('postgres_changes', {
@@ -127,15 +164,18 @@ async function initGlobalSiteRedirectWatcher() {
                         targetUrl: fresh.value.targetUrl || DEFAULT_BACKUP_WEB_URL
                     };
 
-                    try {
-                        localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
-                    } catch(e) {}
+                    if (isSafeAdminBypass()) {
+                        try {
+                            localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                        } catch(e) {}
+                    }
 
                     if (typeof updateRedirectUIElements === 'function') {
                         updateRedirectUIElements();
                     }
 
-                    if (SITE_REDIRECT_CONFIG.enabled) {
+                    // Nếu Thầy BẬT: Chỉ chuyển những ai đang ở trang chủ (index.html), không chuyển người đang thi
+                    if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                         executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
                     }
                 }
@@ -167,9 +207,8 @@ let activeStudentLogin = {
     currentMode: "class"
 };
 
-// ĐÃ SỬA: Thay icon imgbb bị lỗi thành link flaticon sắc nét vĩnh viễn
 const PRESET_AVATARS = [
-    "https://cdn-icons-png.flaticon.com/512/3771/3771417.png", // Icon đề thi toán chuẩn thay cho link imgbb lỗi
+    "https://cdn-icons-png.flaticon.com/512/3771/3771417.png",
     "https://cdn-icons-png.flaticon.com/512/3755/3755251.png",
     "https://cdn-icons-png.flaticon.com/512/3062/3062279.png", 
     "https://cdn-icons-png.flaticon.com/512/4144/4144683.png",
