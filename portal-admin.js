@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 2: portal-admin.js (FIX LƯU ĐẦY ĐỦ SỐ PHÚT VÀO CUSTOM_LINKS)
+// FILE 2: portal-admin.js (BẢN TỐI ƯU UPLOAD DRIVE & LƯU ĐẦY ĐỦ THỜI LƯỢNG)
 // =========================================================
 
 let currentEditingTimeQuizId = null;
@@ -207,7 +207,7 @@ function readFileAsTextAsync(file) {
     });
 }
 
-// FIX YÊU CẦU 4: LƯU ĐẦY ĐỦ SỐ PHÚT VÀO CẢ QUIZZES VÀ CUSTOM_LINKS
+// LƯU ĐẦY ĐỦ SỐ PHÚT VÀO CẢ QUIZZES VÀ CUSTOM_LINKS
 async function processUpload() {
     const fileInput = document.getElementById("admin-file-upload");
     const answerFileInput = document.getElementById("admin-answer-file-upload");
@@ -241,7 +241,6 @@ async function processUpload() {
         const pad = n => String(n).padStart(2, '0');
         const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-        // Lấy chính xác thời lượng thi từ file đề (VD: đề 110 là 90 phút)
         const finalTimeLimitMinutes = parseInt(parsedExam.timeLimitMinutes, 10) || 90;
         const examStartStr = parsedExam.examStartTimeStr || null;
         const examEndStr = parsedExam.examEndTimeStr || null;
@@ -259,7 +258,7 @@ async function processUpload() {
             questions: parsedExam.questions
         }]);
 
-        // 2. Tạo liên kết cho từng lớp trong custom_links (ĐÃ BỔ SUNG time_limit_minutes)
+        // 2. Tạo liên kết cho từng lớp trong custom_links
         const linkRows = categories.map(cat => ({
             id: quizId,
             category_id: cat,
@@ -290,6 +289,7 @@ async function processUpload() {
     }
 }
 
+// TẢI FILE PDF / WORD / ẢNH TRỰC TIẾP LÊN GOOGLE DRIVE
 async function processUploadToGoogleDrive() {
     const fileInput = document.getElementById("admin-drive-file");
     const titleInput = document.getElementById("admin-drive-title");
@@ -319,7 +319,19 @@ async function processUploadToGoogleDrive() {
                 btn.innerText = "🚀 Đang tải lên Drive...";
 
                 let mimeType = file.type || "application/octet-stream";
-                const payload = { filename: file.name, mimeType: mimeType, base64: base64Data };
+                // Lấy tên hiển thị lớp đầu tiên làm thư mục con trong Drive
+                let firstCatName = (typeof getCategoryDisplayName === 'function') 
+                    ? getCategoryDisplayName(categories[0]) 
+                    : categories[0];
+
+                const payload = { 
+                    action: "uploadFile",
+                    filename: file.name, 
+                    mimeType: mimeType, 
+                    base64: base64Data,
+                    folderName: firstCatName,
+                    className: firstCatName
+                };
 
                 const res = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
                     method: 'POST',
