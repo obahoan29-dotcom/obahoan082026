@@ -8,7 +8,7 @@ window.STUDENT_ACCOUNTS = window.STUDENT_ACCOUNTS || {};
 window.STUDENT_ACCOUNTS["them-10"] = [
     { stt: 1, pass: "1", sbd: "1001", username: "Haiidang", name: "Hải Đăng", className: "10B" },
     { stt: 2, pass: "2", sbd: "1002", username: "Tạ Thị Ánh Tuyết", name: "Tạ Thị Ánh Tuyết", className: "10E" },
-    { stt: 3, pass: "3", sbd: "1003", username: "Mai Thị Ngọc Diệp", name: "Mai Thị Ngọc Diệp", className: "10H" },
+    { stt: 3, pass: "3", sbd: "1003", username: "Bảo Trâm", name: "Bảo Trâm kd", className: "10b-ymoa" },
     { stt: 4, pass: "4", sbd: "1004", username: "Phạm Duy", name: "Phạm Duy", className: "10D" },
     { stt: 5, pass: "5", sbd: "1005", username: "Khánh An", name: "Khánh An", className: "10A" },
     { stt: 6, pass: "6", sbd: "1006", username: "Dương Huyền", name: "Dương Huyền", className: "10M" },
@@ -40,7 +40,7 @@ window.STUDENT_ACCOUNTS["them-10"] = [
     { stt: 32, pass: "32", sbd: "1032", username: "Lã Hồng Ngọc", name: "Lã Hồng Ngọc", className: "10C" },
     { stt: 33, pass: "33", sbd: "1033", username: "Nam Huu", name: "Nam Huu", className: "10a9tauyen" },
     { stt: 34, pass: "34", sbd: "1034", username: "Đức Tú", name: "Đức Tú", className: "10a3ymoa" },
-    { stt: 35, pass: "35", sbd: "1035", username: "Nguyễn Bảo", name: "Nguyễn Quốc Bảo", className: "10B" },
+    { stt: 35, pass: "35", sbd: "1035", username: "Huyền B", name: "Huyền B", className: "10b" },
     { stt: 36, pass: "36", sbd: "1036", username: "Nguyễn Vũ", name: "Nguyễn Vũ", className: "10C" },
     { stt: 37, pass: "37", sbd: "1037", username: "Lê Thanh Bình", name: "Lê Thanh Bình", className: "10D" },
     { stt: 38, pass: "38", sbd: "1038", username: "Luân aura", name: "Nguyễn Thanh Luân", className: "10E" },
@@ -48,13 +48,10 @@ window.STUDENT_ACCOUNTS["them-10"] = [
     { stt: 40, pass: "40", sbd: "1040", username: "Trần Trung Anh", name: "Trần Trung Anh", className: "10D" },
     { stt: 41, pass: "41", sbd: "1041", username: "Tuấn vũ", name: "Tuấn vũ", className: "10E" },
     { stt: 42, pass: "42", sbd: "1042", username: "Lại Thư", name: "Lại Thư", className: "10a" },
-    { stt: 43, pass: "43", sbd: "1043", username: "Hải Yến", name: "Hải Yến", className: "10c" },
-    { stt: 44, pass: "44", sbd: "1044", username: "Sơn", name: "Sơn", className: "10PP" },
-    { stt: 45, pass: "45", sbd: "1045", username: "Nguyễn Bảo", name: "Nguyễn Quốc Bảo", className: "10B" },
-    { stt: 46, pass: "46", sbd: "1046", username: "Bảo Trâm", name: "Bảo Trâm kd", className: "10b-ymoa" },
-    { stt: 47, pass: "47", sbd: "1047", username: "Ánh Tuyết", name: "Trần Ánh Tuyết", className: "10h" },
-    { stt: 48, pass: "48", sbd: "1048", username: "Hồng Vân", name: "Hồng Vân", className: "10h" },
-    { stt: 49, pass: "49", sbd: "1049", username: "Huyền B", name: "Huyền B", className: "10b" },
+    { stt: 43, pass: "43", sbd: "1043", username: "Sơn", name: "Sơn", className: "10PP" },
+    { stt: 44, pass: "44", sbd: "1044", username: "Nguyễn Bảo", name: "Nguyễn Quốc Bảo", className: "10B" },
+
+  
     
     { stt: 99, pass: "99", sbd: "1099", username: "Nguyễn Doanh", name: "Nguyễn Doanh", className: "10C" }
 ];
