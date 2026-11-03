@@ -65,11 +65,24 @@ html, body {
 .section-header-title.red-title { color: var(--primary-red-dark); }
 .section-header-title.blue-title { color: var(--primary-blue-dark); }
 
-/* THANH NÚT CHUYÊN MỤC */
-.dantri-nav-container { margin-bottom: 10px; width: 100%; border: none; background: transparent; position: relative; z-index: 25; }
+/* THANH NÚT CHUYÊN MỤC & KẾT NỐI LIỀN MẠCH */
+.dantri-nav-container { margin-bottom: 12px; width: 100%; border: none; background: transparent; position: relative; z-index: 25; }
 .dantri-scroll-bar { display: flex; align-items: center; overflow-x: auto; white-space: nowrap; scrollbar-width: none; padding: 4px 2px 8px 2px; }
 .dantri-scroll-bar::-webkit-scrollbar { display: none; }
-.full-width-nav-row { display: flex; align-items: center; gap: 10px; width: 100%; margin-bottom: 10px; }
+
+.full-width-nav-row { 
+    display: flex; 
+    align-items: stretch; 
+    gap: 10px; 
+    width: 100%; 
+    margin-bottom: 10px; 
+    transition: margin-bottom 0.2s ease;
+}
+
+/* KHI CÓ TAB ĐƯỢC CHỌN: TRIỆT TIÊU KẼ HỞ ĐỂ NỐI LIỀN VÀO PANEL */
+.full-width-nav-row:has(.dantri-nav-btn.active) {
+    margin-bottom: 0px !important;
+}
 
 .dantri-nav-btn { 
     display: inline-flex; align-items: center; justify-content: center; gap: 6px; 
@@ -79,27 +92,67 @@ html, body {
     cursor: pointer; text-transform: none; 
     user-select: none; flex-shrink: 0; font-family: inherit; 
     box-shadow: 0 4px 10px rgba(15, 23, 42, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -2px 0 rgba(0, 0, 0, 0.05);
-    transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), 
-                box-shadow 0.1s cubic-bezier(0.4, 0, 0.2, 1), 
-                background 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), 
+                box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1), 
+                background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    position: relative;
 }
 
 .full-width-nav-row .dantri-nav-btn { 
     flex: 1 1 0; min-width: 0; margin-right: 0; text-align: center;
     min-height: 48px; font-size: 14.5px; font-weight: 800; 
-    border-radius: 13px;
+    border-radius: 14px;
 }
 .dantri-nav-btn:hover { 
     transform: translateY(-2px); 
     box-shadow: 0 7px 18px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95); 
 }
 .dantri-nav-btn:active { 
-    transform: translateY(3px) scale(0.975) !important; 
+    transform: translateY(2px) scale(0.975) !important; 
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15), inset 0 2px 4px rgba(0, 0, 0, 0.15) !important; 
 }
 .dantri-nav-btn .caret-icon { font-size: 11px; transition: transform 0.22s ease; color: inherit; opacity: 0.8; flex-shrink: 0; }
 .dantri-nav-btn.active .caret-icon { transform: rotate(180deg); opacity: 1; }
 
+/* KHI CÓ TAB ACTIVE: CÁC TAB CÒN LẠI HƠI MỜ ĐỂ LÀM NỔI BẬT TAB ĐANG MỞ */
+.full-width-nav-row:has(.dantri-nav-btn.active) .dantri-nav-btn:not(.active) {
+    opacity: 0.85;
+}
+.full-width-nav-row:has(.dantri-nav-btn.active) .dantri-nav-btn:not(.active):hover {
+    opacity: 1;
+}
+
+/* THIẾT KẾ ĐÁY NÚT ACTIVE LIỀN KHỐI & CÓ MẪU CHỈ HƯỚNG */
+.full-width-nav-row .dantri-nav-btn.active {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    position: relative !important;
+    z-index: 30 !important;
+    transform: translateY(0) !important;
+}
+
+/* MẪU TAM GIÁC NỐI LIỀN TỪ TAB XUỐNG PANEL */
+.full-width-nav-row .dantri-nav-btn.active::after {
+    content: "";
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 8px solid currentColor;
+    z-index: 35;
+    pointer-events: none;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
+}
+
+/* ========================================================= */
+/* MÀU SẮC ĐẶC TRƯNG TỪNG LỚP: NÚT & DROPDOWN PANEL THỐNG NHẤT */
+/* ========================================================= */
+
+/* 1. THÊM 10 (CYAN / SKY BLUE) */
 #daythem-nav-bar .cat-btn-them-10,
 #daythem-nav-bar .dantri-nav-btn:nth-child(1) {
     background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
@@ -107,10 +160,13 @@ html, body {
 }
 #daythem-nav-bar .cat-btn-them-10.active,
 #daythem-nav-bar .dantri-nav-btn:nth-child(1).active {
-    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important; color: #ffffff !important; border-color: #0284c7 !important;
-    box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4) !important;
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #0284c7 !important;
+    box-shadow: 0 -4px 16px rgba(2, 132, 199, 0.35) !important;
 }
 
+/* 2. THÊM 11 (WARM ORANGE / AMBER) */
 #daythem-nav-bar .cat-btn-them-11,
 #daythem-nav-bar .dantri-nav-btn:nth-child(2) {
     background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
@@ -118,10 +174,13 @@ html, body {
 }
 #daythem-nav-bar .cat-btn-them-11.active,
 #daythem-nav-bar .dantri-nav-btn:nth-child(2).active {
-    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important; color: #ffffff !important; border-color: #ea580c !important;
-    box-shadow: 0 6px 20px rgba(234, 88, 12, 0.4) !important;
+    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #ea580c !important;
+    box-shadow: 0 -4px 16px rgba(234, 88, 12, 0.35) !important;
 }
 
+/* 3. THÊM 12 (PURPLE AMETHYST) */
 #daythem-nav-bar .cat-btn-them-12,
 #daythem-nav-bar .dantri-nav-btn:nth-child(3) {
     background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
@@ -129,10 +188,13 @@ html, body {
 }
 #daythem-nav-bar .cat-btn-them-12.active,
 #daythem-nav-bar .dantri-nav-btn:nth-child(3).active {
-    background: linear-gradient(135deg, #9333ea 0%, #6b21a8 100%) !important; color: #ffffff !important; border-color: #9333ea !important;
-    box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4) !important;
+    background: linear-gradient(135deg, #9333ea 0%, #6b21a8 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #9333ea !important;
+    box-shadow: 0 -4px 16px rgba(147, 51, 234, 0.35) !important;
 }
 
+/* 4. LỚP 11A (EMERALD GREEN) */
 #chinhkhoa-row1-bar .cat-btn-lop-11a,
 #chinhkhoa-row1-bar .dantri-nav-btn:nth-child(1) {
     background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
@@ -140,10 +202,13 @@ html, body {
 }
 #chinhkhoa-row1-bar .cat-btn-lop-11a.active,
 #chinhkhoa-row1-bar .dantri-nav-btn:nth-child(1).active {
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important; color: #ffffff !important; border-color: #16a34a !important;
-    box-shadow: 0 6px 20px rgba(22, 163, 74, 0.4) !important;
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #16a34a !important;
+    box-shadow: 0 -4px 16px rgba(22, 163, 74, 0.35) !important;
 }
 
+/* 5. LỚP 11C (ROSE RED) */
 #chinhkhoa-row1-bar .cat-btn-lop-11c,
 #chinhkhoa-row1-bar .dantri-nav-btn:nth-child(2) {
     background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
@@ -151,10 +216,13 @@ html, body {
 }
 #chinhkhoa-row1-bar .cat-btn-lop-11c.active,
 #chinhkhoa-row1-bar .dantri-nav-btn:nth-child(2).active {
-    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important; color: #ffffff !important; border-color: #e11d48 !important;
-    box-shadow: 0 6px 20px rgba(225, 29, 72, 0.4) !important;
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #e11d48 !important;
+    box-shadow: 0 -4px 16px rgba(225, 29, 72, 0.35) !important;
 }
 
+/* 6. LỚP 10P (GOLDEN SUN) */
 #chinhkhoa-row1-bar .cat-btn-lop-10p,
 #chinhkhoa-row1-bar .dantri-nav-btn:nth-child(3) {
     background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
@@ -162,35 +230,46 @@ html, body {
 }
 #chinhkhoa-row1-bar .cat-btn-lop-10p.active,
 #chinhkhoa-row1-bar .dantri-nav-btn:nth-child(3).active {
-    background: linear-gradient(135deg, #ca8a04 0%, #854d0e 100%) !important; color: #ffffff !important; border-color: #ca8a04 !important;
-    box-shadow: 0 6px 20px rgba(202, 138, 4, 0.4) !important;
+    background: linear-gradient(135deg, #ca8a04 0%, #854d0e 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #ca8a04 !important;
+    box-shadow: 0 -4px 16px rgba(202, 138, 4, 0.35) !important;
 }
 
+/* 7. LỚP 11E (TEAL) */
 .dantri-nav-btn.lop11e-btn {
     background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
     border: 1.5px solid #2dd4bf; color: #0f766e; box-shadow: 0 4px 12px rgba(20, 184, 166, 0.18);
 }
 .dantri-nav-btn.lop11e-btn.active {
-    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important; color: #ffffff !important; border-color: #0d9488 !important;
-    box-shadow: 0 6px 20px rgba(13, 148, 136, 0.4) !important;
+    background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #0d9488 !important;
+    box-shadow: 0 -4px 16px rgba(13, 148, 136, 0.35) !important;
 }
 
+/* 8. HSG TOÁN 11 (AMBER GOLD) */
 .dantri-nav-btn.hsg-gold-btn { 
     background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
     border: 1.5px solid #fde047; color: #b45309; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25); 
 }
 .dantri-nav-btn.hsg-gold-btn.active {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; color: #ffffff !important; border-color: #f59e0b !important;
-    box-shadow: 0 6px 20px rgba(245, 158, 11, 0.45) !important;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #f59e0b !important;
+    box-shadow: 0 -4px 16px rgba(245, 158, 11, 0.35) !important;
 }
 
+/* 9. NỘP TỰ LUẬN DRIVE (VIOLET) */
 .dantri-nav-btn.padlet-purple-btn { 
     background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
     border: 1.5px solid #c084fc; color: #7c3aed; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25); 
 }
 .dantri-nav-btn.padlet-purple-btn.active {
-    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important; color: #ffffff !important; border-color: #8b5cf6 !important;
-    box-shadow: 0 6px 20px rgba(139, 92, 246, 0.45) !important;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important; 
+    color: #ffffff !important; 
+    border-color: #8b5cf6 !important;
+    box-shadow: 0 -4px 16px rgba(139, 92, 246, 0.35) !important;
 }
 
 #dantri-nav-bar .dantri-nav-btn { min-height: 42px; padding: 6px 12px; font-size: 13px; border-radius: 11px; margin-right: 8px;}
@@ -198,23 +277,56 @@ html, body {
     background: linear-gradient(135deg, #059669 0%, #047857 100%) !important; color: #ffffff !important; border-color: #059669 !important;
 }
 
-/* KHỐI NỐI LIỀN MENU & BẢNG MÀU LỚP */
+/* ========================================================= */
+/* BẢNG DANH SÁCH ĐỀ THI XÒE RA: DÍNH LIỀN KHỐI, KÍNH MỜ SIÊU ĐẸP */
+/* ========================================================= */
 .dantri-dropdown-panel { 
-    display: none; padding: 14px; 
-    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    border-radius: 16px; width: 100%; box-sizing: border-box; 
-    box-shadow: var(--shadow-md); border: 2px solid #cbd5e1; 
-    margin-top: -2px; margin-bottom: 12px;
-    position: relative; z-index: 25;
-    animation: expandDown 0.25s cubic-bezier(0.16, 1, 0.3, 1); 
+    display: none; 
+    padding: 14px 14px 12px 14px; 
+    background: rgba(255, 255, 255, 0.94); 
+    backdrop-filter: blur(18px); 
+    -webkit-backdrop-filter: blur(18px);
+    border-radius: 18px; 
+    width: 100%; 
+    box-sizing: border-box; 
+    box-shadow: 0 14px 35px -5px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset; 
+    border: 2px solid #cbd5e1; 
+    margin-top: 0px !important; 
+    margin-bottom: 14px;
+    position: relative; 
+    z-index: 25;
+    animation: expandDown 0.22s cubic-bezier(0.16, 1, 0.3, 1); 
 }
 .dantri-dropdown-panel.show { display: block; }
-@keyframes expandDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes expandDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* THANH ĐỊNH DANH LỚP TỰ ĐỘNG BẰNG ::before TRÊN DROPDOWN PANEL */
+.dantri-dropdown-panel.show::before {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 11px;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
 .dantri-sub-header { font-size: 15px; font-weight: 800; color: #047857; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
 
+/* 1. KHỐI THÊM 10 LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-them-10 {
-    border-color: #0284c7; box-shadow: 0 12px 30px rgba(2, 132, 199, 0.2);
-    background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%);
+    border-color: #0284c7; 
+    box-shadow: 0 16px 36px rgba(2, 132, 199, 0.18), 0 0 0 1px rgba(2, 132, 199, 0.2) inset;
+    background: linear-gradient(180deg, rgba(240, 249, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-them-10::before {
+    content: "📐 BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP THÊM 10";
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+    color: #0369a1;
+    border: 1.2px solid #7dd3fc;
 }
 .dantri-dropdown-panel.cat-theme-them-10 .exam-card {
     border-color: #bae6fd; border-left: 5.5px solid #0284c7 !important;
@@ -226,9 +338,17 @@ html, body {
     border-color: #38bdf8; color: #0284c7; background: #f0f9ff;
 }
 
+/* 2. KHỐI THÊM 11 LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-them-11 {
-    border-color: #ea580c; box-shadow: 0 12px 30px rgba(234, 88, 12, 0.2);
-    background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+    border-color: #ea580c; 
+    box-shadow: 0 16px 36px rgba(234, 88, 12, 0.18), 0 0 0 1px rgba(234, 88, 12, 0.2) inset;
+    background: linear-gradient(180deg, rgba(255, 247, 237, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-them-11::before {
+    content: "✍️ BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP THÊM 11";
+    background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+    color: #9a3412;
+    border: 1.2px solid #fdba74;
 }
 .dantri-dropdown-panel.cat-theme-them-11 .exam-card {
     border-color: #fed7aa; border-left: 5.5px solid #ea580c !important;
@@ -240,9 +360,17 @@ html, body {
     border-color: #fb923c; color: #c2410c; background: #fff7ed;
 }
 
+/* 3. KHỐI THÊM 12 LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-them-12 {
-    border-color: #9333ea; box-shadow: 0 12px 30px rgba(147, 51, 234, 0.2);
-    background: linear-gradient(180deg, #faf5ff 0%, #ffffff 100%);
+    border-color: #9333ea; 
+    box-shadow: 0 16px 36px rgba(147, 51, 234, 0.18), 0 0 0 1px rgba(147, 51, 234, 0.2) inset;
+    background: linear-gradient(180deg, rgba(250, 245, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-them-12::before {
+    content: "🎓 BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP THÊM 12";
+    background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+    color: #6b21a8;
+    border: 1.2px solid #d8b4fe;
 }
 .dantri-dropdown-panel.cat-theme-them-12 .exam-card {
     border-color: #e9d5ff; border-left: 5.5px solid #9333ea !important;
@@ -254,9 +382,17 @@ html, body {
     border-color: #c084fc; color: #7e22ce; background: #faf5ff;
 }
 
+/* 4. KHỐI LỚP 11A LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-lop-11a {
-    border-color: #16a34a; box-shadow: 0 12px 30px rgba(22, 163, 74, 0.2);
-    background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+    border-color: #16a34a; 
+    box-shadow: 0 16px 36px rgba(22, 163, 74, 0.18), 0 0 0 1px rgba(22, 163, 74, 0.2) inset;
+    background: linear-gradient(180deg, rgba(240, 253, 244, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-lop-11a::before {
+    content: "🏫 BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP 11A CHÍNH KHÓA";
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    color: #166534;
+    border: 1.2px solid #86efac;
 }
 .dantri-dropdown-panel.cat-theme-lop-11a .exam-card {
     border-color: #bbf7d0; border-left: 5.5px solid #16a34a !important;
@@ -268,9 +404,17 @@ html, body {
     border-color: #4ade80; color: #15803d; background: #f0fdf4;
 }
 
+/* 5. KHỐI LỚP 11C LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-lop-11c {
-    border-color: #e11d48; box-shadow: 0 12px 30px rgba(225, 29, 72, 0.2);
-    background: linear-gradient(180deg, #fff1f2 0%, #ffffff 100%);
+    border-color: #e11d48; 
+    box-shadow: 0 16px 36px rgba(225, 29, 72, 0.18), 0 0 0 1px rgba(225, 29, 72, 0.2) inset;
+    background: linear-gradient(180deg, rgba(255, 241, 242, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-lop-11c::before {
+    content: "🏫 BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP 11C CHÍNH KHÓA";
+    background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%);
+    color: #9f1239;
+    border: 1.2px solid #fda4af;
 }
 .dantri-dropdown-panel.cat-theme-lop-11c .exam-card {
     border-color: #fecdd3; border-left: 5.5px solid #e11d48 !important;
@@ -282,9 +426,17 @@ html, body {
     border-color: #fb7185; color: #be123c; background: #fff1f2;
 }
 
+/* 6. KHỐI LỚP 10P LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-lop-10p {
-    border-color: #ca8a04; box-shadow: 0 12px 30px rgba(202, 138, 4, 0.2);
-    background: linear-gradient(180deg, #fefce8 0%, #ffffff 100%);
+    border-color: #ca8a04; 
+    box-shadow: 0 16px 36px rgba(202, 138, 4, 0.18), 0 0 0 1px rgba(202, 138, 4, 0.2) inset;
+    background: linear-gradient(180deg, rgba(254, 252, 232, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-lop-10p::before {
+    content: "🏫 BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP 10P CHÍNH KHÓA";
+    background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%);
+    color: #854d0e;
+    border: 1.2px solid #fde047;
 }
 .dantri-dropdown-panel.cat-theme-lop-10p .exam-card {
     border-color: #fef08a; border-left: 5.5px solid #ca8a04 !important;
@@ -296,9 +448,17 @@ html, body {
     border-color: #facc15; color: #854d0e; background: #fefce8;
 }
 
+/* 7. KHỐI LỚP 11E LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-lop-11e {
-    border-color: #0d9488; box-shadow: 0 12px 30px rgba(13, 148, 136, 0.2);
-    background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 100%);
+    border-color: #0d9488; 
+    box-shadow: 0 16px 36px rgba(13, 148, 136, 0.18), 0 0 0 1px rgba(13, 148, 136, 0.2) inset;
+    background: linear-gradient(180deg, rgba(240, 253, 250, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-lop-11e::before {
+    content: "🏫 BÀI TẬP & ĐỀ THI TRỰC TUYẾN: LỚP 11E CHÍNH KHÓA";
+    background: linear-gradient(135deg, #ccfbf1 0%, #99f6e4 100%);
+    color: #115e59;
+    border: 1.2px solid #5eead4;
 }
 .dantri-dropdown-panel.cat-theme-lop-11e .exam-card {
     border-color: #99f6e4; border-left: 5.5px solid #0d9488 !important;
@@ -310,9 +470,17 @@ html, body {
     border-color: #2dd4bf; color: #0f766e; background: #f0fdfa;
 }
 
+/* 8. KHỐI HSG TOÁN 11 LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-hsg-toan-11 {
-    border-color: #f59e0b; box-shadow: 0 12px 30px rgba(245, 158, 11, 0.25);
-    background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+    border-color: #f59e0b; 
+    box-shadow: 0 16px 36px rgba(245, 158, 11, 0.22), 0 0 0 1px rgba(245, 158, 11, 0.2) inset;
+    background: linear-gradient(180deg, rgba(255, 251, 235, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-hsg-toan-11::before {
+    content: "🏆 BÀI TẬP & ĐỀ THI: ĐỘI TUYỂN HSG TOÁN 11";
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+    border: 1.2px solid #fcd34d;
 }
 .dantri-dropdown-panel.cat-theme-hsg-toan-11 .exam-card {
     border-color: #fde68a; border-left: 5.5px solid #d97706 !important;
@@ -324,9 +492,17 @@ html, body {
     border-color: #fde047; color: #b45309; background: #fffbeb;
 }
 
+/* 9. KHỐI NỘP TỰ LUẬN DRIVE LIỀN MẠCH */
 .dantri-dropdown-panel.cat-theme-tu-luan-padlet {
-    border-color: #8b5cf6; box-shadow: 0 12px 30px rgba(139, 92, 246, 0.25);
-    background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 100%);
+    border-color: #8b5cf6; 
+    box-shadow: 0 16px 36px rgba(139, 92, 246, 0.22), 0 0 0 1px rgba(139, 92, 246, 0.2) inset;
+    background: linear-gradient(180deg, rgba(245, 243, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+.dantri-dropdown-panel.cat-theme-tu-luan-padlet::before {
+    content: "📁 NỘP BÀI TẬP TỰ LUẬN TRỰC TIẾP VÀO GOOGLE DRIVE 5TB";
+    background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+    color: #5b21b6;
+    border: 1.2px solid #c4b5fd;
 }
 .dantri-dropdown-panel.cat-theme-tu-luan-padlet .exam-card {
     border-color: #ddd6fe; border-left: 5.5px solid #8b5cf6 !important;
