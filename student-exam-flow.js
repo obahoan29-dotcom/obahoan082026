@@ -1,8 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN TỐI ƯU 180+ THÍ SINH - NỘP BÀI SO LE JITTER DELAY CHỐNG NGHẼN POOL)
-// BẢO VỆ DỮ LIỆU ĐA TẦNG, CHỐNG ĐÈ LẦN THI, LƯU GOOGLE DRIVE & SHEET CHUẨN XÁC
-// ĐÃ BỔ SUNG: KHI BỊ THU ÉP TỪ XA GHI ĐÚNG 'Thu ép XpYs' VÀO THỜI GIAN THI
+// (BẢN TỐI ƯU 180+ THÍ SINH - TÍCH HỢP RETRY BACKOFF VỚI GAS & THU BÀI TẠM)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -15,7 +13,7 @@ function getStrictStandardClassName(rawClass, rawSbd) {
     const s = String(rawClass || "").trim().toLowerCase();
 
     // 1. ƯU TIÊN SỐ 1: NHẬN DIỆN CHÍNH XÁC THEO ĐỊNH DẠNG SỐ BÁO DANH (SBD)
-    if (/^11\d{2}$/.test(sbd)) return "Thêm 11"; // 1101 đến 1143 (Luôn luôn là Thêm 11)
+    if (/^11\d{2}$/.test(sbd)) return "Thêm 11"; // 1101 đến 1143
     if (/^10\d{2}$/.test(sbd)) return "Thêm 10"; // 1001 đến 1049
     if (/^12\d{2}$/.test(sbd)) return "Thêm 12"; // 1201 đến 1236
 
@@ -67,7 +65,6 @@ function getStrictStandardClassName(rawClass, rawSbd) {
     return "Thêm 11";
 }
 
-// XÁC ĐỊNH CHÍNH XÁC HỌC SINH ĐANG THI LẦN MẤY (ĐỌC TỪ LOCALSTORAGE + SUPABASE)
 function getRealStudentExamAttemptNumber(quizId, sbd) {
     try {
         const cleanSbd = String(sbd || "").replace(/[^a-zA-Z0-9]/g, '_');
@@ -81,7 +78,6 @@ function getRealStudentExamAttemptNumber(quizId, sbd) {
     return 1;
 }
 
-// LẤY SỐ LẦN THI ĐỒNG BỘ TỪ SUPABASE
 async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
     const localAttempt = getRealStudentExamAttemptNumber(quizId, sbd);
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -489,7 +485,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                 }
             }
 
-            // Ghi nhận nhật ký bắt đầu nhẹ nhàng
             client.from('cheating_logs').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
@@ -677,8 +672,64 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
+// =========================================================================
+// FIX CÂU A: BỘ GỬI GOOGLE DRIVE CÓ EXPONENTIAL BACKOFF VÀ JITTER RETRY
+// (Tối đa 5 lần thử, tự động giãn cách 1s - 3.5s, nhận biết status: "busy" để gửi lại)
+// =========================================================================
+async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5, timeoutMs = 60000) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => {
+            try { controller.abort(); } catch(e) {}
+        }, timeoutMs);
+
+        try {
+            console.log(`📡 [GAS Drive] Đang gửi bài thi (Lần thử ${attempt}/${maxRetries})...`);
+
+            const res = await fetch(gasUrl, {
+                method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+
+            clearTimeout(timer);
+
+            if (res.ok) {
+                const result = await res.json().catch(() => null);
+                if (result && result.status === "success") {
+                    console.log(`✅ [GAS Drive] Lưu thành công ở lần thử ${attempt}:`, result.message);
+                    return result;
+                } else if (result && result.status === "busy") {
+                    throw new Error("Máy chủ GAS đang bận (kẹt LockService)");
+                } else {
+                    throw new Error((result && result.message) || "Máy chủ không xác nhận thành công");
+                }
+            } else {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+        } catch (err) {
+            clearTimeout(timer);
+            lastError = err;
+            console.warn(`⚠️ [GAS Drive] Lần thử ${attempt} chưa thành công: ${err.message}`);
+
+            if (attempt < maxRetries) {
+                // Giãn cách ngẫu nhiên có gia tốc (Exponential Backoff + Jitter: 1s đến 3.5s)
+                const jitter = Math.floor(Math.random() * 1500);
+                const delayMs = 1200 + (attempt - 1) * 600 + jitter;
+                console.log(`⏳ Đang đợi ${delayMs}ms trước khi thử lại...`);
+                await new Promise(r => setTimeout(r, delayMs));
+            }
+        }
+    }
+
+    throw lastError || new Error("Không thể lưu bài thi lên Drive sau 5 lần thử");
+}
+
 function sendSubmissionJsonToGoogleDriveFolder(payload) {
-    setTimeout(() => {
+    setTimeout(async () => {
         try {
             const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
                 ? GOOGLE_DRIVE_TULUAN_GAS_URL 
@@ -691,7 +742,7 @@ function sendSubmissionJsonToGoogleDriveFolder(payload) {
 
             const sbd = payload.sbd || "sbd";
             const sName = payload.student_name || "hocsinh";
-            const fileName = `${sbd}_${sName}_${Date.now()}.json`.replace(/\s+/g, '_');
+            const fileName = `${sbd}_${sName}.json`.replace(/\s+/g, '_');
 
             const jsonStr = JSON.stringify(payload, null, 2);
             let base64Data = "";
@@ -714,14 +765,100 @@ function sendSubmissionJsonToGoogleDriveFolder(payload) {
                 submission: payload
             };
 
-            fetch(gasUrl, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify(drivePayload),
-                keepalive: true
-            }).catch(() => null);
-        } catch(e) {}
-    }, 100);
+            await sendToDriveWithExponentialBackoff(gasUrl, drivePayload, 5, 60000);
+        } catch(e) {
+            console.error("❌ Lỗi gửi file JSON dự phòng lên Google Drive:", e);
+        }
+    }, 150);
+}
+
+// =========================================================================
+// FIX CÂU B: HÀM GỬI NHÁP THỜI GIAN THỰC SANG GOOGLE SHEET THU TẠM
+// (Chỉ kích hoạt khi Admin bấm nút 'Thu bài tạm', có kèm chấm tạm tính)
+// =========================================================================
+async function sendCurrentDraftToGoogleSheetTemp() {
+    if (typeof isSubmitted !== 'undefined' && isSubmitted) return;
+    if (typeof examStartTime === 'undefined' || !examStartTime) return;
+
+    try {
+        const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+            ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+            : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
+
+        if (!gasUrl || gasUrl.includes("DÁN_URL")) return;
+
+        let draftData = null;
+        if (typeof buildCurrentLiveDraftPayload === 'function') {
+            draftData = buildCurrentLiveDraftPayload();
+        }
+
+        if (!draftData) {
+            const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+            if (!sId) return;
+            const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
+            const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
+            const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+            const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
+
+            const scoreResult = (typeof calculateTemporaryDraftScore === 'function') 
+                ? calculateTemporaryDraftScore() 
+                : { finalScore: 0, totalRawScore: 0, correctCount: 0, wrongCount: 0, dataDetails: [] };
+
+            draftData = {
+                sbd: cleanSbd,
+                student_name: sName,
+                class_name: sClass,
+                category_id: currentCat,
+                score10: scoreResult.finalScore,
+                raw_score: scoreResult.totalRawScore,
+                correct_count: scoreResult.correctCount,
+                wrong_count: scoreResult.wrongCount,
+                completion_time: typeof formatElapsedDuration === 'function' ? formatElapsedDuration(examStartTime) : "Đang làm...",
+                tab_switch_count: `${tabSwitchCount || 0} lần`,
+                data_string: scoreResult.dataDetails.join(" | "),
+                user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {}
+            };
+        }
+
+        const strictClassName = getStrictStandardClassName(draftData.class_name, draftData.sbd);
+        const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
+            ? EXAM_NAME 
+            : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
+
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const captureTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+        const driveDraftPayload = {
+            action: "saveLiveDraftToSheet",
+            rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
+            className: strictClassName,
+            class: strictClassName,
+            lop: strictClassName,
+            examTitle: exactExamTitle,
+            saveDraftJson: true,
+            capturedAt: captureTimeStr,
+            draft: {
+                sbd: draftData.sbd,
+                student_name: draftData.student_name,
+                class_name: strictClassName,
+                score10: draftData.score10,
+                raw_score: draftData.raw_score,
+                correct_count: draftData.correct_count,
+                wrong_count: draftData.wrong_count,
+                completion_time: draftData.completion_time || (typeof formatElapsedDuration === 'function' ? formatElapsedDuration(examStartTime) : "Đang làm..."),
+                tab_switch_count: draftData.tab_switch_count || `${tabSwitchCount || 0} lần`,
+                data_string: (draftData.data_string || "") + ` | [Thu tạm lúc ${captureTimeStr}]`,
+                user_answers: draftData.user_answers || {}
+            }
+        };
+
+        // Gửi sang GAS với cơ chế Retry nhẹ 3 lần
+        await sendToDriveWithExponentialBackoff(gasUrl, driveDraftPayload, 3, 45000);
+        console.log(`✅ Đã gửi bản thu bài tạm của ${draftData.student_name} (${draftData.sbd}) lên Google Drive!`);
+    } catch(err) {
+        console.warn("Lỗi gửi bản nháp tạm lên Google Sheet:", err);
+    }
 }
 
 function downloadSubmissionJsonSilently(payload, attemptNumber = 1) {
@@ -898,9 +1035,6 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
-// =========================================================================
-// HÀM NỘP BÀI: TÍCH HỢP JITTER DELAY SO LE CHỐNG NGHẼN KHI HẾT GIỜ ĐỒNG LOẠT
-// =========================================================================
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -913,9 +1047,9 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (normalView) normalView.style.display = "none";
     if (actionsBox) actionsBox.innerHTML = "";
 
-    // NGUYÊN TẮC 3 (JITTER DELAY): NẾU LÀ TỰ ĐỘNG NỘP DO HẾT GIỜ HOẶC LỆNH ADMIN, TRÌ HOÃN NGẪU NHIÊN 0.5s - 11.5s
+    // NGUYÊN TẮC JITTER DELAY: Nếu tự động nộp do hết giờ/thu ép thì giãn cách ngẫu nhiên 0.5s - 10s
     if (isForceSubmit) {
-        const jitterDelayMs = Math.floor(Math.random() * 11000) + 500;
+        const jitterDelayMs = Math.floor(Math.random() * 9500) + 500;
         const waitSeconds = Math.round(jitterDelayMs / 1000);
         
         if (progressView) {
@@ -953,6 +1087,7 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
+    // GỬI LÊN DRIVE VỚI BỘ RETRY 5 LẦN
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const updateProgressStatus = (text) => {
@@ -973,7 +1108,6 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     if (client) {
         try {
-            // 1. Thử gửi INSERT bản nộp
             let { error: err1 } = await client.from('submissions').insert([payload]);
             if (!err1) {
                 submitOk = true;
@@ -981,14 +1115,11 @@ async function executeSubmitExam(isForceSubmit = false) {
                 console.warn("Lệnh Insert thông thường gặp lỗi:", err1);
                 serverErrorMessage = err1.message || "";
 
-                // 2. NẾU BỊ CHẶN BỞI UNIQUE CONSTRAINT: KÍCH HOẠT CƠ CHẾ DỰ PHÒNG
                 const isConstraintError = String(serverErrorMessage).includes("idx_submissions_quiz_sbd") || 
                                           String(serverErrorMessage).includes("unique constraint") ||
                                           String(serverErrorMessage).includes("duplicate key");
 
                 if (isConstraintError) {
-                    console.log("⚡ Phát hiện constraint idx_submissions_quiz_sbd, thực hiện cập nhật hoặc đổi nhánh SBD...");
-                    
                     let { error: errUpdate } = await client.from('submissions')
                         .update({
                             score10: payload.score10,
@@ -1028,7 +1159,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         }
     }
 
-    // NỘP THÀNH CÔNG LÊN MÁY CHỦ
     if (submitOk) {
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
@@ -1069,7 +1199,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         return;
     }
 
-    // NẾU MẠNG MẤT HOẶC MÁY CHỦ LỖI: BẢO LƯU FILE OFFLINE AN TOÀN
     isSubmittingInProgress = false;
     const savedFileName = downloadSubmissionJsonSilently(payload, currentAttemptNumber);
     recordSubmissionToHistory(payload);
@@ -1188,10 +1317,12 @@ window.checkPassword = checkPassword;
 window.startExamAction = startExamAction;
 window.executeStartExamAPI = executeStartExamAPI;
 window.executeSubmitExam = executeSubmitExam;
+window.sendSubmissionJsonToGoogleDriveFolder = sendSubmissionJsonToGoogleDriveFolder;
+window.sendCurrentDraftToGoogleSheetTemp = sendCurrentDraftToGoogleSheetTemp;
+window.sendToDriveWithExponentialBackoff = sendToDriveWithExponentialBackoff;
 window.viewResultOfflineFallback = viewResultOfflineFallback;
 window.showSubmitConfirmModal = showSubmitConfirmModal;
 window.closeSubmitConfirmModal = closeSubmitConfirmModal;
 window.shareSubmissionFileNative = shareSubmissionFileNative;
 window.downloadSubmissionJsonSilently = downloadSubmissionJsonSilently;
 window.renderStudentSubmissionHistoryButtons = renderStudentSubmissionHistoryButtons;
-window.sendSubmissionJsonToGoogleDriveFolder = sendSubmissionJsonToGoogleDriveFolder;
