@@ -17,7 +17,6 @@ let isExamLocked = false;
 let lockedDurationSec = 0;
 let isSubmittingInProgress = false;
 
-// BỘ HẸN GIỜ TRÌ HOÃN THÔNG MINH CỤC BỘ
 let _storageDebounceTimer = null;
 let _statementDebounceTimer = null;
 let _autoSaveDebounceTimer = null;
@@ -84,7 +83,6 @@ async function ensureActiveSessionAndDraft() {
 
     try {
         const cfg = window.CURRENT_RT_CONFIG || {};
-        // Chỉ ping trạng thái có mặt (nhẹ như một gói tin 50 bytes), không gửi toàn bộ đáp án
         if (cfg.pingIntervalSec !== 0) {
             const { data: updatedAct } = await client.from('active_sessions')
                 .update({
@@ -171,11 +169,9 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
-// BỘ TỰ ĐỘNG LƯU ĐÁP ÁN: LƯU TỨC THÌ (0ms) VÀO LOCALSTORAGE VÀ INDEXEDDB, KHÔNG GỌI DATABASE ĐỂ BẢO VỆ CPU
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
-    // Lưu ngay vào IndexedDB cục bộ (an toàn tuyệt đối, không nghẽn mạng)
     const draftData = buildCurrentLiveDraftPayload();
     if (!draftData) return;
 
@@ -185,15 +181,13 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
             ...draftData
         }).catch(() => {});
     }
-
-    // Ghi chú: Chúng ta không gửi UPDATE liên tục lên Supabase mỗi khi click chuột
-    // để tránh 15.000 - 30.000 requests làm sập CPU gói Free.
-    // Dữ liệu sẽ được gửi 1 lần duy nhất khi học sinh nộp bài hoặc hết giờ.
 }
 
+// BẬT LẠI HÀM NÀY: LIÊN KẾT TRỰC TIẾP TỚI HÀM GỬI NHÁP CÓ RETRY LÊN GAS
 function sendDraftToGoogleSheetTemp(draftData) {
-    // Để trống hoặc không gọi liên tục trong lúc làm bài nhằm tiết kiệm tài nguyên
-    return;
+    if (typeof sendCurrentDraftToGoogleSheetTemp === 'function') {
+        sendCurrentDraftToGoogleSheetTemp();
+    }
 }
 
 window.addEventListener('online', function() {
@@ -301,7 +295,6 @@ async function initExamEngine() {
             safeLocal.setItem(`exam_allow_free_${quizId}`, String(examData.allowFree !== false));
         }
 
-        // Tải cấu hình Realtime Admin trước khi dựng phòng thi
         if (typeof loadRealtimeExamConfig === 'function') {
             await loadRealtimeExamConfig();
         }
@@ -317,12 +310,10 @@ async function initExamEngine() {
         
         await checkSessionStatus(isAutostart);
 
-        // Kênh 3: Lắng nghe đổi giờ thi thời gian thực
         if (typeof startTimeWatcherRealtime === 'function') {
             startTimeWatcherRealtime(quizId);
         }
 
-        // Kênh 4: Lắng nghe đồng bộ ảnh câu hỏi thời gian thực
         if (typeof startImageSyncWatcher === 'function') {
             startImageSyncWatcher(quizId);
         }
@@ -399,7 +390,6 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
-// BỘ KIỂM TRA PHIÊN THI: AUTOSTART AN TOÀN - CHỈ MỞ KHI HANDSHAKE SUPABASE THÀNH CÔNG
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -489,7 +479,6 @@ async function checkSessionStatus(isAutostart = false) {
         return; 
     }
 
-    // NẾU TỰ ĐỘNG BẮT ĐẦU (AUTOSTART): PHẢI QUA CHỐT CHẶN HANDSHAKE THÀNH CÔNG MỚI ĐƯỢC VÀO
     if (isAutostart) {
         const sIdVal = document.getElementById("student-id").value.trim();
         const sNameVal = document.getElementById("student-name").value.trim();
@@ -602,7 +591,6 @@ function selectOption(qId, letter) {
     
     updateProgress(); 
 
-    // GHI CỤC BỘ TỨC THÌ (0ms - OFFLINE FIRST), KHÔNG GỌI DATABASE ĐỂ TRÁNH QUÁ TẢI CPU
     if (_storageDebounceTimer) clearTimeout(_storageDebounceTimer);
     _storageDebounceTimer = setTimeout(() => {
         saveExamStateToStorage();
@@ -618,7 +606,6 @@ function onStatementChange(subKey) {
     window.SECURE_VAULT.userAnswers[subKey] = selected.value; 
     updateProgress(); 
 
-    // GHI CỤC BỘ TỨC THÌ (0ms - OFFLINE FIRST)
     if (_statementDebounceTimer) clearTimeout(_statementDebounceTimer);
     _statementDebounceTimer = setTimeout(() => {
         saveExamStateToStorage(); 
@@ -636,7 +623,6 @@ function onShortInputChange(qId) {
     }
     updateProgress(); 
 
-    // GHI CỤC BỘ TỨC THÌ (0ms - OFFLINE FIRST)
     saveExamStateToStorage(); 
 
     if (_autoSaveDebounceTimer) clearTimeout(_autoSaveDebounceTimer);
@@ -732,7 +718,6 @@ function startCountdownTimer() {
         const elapsedTimeSec = Math.floor((now - examStartTime) / 1000); 
         remainingSeconds = totalTimeSeconds - elapsedTimeSec; 
 
-        // KHI HẾT GIỜ: TỰ ĐỘNG KHÓA VÀ NỘP BÀI (SẼ ĐƯỢC CHẠY QUA JITTER DELAY SO LE)
         if (now >= currentEndTimeMs || remainingSeconds <= 0) { 
             clearInterval(timerInterval); 
             timerInterval = null;
