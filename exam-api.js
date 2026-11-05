@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
-// TÍCH HỢP: BỘ ĐIỀU TIẾT 5 CÔNG TẮC LẮNG NGHE & TẦN SUẤT PING
+// ĐÃ TÍCH HỢP: LẮNG NGHE SỰ KIỆN THU BÀI TẠM THỜI (TEMP_DRAFT_CAPTURE)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -44,7 +44,6 @@ window.CURRENT_RT_CONFIG = {
     pingIntervalSec: 30
 };
 
-// ĐỌC CẤU HÌNH LẮNG NGHE TỪ SUPABASE HOẶC LOCAL CACHE
 async function loadRealtimeExamConfig() {
     try {
         const rawLocal = safeLocal.getItem("exam_realtime_config");
@@ -63,7 +62,6 @@ async function loadRealtimeExamConfig() {
     } catch(e) {}
 }
 
-// Khởi chạy nạp ngay khi tải trang
 loadRealtimeExamConfig();
 
 if ('serviceWorker' in navigator) {
@@ -170,7 +168,6 @@ function applyStudentToUI(student) {
     safeLocal.setItem("saved_student_sbd", sId); 
     safeLocal.setItem("saved_student_class", sClass);
 
-    // KIỂM TRA SỐ LẦN THI ĐỂ HIỂN THỊ TRÊN MÀN HÌNH ĐĂNG NHẬP
     checkAndDisplayAttemptNoticeOnStudentCard(sId);
 
     if (typeof renderStudentSubmissionHistoryButtons === 'function') {
@@ -289,7 +286,6 @@ function getExamCode() {
     return String(code).trim().replace(/\s+/g, '_'); 
 }
 
-// BỘ TẠO KHÓA LƯU LOCALSTORAGE PHÂN BIỆT THEO TỪNG LẦN THI
 function getStorageKey(attempt = null) { 
     const sbd = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "guest";
     const att = attempt || window.currentStudentAttemptNumber || 1;
@@ -376,7 +372,6 @@ async function handleOnlineCountClick() {
     }
 }
 
-// 1. KÊNH ĐẾM NGƯỜI CÙNG THI: KIỂM TRA CÔNG TẮC watchOnlineCount
 function startOnlineRealtimeWatcher(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
     if (cfg.watchOnlineCount === false) {
@@ -407,7 +402,9 @@ function startOnlineRealtimeWatcher(quizId) {
         .subscribe();
 }
 
-// 2. KÊNH THU BÀI ÉP BUỘC: KIỂM TRA CÔNG TẮC watchForceSubmit
+// =========================================================
+// 2. KÊNH THU BÀI ÉP BUỘC & LẮNG NGHE SỰ KIỆN THU BÀI TẠM THỜI
+// =========================================================
 function startForceSubmitWatcher(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
     if (cfg.watchForceSubmit === false) {
@@ -427,6 +424,7 @@ function startForceSubmitWatcher(quizId) {
     const cleanSbd = (sbd || "user").replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
     forceSubmitRealtimeChannel = client.channel(`exam_force_submit_${quizId}`)
+        // SỰ KIỆN 1: THU BÀI ÉP BUỘC
         .on('broadcast', { event: 'FORCE_SUBMIT' }, payload => {
             if (isSubmitted) return;
             const data = payload.payload;
@@ -447,10 +445,21 @@ function startForceSubmitWatcher(quizId) {
                 }, 400);
             }
         })
+        // SỰ KIỆN 2: THU BÀI TẠM THỜI (GHI NHÁP SANG SHEET TẠM DRIVE)
+        .on('broadcast', { event: 'TEMP_DRAFT_CAPTURE' }, payload => {
+            if (isSubmitted || !examStartTime) return;
+            console.log("📝 [Học sinh] Nhận được lệnh thu bài tạm thời từ Giáo viên...");
+            
+            if (typeof showTimeChangeToast === 'function') {
+                showTimeChangeToast("📋 Thầy vừa thu bài tạm thời! Điểm nháp đang được gửi sang Drive...");
+            }
+            if (typeof sendCurrentDraftToGoogleSheetTemp === 'function') {
+                sendCurrentDraftToGoogleSheetTemp();
+            }
+        })
         .subscribe();
 }
 
-// 5. CẤU HÌNH NHỊP TIM VÀ TẤT CẢ KÊNH REALTIME THEO CẤU HÌNH ADMIN
 async function startPresenceSystem(sId) {
     await loadRealtimeExamConfig();
     const cfg = window.CURRENT_RT_CONFIG || {};
@@ -459,7 +468,6 @@ async function startPresenceSystem(sId) {
     const urlParams = new URLSearchParams(window.location.search); 
     const currentQuizId = urlParams.get('id') || "";
 
-    // Kênh 1: Đếm người cùng thi
     if (cfg.watchOnlineCount !== false && currentQuizId) {
         startOnlineRealtimeWatcher(currentQuizId);
         refreshOnlineCount();
@@ -468,12 +476,10 @@ async function startPresenceSystem(sId) {
         if (onlineBox) onlineBox.style.display = "none";
     }
 
-    // Kênh 2: Thu bài ép buộc
     if (cfg.watchForceSubmit !== false && currentQuizId) {
         startForceSubmitWatcher(currentQuizId);
     }
 
-    // Kênh 5: Tần suất Ping nhịp tim: 30s / 60s / 90s hoặc tắt hẳn (0)
     const intervalSec = (cfg.pingIntervalSec !== undefined) ? parseInt(cfg.pingIntervalSec, 10) : 30;
     if (presenceInterval) {
         clearInterval(presenceInterval);
@@ -558,7 +564,6 @@ function showTimeChangeToast(message) {
     setTimeout(() => { toast.classList.remove("show"); }, 4500);
 }
 
-// 3. KÊNH CẬP NHẬT GIỜ THI TRỰC TIẾP: KIỂM TRA CÔNG TẮC watchTimeConfig
 function startTimeWatcherRealtime(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
     if (cfg.watchTimeConfig === false) {
