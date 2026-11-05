@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN SIÊU HẸP HEADER - THU HIỆN ĐỦ DÒNG CHỮ TO NHẤT - CỘT DÒNG SÁT NHAU TỐI ĐA)
-// ĐÃ TÍCH HỢP: CỘT THU ÉP TỪ XA CHO TỪNG THÍ SINH HOẶC TOÀN BỘ PHÒNG THI
+// (BẢN SIÊU HẸP HEADER - TÍCH HỢP NÚT THU BÀI TẠM THỜI QUA REALTIME & GAS)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -10,14 +9,12 @@ let _liveDoingTickerInterval = null;
 let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 
-// TIÊM STYLE CHO CỘT "SỐ LẦN THI", HEADER SIÊU HẸP VÀ CHẾ ĐỘ THU HIỆN ĐỦ DÒNG
 (function injectAttemptDropdownStyles() {
     const styleId = "status-attempt-dropdown-styles";
     if (document.getElementById(styleId)) return;
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* ẨN NÚT THU BÀI TỰ ĐỘNG KHỎI HEADER */
         #btn-auto-collect-drafts {
             display: none !important;
         }
@@ -33,7 +30,6 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
-        /* 1. THANH TIÊU ĐỀ HEADER SIÊU HẸP */
         .result-modal-header {
             padding: 2px 8px !important;
             min-height: 28px !important;
@@ -132,7 +128,8 @@ let isFitAllRowsActive = false;
         .btn-regrade-exam,
         .btn-upload-json-backup,
         .btn-export-excel,
-        .btn-fit-all-rows {
+        .btn-fit-all-rows,
+        .btn-temp-draft-capture {
             padding: 2px 7px !important;
             font-size: 10.5px !important;
             height: 22px !important;
@@ -140,13 +137,29 @@ let isFitAllRowsActive = false;
             line-height: 1 !important;
         }
 
-        .btn-refresh-result::before,
-        .btn-refresh-result::after {
-            display: none !important;
-            content: none !important;
+        /* NÚT THU BÀI TẠM THỜI RẤT NHỎ TRÊN TOOLBAR */
+        .btn-temp-draft-capture {
+            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #5eead4 !important;
+            font-weight: 900 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 2px !important;
+            box-shadow: 0 1px 4px rgba(13, 148, 136, 0.25) !important;
+            transition: all 0.15s ease !important;
+            white-space: nowrap !important;
+            user-select: none !important;
+            font-family: inherit !important;
         }
-        .btn-refresh-result {
-            font-size: 10.5px !important;
+        .btn-temp-draft-capture:hover {
+            filter: brightness(1.15) !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 2px 6px rgba(13, 148, 136, 0.35) !important;
+        }
+        .btn-temp-draft-capture:active {
+            transform: translateY(1.5px) scale(0.96) !important;
         }
 
         .btn-table-settings,
@@ -158,7 +171,6 @@ let isFitAllRowsActive = false;
             padding: 0 !important;
         }
 
-        /* THANH THỐNG KÊ PHÂN LOẠI SIÊU HẸP */
         .result-modal-stats-bar {
             padding: 1px 8px !important;
             font-size: 10px !important;
@@ -197,9 +209,9 @@ let isFitAllRowsActive = false;
         }
 
         .btn-fit-all-rows {
-            background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
             color: #ffffff !important;
-            border: 1px solid #5eead4 !important;
+            border: 1px solid #7dd3fc !important;
             border-radius: 11px !important;
             padding: 2px 7px !important;
             font-size: 10.5px !important;
@@ -208,7 +220,7 @@ let isFitAllRowsActive = false;
             display: inline-flex !important;
             align-items: center !important;
             gap: 3px !important;
-            box-shadow: 0 1px 4px rgba(13, 148, 136, 0.25) !important;
+            box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25) !important;
             transition: all 0.15s ease !important;
             white-space: nowrap !important;
             user-select: none !important;
@@ -219,13 +231,9 @@ let isFitAllRowsActive = false;
             filter: brightness(1.12) !important;
             transform: translateY(-1px) !important;
         }
-        .btn-fit-all-rows:active {
-            transform: translateY(1.5px) scale(0.96) !important;
-        }
         .btn-fit-all-rows.is-fitted {
             background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
             border-color: #fdba74 !important;
-            box-shadow: 0 2px 6px rgba(234, 88, 12, 0.35) !important;
         }
 
         .modal-independent-zoom-control {
@@ -259,7 +267,6 @@ let isFitAllRowsActive = false;
         }
         .btn-modal-zoom-step:hover {
             background: #0284c7 !important;
-            transform: scale(1.1) !important;
         }
         .modal-zoom-val-badge {
             font-size: 10px !important;
@@ -272,7 +279,6 @@ let isFitAllRowsActive = false;
             cursor: pointer !important;
         }
 
-        /* 2. BẢNG KHI BẬT "THU HIỆN ĐỦ DÒNG": DÒNG SÁT TỐI ĐA, CỘT SÁT TỐI ĐA, CHỮ TO RÕ */
         .result-table.table-fitted-compact {
             --table-row-padding-y: 0px !important;
             --table-row-padding-x: 2px !important;
@@ -302,7 +308,6 @@ let isFitAllRowsActive = false;
             text-overflow: ellipsis !important;
         }
 
-        /* Co hẹp các cột khi thu hiện đủ dòng để các cột sát nhau tối đa */
         .result-table.table-fitted-compact th.td-stt { width: 34px !important; }
         .result-table.table-fitted-compact th.td-exam-col,
         .result-table.table-fitted-compact th:nth-child(2) { width: 125px !important; }
@@ -322,55 +327,6 @@ let isFitAllRowsActive = false;
         .result-table.table-fitted-compact th.th-force-submit-col { width: 68px !important; }
         .result-table.table-fitted-compact th.th-row-action-col { width: 42px !important; }
 
-        .result-table.table-fitted-compact .btn-exam-picker {
-            padding: 1px 3px !important;
-            font-size: inherit !important;
-            border-radius: 4px !important;
-            height: auto !important;
-            line-height: 1.15 !important;
-        }
-        .result-table.table-fitted-compact .btn-rank-picker {
-            padding: 1px 3px !important;
-            font-size: inherit !important;
-            border-radius: 4px !important;
-            height: auto !important;
-            line-height: 1.15 !important;
-        }
-        .result-table.table-fitted-compact .status-pill,
-        .result-table.table-fitted-compact .status-doing-heartbeat,
-        .result-table.table-fitted-compact .btn-attempt-badge-single,
-        .result-table.table-fitted-compact .btn-attempt-badge-multi,
-        .result-table.table-fitted-compact .score-pill-high,
-        .result-table.table-fitted-compact .score-pill-mid,
-        .result-table.table-fitted-compact .score-pill-low,
-        .result-table.table-fitted-compact .class-badge,
-        .result-table.table-fitted-compact .live-doing-timer-pill,
-        .result-table.table-fitted-compact .tabs-warn,
-        .result-table.table-fitted-compact .tabs-ok {
-            padding: 0px 3px !important;
-            font-size: inherit !important;
-            line-height: 1.15 !important;
-            border-radius: 4px !important;
-            box-shadow: none !important;
-        }
-        .result-table.table-fitted-compact .btn-delete-result-row {
-            padding: 0px 4px !important;
-            font-size: 9.5px !important;
-            line-height: 1.1 !important;
-            border-radius: 3px !important;
-            box-shadow: none !important;
-        }
-        .result-table.table-fitted-compact .btn-force-submit-item {
-            padding: 1px 4px !important;
-            font-size: 10px !important;
-            line-height: 1.1 !important;
-            border-radius: 4px !important;
-        }
-        .result-table.table-fitted-compact .td-attempt-cell-wrap {
-            padding: 0px 2px !important;
-        }
-
-        /* NÚT THU ÉP TỪ XA TRONG BẢNG */
         .btn-force-submit-item {
             background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
             color: #ffffff !important;
@@ -388,13 +344,8 @@ let isFitAllRowsActive = false;
             user-select: none !important;
             white-space: nowrap !important;
         }
-        .btn-force-submit-item:hover {
-            filter: brightness(1.15) !important;
-            transform: scale(1.04) !important;
-        }
-        .btn-force-submit-item:active {
-            transform: translateY(1.5px) scale(0.96) !important;
-        }
+        .btn-force-submit-item:hover { filter: brightness(1.15) !important; transform: scale(1.04) !important; }
+        .btn-force-submit-item:active { transform: translateY(1.5px) scale(0.96) !important; }
 
         .btn-force-submit-all-header {
             background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
@@ -411,9 +362,7 @@ let isFitAllRowsActive = false;
             transition: 0.15s !important;
             margin-top: 2px !important;
         }
-        .btn-force-submit-all-header:hover {
-            filter: brightness(1.1) !important;
-        }
+        .btn-force-submit-all-header:hover { filter: brightness(1.1) !important; }
 
         @keyframes heartbeatDoing {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65), 0 0 10px rgba(192, 132, 252, 0.5); }
@@ -441,27 +390,17 @@ let isFitAllRowsActive = false;
             letter-spacing: -0.2px !important;
             text-shadow: 0 0 2px rgba(168, 85, 247, 0.4) !important;
         }
-
         .status-doing-heartbeat.free-mode {
             background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%) !important;
             color: #92400e !important;
             border-color: #f59e0b !important;
             box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
         }
-
-        .status-doing-heartbeat .heartbeat-icon {
-            display: inline-block !important;
-            font-size: 15px !important;
-            line-height: 1 !important;
-        }
+        .status-doing-heartbeat .heartbeat-icon { font-size: 15px !important; line-height: 1 !important; }
 
         tr.row-student-is-doing td { background-color: #faf5ff !important; }
         tr.row-student-is-doing:hover td { background-color: #f3e8ff !important; }
-        tr.row-student-is-doing .td-stt {
-            background-color: #e9d5ff !important;
-            color: #581c87 !important;
-            font-weight: 900 !important;
-        }
+        tr.row-student-is-doing .td-stt { background-color: #e9d5ff !important; color: #581c87 !important; font-weight: 900 !important; }
 
         .live-doing-timer-pill {
             display: inline-flex !important;
@@ -501,16 +440,7 @@ let isFitAllRowsActive = false;
             transition: all 0.15s ease !important;
             user-select: none !important;
             white-space: nowrap !important;
-            font-family: inherit !important;
         }
-        .btn-attempt-badge-multi:hover {
-            filter: brightness(1.1) !important;
-            transform: scale(1.05) !important;
-        }
-        .btn-attempt-badge-multi:active {
-            transform: translateY(1px) scale(0.96) !important;
-        }
-
         .btn-attempt-badge-single {
             display: inline-flex !important;
             align-items: center !important;
@@ -525,108 +455,21 @@ let isFitAllRowsActive = false;
             cursor: pointer !important;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
             transition: all 0.15s ease !important;
-            user-select: none !important;
             white-space: nowrap !important;
-            font-family: inherit !important;
         }
-        .btn-attempt-badge-single:hover {
-            background: #f1f5f9 !important;
-            border-color: #94a3b8 !important;
-        }
-
-        .attempt-picker-wrapper {
-            position: relative !important;
-            display: inline-block !important;
-        }
-
+        .attempt-picker-wrapper { position: relative !important; display: inline-block !important; }
         .attempt-dropdown-menu {
-            display: none;
-            position: absolute !important;
-            top: calc(100% + 4px) !important;
-            left: 0 !important;
-            min-width: 255px !important;
-            background: #ffffff !important;
-            border-radius: 12px !important;
+            display: none; position: absolute !important; top: calc(100% + 4px) !important; left: 0 !important;
+            min-width: 255px !important; background: #ffffff !important; border-radius: 12px !important;
             box-shadow: 0 14px 35px rgba(15, 23, 42, 0.22), 0 0 0 1px #cbd5e1 !important;
-            border: 1.5px solid #cbd5e1 !important;
-            padding: 8px 10px !important;
-            z-index: 9999999 !important;
-            animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
-            text-align: left !important;
-            white-space: nowrap !important;
+            border: 1.5px solid #cbd5e1 !important; padding: 8px 10px !important; z-index: 9999999 !important;
+            animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important; text-align: left !important; white-space: nowrap !important;
         }
-        .attempt-dropdown-menu.show {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 4px !important;
-        }
-
-        .attempt-dropdown-header {
-            font-size: 11px !important;
-            font-weight: 900 !important;
-            color: #334155 !important;
-            text-align: center !important;
-            margin-bottom: 5px !important;
-            letter-spacing: 0.3px !important;
-            user-select: none !important;
-        }
-
-        .attempt-menu-item {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            gap: 10px !important;
-            padding: 6px 10px !important;
-            border-radius: 8px !important;
-            font-size: 12px !important;
-            font-weight: 700 !important;
-            color: #1e293b !important;
-            cursor: pointer !important;
-            transition: background 0.15s ease !important;
-            user-select: none !important;
-        }
-        .attempt-menu-item:hover {
-            background: #f1f5f9 !important;
-        }
-
-        .attempt-menu-item.selected {
-            background: #ede9fe !important;
-            color: #6d28d9 !important;
-            font-weight: 900 !important;
-        }
-        .attempt-menu-item.selected .attempt-check-icon {
-            color: #7c3aed !important;
-            font-weight: 900 !important;
-        }
-        .attempt-menu-item.selected .attempt-item-score {
-            color: #6d28d9 !important;
-        }
-
-        .attempt-item-left {
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 4px !important;
-        }
-
-        .attempt-check-icon {
-            font-size: 12px !important;
-            font-weight: 900 !important;
-            width: 14px !important;
-            display: inline-block !important;
-            text-align: center !important;
-        }
-
-        .attempt-item-score {
-            font-size: 12px !important;
-            font-weight: 900 !important;
-            color: #0284c7 !important;
-            margin-left: 8px !important;
-        }
-
-        tr.has-active-attempt-menu {
-            position: relative !important;
-            z-index: 1000 !important;
-        }
+        .attempt-dropdown-menu.show { display: flex !important; flex-direction: column !important; gap: 4px !important; }
+        .attempt-dropdown-header { font-size: 11px !important; font-weight: 900 !important; color: #334155 !important; text-align: center !important; margin-bottom: 5px !important; }
+        .attempt-menu-item { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 10px !important; padding: 6px 10px !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; }
+        .attempt-menu-item:hover { background: #f1f5f9 !important; }
+        .attempt-menu-item.selected { background: #ede9fe !important; color: #6d28d9 !important; font-weight: 900 !important; }
     `;
     document.head.appendChild(style);
 })();
@@ -693,9 +536,6 @@ function resetModalZoom() {
     applyModalZoomLevel(1.0);
 }
 
-// =========================================================================
-// THUẬT TOÁN THU HIỆN ĐỦ DÒNG THÔNG MINH
-// =========================================================================
 function fitAllRowsInView(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
@@ -772,10 +612,30 @@ function fitAllRowsInView(event) {
     }, 40);
 }
 
+// BỔ SUNG NÚT "THU TẠM" & CÁC NÚT ĐIỀU KHIỂN VÀO HEADER MODAL
 function ensureModalZoomControlsInHeader() {
     const toolsWrap = document.querySelector(".result-modal-tools");
     if (!toolsWrap) return;
 
+    // 1. NÚT "📋 Thu tạm"
+    if (!document.getElementById("btn-temp-draft-capture")) {
+        const tempBtn = document.createElement("button");
+        tempBtn.type = "button";
+        tempBtn.className = "btn-temp-draft-capture";
+        tempBtn.id = "btn-temp-draft-capture";
+        tempBtn.title = "Kích hoạt tạm chấm và xuất bản nháp của các em đang thi vào file điểm thi thu tạm trên Google Drive";
+        tempBtn.innerHTML = "📋 Thu tạm";
+        tempBtn.onclick = (e) => triggerCollectTempDraftsToDrive(e);
+
+        const excelBtn = toolsWrap.querySelector(".btn-export-excel");
+        if (excelBtn) {
+            toolsWrap.insertBefore(tempBtn, excelBtn);
+        } else {
+            toolsWrap.appendChild(tempBtn);
+        }
+    }
+
+    // 2. NÚT "📐 Thu hiện đủ dòng"
     if (!document.getElementById("btn-fit-all-rows")) {
         const fitBtn = document.createElement("button");
         fitBtn.type = "button";
@@ -793,6 +653,7 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
+    // 3. BỘ ZOOM
     if (!document.getElementById("modal-independent-zoom-control")) {
         const zoomDiv = document.createElement("div");
         zoomDiv.className = "modal-independent-zoom-control";
@@ -810,6 +671,103 @@ function ensureModalZoomControlsInHeader() {
         } else {
             toolsWrap.appendChild(zoomDiv);
         }
+    }
+}
+
+// =========================================================================
+// HÀM XỬ LÝ KHI BẤM NÚT "THU TẠM": GỬI LỆNH REALTIME VÀ PUSH SANG GAS
+// =========================================================================
+async function triggerCollectTempDraftsToDrive(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const currentItem = currentExamResultData.item;
+    const quizId = currentItem ? (extractQuizIdFromItem(currentItem) || currentItem.id) : "";
+    if (!quizId) return alert("⚠️ Không xác định được mã đề thi hiện tại!");
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return alert("❌ Chưa kết nối máy chủ Supabase!");
+
+    const btn = document.getElementById("btn-temp-draft-capture");
+    if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang thu..."; }
+
+    try {
+        // 1. Phát sóng Realtime TEMP_DRAFT_CAPTURE tới các máy học sinh đang thi
+        const channelName = `exam_force_submit_${quizId}`;
+        const tempChannel = client.channel(channelName);
+        tempChannel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await tempChannel.send({
+                    type: 'broadcast',
+                    event: 'TEMP_DRAFT_CAPTURE',
+                    payload: { quizId: quizId, timestamp: Date.now() }
+                });
+                try { client.removeChannel(tempChannel); } catch(e) {}
+            }
+        });
+
+        // 2. Phía Admin: Quét đồng thời các bản nháp từ Supabase live_drafts để đẩy bù sang GAS
+        const { data: drafts } = await client.from('live_drafts').select('*').eq('quiz_id', quizId);
+        let sentCount = 0;
+
+        if (drafts && drafts.length > 0) {
+            const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
+                ? GOOGLE_DRIVE_TULUAN_GAS_URL 
+                : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : null);
+
+            if (gasUrl && !gasUrl.includes("DÁN_URL")) {
+                const now = new Date();
+                const pad = n => String(n).padStart(2, '0');
+                const captureTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
+
+                for (const d of drafts) {
+                    const strictClassName = typeof getStrictStandardClassName === 'function' 
+                        ? getStrictStandardClassName(d.class_name, d.sbd) 
+                        : (d.class_name || "Lớp");
+                    const exactExamTitle = (currentItem && currentItem.title) || d.exam_title || "Đề thi";
+
+                    const driveDraftPayload = {
+                        action: "saveLiveDraftToSheet",
+                        rootFolder: "FILE_SHEET_AND_JSON_DU_PHONG",
+                        className: strictClassName,
+                        class: strictClassName,
+                        lop: strictClassName,
+                        examTitle: exactExamTitle,
+                        saveDraftJson: true,
+                        capturedAt: captureTimeStr,
+                        draft: {
+                            sbd: d.sbd,
+                            student_name: d.student_name,
+                            class_name: strictClassName,
+                            score10: d.score10,
+                            raw_score: d.raw_score,
+                            correct_count: d.correct_count,
+                            wrong_count: d.wrong_count,
+                            completion_time: d.completion_time || "Đang thi...",
+                            tab_switch_count: d.tab_switch_count || "0 lần",
+                            data_string: (d.data_string || "") + ` | [Thu tạm lúc ${captureTimeStr}]`,
+                            user_answers: d.user_answers || {}
+                        }
+                    };
+
+                    if (typeof sendToDriveWithExponentialBackoff === 'function') {
+                        sendToDriveWithExponentialBackoff(gasUrl, driveDraftPayload, 2, 35000).catch(() => null);
+                    } else {
+                        fetch(gasUrl, {
+                            method: "POST",
+                            headers: { "Content-Type": "text/plain;charset=utf-8" },
+                            body: JSON.stringify(driveDraftPayload)
+                        }).catch(() => null);
+                    }
+                    sentCount++;
+                }
+            }
+        }
+
+        alert(`📋 ĐÃ KÍCH HOẠT THU BÀI TẠM THỜI!\n\n1. Đã gửi lệnh tới toàn bộ thí sinh đang trong bài thi để tự động tạm tính điểm và gửi sang Drive.\n2. Đã quét ${sentCount} bản nháp từ Supabase để ghi vào Sheet thu tạm trên Google Drive.`);
+        setTimeout(refreshCurrentExamResults, 1500);
+    } catch(err) {
+        alert("❌ Lỗi kích hoạt thu tạm: " + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerText = "📋 Thu tạm"; }
     }
 }
 
@@ -1054,7 +1012,6 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     if (breadcrumbCat) breadcrumbCat.innerText = displayCatName;
 
     window.history.pushState({ isViewingResult: true }, "", "#bang-ket-qua");
-
     document.body.classList.add("modal-backdrop-locked");
 
     modal.style.display = "flex";
@@ -1162,9 +1119,6 @@ function deleteResultRowPermanently(rowUid, event) {
     updateStatsAndRenderTable(currentExamResultData.rawRows);
 }
 
-// =========================================================================
-// HÀM GỬI LỆNH THU BÀI ÉP BUỘC TỪ XA QUA SUPABASE REALTIME (BROADCAST)
-// =========================================================================
 async function sendForceSubmitCommand(targetSbd = 'all', studentName = '') {
     const currentItem = currentExamResultData.item;
     const quizId = currentItem ? (extractQuizIdFromItem(currentItem) || currentItem.id) : "";
@@ -1189,7 +1143,6 @@ async function sendForceSubmitCommand(targetSbd = 'all', studentName = '') {
     try {
         const cleanTarget = isAll ? 'all' : String(targetSbd).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
         
-        // Tạo kênh broadcast gửi lệnh tới máy học sinh
         const channelName = `exam_force_submit_${quizId}`;
         const tempChannel = client.channel(channelName);
         
@@ -1217,14 +1170,12 @@ async function sendForceSubmitCommand(targetSbd = 'all', studentName = '') {
     }
 }
 
-// BỔ SUNG CỘT TIÊU ĐỀ: THU ÉP VÀ NÚT XÓA
 function ensureActionColumnHeaders() {
     const table = document.getElementById("admin-result-table");
     if (!table) return; 
     const theadTr = table.querySelector("thead tr"); 
     if (!theadTr) return;
 
-    // 1. CỘT THU ÉP
     let thForce = theadTr.querySelector(".th-force-submit-col");
     if (!thForce) {
         thForce = document.createElement("th");
@@ -1237,11 +1188,9 @@ function ensureActionColumnHeaders() {
                 ⚡ Thu hết
             </button>
         `;
-        // Chèn trước cột XÓA nếu có, hoặc thêm vào cuối
         theadTr.appendChild(thForce);
     }
 
-    // 2. CỘT XÓA
     let thDel = theadTr.querySelector(".th-row-action-col");
     if (!thDel) {
         thDel = document.createElement("th");
@@ -1267,9 +1216,6 @@ function startLiveDoingTicker() {
     }, 1000);
 }
 
-// =========================================================================
-// BỘ VẼ BẢNG: ĐÃ BỔ SUNG CỘT "THU ÉP" VÀO TỪNG HÀNG
-// =========================================================================
 function renderFilteredResultTable(rows) {
     ensureActionColumnHeaders();
     ensureModalZoomControlsInHeader();
@@ -1384,7 +1330,6 @@ function renderFilteredResultTable(rows) {
             let subDateMs = getSubmissionTimestamp(currentSub);
             col2_inTime = `<span style="font-family:monospace; font-weight:700; color:#0369a1;">${subDateMs ? formatDateTimeFull(subDateMs) : (currentSub.timestamp || "---")}</span>`;
             
-            // HIỂN THỊ THỜI GIAN THI: NẾU BỊ THU ÉP SẼ HIỆN 'Thu ép XpYs'
             const spentText = currentSub.completionTime || `${currentSub.spentMins || 0} phút`;
             const isForceSubmittedText = String(spentText).includes("Thu ép");
             col3_spentTime = `<span style="color:${isForceSubmittedText ? '#dc2626' : '#0f766e'}; font-weight:800;">${spentText}</span>`;
@@ -1451,7 +1396,6 @@ function renderFilteredResultTable(rows) {
         let col5_sbd = acc.sbd || (currentSub ? (currentSub.sbd || currentSub.studentId) : "---");
         let safeTitleCol10 = stripHtml(col10_cheatTime);
         
-        // CỘT NÚT THU ÉP TỪNG HÀNG
         let col_force_submit = `
             <button type="button" class="btn-force-submit-item" 
                     onclick="sendForceSubmitCommand('${col5_sbd}', '${rawName.replace(/'/g, "\\'")}')" 
@@ -1502,7 +1446,6 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
-// BỘ ĐÓNG DROPDOWN KHI BẤM RA NGOÀI VÙNG CHỌN
 document.addEventListener("click", function(event) {
     if (!event.target.closest('.attempt-picker-wrapper')) {
         document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
@@ -1510,7 +1453,6 @@ document.addEventListener("click", function(event) {
     }
 });
 
-// ĐĂNG KÝ HÀM TOÀN CỤC
 window.toggleAttemptMenu = toggleAttemptMenu;
 window.selectStudentAttempt = selectStudentAttempt;
 window.adjustModalZoomStep = adjustModalZoomStep;
@@ -1520,3 +1462,4 @@ window.fitAllRowsInView = fitAllRowsInView;
 window.renderFilteredResultTable = renderFilteredResultTable;
 window.filterResultTable = filterResultTable;
 window.sendForceSubmitCommand = sendForceSubmitCommand;
+window.triggerCollectTempDraftsToDrive = triggerCollectTempDraftsToDrive;
