@@ -2,18 +2,15 @@
 // FILE: app-config.js (BẢN FIX TRIỆT ĐỂ CHUYỂN HƯỚNG VÀ BẢO VỆ PHÒNG THI)
 // =========================================================
 
-// THÔNG SỐ DỰ ÁN SUPABASE CỦA THẦY
 const SUPABASE_URL = "https://vvjstcftecorvmepdkbi.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pLAoa3B4c6Z0N19kbLA9NA_3_npZyaC";
 
-// CẤU HÌNH WEB DỰ PHÒNG & CHUYỂN HƯỚNG TỰ ĐỘNG
 const DEFAULT_BACKUP_WEB_URL = "https://obahoan2026.vercel.app/";
 let SITE_REDIRECT_CONFIG = {
     enabled: false,
     targetUrl: DEFAULT_BACKUP_WEB_URL
 };
 
-// Khởi tạo Supabase Client an toàn
 let supabaseClient = null;
 function getSupabaseClient() {
     if (!supabaseClient && typeof window.supabase !== 'undefined' && window.supabase && window.supabase.createClient) {
@@ -27,7 +24,6 @@ function getSupabaseClient() {
 }
 getSupabaseClient();
 
-// HÀM KIỂM TRA QUYỀN ADMIN (ADMIN KHÔNG BAO GIỜ BỊ CHUYỂN HƯỚNG)
 function isSafeAdminBypass() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
@@ -43,8 +39,6 @@ function isSafeAdminBypass() {
     return false;
 }
 
-// HÀM KIỂM TRA HỌC SINH CÓ ĐANG TRONG PHÒNG THI HAY KHÔNG
-// (Bảo vệ tuyệt đối: Nhận diện cả thi.html, /thi, link rewrite để iPhone không bao giờ bị redirect nhầm)
 function isExamInProgress() {
     try {
         const currentPath = (window.location.pathname || "").toLowerCase();
@@ -62,12 +56,8 @@ function isExamInProgress() {
     return false;
 }
 
-// HÀM THỰC HIỆN CHUYỂN HƯỚNG SANG WEB DỰ PHÒNG CHO HỌC SINH
 function executeStudentRedirect(targetUrl) {
-    // 1. Thầy là Admin -> Không chuyển
     if (isSafeAdminBypass()) return;
-    
-    // 2. Học sinh đang trong phòng thi -> Không chuyển để không làm mất bài thi
     if (isExamInProgress()) return;
     
     let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
@@ -87,7 +77,6 @@ function executeStudentRedirect(targetUrl) {
     window.location.replace(destination);
 }
 
-// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE (ĐÃ FIX: KHÔNG BỊ KẸT LOCALSTORAGE CŨ)
 async function initGlobalSiteRedirectWatcher() {
     if (!isSafeAdminBypass()) {
         try {
@@ -186,7 +175,6 @@ async function initGlobalSiteRedirectWatcher() {
 
 initGlobalSiteRedirectWatcher();
 
-// CẤU HÌNH GOOGLE DRIVE & IMGBB
 const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const GOOGLE_DRIVE_TULUAN_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const IMGBB_API_KEY = "548b05b895acef8ad88e645fd274c574"; 
