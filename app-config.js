@@ -33,8 +33,8 @@ function isSafeAdminBypass() {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('admin') === '1' || window.location.hash.includes('admin')) return true;
         
-        const logged = localStorage.getItem("adminLoggedInSession");
-        const expiresAt = localStorage.getItem("admin_expires_at");
+        const logged = typeof safeLocal !== 'undefined' ? safeLocal.getItem("adminLoggedInSession") : localStorage.getItem("adminLoggedInSession");
+        const expiresAt = typeof safeLocal !== 'undefined' ? safeLocal.getItem("admin_expires_at") : localStorage.getItem("admin_expires_at");
         if (logged === "true" && expiresAt && Date.now() < parseInt(expiresAt, 10)) {
             return true;
         }
@@ -44,12 +44,18 @@ function isSafeAdminBypass() {
 }
 
 // HÀM KIỂM TRA HỌC SINH CÓ ĐANG TRONG PHÒNG THI HAY KHÔNG
-// (Bảo vệ tuyệt đối: Học sinh đang thi dở ở thi.html KHÔNG BAO GIỜ bị chuyển hướng làm hỏng bài thi)
+// (Bảo vệ tuyệt đối: Nhận diện cả thi.html, /thi, link rewrite để iPhone không bao giờ bị redirect nhầm)
 function isExamInProgress() {
     try {
-        const currentPath = window.location.pathname.toLowerCase();
-        const currentHref = window.location.href.toLowerCase();
-        if (currentPath.includes("thi.html") || currentHref.includes("thi.html")) {
+        const currentPath = (window.location.pathname || "").toLowerCase();
+        const currentHref = (window.location.href || "").toLowerCase();
+        if (
+            currentPath.includes("thi.html") || 
+            currentHref.includes("thi.html") ||
+            currentPath.endsWith("/thi") ||
+            currentHref.includes("/thi?") ||
+            currentHref.includes("autostart=")
+        ) {
             return true;
         }
     } catch(e) {}
@@ -61,7 +67,7 @@ function executeStudentRedirect(targetUrl) {
     // 1. Thầy là Admin -> Không chuyển
     if (isSafeAdminBypass()) return;
     
-    // 2. Học sinh đang trong phòng thi thi.html -> Không chuyển để không làm mất bài thi
+    // 2. Học sinh đang trong phòng thi -> Không chuyển để không làm mất bài thi
     if (isExamInProgress()) return;
     
     let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
@@ -83,16 +89,14 @@ function executeStudentRedirect(targetUrl) {
 
 // LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE (ĐÃ FIX: KHÔNG BỊ KẸT LOCALSTORAGE CŨ)
 async function initGlobalSiteRedirectWatcher() {
-    // Nếu không phải là Admin: Xóa ngay cache redirect cũ trong localStorage của học sinh
-    // để tránh việc máy học sinh tự chuyển hướng khi Thầy đã tắt trên Supabase
     if (!isSafeAdminBypass()) {
         try {
-            localStorage.removeItem("site_redirect_config");
+            if (typeof safeLocal !== 'undefined') safeLocal.removeItem("site_redirect_config");
+            else localStorage.removeItem("site_redirect_config");
         } catch(e) {}
     } else {
-        // Nếu là Admin: đọc để hiển thị đúng vị trí công tắc trên bảng điều khiển
         try {
-            const rawRedirect = localStorage.getItem("site_redirect_config");
+            const rawRedirect = typeof safeLocal !== 'undefined' ? safeLocal.getItem("site_redirect_config") : localStorage.getItem("site_redirect_config");
             if (rawRedirect) {
                 const parsed = JSON.parse(rawRedirect);
                 if (parsed) {
@@ -108,7 +112,6 @@ async function initGlobalSiteRedirectWatcher() {
     const client = getSupabaseClient();
     if (!client) return;
 
-    // Luôn truy vấn trực tiếp từ Supabase để lấy trạng thái mới nhất 100%
     try {
         const { data, error } = await client
             .from('app_key_values')
@@ -122,10 +125,10 @@ async function initGlobalSiteRedirectWatcher() {
                 targetUrl: data.value.targetUrl || DEFAULT_BACKUP_WEB_URL
             };
 
-            // Lưu cache chỉ khi là Admin
             if (isSafeAdminBypass()) {
                 try {
-                    localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                    if (typeof safeLocal !== 'undefined') safeLocal.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                    else localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
                 } catch(e) {}
             }
 
@@ -133,12 +136,10 @@ async function initGlobalSiteRedirectWatcher() {
                 updateRedirectUIElements();
             }
 
-            // CHỈ CHUYỂN HƯỚNG KHI MÁY CHỦ SUPABASE XÁC NHẬN LÀ ENABLED = TRUE
             if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                 executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
             }
         } else {
-            // Nếu không có dữ liệu hoặc Thầy chưa cấu hình -> Luôn coi là TẮT
             SITE_REDIRECT_CONFIG.enabled = false;
             if (typeof updateRedirectUIElements === 'function') {
                 updateRedirectUIElements();
@@ -148,7 +149,6 @@ async function initGlobalSiteRedirectWatcher() {
         SITE_REDIRECT_CONFIG.enabled = false;
     }
 
-    // Lắng nghe Realtime: Khi Thầy gạt BẬT hoặc TẮT, máy học sinh cập nhật ngay
     try {
         client.channel('realtime_redirect_watcher')
             .on('postgres_changes', {
@@ -166,7 +166,8 @@ async function initGlobalSiteRedirectWatcher() {
 
                     if (isSafeAdminBypass()) {
                         try {
-                            localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                            if (typeof safeLocal !== 'undefined') safeLocal.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                            else localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
                         } catch(e) {}
                     }
 
@@ -174,7 +175,6 @@ async function initGlobalSiteRedirectWatcher() {
                         updateRedirectUIElements();
                     }
 
-                    // Nếu Thầy BẬT: Chỉ chuyển những ai đang ở trang chủ (index.html), không chuyển người đang thi
                     if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                         executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
                     }
