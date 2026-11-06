@@ -183,6 +183,7 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     }
 }
 
+// BẬT LẠI HÀM NÀY: LIÊN KẾT TRỰC TIẾP TỚI HÀM GỬI NHÁP CÓ RETRY LÊN GAS
 function sendDraftToGoogleSheetTemp(draftData) {
     if (typeof sendCurrentDraftToGoogleSheetTemp === 'function') {
         sendCurrentDraftToGoogleSheetTemp();
@@ -255,10 +256,6 @@ async function initExamEngine() {
 
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-        if (!client) {
-            throw new Error("Không thể kết nối máy chủ Supabase. Vui lòng kiểm tra lại kết nối mạng!");
-        }
-
         const { data, error } = await client.from('quizzes').select('*').eq('id', quizId).single();
         if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
 
@@ -299,7 +296,7 @@ async function initExamEngine() {
         }
 
         if (typeof loadRealtimeExamConfig === 'function') {
-            await loadRealtimeExamConfig().catch(() => {});
+            await loadRealtimeExamConfig();
         }
 
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
@@ -410,9 +407,7 @@ async function checkSessionStatus(isAutostart = false) {
 
     let attempt = 1;
     if (quizId && sId) {
-        try {
-            attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
-        } catch(e) {}
+        attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
         window.currentStudentAttemptNumber = attempt;
         checkAndDisplayAttemptNoticeOnStudentCard(sId);
     }
@@ -420,8 +415,6 @@ async function checkSessionStatus(isAutostart = false) {
     const isCleared = (safeLocal.getItem("last_submission_cleared") === "true");
     if (isCleared && !isAutostart) {
         hideLoading();
-        // Đảm bảo student-card nổi lên, không bao giờ bị trắng màn hình
-        document.getElementById("student-card").style.display = "block";
         return;
     }
 
@@ -486,7 +479,6 @@ async function checkSessionStatus(isAutostart = false) {
         return; 
     }
 
-    // NẾU TỰ ĐỘNG VÀO BÀI THI (AUTOSTART)
     if (isAutostart) {
         const sIdVal = document.getElementById("student-id").value.trim();
         const sNameVal = document.getElementById("student-name").value.trim();
@@ -496,27 +488,15 @@ async function checkSessionStatus(isAutostart = false) {
                 if (success) {
                     document.getElementById("login-box").style.display = "none";
                     document.getElementById("student-card").style.display = "none";
-                    hideLoading();
-                    return;
                 } else {
                     document.getElementById("student-card").style.display = "block";
-                    hideLoading();
-                    return;
                 }
             }
+            hideLoading();
+            return;
         }
     }
-
-    // CHỐT CHẶN AN TOÀN TUYỆT ĐỐI CHỐNG TRẮNG MÀN HÌNH:
-    // Nếu không tự động vào bài thi được (do thiếu thông tin / rỗng param), LUÔN LUÔN hiển thị thẻ học sinh
     hideLoading();
-    if (EXAM_PASSWORD !== "") {
-        document.getElementById("login-box").style.display = "block";
-        document.getElementById("student-card").style.display = "none";
-    } else {
-        document.getElementById("login-box").style.display = "none";
-        document.getElementById("student-card").style.display = "block";
-    }
 }
 
 function fetchExamQuestions(isAutostart = false) { 
@@ -572,7 +552,6 @@ function fetchExamQuestions(isAutostart = false) {
             }
         }
 
-        // ĐẢM BẢO KHÔNG BỊ TRẮNG GIAO DIỆN
         if (!isAutostart) {
             if (EXAM_PASSWORD !== "") document.getElementById("login-box").style.display = "block"; 
             else document.getElementById("student-card").style.display = "block"; 

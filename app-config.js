@@ -2,15 +2,18 @@
 // FILE: app-config.js (BẢN FIX TRIỆT ĐỂ CHUYỂN HƯỚNG VÀ BẢO VỆ PHÒNG THI)
 // =========================================================
 
+// THÔNG SỐ DỰ ÁN SUPABASE CỦA THẦY
 const SUPABASE_URL = "https://vvjstcftecorvmepdkbi.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_pLAoa3B4c6Z0N19kbLA9NA_3_npZyaC";
 
+// CẤU HÌNH WEB DỰ PHÒNG & CHUYỂN HƯỚNG TỰ ĐỘNG
 const DEFAULT_BACKUP_WEB_URL = "https://obahoan2026.vercel.app/";
 let SITE_REDIRECT_CONFIG = {
     enabled: false,
     targetUrl: DEFAULT_BACKUP_WEB_URL
 };
 
+// Khởi tạo Supabase Client an toàn
 let supabaseClient = null;
 function getSupabaseClient() {
     if (!supabaseClient && typeof window.supabase !== 'undefined' && window.supabase && window.supabase.createClient) {
@@ -24,13 +27,14 @@ function getSupabaseClient() {
 }
 getSupabaseClient();
 
+// HÀM KIỂM TRA QUYỀN ADMIN (ADMIN KHÔNG BAO GIỜ BỊ CHUYỂN HƯỚNG)
 function isSafeAdminBypass() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('admin') === '1' || window.location.hash.includes('admin')) return true;
         
-        const logged = typeof safeLocal !== 'undefined' ? safeLocal.getItem("adminLoggedInSession") : localStorage.getItem("adminLoggedInSession");
-        const expiresAt = typeof safeLocal !== 'undefined' ? safeLocal.getItem("admin_expires_at") : localStorage.getItem("admin_expires_at");
+        const logged = localStorage.getItem("adminLoggedInSession");
+        const expiresAt = localStorage.getItem("admin_expires_at");
         if (logged === "true" && expiresAt && Date.now() < parseInt(expiresAt, 10)) {
             return true;
         }
@@ -39,25 +43,25 @@ function isSafeAdminBypass() {
     return false;
 }
 
+// HÀM KIỂM TRA HỌC SINH CÓ ĐANG TRONG PHÒNG THI HAY KHÔNG
+// (Bảo vệ tuyệt đối: Học sinh đang thi dở ở thi.html KHÔNG BAO GIỜ bị chuyển hướng làm hỏng bài thi)
 function isExamInProgress() {
     try {
-        const currentPath = (window.location.pathname || "").toLowerCase();
-        const currentHref = (window.location.href || "").toLowerCase();
-        if (
-            currentPath.includes("thi.html") || 
-            currentHref.includes("thi.html") ||
-            currentPath.endsWith("/thi") ||
-            currentHref.includes("/thi?") ||
-            currentHref.includes("autostart=")
-        ) {
+        const currentPath = window.location.pathname.toLowerCase();
+        const currentHref = window.location.href.toLowerCase();
+        if (currentPath.includes("thi.html") || currentHref.includes("thi.html")) {
             return true;
         }
     } catch(e) {}
     return false;
 }
 
+// HÀM THỰC HIỆN CHUYỂN HƯỚNG SANG WEB DỰ PHÒNG CHO HỌC SINH
 function executeStudentRedirect(targetUrl) {
+    // 1. Thầy là Admin -> Không chuyển
     if (isSafeAdminBypass()) return;
+    
+    // 2. Học sinh đang trong phòng thi thi.html -> Không chuyển để không làm mất bài thi
     if (isExamInProgress()) return;
     
     let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
@@ -77,15 +81,18 @@ function executeStudentRedirect(targetUrl) {
     window.location.replace(destination);
 }
 
+// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE (ĐÃ FIX: KHÔNG BỊ KẸT LOCALSTORAGE CŨ)
 async function initGlobalSiteRedirectWatcher() {
+    // Nếu không phải là Admin: Xóa ngay cache redirect cũ trong localStorage của học sinh
+    // để tránh việc máy học sinh tự chuyển hướng khi Thầy đã tắt trên Supabase
     if (!isSafeAdminBypass()) {
         try {
-            if (typeof safeLocal !== 'undefined') safeLocal.removeItem("site_redirect_config");
-            else localStorage.removeItem("site_redirect_config");
+            localStorage.removeItem("site_redirect_config");
         } catch(e) {}
     } else {
+        // Nếu là Admin: đọc để hiển thị đúng vị trí công tắc trên bảng điều khiển
         try {
-            const rawRedirect = typeof safeLocal !== 'undefined' ? safeLocal.getItem("site_redirect_config") : localStorage.getItem("site_redirect_config");
+            const rawRedirect = localStorage.getItem("site_redirect_config");
             if (rawRedirect) {
                 const parsed = JSON.parse(rawRedirect);
                 if (parsed) {
@@ -101,6 +108,7 @@ async function initGlobalSiteRedirectWatcher() {
     const client = getSupabaseClient();
     if (!client) return;
 
+    // Luôn truy vấn trực tiếp từ Supabase để lấy trạng thái mới nhất 100%
     try {
         const { data, error } = await client
             .from('app_key_values')
@@ -114,10 +122,10 @@ async function initGlobalSiteRedirectWatcher() {
                 targetUrl: data.value.targetUrl || DEFAULT_BACKUP_WEB_URL
             };
 
+            // Lưu cache chỉ khi là Admin
             if (isSafeAdminBypass()) {
                 try {
-                    if (typeof safeLocal !== 'undefined') safeLocal.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
-                    else localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                    localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
                 } catch(e) {}
             }
 
@@ -125,10 +133,12 @@ async function initGlobalSiteRedirectWatcher() {
                 updateRedirectUIElements();
             }
 
+            // CHỈ CHUYỂN HƯỚNG KHI MÁY CHỦ SUPABASE XÁC NHẬN LÀ ENABLED = TRUE
             if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                 executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
             }
         } else {
+            // Nếu không có dữ liệu hoặc Thầy chưa cấu hình -> Luôn coi là TẮT
             SITE_REDIRECT_CONFIG.enabled = false;
             if (typeof updateRedirectUIElements === 'function') {
                 updateRedirectUIElements();
@@ -138,6 +148,7 @@ async function initGlobalSiteRedirectWatcher() {
         SITE_REDIRECT_CONFIG.enabled = false;
     }
 
+    // Lắng nghe Realtime: Khi Thầy gạt BẬT hoặc TẮT, máy học sinh cập nhật ngay
     try {
         client.channel('realtime_redirect_watcher')
             .on('postgres_changes', {
@@ -155,8 +166,7 @@ async function initGlobalSiteRedirectWatcher() {
 
                     if (isSafeAdminBypass()) {
                         try {
-                            if (typeof safeLocal !== 'undefined') safeLocal.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
-                            else localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
+                            localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
                         } catch(e) {}
                     }
 
@@ -164,6 +174,7 @@ async function initGlobalSiteRedirectWatcher() {
                         updateRedirectUIElements();
                     }
 
+                    // Nếu Thầy BẬT: Chỉ chuyển những ai đang ở trang chủ (index.html), không chuyển người đang thi
                     if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                         executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
                     }
@@ -175,6 +186,7 @@ async function initGlobalSiteRedirectWatcher() {
 
 initGlobalSiteRedirectWatcher();
 
+// CẤU HÌNH GOOGLE DRIVE & IMGBB
 const GOOGLE_DRIVE_UPLOAD_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const GOOGLE_DRIVE_TULUAN_GAS_URL = "https://script.google.com/macros/s/AKfycbw7FcB-bU6IsHquCwbNeBsJ_ysoPDm-220dnQirzyHYwHwRmHcuxU-5WHogLpExHJMm/exec";
 const IMGBB_API_KEY = "548b05b895acef8ad88e645fd274c574"; 
