@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
-// ĐÃ TÍCH HỢP: LẮNG NGHE SỰ KIỆN THU BÀI TẠM THỜI (TEMP_DRAFT_CAPTURE)
+// ĐÃ TỐI ƯU HOÀN TOÀN CHO IPHONE TRONG TRÌNH DUYỆT NHÚNG MESSENGER
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -33,9 +33,13 @@ let forceSubmitRealtimeChannel = null;
 
 window.localOnlineCount = 1; 
 
-// =========================================================
-// CẤU HÌNH LẮNG NGHE REALTIME TOÀN CỤC (ĐỒNG BỘ TỪ ADMIN)
-// =========================================================
+// Hàm nhận diện In-App Browser (Messenger, Facebook, Zalo, Instagram)
+function isMobileInAppBrowser() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+    return /FBAN|FBAV|Messenger|Instagram|Zalo|Line|Twitter|Kakaotalk/i.test(ua);
+}
+
+// CẤU HÌNH LẮNG NGHE REALTIME TOÀN CỤC
 window.CURRENT_RT_CONFIG = {
     watchOnlineCount: true,
     watchForceSubmit: true,
@@ -64,10 +68,11 @@ async function loadRealtimeExamConfig() {
 
 loadRealtimeExamConfig();
 
-if ('serviceWorker' in navigator) {
+// Chỉ đăng ký Service Worker nếu KHÔNG PHẢI trình duyệt nhúng Messenger/Facebook (tránh văng WebKit)
+if ('serviceWorker' in navigator && !isMobileInAppBrowser()) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').then((reg) => {
-            console.log('✅ Service Worker đã sẵn sàng bảo lưu bài thi:', reg.scope);
+            console.log('✅ Service Worker đã sẵn sàng:', reg.scope);
         }).catch((err) => {
             console.warn('Cảnh báo Service Worker:', err);
         });
@@ -375,7 +380,6 @@ async function handleOnlineCountClick() {
 function startOnlineRealtimeWatcher(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
     if (cfg.watchOnlineCount === false) {
-        console.log("ℹ️ Đã tắt kênh đếm người cùng thi theo cấu hình Admin");
         return;
     }
 
@@ -402,15 +406,9 @@ function startOnlineRealtimeWatcher(quizId) {
         .subscribe();
 }
 
-// =========================================================
-// 2. KÊNH THU BÀI ÉP BUỘC & LẮNG NGHE SỰ KIỆN THU BÀI TẠM THỜI
-// =========================================================
 function startForceSubmitWatcher(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
-    if (cfg.watchForceSubmit === false) {
-        console.log("ℹ️ Đã tắt kênh thu bài ép buộc từ xa theo cấu hình Admin");
-        return;
-    }
+    if (cfg.watchForceSubmit === false) return;
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
@@ -424,7 +422,6 @@ function startForceSubmitWatcher(quizId) {
     const cleanSbd = (sbd || "user").replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
 
     forceSubmitRealtimeChannel = client.channel(`exam_force_submit_${quizId}`)
-        // SỰ KIỆN 1: THU BÀI ÉP BUỘC
         .on('broadcast', { event: 'FORCE_SUBMIT' }, payload => {
             if (isSubmitted) return;
             const data = payload.payload;
@@ -436,7 +433,7 @@ function startForceSubmitWatcher(quizId) {
 
             if (targetSbd === 'all' || targetSbd === mySbdClean || targetSbd === myRawSbd) {
                 if (typeof showTimeChangeToast === 'function') {
-                    showTimeChangeToast("⚡ Giáo viên đã gửi lệnh thu bài ép buộc! Đang tiến hành nộp bài ngay...");
+                    showTimeChangeToast("⚡ Giáo viên đã gửi lệnh thu bài ép buộc! Đang nộp bài...");
                 }
                 setTimeout(() => {
                     if (typeof window.executeSubmitExam === 'function') {
@@ -445,11 +442,8 @@ function startForceSubmitWatcher(quizId) {
                 }, 400);
             }
         })
-        // SỰ KIỆN 2: THU BÀI TẠM THỜI (GHI NHÁP SANG SHEET TẠM DRIVE)
         .on('broadcast', { event: 'TEMP_DRAFT_CAPTURE' }, payload => {
             if (isSubmitted || !examStartTime) return;
-            console.log("📝 [Học sinh] Nhận được lệnh thu bài tạm thời từ Giáo viên...");
-            
             if (typeof showTimeChangeToast === 'function') {
                 showTimeChangeToast("📋 Thầy vừa thu bài tạm thời! Điểm nháp đang được gửi sang Drive...");
             }
@@ -491,8 +485,6 @@ async function startPresenceSystem(sId) {
         presenceInterval = setInterval(() => { 
             updatePresence(cleanSbd); 
         }, intervalSec * 1000);
-    } else {
-        console.log("ℹ️ Đã tắt Ping nhịp tim định kỳ theo cấu hình Admin");
     }
 }
 
@@ -566,10 +558,7 @@ function showTimeChangeToast(message) {
 
 function startTimeWatcherRealtime(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
-    if (cfg.watchTimeConfig === false) {
-        console.log("ℹ️ Đã tắt lắng nghe đổi giờ thi thời gian thực theo cấu hình Admin");
-        return;
-    }
+    if (cfg.watchTimeConfig === false) return;
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
@@ -611,26 +600,31 @@ function startTimeWatcherRealtime(quizId) {
 }
 
 function setupBackPrevention() { 
-    window.history.pushState({ page: 'quiz' }, "", ""); 
-    window.addEventListener('popstate', function () { 
-        if (!isSubmitted && examStartTime) { 
-            window.history.pushState({ page: 'quiz' }, "", ""); 
-            confirm("⚠️ BẠN ĐANG TRONG BÀI THI!\nThoát hoặc quay lại sẽ làm gián đoạn bài làm của bạn."); 
-        } 
-    }); 
-    window.addEventListener('beforeunload', function (e) { 
-        if (!isSubmitted && examStartTime) { 
-            if (typeof window.__saveExamState === 'function') window.__saveExamState(); 
-            e.preventDefault(); 
-            e.returnValue = 'Bài làm của bạn chưa được nộp. Dữ liệu đã được lưu tạm an toàn.'; 
-        } 
-    }); 
+    try {
+        window.history.pushState({ page: 'quiz' }, "", ""); 
+        window.addEventListener('popstate', function () { 
+            if (!isSubmitted && examStartTime) { 
+                window.history.pushState({ page: 'quiz' }, "", ""); 
+                confirm("⚠️ BẠN ĐANG TRONG BÀI THI!\nThoát hoặc quay lại sẽ làm gián đoạn bài làm của bạn."); 
+            } 
+        }); 
+        window.addEventListener('beforeunload', function (e) { 
+            if (!isSubmitted && examStartTime) { 
+                if (typeof window.__saveExamState === 'function') window.__saveExamState(); 
+                e.preventDefault(); 
+                e.returnValue = 'Bài làm của bạn chưa được nộp. Dữ liệu đã được lưu tạm an toàn.'; 
+            } 
+        }); 
+    } catch(e) {}
+
     window.addEventListener('online', function() { 
-        document.getElementById("net-status-banner").style.display = "none"; 
+        const banner = document.getElementById("net-status-banner");
+        if (banner) banner.style.display = "none"; 
         checkPendingSubmissionOnLoad(); 
     }); 
     window.addEventListener('offline', function() { 
-        document.getElementById("net-status-banner").style.display = "block"; 
+        const banner = document.getElementById("net-status-banner");
+        if (banner) banner.style.display = "block"; 
         updateTopBackupStatus(false);
     }); 
 }
@@ -649,7 +643,7 @@ function updateTopBackupStatus(isServerConfirmed = false) {
     } else {
         const hasPending = Boolean(safeLocal.getItem("pending_exam_submission"));
         if (hasPending) {
-            if (statusText) statusText.innerText = "⚠️ Chưa gửi thành công lên máy chủ (Đã bảo lưu trên máy & IndexedDB)";
+            if (statusText) statusText.innerText = "⚠️ Chưa gửi thành công lên máy chủ (Đã bảo lưu an toàn)";
             if (statusIcon) statusIcon.innerText = "🔴";
             if (indicator) indicator.className = "backup-status-indicator pending";
             if (resendBtn) resendBtn.style.display = "inline-flex";
