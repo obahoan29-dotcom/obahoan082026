@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ PHÂN LOẠI SBD & THỜI GIAN THI)
+// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER)
 // =========================================================
 
 const safeLocal = {
@@ -14,7 +14,7 @@ const safeSession = {
     removeItem(k) { try { sessionStorage.removeItem(k); } catch(e) {} }
 };
 
-// MODULE: examIndexedDB
+// MODULE: examIndexedDB (ĐÃ BỔ SUNG TIMEOUT CHỐNG TREO 100% TRÊN IOS WEBKIT)
 const examIndexedDB = {
     dbName: 'ExamSecureOfflineDB',
     dbVersion: 2,
@@ -22,35 +22,60 @@ const examIndexedDB = {
 
     async getDB() {
         if (this._db) return this._db;
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             if (!('indexedDB' in window)) {
                 resolve(null);
                 return;
             }
-            const request = indexedDB.open(this.dbName, this.dbVersion);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains('exam_states')) {
-                    db.createObjectStore('exam_states', { keyPath: 'key' });
+            
+            let hasResolved = false;
+            // Timeout 500ms: Nếu WebKit của iOS Messenger bị đơ IndexedDB, lập tức bỏ qua dùng localStorage
+            const timeoutTimer = setTimeout(() => {
+                if (!hasResolved) {
+                    hasResolved = true;
+                    resolve(null);
                 }
-                if (!db.objectStoreNames.contains('pending_submissions')) {
-                    db.createObjectStore('pending_submissions', { keyPath: 'id' });
+            }, 500);
+
+            try {
+                const request = indexedDB.open(this.dbName, this.dbVersion);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('exam_states')) {
+                        db.createObjectStore('exam_states', { keyPath: 'key' });
+                    }
+                    if (!db.objectStoreNames.contains('pending_submissions')) {
+                        db.createObjectStore('pending_submissions', { keyPath: 'id' });
+                    }
+                    if (!db.objectStoreNames.contains('exam_history')) {
+                        db.createObjectStore('exam_history', { keyPath: 'id' });
+                    }
+                    if (!db.objectStoreNames.contains('live_drafts')) {
+                        db.createObjectStore('live_drafts', { keyPath: 'key' });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        clearTimeout(timeoutTimer);
+                        this._db = e.target.result;
+                        resolve(this._db);
+                    }
+                };
+                request.onerror = () => {
+                    if (!hasResolved) {
+                        hasResolved = true;
+                        clearTimeout(timeoutTimer);
+                        resolve(null);
+                    }
+                };
+            } catch (err) {
+                if (!hasResolved) {
+                    hasResolved = true;
+                    clearTimeout(timeoutTimer);
+                    resolve(null);
                 }
-                if (!db.objectStoreNames.contains('exam_history')) {
-                    db.createObjectStore('exam_history', { keyPath: 'id' });
-                }
-                if (!db.objectStoreNames.contains('live_drafts')) {
-                    db.createObjectStore('live_drafts', { keyPath: 'key' });
-                }
-            };
-            request.onsuccess = (e) => {
-                this._db = e.target.result;
-                resolve(this._db);
-            };
-            request.onerror = (e) => {
-                console.warn('Lỗi mở IndexedDB:', e);
-                resolve(null);
-            };
+            }
         });
     },
 
@@ -255,12 +280,10 @@ function formatScheduleDateTime(dtStr) {
     return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-// FIX YÊU CẦU 4: LẤY ĐÚNG SỐ PHÚT TỪ FILE ĐỀ, KHÔNG ÉP CỨNG VỀ 120 PHÚT
 function buildTimeBoxHtml(timeLimitMinutes, startStr, endStr, fallbackDateStr = "") {
     let mins = parseInt(timeLimitMinutes, 10);
-    // Nếu đề có thiết lập số phút (VD 90 phút ở đề 110), giữ đúng 100%, không bị ép về 120
     if (isNaN(mins) || mins <= 0) {
-        mins = 90; // Mặc định chuẩn 90 phút cho các đề kiểm tra
+        mins = 90;
     }
 
     let stFormatted = "";
@@ -311,22 +334,19 @@ function getCategoryDisplayName(catId) {
     return map[catId] || catId;
 }
 
-// FIX YÊU CẦU 2 & 3: QUY TẮC PHÂN LOẠI SBD CHUẨN XÁC 100%
 function detectCategoryFromSbd(rawSbd) {
     if (!rawSbd) return null;
     const s = String(rawSbd).trim().toLowerCase();
     
-    // Nhận diện dạng SBD lớp chính khóa
     if (s.startsWith("11a") || s.startsWith("11a_")) return "lop-11a";
     if (s.startsWith("11c") || s.startsWith("11c_")) return "lop-11c";
     if (s.startsWith("11e") || s.startsWith("11e_")) return "lop-11e";
     if (s.startsWith("10p") || s.startsWith("10p_")) return "lop-10p";
     if (s.startsWith("hsg")) return "hsg-toan-11";
 
-    // Nhận diện dạng SBD 4 chữ số các lớp dạy thêm
-    if (/^10\d{2}$/.test(s)) return "them-10"; // 1001 đến 1049
-    if (/^11\d{2}$/.test(s)) return "them-11"; // 1101 đến 1143
-    if (/^12\d{2}$/.test(s)) return "them-12"; // 1201 đến 1236
+    if (/^10\d{2}$/.test(s)) return "them-10";
+    if (/^11\d{2}$/.test(s)) return "them-11";
+    if (/^12\d{2}$/.test(s)) return "them-12";
 
     if (window.STUDENT_ACCOUNTS) {
         for (let cat in window.STUDENT_ACCOUNTS) {
@@ -340,11 +360,10 @@ function detectCategoryFromSbd(rawSbd) {
     return null;
 }
 
-// HÀM KIỂM TRA SBD CÓ THUỘC LỚP ĐANG XEM HAY KHÔNG (CHỐNG NHẢY LỚP LUNG TUNG)
 function isSbdBelongsToCategory(sbd, currentCatId) {
     if (!sbd || !currentCatId) return false;
     const detected = detectCategoryFromSbd(sbd);
-    if (!detected) return true; // SBD tự do thực sự (như TD01, 999...) cho phép gắn theo lớp thi
+    if (!detected) return true;
     return detected === currentCatId;
 }
 
