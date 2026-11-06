@@ -1,5 +1,5 @@
-/ =========================================================
-// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ PHÂN LOẠI SBD & THỜI GIAN THI)
+// =========================================================
+// FILE: app-utils.js (BẢN FIX TRIỆT ĐỂ PHÂN LOẠI SBD & THỜI GIAN THI)
 // =========================================================
 
 const safeLocal = {
@@ -14,7 +14,7 @@ const safeSession = {
     removeItem(k) { try { sessionStorage.removeItem(k); } catch(e) {} }
 };
 
-// MODULE: examIndexedDB (ĐÃ FIX TIMEOUT CHO IPHONE SAFARI PRIVATE BROWSING)
+// MODULE: examIndexedDB (CÓ TIMEOUT 1.2S CHỐNG TREO SAFARI ẨN DANH)
 const examIndexedDB = {
     dbName: 'ExamSecureOfflineDB',
     dbVersion: 2,
@@ -23,14 +23,12 @@ const examIndexedDB = {
     async getDB() {
         if (this._db) return this._db;
         return new Promise((resolve) => {
-            // Kiểm tra an toàn cho iOS Safari Private Mode / Webview
             if (!('indexedDB' in window)) {
                 resolve(null);
                 return;
             }
 
             let isResolved = false;
-            // Timeout 1.2 giây để bảo vệ Safari iOS khỏi bị treo vĩnh viễn nếu IndexedDB bị lock
             const timer = setTimeout(() => {
                 if (!isResolved) {
                     isResolved = true;
@@ -281,7 +279,6 @@ function formatScheduleDateTime(dtStr) {
     return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-// FIX YÊU CẦU 4: LẤY ĐÚNG SỐ PHÚT TỪ FILE ĐỀ, KHÔNG ÉP CỨNG VỀ 120 PHÚT
 function buildTimeBoxHtml(timeLimitMinutes, startStr, endStr, fallbackDateStr = "") {
     let mins = parseInt(timeLimitMinutes, 10);
     if (isNaN(mins) || mins <= 0) {
@@ -336,7 +333,6 @@ function getCategoryDisplayName(catId) {
     return map[catId] || catId;
 }
 
-// FIX YÊU CẦU 2 & 3: QUY TẮC PHÂN LOẠI SBD CHUẨN XÁC 100%
 function detectCategoryFromSbd(rawSbd) {
     if (!rawSbd) return null;
     const s = String(rawSbd).trim().toLowerCase();
