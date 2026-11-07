@@ -548,11 +548,11 @@
 
         <div class="view-mode-selector">
             <button class="nav-btn" onclick="toggleViewModeDropdown(event)" title="Chế độ xem tệp (Tiles, Details, List, Large...)">
-                <span id="current-view-mode-icon">🔲</span> ▾
+                <span id="current-view-mode-icon">📑</span> ▾
             </button>
             <div class="view-mode-dropdown" id="view-mode-dropdown" onclick="event.stopPropagation()">
                 <div class="view-opt-btn" id="opt-view-tiles" onclick="switchViewMode('tiles')"><span>🔲</span> <span>Gạch ngói (Tiles)</span></div>
-                <div class="view-opt-btn" id="opt-view-details" onclick="switchViewMode('details')"><span>📑</span> <span>Chi tiết (Details)</span></div>
+                <div class="view-opt-btn active" id="opt-view-details" onclick="switchViewMode('details')"><span>📑</span> <span>Chi tiết (Details)</span></div>
                 <div class="view-opt-btn" id="opt-view-large" onclick="switchViewMode('large')"><span>🖼️</span> <span>Biểu tượng lớn</span></div>
                 <div class="view-opt-btn" id="opt-view-list" onclick="switchViewMode('list')"><span>📋</span> <span>Danh sách (List)</span></div>
             </div>
@@ -620,8 +620,8 @@
 
         <!-- CỘT GIỮA: NỘI DUNG TỆP / THƯ MỤC -->
         <div class="content-pane" id="folder-content-container">
-            <div id="grid-view-wrapper" class="view-tiles"></div>
-            <div id="details-view-wrapper" class="view-details-wrapper" style="display: none;">
+            <div id="grid-view-wrapper" class="view-tiles" style="display: none;"></div>
+            <div id="details-view-wrapper" class="view-details-wrapper" style="display: block;">
                 <table class="file-table" id="file-table">
                     <thead>
                         <tr>
@@ -716,7 +716,7 @@
 
         let currentFolder = 'root';
         let currentSubFolderParam = null;
-        let viewMode = 'tiles';
+        let viewMode = 'details';
         let currentItems = [];
         let selectedItem = null;
         let navHistory = [{ folder: 'root', param: null }];
@@ -761,6 +761,7 @@
 
         // KHỞI ĐỘNG
         window.addEventListener("load", () => {
+            switchViewMode(viewMode);
             if (!checkAdminAccess()) {
                 document.getElementById("auth-gate-modal").style.display = "flex";
                 document.getElementById("gate-pass-input").focus();
@@ -784,7 +785,7 @@
             if (curOpt) curOpt.classList.add("active");
 
             const iconMap = { tiles: '🔲', details: '📑', large: '🖼️', list: '📋' };
-            document.getElementById("current-view-mode-icon").innerText = iconMap[mode] || '🔲';
+            document.getElementById("current-view-mode-icon").innerText = iconMap[mode] || '📑';
             document.getElementById("view-mode-dropdown").classList.remove("show");
 
             const gridWrap = document.getElementById("grid-view-wrapper");
