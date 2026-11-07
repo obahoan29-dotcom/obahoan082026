@@ -1,9 +1,19 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN TỐI ƯU 180+ THÍ SINH - TÍCH HỢP RETRY BACKOFF VỚI GAS & THU BÀI TẠM)
+// (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER / IOS - ZERO CRASH)
 // =========================================================
 
 let submissionCountdownTimer = null;
+
+// HÀM GIẢI MÃ THAM SỐ URL AN TOÀN TRÊN IOS SAFARI/MESSENGER (CHỐNG LỖI KÝ TỰ VIỆT)
+function safeDecodeParam(val) {
+    if (!val) return "";
+    try {
+        return decodeURIComponent(val).trim();
+    } catch(e) {
+        return String(val).trim();
+    }
+}
 
 // =========================================================================
 // HÀM ÁNH XẠ CHÍNH XÁC TÊN LỚP DỰA TRÊN SỐ BÁO DANH (ƯU TIÊN TUYỆT ĐỐI)
@@ -12,10 +22,9 @@ function getStrictStandardClassName(rawClass, rawSbd) {
     const sbd = String(rawSbd || "").trim().toLowerCase();
     const s = String(rawClass || "").trim().toLowerCase();
 
-    // 1. ƯU TIÊN SỐ 1: NHẬN DIỆN CHÍNH XÁC THEO ĐỊNH DẠNG SỐ BÁO DANH (SBD)
-    if (/^11\d{2}$/.test(sbd)) return "Thêm 11"; // 1101 đến 1143
-    if (/^10\d{2}$/.test(sbd)) return "Thêm 10"; // 1001 đến 1049
-    if (/^12\d{2}$/.test(sbd)) return "Thêm 12"; // 1201 đến 1236
+    if (/^11\d{2}$/.test(sbd)) return "Thêm 11";
+    if (/^10\d{2}$/.test(sbd)) return "Thêm 10";
+    if (/^12\d{2}$/.test(sbd)) return "Thêm 12";
 
     if (sbd.startsWith("11a") || sbd.startsWith("11a_")) return "Lớp 11A";
     if (sbd.startsWith("11c") || sbd.startsWith("11c_")) return "Lớp 11C";
@@ -85,11 +94,15 @@ async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
 
     try {
         const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
-        const { data, error } = await client
+        // Đặt timeout 1.8s để tránh treo trên iOS WebKit
+        const queryPromise = client
             .from('submissions')
             .select('id, created_at')
             .eq('quiz_id', quizId)
             .ilike('sbd', `${cleanSbd}%`);
+        
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ data: null }), 1800));
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
         if (!error && Array.isArray(data)) {
             const cloudCount = data.length;
@@ -294,6 +307,9 @@ function submitStudentLogin() {
     safeLocal.removeItem("saved_student_name"); 
     safeLocal.removeItem("saved_student_class");
     safeLocal.setItem("current_exam_student", JSON.stringify({ sbd: finalSbd, name: finalName, className: finalClass, categoryId: targetCat }));
+    safeLocal.setItem("saved_student_sbd", finalSbd);
+    safeLocal.setItem("saved_student_name", finalName);
+    safeLocal.setItem("saved_student_class", finalClass);
 
     try {
         let u = new URL(targetUrl, window.location.href);
@@ -342,9 +358,14 @@ function checkPassword() {
 }
 
 async function startExamAction(isAutostart = false) {
-    const sId = document.getElementById("student-id").value.trim();
-    const sName = document.getElementById("student-name").value.trim();
-    const sClass = document.getElementById("student-class").value.trim();
+    let sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+    let sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "";
+    let sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "";
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!sId) sId = safeDecodeParam(urlParams.get('sbd'));
+    if (!sName) sName = safeDecodeParam(urlParams.get('name'));
+    if (!sClass) sClass = safeDecodeParam(urlParams.get('class'));
 
     if (!sId || !sName || !sClass) {
         if (!isAutostart) alert("⚠️ Vui lòng nhập đầy đủ Số báo danh, Họ và tên, Lớp!");
@@ -409,6 +430,7 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
     } catch(e) {}
 }
 
+// BẢN FIX MẠNH: THÍCH ỨNG CAO ĐỘ (RESILIENT) VỚI WEBKIT TRONG MESSENGER
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -419,7 +441,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     if (startBtn) { 
         startBtn.disabled = true; 
-        startBtn.innerText = "⏳ Đang kết nối và đăng ký phòng thi với máy chủ..."; 
+        startBtn.innerText = "⏳ Đang kết nối phòng thi..."; 
     }
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
@@ -436,89 +458,43 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     window.currentStudentAttemptNumber = currentAttempt;
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (!client) {
-        const errMsg = "❌ Lỗi: Chưa thể kết nối máy chủ Supabase. Vui lòng tải lại trang!";
-        alert(errMsg);
-        if (startBtn) { startBtn.disabled = false; startBtn.innerText = "Vào Làm Bài 🚀"; }
-        document.getElementById("student-card").style.display = "block";
-        return false;
-    }
-
     const nowMs = Date.now();
-    let handshakeSuccess = false;
-    let handshakeErrorMsg = "";
 
-    for (let attemptIdx = 1; attemptIdx <= 2; attemptIdx++) {
+    // Thử gửi kết nối tới Supabase nhưng ĐẶT TIMEOUT 2 GIÂY
+    // Nếu mạng Messenger bị chậm, KHÔNG CRASH MÀ VẪN CHO HỌC SINH VÀO THI NGAY (Offline-first)!
+    if (client) {
         try {
-            await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
-            let { error: activeErr } = await client.from('active_sessions').insert([{
-                quiz_id: currentQuizId,
-                sbd: cleanSbd,
-                name: sName,
-                class_name: strictClassName,
-                category_id: currentCat,
-                is_free: isFreeStudent,
-                ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                exam_title: exactExamTitle,
-                start_time: nowMs,
-                last_ping: nowMs
-            }]);
+            const handshakeTask = async () => {
+                await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
+                await client.from('active_sessions').insert([{
+                    quiz_id: currentQuizId,
+                    sbd: cleanSbd,
+                    name: sName,
+                    class_name: strictClassName,
+                    category_id: currentCat,
+                    is_free: isFreeStudent,
+                    ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                    exam_title: exactExamTitle,
+                    start_time: nowMs,
+                    last_ping: nowMs
+                }]);
+                client.from('cheating_logs').insert([{
+                    quiz_id: currentQuizId,
+                    sbd: cleanSbd,
+                    student_name: sName,
+                    student_class: strictClassName,
+                    category_id: currentCat,
+                    switch_count: 0,
+                    duration_str: `Bắt đầu Lần ${currentAttempt}`,
+                    duration_sec: 0
+                }]).then();
+            };
 
-            if (activeErr) {
-                const { error: updErr } = await client.from('active_sessions')
-                    .update({
-                        name: sName,
-                        class_name: strictClassName,
-                        category_id: currentCat,
-                        is_free: isFreeStudent,
-                        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                        exam_title: exactExamTitle,
-                        start_time: nowMs,
-                        last_ping: nowMs
-                    })
-                    .match({ quiz_id: currentQuizId, sbd: cleanSbd });
-
-                if (!updErr) {
-                    activeErr = null;
-                } else {
-                    throw new Error("Ghi active_sessions thất bại: " + (activeErr.message || updErr.message));
-                }
-            }
-
-            client.from('cheating_logs').insert([{
-                quiz_id: currentQuizId,
-                sbd: cleanSbd,
-                student_name: sName,
-                student_class: strictClassName,
-                category_id: currentCat,
-                switch_count: 0,
-                duration_str: `Bắt đầu Lần ${currentAttempt}`,
-                duration_sec: 0
-            }]).then();
-
-            handshakeSuccess = true;
-            break;
-        } catch (err) {
-            handshakeErrorMsg = err.message || "Lỗi mạng";
-            console.warn(`Lần thử handshake ${attemptIdx} thất bại:`, err);
-            if (attemptIdx < 2) {
-                await new Promise(r => setTimeout(r, 800));
-            }
+            const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 1800));
+            await Promise.race([handshakeTask(), timeoutTask]);
+        } catch(err) {
+            console.warn("Handshake Supabase bị chậm, cho phép vào thi chế độ offline-first:", err);
         }
-    }
-
-    if (!handshakeSuccess) {
-        if (startBtn) { 
-            startBtn.disabled = false; 
-            startBtn.innerText = `Thử Vào Bài Thi Lại 🚀`; 
-        }
-
-        document.getElementById("student-card").style.display = "block";
-        document.getElementById("top-navbar").style.display = "none";
-        document.getElementById("quiz-content").style.display = "none";
-
-        alert(`⛔ KHÔNG THỂ BẮT ĐẦU BÀI THI DO MÁY CHỦ CHƯA PHẢN HỒI XÁC NHẬN!\n\nChi tiết lỗi: ${handshakeErrorMsg}\n\n👉 Em vui lòng kiểm tra lại kết nối mạng Wifi/4G và bấm lại nút "Vào Làm Bài" để hệ thống ghi tên em vào danh sách thi của Thầy nhé!`);
-        return false;
     }
 
     sendStartExamBackupLogToDrive(cleanSbd, sName, strictClassName, currentQuizId, exactExamTitle, currentAttempt);
@@ -563,6 +539,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     document.getElementById("nav-student-class").innerText = strictClassName; 
     document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
     
+    // ẨN CÁC THẺ ĐĂNG NHẬP, BẬT PHÒNG THI & THANH CÔNG CỤ
     document.getElementById("student-card").style.display = "none"; 
     const waitingCard = document.getElementById("waiting-room-card"); 
     if (waitingCard) waitingCard.style.display = "none"; 
@@ -615,7 +592,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const spentMins = Math.floor(durationSec / 60);
     const spentSecs = durationSec % 60;
     
-    // NẾU BỊ THU BÀI ÉP BUỘC THÌ GHI RÕ 'Thu ép XpYs'
     const completionTimeStr = isForceSubmit 
         ? `Thu ép ${spentMins}p${spentSecs}s` 
         : `${spentMins} phút ${spentSecs} giây`;
@@ -672,10 +648,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// =========================================================================
-// FIX CÂU A: BỘ GỬI GOOGLE DRIVE CÓ EXPONENTIAL BACKOFF VÀ JITTER RETRY
-// (Tối đa 5 lần thử, tự động giãn cách 1s - 3.5s, nhận biết status: "busy" để gửi lại)
-// =========================================================================
+// BỘ GỬI GOOGLE DRIVE CÓ EXPONENTIAL BACKOFF VÀ JITTER RETRY
 async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5, timeoutMs = 60000) {
     let lastError = null;
 
@@ -686,8 +659,6 @@ async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5
         }, timeoutMs);
 
         try {
-            console.log(`📡 [GAS Drive] Đang gửi bài thi (Lần thử ${attempt}/${maxRetries})...`);
-
             const res = await fetch(gasUrl, {
                 method: "POST",
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -700,7 +671,6 @@ async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5
             if (res.ok) {
                 const result = await res.json().catch(() => null);
                 if (result && result.status === "success") {
-                    console.log(`✅ [GAS Drive] Lưu thành công ở lần thử ${attempt}:`, result.message);
                     return result;
                 } else if (result && result.status === "busy") {
                     throw new Error("Máy chủ GAS đang bận (kẹt LockService)");
@@ -713,13 +683,10 @@ async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5
         } catch (err) {
             clearTimeout(timer);
             lastError = err;
-            console.warn(`⚠️ [GAS Drive] Lần thử ${attempt} chưa thành công: ${err.message}`);
 
             if (attempt < maxRetries) {
-                // Giãn cách ngẫu nhiên có gia tốc (Exponential Backoff + Jitter: 1s đến 3.5s)
                 const jitter = Math.floor(Math.random() * 1500);
                 const delayMs = 1200 + (attempt - 1) * 600 + jitter;
-                console.log(`⏳ Đang đợi ${delayMs}ms trước khi thử lại...`);
                 await new Promise(r => setTimeout(r, delayMs));
             }
         }
@@ -772,10 +739,6 @@ function sendSubmissionJsonToGoogleDriveFolder(payload) {
     }, 150);
 }
 
-// =========================================================================
-// FIX CÂU B: HÀM GỬI NHÁP THỜI GIAN THỰC SANG GOOGLE SHEET THU TẠM
-// (Chỉ kích hoạt khi Admin bấm nút 'Thu bài tạm', có kèm chấm tạm tính)
-// =========================================================================
 async function sendCurrentDraftToGoogleSheetTemp() {
     if (typeof isSubmitted !== 'undefined' && isSubmitted) return;
     if (typeof examStartTime === 'undefined' || !examStartTime) return;
@@ -827,7 +790,7 @@ async function sendCurrentDraftToGoogleSheetTemp() {
 
         const now = new Date();
         const pad = n => String(n).padStart(2, '0');
-        const captureTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+        const captureTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
 
         const driveDraftPayload = {
             action: "saveLiveDraftToSheet",
@@ -853,9 +816,7 @@ async function sendCurrentDraftToGoogleSheetTemp() {
             }
         };
 
-        // Gửi sang GAS với cơ chế Retry nhẹ 3 lần
         await sendToDriveWithExponentialBackoff(gasUrl, driveDraftPayload, 3, 45000);
-        console.log(`✅ Đã gửi bản thu bài tạm của ${draftData.student_name} (${draftData.sbd}) lên Google Drive!`);
     } catch(err) {
         console.warn("Lỗi gửi bản nháp tạm lên Google Sheet:", err);
     }
@@ -1047,7 +1008,6 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (normalView) normalView.style.display = "none";
     if (actionsBox) actionsBox.innerHTML = "";
 
-    // NGUYÊN TẮC JITTER DELAY: Nếu tự động nộp do hết giờ/thu ép thì giãn cách ngẫu nhiên 0.5s - 10s
     if (isForceSubmit) {
         const jitterDelayMs = Math.floor(Math.random() * 9500) + 500;
         const waitSeconds = Math.round(jitterDelayMs / 1000);
@@ -1087,7 +1047,6 @@ async function executeSubmitExam(isForceSubmit = false) {
         }).catch(() => {});
     }
 
-    // GỬI LÊN DRIVE VỚI BỘ RETRY 5 LẦN
     sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const updateProgressStatus = (text) => {
