@@ -1,7 +1,7 @@
 /* ========================================================= */
 /* FILE: style-modals.css                                    */
-/* BẢNG ĐIỀU KHIỂN ADMIN NÂNG CẤP: KÍNH MỜ TRONG SUỐT,      */
-/* MỞ RỘNG BỀ NGANG 570PX, THU GỌN CHIỀU CAO, NỔI KHỐI RÕ NÉT */
+/* BẢNG ĐIỀU KHIỂN ADMIN: 50% MÀN HÌNH PC, 80% MÀN HÌNH MOBILE */
+/* CO SÁT THEO CHIỀU DỌC TỐI ĐA - HIỂN THỊ TRỌN VẸN MỌI NÚT BẤM*/
 /* ========================================================= */
 
 /* 1. KHU VỰC ĐIỀU KHIỂN QUẢN TRỊ VIÊN */
@@ -97,7 +97,7 @@
     color: #ffffff; 
     border: none; 
     border-radius: 8px; 
-    padding: 5px 11px;
+    padding: 4px 10px;
     font-size: 11px; 
     font-weight: 800; 
     cursor: pointer; 
@@ -144,24 +144,27 @@
 }
 
 /* ========================================================= */
-/* BẢNG ĐIỀU KHIỂN ADMIN: RỘNG 570PX, KÍNH MỜ TRONG SUỐT, NỔI KHỐI */
+/* BẢNG ĐIỀU KHIỂN ADMIN TRÊN MÁY TÍNH / LAPTOP: 50% MÀN HÌNH */
+/* CO SÁT THEO CHIỀU DỌC ĐỂ KHÔNG BỊ TRÀN MÀN HÌNH LAPTOP    */
 /* ========================================================= */
 .admin-popover-panel { 
     position: absolute; 
-    top: calc(100% + 10px); 
+    top: calc(100% + 8px); 
     right: 0; 
-    width: min(570px, calc(100vw - 20px)); 
-    max-height: calc(100vh - 150px);
+    width: 50vw; 
+    max-width: 50vw;
+    min-width: 460px;
+    max-height: calc(100vh - 70px);
     overflow-y: auto; 
     overflow-x: hidden;
-    background: rgba(255, 255, 255, 0.88); 
+    background: rgba(255, 255, 255, 0.94); 
     backdrop-filter: blur(22px); 
     -webkit-backdrop-filter: blur(22px); 
-    border-radius: 20px; 
-    padding: 14px 16px; 
-    box-shadow: 0 25px 60px -10px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.95); 
+    border-radius: 16px; 
+    padding: 8px 12px; 
+    box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.95); 
     z-index: 99999; 
-    border: 1px solid rgba(226, 232, 240, 0.8);
+    border: 1px solid rgba(226, 232, 240, 0.85);
     visibility: hidden; 
     opacity: 0; 
     pointer-events: none;
@@ -179,7 +182,7 @@
 }
 
 .admin-popover-title { 
-    font-size: 1.08rem; 
+    font-size: 0.98rem; 
     font-weight: 900; 
     color: transparent; 
     background-clip: text; 
@@ -187,71 +190,71 @@
     background-image: linear-gradient(135deg, #0284c7 0%, #be123c 100%); 
     display: flex; 
     align-items: center; 
-    gap: 6px;
+    gap: 5px;
     letter-spacing: -0.2px;
 }
 
-/* KHỐI CARD CON BỌC TỪNG KHU CHỨC NĂNG NỔI BẬT */
+/* KHỐI CARD CON BỌC TỪNG KHU CHỨC NĂNG - CO GỌN TỐI ĐA */
 .admin-section-card {
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.94);
     border: 1.2px solid #e2e8f0;
-    border-radius: 13px;
-    padding: 9px 12px;
-    margin-bottom: 9px;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    border-radius: 10px;
+    padding: 5px 8px;
+    margin-bottom: 5px;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
     box-sizing: border-box;
 }
 
 /* KHỐI CARD WEB DỰ PHÒNG */
 .admin-redirect-control-box {
     background: linear-gradient(135deg, rgba(254, 242, 242, 0.95) 0%, rgba(255, 241, 242, 0.95) 100%);
-    border: 1.5px solid #fecdd3;
-    border-radius: 13px;
-    padding: 9px 12px;
-    margin-bottom: 9px;
-    box-shadow: 0 3px 10px rgba(225, 29, 72, 0.08);
+    border: 1.2px solid #fecdd3;
+    border-radius: 10px;
+    padding: 5px 8px;
+    margin-bottom: 5px;
+    box-shadow: 0 2px 6px rgba(225, 29, 72, 0.06);
 }
 .admin-redirect-toggle-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
 }
 .admin-redirect-title {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 800;
     color: #991b1b;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
 }
 .admin-redirect-subhint {
-    font-size: 10.5px;
+    font-size: 10px;
     color: #64748b;
     font-weight: 600;
-    margin-top: 4px;
-    line-height: 1.35;
+    margin-top: 3px;
+    line-height: 1.3;
 }
 
-/* TABS QUẢN TRỊ DẠNG SEGMENTED CONTROL */
+/* TABS QUẢN TRỊ */
 .admin-tabs { 
     display: flex; 
-    gap: 4px; 
-    margin-bottom: 9px; 
+    gap: 3px; 
+    margin-bottom: 5px; 
     background: rgba(226, 232, 240, 0.85); 
-    padding: 3px; 
-    border-radius: 11px;
+    padding: 2px; 
+    border-radius: 8px;
     width: 100%; 
     box-sizing: border-box;
 }
 .admin-tab-btn { 
     flex: 1 1 0; 
     min-width: 0; 
-    padding: 7px 4px; 
+    padding: 5px 3px; 
     border: none; 
-    border-radius: 8px; 
+    border-radius: 6px; 
     font-weight: 800; 
-    font-size: 0.82rem; 
+    font-size: 0.78rem; 
     cursor: pointer; 
     color: #475569; 
     background: transparent; 
@@ -265,20 +268,20 @@
 .admin-tab-btn.active { 
     background: #ffffff; 
     color: #0284c7; 
-    box-shadow: 0 2px 7px rgba(0,0,0,0.08); 
+    box-shadow: 0 1px 5px rgba(0,0,0,0.08); 
 }
 
 .admin-input-group { 
-    margin-bottom: 7px; 
+    margin-bottom: 4px; 
     width: 100%; 
 }
 .admin-input-group label { 
     display: block; 
     font-weight: 800; 
-    margin-bottom: 4px; 
-    font-size: 0.82rem; 
+    margin-bottom: 2px; 
+    font-size: 0.76rem; 
     color: #1e293b; 
-    line-height: 1.25; 
+    line-height: 1.2; 
 }
 .admin-input-group select, 
 .admin-input-group input[type="text"], 
@@ -287,13 +290,13 @@
 .admin-input-group input[type="datetime-local"] { 
     width: 100%; 
     max-width: 100%; 
-    padding: 7px 11px; 
-    border: 1.5px solid #cbd5e1; 
-    border-radius: 9px; 
+    padding: 5px 8px; 
+    border: 1.2px solid #cbd5e1; 
+    border-radius: 7px; 
     outline: none; 
     background: #ffffff; 
     font-family: inherit; 
-    font-size: 12.5px; 
+    font-size: 11.5px; 
     font-weight: 600; 
     color: #0f172a; 
     box-sizing: border-box;
@@ -306,30 +309,30 @@
     box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
 }
 
-/* LƯỚI CHECKBOX 3 CỘT RỘNG THOÁNG & THU GỌN CHIỀU CAO */
+/* LƯỚI CHECKBOX 3 CỘT RỘNG THOÁNG */
 .category-checkbox-grid { 
     display: grid; 
     grid-template-columns: repeat(3, 1fr); 
-    gap: 5px; 
-    max-height: 110px; 
+    gap: 4px; 
+    max-height: 90px; 
     overflow-y: auto; 
-    padding: 5px; 
+    padding: 3px; 
     background: #f8fafc; 
-    border: 1.5px solid #cbd5e1; 
-    border-radius: 10px; 
+    border: 1.2px solid #cbd5e1; 
+    border-radius: 8px; 
     width: 100%; 
     box-sizing: border-box;
 }
 .cat-checkbox-item { 
     display: flex; 
     align-items: center; 
-    gap: 5px; 
+    gap: 4px; 
     background: #ffffff; 
-    border: 1.5px solid #e2e8f0; 
-    border-radius: 8px; 
-    padding: 4px 6px; 
+    border: 1.2px solid #e2e8f0; 
+    border-radius: 6px; 
+    padding: 3px 5px; 
     cursor: pointer; 
-    font-size: 11px; 
+    font-size: 10.5px; 
     font-weight: 700; 
     color: #1e293b; 
     user-select: none; 
@@ -339,7 +342,6 @@
 .cat-checkbox-item:hover { 
     border-color: #38bdf8; 
     background: #f0f9ff; 
-    transform: translateY(-1px);
 }
 .cat-checkbox-item.checked { 
     border-color: #0284c7; 
@@ -347,8 +349,8 @@
     color: #0369a1; 
 }
 .cat-checkbox-item input[type="checkbox"] { 
-    width: 14px; 
-    height: 14px; 
+    width: 13px; 
+    height: 13px; 
     accent-color: #0284c7; 
     cursor: pointer; 
     flex-shrink: 0; 
@@ -361,16 +363,16 @@
     min-width: 0; 
 }
 
-/* LƯỚI AVATAR 8 CỘT HIỂN THỊ ĐỦ TRONG 2 HÀNG KHÔNG CẦN CUỘN */
+/* LƯỚI AVATAR 8 CỘT GỌN GÀNG */
 .avatar-picker-grid { 
     display: grid; 
     grid-template-columns: repeat(8, 1fr); 
-    gap: 5px; 
-    max-height: 85px; 
+    gap: 4px; 
+    max-height: 65px; 
     overflow-y: auto; 
-    padding: 5px; 
+    padding: 3px; 
     background: rgba(241, 245, 249, 0.85); 
-    border-radius: 10px; 
+    border-radius: 8px; 
     border: 1px solid #e2e8f0; 
     width: 100%; 
     box-sizing: border-box;
@@ -378,14 +380,13 @@
 .avatar-option { 
     width: 100%; 
     aspect-ratio: 1; 
-    border-radius: 8px; 
+    border-radius: 6px; 
     object-fit: cover; 
     cursor: pointer; 
-    border: 2px solid transparent; 
+    border: 1.8px solid transparent; 
     transition: all 0.15s ease; 
     background: #fff; 
-    padding: 1.5px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    padding: 1px;
 }
 .avatar-option:hover { 
     transform: scale(1.15); 
@@ -401,21 +402,21 @@
 
 .admin-btn-row { 
     display: flex; 
-    gap: 8px; 
-    margin-top: 10px; 
+    gap: 6px; 
+    margin-top: 6px; 
     width: 100%; 
 }
 .btn-admin { 
     flex: 1; 
-    padding: 8px 12px; 
-    border-radius: 9px; 
+    padding: 6px 10px; 
+    border-radius: 8px; 
     border: none; 
     font-weight: 800; 
     cursor: pointer; 
     color: #fff; 
     font-family: inherit; 
     transition: 0.15s; 
-    font-size: 0.88rem; 
+    font-size: 0.82rem; 
     text-align: center; 
 }
 .btn-cancel { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
@@ -1544,7 +1545,9 @@
     box-shadow: 0 10px 30px rgba(0,0,0,0.4);
 }
 
-/* 9. RESPONSIVE HOÀN THIỆN CHO MOBILE & IPHONE */
+/* ========================================================= */
+/* 9. RESPONSIVE HOÀN THIỆN: 80% BỀ NGANG TRÊN MOBILE & CO SÁT */
+/* ========================================================= */
 @media (max-width: 640px) {
     body { font-size: 14px; }
     
@@ -1553,31 +1556,103 @@
         max-width: 100vw;
     }
 
+    /* BẢNG ADMIN XÒE RA 80% MÀN HÌNH ĐIỆN THOẠI & CO SÁT CHIỀU DỌC */
     .admin-popover-panel { 
         position: fixed !important; 
-        top: 48px !important; 
-        right: 8px !important; 
-        left: 8px !important; 
-        width: calc(100vw - 16px) !important; 
-        max-width: calc(100vw - 16px) !important; 
-        max-height: calc(100vh - 58px) !important; 
-        border-radius: 16px; 
-        padding: 10px 10px !important;
+        top: 45px !important; 
+        right: 10px !important; 
+        left: auto !important; 
+        width: 80vw !important; 
+        max-width: 80vw !important; 
+        max-height: calc(100vh - 55px) !important; 
+        border-radius: 14px !important; 
+        padding: 6px 8px !important;
         transform: translateY(-6px) scale(0.97); 
         transform-origin: top right;
-        box-shadow: 0 16px 40px rgba(0,0,0,0.38);
+        box-shadow: 0 16px 40px rgba(0,0,0,0.38) !important;
     }
     .admin-popover-panel.show { transform: translateY(0) scale(1) !important; }
 
+    .admin-popover-title {
+        font-size: 0.95rem !important;
+    }
+
+    .admin-section-card {
+        padding: 4px 6px !important;
+        margin-bottom: 4px !important;
+        border-radius: 9px !important;
+    }
+
+    .admin-redirect-control-box {
+        padding: 4px 6px !important;
+        margin-bottom: 4px !important;
+        border-radius: 9px !important;
+    }
+
+    .admin-redirect-title {
+        font-size: 11px !important;
+    }
+    .admin-redirect-subhint {
+        font-size: 9.5px !important;
+        margin-top: 2px !important;
+    }
+
+    .admin-tabs {
+        margin-bottom: 4px !important;
+        padding: 2px !important;
+        border-radius: 8px !important;
+    }
+    .admin-tab-btn {
+        padding: 4px 2px !important;
+        font-size: 11px !important;
+    }
+
+    .admin-input-group {
+        margin-bottom: 3px !important;
+    }
+    .admin-input-group label {
+        font-size: 10.5px !important;
+        margin-bottom: 2px !important;
+    }
+    .admin-input-group input, 
+    .admin-input-group select {
+        padding: 4px 7px !important;
+        font-size: 11.5px !important;
+        border-radius: 7px !important;
+    }
+
     .category-checkbox-grid {
         grid-template-columns: repeat(2, 1fr) !important;
-        gap: 4px !important;
-        max-height: 100px !important;
+        gap: 3px !important;
+        max-height: 80px !important;
+        padding: 2px !important;
+    }
+    .cat-checkbox-item {
+        padding: 2px 4px !important;
+        font-size: 10px !important;
     }
 
     .avatar-picker-grid {
         grid-template-columns: repeat(6, 1fr) !important;
-        gap: 4px !important;
-        max-height: 70px !important;
+        gap: 3px !important;
+        max-height: 55px !important;
+        padding: 2px !important;
+    }
+
+    .admin-btn-row {
+        margin-top: 5px !important;
+        gap: 6px !important;
+    }
+    .btn-admin {
+        padding: 6px 8px !important;
+        font-size: 11.5px !important;
+        border-radius: 7px !important;
+    }
+
+    .btn-admin-header-tool,
+    .btn-open-file-explorer,
+    .admin-logout-btn {
+        padding: 3px 6px !important;
+        font-size: 10px !important;
     }
 }
