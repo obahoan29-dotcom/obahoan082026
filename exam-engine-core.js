@@ -1,7 +1,8 @@
 // =========================================================
-// FILE 3: exam-engine-core.js (BẢN TỐI ƯU 180+ THÍ SINH - TIẾT KIỆM TÀI NGUYÊN SUPABASE FREE)
+// FILE 3: exam-engine-core.js (BẢN FIX TRIỆT ĐỂ LỖI TỰ NỘP BÀI 0 ĐIỂM KHI VÀO THI)
+// ĐÃ TỐI ƯU 180+ THÍ SINH - TIẾT KIỆM TÀI NGUYÊN SUPABASE FREE
 // ĐÃ TÍCH HỢP: OFFLINE-FIRST (LƯU TỨC THÌ LOCAL/INDEXEDDB, KHÔNG GHI DB LIÊN TỤC)
-// BẢO LƯU 100% TÍNH NĂNG, GIAO DIỆN VÀ KHÔI PHỤC KHI F5 / CÚP ĐIỆN
+// BẢO VỆ 100% PHIÊN THI MỚI, CHỐNG KẸT PHIÊN CŨ HẾT GIỜ LÀM TỰ NỘP BÀI 0 ĐIỂM
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -183,7 +184,6 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     }
 }
 
-// BẬT LẠI HÀM NÀY: LIÊN KẾT TRỰC TIẾP TỚI HÀM GỬI NHÁP CÓ RETRY LÊN GAS
 function sendDraftToGoogleSheetTemp(draftData) {
     if (typeof sendCurrentDraftToGoogleSheetTemp === 'function') {
         sendCurrentDraftToGoogleSheetTemp();
@@ -390,6 +390,7 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
+// BẢN FIX TOÀN DIỆN: CHỐNG TỰ NỘP BÀI 0 ĐIỂM KHI VỪA VÀO PHÒNG THI
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -418,6 +419,7 @@ async function checkSessionStatus(isAutostart = false) {
         return;
     }
 
+    // NẾU HỌC SINH ĐĂNG NHẬP MỚI VỚI AUTOSTART: DỌN DẸP SẠCH CÁC SESSION CŨ ĐÃ HẾT GIỜ ĐỂ KHÔNG BỊ TỰ NỘP BÀI 0 ĐIỂM
     let isRestored = restoreExamStateFromStorage();
     if (!isRestored && typeof examIndexedDB !== 'undefined') {
         try {
@@ -427,6 +429,34 @@ async function checkSessionStatus(isAutostart = false) {
                 isRestored = restoreExamStateFromStorage();
             }
         } catch(e) {}
+    }
+
+    if (isRestored) { 
+        const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
+        const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
+
+        // KIỂM TRA SỐ CÂU ĐÃ LÀM
+        const currentAnsCount = Object.keys(window.SECURE_VAULT.userAnswers || {}).length;
+
+        // NẾU LÀ AUTOSTART HOẶC PHIÊN CŨ ĐÃ HẾT HẠN MÀ CHƯA LÀM GÌ -> XÓA PHIÊN RÁC, KHÔNG TỰ NỘP BÀI 0 ĐIỂM
+        if (isAutostart || timeRemaining <= 0 || isExamLocked) {
+            if (timeRemaining <= 0 || isExamLocked || currentAnsCount === 0) {
+                console.warn("⚠️ Phát hiện phiên làm bài cũ đã hết giờ hoặc bị khóa. Tự động dọn dẹp để bắt đầu phiên mới sạch 100%!");
+                safeLocal.removeItem(getStorageKey(attempt));
+                if (typeof getStorageKey === 'function') {
+                    safeLocal.removeItem(getStorageKey());
+                }
+                if (typeof examIndexedDB !== 'undefined') {
+                    examIndexedDB.removeItem('exam_states', getStorageKey(attempt)).catch(() => {});
+                }
+                isRestored = false;
+                isExamLocked = false;
+                lockedDurationSec = 0;
+                examStartTime = null;
+                window.SECURE_VAULT.userAnswers = {};
+                window.SECURE_VAULT.padletClicked = {};
+            }
+        }
     }
 
     if (isRestored) { 
@@ -453,30 +483,13 @@ async function checkSessionStatus(isAutostart = false) {
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        if (isExamLocked) {
-            lockExamInteractions();
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(true);
-            return;
+        if (timeRemaining > 0 && !isExamLocked) {
+            remainingSeconds = timeRemaining; 
+            startCountdownTimer(); 
+            startPresenceSystem(sId);
+            ensureActiveSessionAndDraft();
+            return; 
         }
-
-        if (timeRemaining <= 0) {
-            if (elapsedTimeSec > totalTimeSeconds + 3600) {
-                safeLocal.removeItem(getStorageKey(attempt));
-                alert("⚠️ Phát hiện phiên làm bài cũ đã hết hạn. Hệ thống đang tải lại phiên mới...");
-                window.location.reload();
-                return;
-            }
-            lockExamInteractions();
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(true);
-            return;
-        }
-
-        remainingSeconds = timeRemaining; 
-        startCountdownTimer(); 
-        startPresenceSystem(sId);
-
-        ensureActiveSessionAndDraft();
-        return; 
     }
 
     if (isAutostart) {
@@ -695,6 +708,7 @@ function formatHHMMSS(totalSecs) {
     return `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`; 
 }
 
+// BỘ ĐẾM GIỜ AN TOÀN: BẢO VỆ 15 GIÂY ĐẦU KHÔNG BAO GIỜ TỰ NỘP BÀI 0 ĐIỂM
 function startCountdownTimer() { 
     if (isExamLocked) return;
     const timerVal = document.getElementById("nav-timer-val"); 
@@ -715,8 +729,21 @@ function startCountdownTimer() {
             if (!isNaN(t)) currentEndTimeMs = t;
         } 
 
-        const elapsedTimeSec = Math.floor((now - examStartTime) / 1000); 
+        const elapsedTimeSec = examStartTime ? Math.floor((now - examStartTime) / 1000) : 0; 
         remainingSeconds = totalTimeSeconds - elapsedTimeSec; 
+
+        // LỚP BẢO VỆ: Nếu học sinh mới vào dưới 15 giây mà phát hiện hết giờ hoặc hết hạn, không tự nộp bài trắng
+        if (elapsedTimeSec < 15 && (remainingSeconds <= 0 || now >= currentEndTimeMs)) {
+            if (now >= currentEndTimeMs) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+                alert("⚠️ KHUNG GIỜ LÀM BÀI THI NÀY ĐÃ KẾT THÚC!\nHệ thống không nhận bài làm mới. Vui lòng quay lại trang chủ.");
+                window.location.href = "./index.html";
+                return;
+            }
+            remainingSeconds = totalTimeSeconds;
+            return;
+        }
 
         if (now >= currentEndTimeMs || remainingSeconds <= 0) { 
             clearInterval(timerInterval); 
@@ -761,10 +788,12 @@ function saveExamStateToStorage() {
     }
 }
 
+// KHÔI PHỤC TRẠNG THÁI: TỰ ĐỘNG BỎ QUA VÀ XÓA CÁC PHIÊN HẾT HẠN / ĐÃ KHÓA
 function restoreExamStateFromStorage() { 
     try { 
         const currentAttempt = window.currentStudentAttemptNumber || 1;
-        const raw = safeLocal.getItem(getStorageKey(currentAttempt)); 
+        const storageKey = getStorageKey(currentAttempt);
+        const raw = safeLocal.getItem(storageKey); 
         if (!raw) return false; 
         
         let parsed = JSON.parse(raw);
@@ -772,7 +801,7 @@ function restoreExamStateFromStorage() {
         const urlParams = new URLSearchParams(window.location.search);
         const currentUrlSbd = urlParams.get('sbd');
         if (currentUrlSbd && parsed && parsed.studentId && currentUrlSbd.toLowerCase() !== String(parsed.studentId).toLowerCase()) {
-            safeLocal.removeItem(getStorageKey(currentAttempt));
+            safeLocal.removeItem(storageKey);
             return false;
         }
 
@@ -781,8 +810,13 @@ function restoreExamStateFromStorage() {
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
 
-            if (elapsed > limitSec + 3600 && !parsed.isExamLocked) {
-                safeLocal.removeItem(getStorageKey(currentAttempt));
+            // NẾU PHIÊN ĐÃ QUÁ THỜI GIAN THI HOẶC BỊ KHÓA TỪ TRƯỚC -> HỦY BỎ ĐỂ KHÔNG TỰ NỘP BÀI 0 ĐIỂM
+            if (elapsed > limitSec || parsed.isExamLocked) {
+                console.warn("Dọn dẹp phiên thi cũ đã quá giờ hoặc bị khóa để bắt đầu bài mới.");
+                safeLocal.removeItem(storageKey);
+                if (typeof examIndexedDB !== 'undefined') {
+                    examIndexedDB.removeItem('exam_states', storageKey).catch(() => {});
+                }
                 return false;
             }
 
@@ -799,10 +833,8 @@ function restoreExamStateFromStorage() {
             if (parsed.studentName) document.getElementById("student-name").value = parsed.studentName; 
             if (parsed.studentClass) document.getElementById("student-class").value = parsed.studentClass; 
             
-            if (parsed.isExamLocked) {
-                isExamLocked = true;
-                lockedDurationSec = parsed.lockedDurationSec || 0;
-            }
+            isExamLocked = false;
+            lockedDurationSec = 0;
             return true; 
         } 
     } catch(e) {} 
