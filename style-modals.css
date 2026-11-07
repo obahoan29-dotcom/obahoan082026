@@ -364,17 +364,18 @@
     min-width: 0; 
 }
 
-/* LƯỚI AVATAR 10 CỘT GỌN GÀNG, HIỂN THỊ ĐỦ 2 HÀNG */
+/* LƯỚI AVATAR 10 CỘT GỌN GÀNG, ĐÃ TĂNG GẤP ĐÔI CHIỀU CAO HIỂN THỊ RÕ 2-3 HÀNG */
 .avatar-picker-grid { 
     display: grid; 
     grid-template-columns: repeat(10, 1fr); 
-    gap: 3px; 
-    max-height: 78px; 
+    gap: 4px; 
+    max-height: 155px; /* TĂNG GẤP ĐÔI THEO CHIỀU DỌC ĐỂ NHÌN RÕ NHIỀU HÀNG ICON */
+    min-height: 120px;
     overflow-y: auto; 
-    padding: 3px; 
+    padding: 4px; 
     background: rgba(241, 245, 249, 0.85); 
-    border-radius: 7px; 
-    border: 1px solid #e2e8f0; 
+    border-radius: 8px; 
+    border: 1.2px solid #cbd5e1; 
     width: 100%; 
     box-sizing: border-box;
 }
@@ -1547,7 +1548,7 @@
 }
 
 /* ========================================================= */
-/* 9. RESPONSIVE HOÀN THIỆN: 90% BỀ NGANG TRÊN MOBILE & CO SÁT */
+/* 9. RESPONSIVE: 90% BỀ NGANG TRÊN MOBILE & CO SÁT */
 /* ========================================================= */
 @media (max-width: 640px) {
     body { font-size: 14px; }
@@ -1635,13 +1636,13 @@
         font-size: 9.5px !important;
     }
 
-    /* LƯỚI AVATAR TRÊN MOBILE: 8 CỘT NHỎ GỌN, CAO ĐỦ HIỆN 2 HÀNG */
+    /* LƯỚI AVATAR TRÊN MOBILE: TĂNG GẤP ĐÔI THEO CHIỀU DỌC ĐỂ HIỆN RÕ NHIỀU HÀNG */
     .avatar-picker-grid {
         grid-template-columns: repeat(8, 1fr) !important;
         gap: 3px !important;
-        max-height: 80px !important;
-        min-height: 74px !important;
-        padding: 2px !important;
+        max-height: 155px !important; /* TĂNG GẤP ĐÔI CHIỀU DỌC TRÊN MOBILE */
+        min-height: 120px !important;
+        padding: 3px !important;
     }
     .avatar-option {
         padding: 1px !important;
