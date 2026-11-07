@@ -207,7 +207,11 @@ let activeStudentLogin = {
     currentMode: "class"
 };
 
+// =========================================================================
+// DANH SÁCH 50 ICON AVATAR MẪU (30 CŨ + 20 MỚI: DORAEMON, SIÊU NHÂN, XE, MÁY BAY, QUÁI DỊ...)
+// =========================================================================
 const PRESET_AVATARS = [
+    // 30 ICON GỐC
     "https://cdn-icons-png.flaticon.com/512/3771/3771417.png",
     "https://cdn-icons-png.flaticon.com/512/3755/3755251.png",
     "https://cdn-icons-png.flaticon.com/512/3062/3062279.png", 
@@ -237,7 +241,29 @@ const PRESET_AVATARS = [
     "https://cdn-icons-png.flaticon.com/512/2072/2072138.png", 
     "https://cdn-icons-png.flaticon.com/512/4207/4207253.png",
     "https://cdn-icons-png.flaticon.com/512/1048/1048953.png", 
-    "https://cdn-icons-png.flaticon.com/512/3135/3135768.png"
+    "https://cdn-icons-png.flaticon.com/512/3135/3135768.png",
+
+    // 20 ICON MỚI THÊM: DORAEMON, SIÊU NHÂN, NGƯỜI NHỆN, Ô TÔ, MÁY BAY, QUÁI DỊ...
+    "https://cdn-icons-png.flaticon.com/512/18551/18551183.png", // 31. Mèo máy Doraemon
+    "https://cdn-icons-png.flaticon.com/512/86/86489.png",         // 32. Mặt nạ Người nhện (Spider-Man)
+    "https://cdn-icons-png.flaticon.com/512/86/86511.png",         // 33. Đầu Người nhện Spider-Man
+    "https://cdn-icons-png.flaticon.com/512/1610/1610724.png",     // 34. Người dơi Batman
+    "https://cdn-icons-png.flaticon.com/512/1352/1352423.png",     // 35. Khiên Siêu nhân (Superhero Shield)
+    "https://cdn-icons-png.flaticon.com/512/1388/1388527.png",     // 36. Siêu nhân bay (Flying Hero)
+    "https://cdn-icons-png.flaticon.com/512/1538/1538432.png",     // 37. Siêu nhân áo choàng
+    "https://cdn-icons-png.flaticon.com/512/565/565524.png",       // 38. Xe ô tô thể thao đỏ
+    "https://cdn-icons-png.flaticon.com/512/2211/2211242.png",     // 39. Xe ô tô đua tốc độ
+    "https://cdn-icons-png.flaticon.com/512/3840/3840525.png",     // 40. Máy bay dân dụng (Airplane)
+    "https://cdn-icons-png.flaticon.com/512/6349/6349658.png",     // 41. Máy bay phản lực du lịch
+    "https://cdn-icons-png.flaticon.com/512/31/31069.png",         // 42. Máy bay phản lực siêu thanh
+    "https://cdn-icons-png.flaticon.com/512/4762/4762314.png",     // 43. Robot trí tuệ nhân tạo AI
+    "https://cdn-icons-png.flaticon.com/512/3070/3070648.png",     // 44. Đầu Robot tương lai
+    "https://cdn-icons-png.flaticon.com/512/3059/3059870.png",     // 45. Ninja sát thủ bóng đêm
+    "https://cdn-icons-png.flaticon.com/512/590/590685.png",       // 46. Khủng long bạo chúa T-Rex
+    "https://cdn-icons-png.flaticon.com/512/7231/7231355.png",     // 47. Quái vật quái dị (Arcade Monster)
+    "https://cdn-icons-png.flaticon.com/512/3594/3594663.png",     // 48. Người ngoài hành tinh (Alien)
+    "https://cdn-icons-png.flaticon.com/512/6667/6667735.png",     // 49. Quái vật một mắt xanh
+    "https://cdn-icons-png.flaticon.com/512/3042/3042510.png"      // 50. Hồn ma / Con ma Ghost quái dị
 ];
 const PRESET_20_AVATARS = PRESET_AVATARS.slice(0, 20);
 
