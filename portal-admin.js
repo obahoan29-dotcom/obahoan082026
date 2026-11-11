@@ -1,5 +1,6 @@
 // =========================================================
-// FILE 2: portal-admin.js (BẢN TỐI ƯU UPLOAD DRIVE & LƯU ĐẦY ĐỦ THỜI LƯỢNG)
+// FILE 2: portal-admin.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN KHI UPLOAD)
+// CHUẨN HÓA ĐÁP ÁN PHẦN 1, 2, 3, 4 NGAY TỪ LÚC TẢI LÊN DATABASE
 // =========================================================
 
 let currentEditingTimeQuizId = null;
@@ -123,6 +124,7 @@ function parseScriptOrJson(content) {
 function mergeQuestionsAndAnswers(examObj, answerObj) {
     if (!examObj || !examObj.questions || !answerObj) return examObj;
     const answersMap = answerObj.answers || answerObj.dapan || answerObj;
+    const letters = ["A", "B", "C", "D"];
 
     examObj.questions.forEach((q, idx) => {
         const qKey = String(q.id || (idx + 1));
@@ -139,8 +141,16 @@ function mergeQuestionsAndAnswers(examObj, answerObj) {
                     });
                 }
             } else {
-                if (q.type === 'multiple_choice') q.correct = itemAns;
-                else q.correctAnswer = String(itemAns);
+                if (q.type === 'multiple_choice') {
+                    if (typeof itemAns === 'string') {
+                        const u = itemAns.trim().toUpperCase();
+                        q.correct = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
+                    } else {
+                        q.correct = itemAns;
+                    }
+                } else {
+                    q.correctAnswer = String(itemAns).trim();
+                }
             }
         }
     });
@@ -207,7 +217,7 @@ function readFileAsTextAsync(file) {
     });
 }
 
-// LƯU ĐẦY ĐỦ SỐ PHÚT VÀO CẢ QUIZZES VÀ CUSTOM_LINKS
+// BỘ CHUẨN HÓA ĐÁP ÁN KHI UP ĐỀ THI LÊN SUPABASE
 async function processUpload() {
     const fileInput = document.getElementById("admin-file-upload");
     const answerFileInput = document.getElementById("admin-answer-file-upload");
@@ -232,6 +242,47 @@ async function processUpload() {
             if (parsedAnswers) parsedExam = mergeQuestionsAndAnswers(parsedExam, parsedAnswers);
         }
 
+        const letters = ["A", "B", "C", "D"];
+
+        // CHUẨN HÓA TOÀN BỘ ĐÁP ÁN CHO TỪNG CÂU
+        parsedExam.questions = parsedExam.questions.map((q, idx) => {
+            q.id = q.id || (idx + 1);
+
+            // Phần 1:
+            if (q.type === "multiple_choice" && !q.part && q.type !== "essay") {
+                if (typeof q.correct === "string") {
+                    const u = q.correct.trim().toUpperCase();
+                    q.correct = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
+                } else if (q.correct === undefined && q.answer !== undefined) {
+                    if (typeof q.answer === "string") {
+                        const u = q.answer.trim().toUpperCase();
+                        q.correct = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
+                    } else {
+                        q.correct = q.answer;
+                    }
+                }
+                if (q.correct === undefined || q.correct === null) {
+                    q.correct = 0;
+                }
+            }
+            // Phần 2:
+            else if (q.type === "true_false") {
+                if (Array.isArray(q.statements)) {
+                    q.statements.forEach(st => {
+                        let val = st.correct !== undefined ? st.correct : (st.answer !== undefined ? st.answer : true);
+                        st.correct = (val === true || String(val).toLowerCase() === "đúng" || String(val).toLowerCase() === "true");
+                    });
+                }
+            }
+            // Phần 3 & 4:
+            else {
+                let ans = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : (q.answer !== undefined ? q.answer : "0"));
+                q.correctAnswer = String(ans).trim();
+            }
+
+            return q;
+        });
+
         const customTitle = customTitleInput ? customTitleInput.value.trim() : "";
         if (customTitle) parsedExam.title = customTitle;
         if (!parsedExam.title) parsedExam.title = fileInput.files[0].name.replace(/\.[^/.]+$/, "");
@@ -241,15 +292,15 @@ async function processUpload() {
         const pad = n => String(n).padStart(2, '0');
         const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} - ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-        const finalTimeLimitMinutes = parseInt(parsedExam.timeLimitMinutes, 10) || 90;
+        const finalTimeLimitMinutes = parseInt(parsedExam.timeLimitMinutes || parsedExam.time_limit_minutes, 10) || 90;
         const examStartStr = parsedExam.examStartTimeStr || null;
         const examEndStr = parsedExam.examEndTimeStr || null;
 
-        // 1. Lưu vào bảng quizzes
+        // 1. Lưu vào bảng quizzes trên Supabase
         await supabaseClient.from('quizzes').insert([{
             id: quizId,
             title: parsedExam.title,
-            made: parsedExam.maDe || "101",
+            made: parsedExam.maDe || parsedExam.made || "101",
             time_limit_minutes: finalTimeLimitMinutes,
             exam_start_time: examStartStr,
             exam_end_time: examEndStr,
@@ -280,7 +331,7 @@ async function processUpload() {
 
         await supabaseClient.from('custom_links').insert(linkRows);
 
-        alert(`✨ Đăng đề thi "${parsedExam.title}" (${finalTimeLimitMinutes} phút) thành công!`);
+        alert(`✨ Đăng đề thi "${parsedExam.title}" (${finalTimeLimitMinutes} phút) thành công!\nToàn bộ đáp án đã được chuẩn hóa và lưu trữ an toàn.`);
         window.location.reload(); 
     } catch (err) { 
         alert("❌ Lỗi: " + err.message); 
@@ -289,7 +340,6 @@ async function processUpload() {
     }
 }
 
-// TẢI FILE PDF / WORD / ẢNH TRỰC TIẾP LÊN GOOGLE DRIVE
 async function processUploadToGoogleDrive() {
     const fileInput = document.getElementById("admin-drive-file");
     const titleInput = document.getElementById("admin-drive-title");
@@ -319,7 +369,6 @@ async function processUploadToGoogleDrive() {
                 btn.innerText = "🚀 Đang tải lên Drive...";
 
                 let mimeType = file.type || "application/octet-stream";
-                // Lấy tên hiển thị lớp đầu tiên làm thư mục con trong Drive
                 let firstCatName = (typeof getCategoryDisplayName === 'function') 
                     ? getCategoryDisplayName(categories[0]) 
                     : categories[0];
