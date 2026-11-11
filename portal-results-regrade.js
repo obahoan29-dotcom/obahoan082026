@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: portal-results-regrade.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG)
-// BỔ SUNG: XỬ LÝ NẠP FILE JSON NỘP SÓT VÀ CHẤM BÙ TỰ ĐỘNG KHÔNG BỊ ĐÈ LẦN THI
+// FILE: portal-results-regrade.js (BẢN TỐI ƯU HỖ TRỢ CHẤM LẠI & FILE DỰ PHÒNG)
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
