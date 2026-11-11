@@ -1,7 +1,6 @@
 // =========================================================
-// FILE: portal-soi-de.js
-// CÔNG CỤ SOI ĐỀ, BIÊN TẬP VÀ XEM TRƯỚC THỜI GIAN THỰC (REALTIME)
-// TÍCH HỢP: NÚT UPDATE CẬP NHẬT TRỰC TIẾP TỪ PHÒNG THI & 8 LỚP
+// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN)
+// Cập nhật tính năng Deep Clone để ngăn chặn lây chéo xóa bộ nhớ
 // =========================================================
 
 let soiDeState = {
@@ -699,12 +698,16 @@ async function updateExamFromSoiDe() {
 
         // 3. NẾU ĐANG TRONG PHÒNG THI (thi.html): CẬP NHẬT TỨC THÌ GIAO DIỆN BÀI THI
         if (typeof examData !== 'undefined' && examData) {
+            // TẠO BẢN SAO SÂU (DEEP CLONE) ĐỂ CÁCH LY BỘ NHỚ GIỮA SOI ĐỀ VÀ PHÒNG THI
+            const clonedQuestions = JSON.parse(JSON.stringify(cleanQuestions));
+            const clonedImages = JSON.parse(JSON.stringify(imagesMap));
+
             examData.title = finalTitle;
             examData.made = finalMade;
             examData.timeLimitMinutes = finalMinutes;
             examData.time_limit_minutes = finalMinutes;
-            examData.questions = cleanQuestions;
-            examData.images = imagesMap;
+            examData.questions = clonedQuestions;
+            examData.images = clonedImages;
 
             if (typeof EXAM_NAME !== 'undefined') EXAM_NAME = finalTitle;
 
@@ -717,13 +720,13 @@ async function updateExamFromSoiDe() {
             // Lưu vào bộ nhớ đệm đảo đề để không bị mất khi load lại
             try {
                 if (typeof getExamCode === 'function') {
-                    safeLocal.setItem(`shuffled_exam_${getExamCode()}`, JSON.stringify(cleanQuestions));
+                    safeLocal.setItem(`shuffled_exam_${getExamCode()}`, JSON.stringify(clonedQuestions));
                 }
             } catch(e) {}
 
             // Vẽ lại toàn bộ câu hỏi và công thức toán học
             if (typeof renderQuizLayout === 'function') {
-                renderQuizLayout(cleanQuestions, imagesMap);
+                renderQuizLayout(clonedQuestions, clonedImages);
             }
             if (window.MathJax && MathJax.typesetPromise) {
                 MathJax.typesetPromise().catch(() => {});
