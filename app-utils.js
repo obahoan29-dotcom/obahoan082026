@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER)
+// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER & FALLBACK ẢNH ĐA TẦNG)
 // =========================================================
 
 const safeLocal = {
@@ -29,7 +29,6 @@ const examIndexedDB = {
             }
             
             let hasResolved = false;
-            // Timeout 500ms: Nếu WebKit của iOS Messenger bị đơ IndexedDB, lập tức bỏ qua dùng localStorage
             const timeoutTimer = setTimeout(() => {
                 if (!hasResolved) {
                     hasResolved = true;
@@ -236,12 +235,33 @@ function getExamCandidateCodes(title, maDe, quizId) {
     return Array.from(codes);
 }
 
-function toDirectGoogleDriveImageUrl(url) {
+// BỘ CHUYỂN ĐỔI LINK ẢNH GOOGLE DRIVE ĐA TẦNG CHỐNG CHẾT LINK VĨNH VIỄN
+function extractGoogleDriveFileId(url) {
     if (!url) return "";
     let cleanUrl = String(url).trim();
     let m = cleanUrl.match(/(?:file\/d\/|id=|open\?id=|\/d\/)([a-zA-Z0-9_-]{25,})/);
-    if (m && m[1]) return `https://lh3.googleusercontent.com/d/${m[1]}`;
+    return (m && m[1]) ? m[1] : "";
+}
+
+function toDirectGoogleDriveImageUrl(url) {
+    if (!url) return "";
+    let cleanUrl = String(url).trim();
+    let fileId = extractGoogleDriveFileId(cleanUrl);
+    if (fileId) {
+        return `https://lh3.googleusercontent.com/d/${fileId}`;
+    }
     return cleanUrl;
+}
+
+function getGoogleDriveFallbackUrls(url) {
+    const fileId = extractGoogleDriveFileId(url);
+    if (!fileId) return [];
+    return [
+        `https://lh3.googleusercontent.com/d/${fileId}`,
+        `https://drive.google.com/thumbnail?id=${fileId}&sz=w1400`,
+        `https://lh3.googleusercontent.com/u/0/d/${fileId}`,
+        `https://drive.google.com/uc?export=view&id=${fileId}`
+    ];
 }
 
 function stripHtml(html) {
@@ -386,3 +406,9 @@ async function sha256Hash(message) {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+window.safeLocal = safeLocal;
+window.safeSession = safeSession;
+window.extractGoogleDriveFileId = extractGoogleDriveFileId;
+window.getGoogleDriveFallbackUrls = getGoogleDriveFallbackUrls;
+window.toDirectGoogleDriveImageUrl = toDirectGoogleDriveImageUrl;
