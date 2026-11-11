@@ -1,6 +1,6 @@
 /* ========================================================= */
 /* FILE: style-modals.css                                    */
-/* BẢNG ĐIỀU KHIỂN ADMIN: 60% MÀN HÌNH PC, 90% MÀN HÌNH MOBILE */
+/* BẢNG ĐIỀU KHIỂN ADMIN: BỀ NGANG 90% WEB CHÍNH, GIỮ NGUYÊN CHIỀU CAO */
 /* CO SÁT THEO CHIỀU DỌC TỐI ĐA - HIỂN THỊ TRỌN VẸN MỌI NÚT BẤM*/
 /* ========================================================= */
 
@@ -144,16 +144,15 @@
 }
 
 /* ========================================================= */
-/* BẢNG ĐIỀU KHIỂN ADMIN TRÊN MÁY TÍNH / LAPTOP: 60% MÀN HÌNH */
-/* CO SÁT THEO CHIỀU DỌC ĐỂ KHÔNG BỊ TRÀN MÀN HÌNH LAPTOP    */
+/* BẢNG ĐIỀU KHIỂN ADMIN: BỀ NGANG 90% WEB CHÍNH, GIỮ CHIỀU CAO */
 /* ========================================================= */
 .admin-popover-panel { 
     position: absolute; 
     top: calc(100% + 6px); 
     right: 0; 
-    width: 60vw; 
-    max-width: 60vw;
-    min-width: 480px;
+    width: min(90vw, 920px); 
+    max-width: min(90vw, 920px);
+    min-width: 0;
     max-height: calc(100vh - 55px);
     overflow-y: auto; 
     overflow-x: hidden;
@@ -364,12 +363,12 @@
     min-width: 0; 
 }
 
-/* LƯỚI AVATAR 10 CỘT GỌN GÀNG, ĐÃ TĂNG GẤP ĐÔI CHIỀU CAO HIỂN THỊ RÕ 2-3 HÀNG */
+/* LƯỚI AVATAR 10 CỘT GỌN GÀNG, CHIỀU CAO RÕ 2-3 HÀNG */
 .avatar-picker-grid { 
     display: grid; 
     grid-template-columns: repeat(10, 1fr); 
     gap: 4px; 
-    max-height: 155px; /* TĂNG GẤP ĐÔI THEO CHIỀU DỌC ĐỂ NHÌN RÕ NHIỀU HÀNG ICON */
+    max-height: 155px; 
     min-height: 120px;
     overflow-y: auto; 
     padding: 4px; 
@@ -1566,7 +1565,7 @@
         right: 5vw !important; 
         width: 90vw !important; 
         max-width: 90vw !important; 
-        min-width: 0 !important; /* QUAN TRỌNG: Triệt tiêu min-width: 480px của desktop */
+        min-width: 0 !important; 
         max-height: calc(100vh - 48px) !important; 
         border-radius: 12px !important; 
         padding: 4px 6px !important;
@@ -1636,11 +1635,11 @@
         font-size: 9.5px !important;
     }
 
-    /* LƯỚI AVATAR TRÊN MOBILE: TĂNG GẤP ĐÔI THEO CHIỀU DỌC ĐỂ HIỆN RÕ NHIỀU HÀNG */
+    /* LƯỚI AVATAR TRÊN MOBILE */
     .avatar-picker-grid {
         grid-template-columns: repeat(8, 1fr) !important;
         gap: 3px !important;
-        max-height: 155px !important; /* TĂNG GẤP ĐÔI CHIỀU DỌC TRÊN MOBILE */
+        max-height: 155px !important; 
         min-height: 120px !important;
         padding: 3px !important;
     }
