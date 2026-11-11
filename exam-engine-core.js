@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI CHẤM 0 ĐIỂM VÀ HIỂN THỊ ĐÁP ÁN UNDEFINED)
-// TÍCH HỢP: FALLBACK ĐÁP ÁN ĐA TẦNG VÀ ZERO-BLANK-SCREEN WATCHDOG
+// (BẢN FIX TRIỆT ĐỂ LỖI MẤT HÌNH ẢNH SAU VÀI NGÀY & ĐỒNG BỘ CACHE THÔNG MINH)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -298,6 +297,27 @@ function ensureSomeUIElementsAreVisible() {
     }
 }
 
+// BỘ CHUẨN HÓA 2 CHIỀU ĐẢM BẢO 100% CÂU HỎI MANG THEO LINK ẢNH TRỰC TIẾP
+function synchronizeExamQuestionsAndImages(questionsList, imageMap) {
+    if (!Array.isArray(questionsList)) return [];
+    if (!imageMap || typeof imageMap !== 'object') imageMap = {};
+
+    questionsList.forEach(q => {
+        if (!q) return;
+        const directUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
+        if (directUrl && String(directUrl).trim() !== "") {
+            q.imageUrl = directUrl.trim();
+            const effKey = q.imageKey || `img_q_${q.id}`;
+            q.imageKey = effKey;
+            if (!imageMap[effKey]) {
+                imageMap[effKey] = q.imageUrl;
+            }
+        }
+    });
+
+    return questionsList;
+}
+
 async function initExamEngine() {
     if (hasInitExamEngine) return;
     hasInitExamEngine = true;
@@ -331,8 +351,16 @@ async function initExamEngine() {
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
         if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
 
+        const rawQuestions = Array.isArray(data.questions) ? data.questions : [];
+        const rawImages = (data.images && typeof data.images === 'object') ? { ...data.images } : {};
+
+        // CHUẨN HÓA GẮN LINK ẢNH THẬT VÀO TỪNG CÂU HỎI NGAY TỪ LÚC TẢI VỀ
+        const synchronizedQuestions = synchronizeExamQuestionsAndImages(rawQuestions, rawImages);
+
         examData = {
             ...data,
+            questions: synchronizedQuestions,
+            images: rawImages,
             timeLimitMinutes: data.time_limit_minutes,
             examStartTimeStr: data.exam_start_time,
             examEndTimeStr: data.exam_end_time,
@@ -449,6 +477,9 @@ function resetToFreshLoginScreen() {
         safeLocal.removeItem(getStorageKey(2));
         safeLocal.removeItem(getStorageKey(3));
     }
+    
+    // XÓA ĐÚNG CÁC KEY SHUFFLE ĐỂ KHÔNG BỊ KẸT BẢN CŨ
+    safeLocal.removeItem(`shuffled_exam_${quizId}_${getExamCode()}`);
     safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem("last_submission_cleared");
@@ -609,6 +640,7 @@ async function checkSessionStatus(isAutostart = false) {
     ensureSomeUIElementsAreVisible();
 }
 
+// BỘ TẢI VÀ XÁO ĐỀ: ĐỒNG BỘ 100% ẢNH MỚI NHẤT TỪ SUPABASE, KHÔNG ĐỂ CACHE CŨ LÀM MẤT ẢNH
 function fetchExamQuestions(isAutostart = false) { 
     try { 
         if (typeof examData === 'undefined' || !examData) { 
@@ -636,19 +668,40 @@ function fetchExamQuestions(isAutostart = false) {
             noticeEl.innerText = `⏱ Mở từ: ${st} - Đến: ${et}`; 
             noticeEl.style.display = "inline-block"; 
         } 
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentQuizId = urlParams.get('id') || examData.id || "quiz";
         
-        const shuffleKey = `shuffled_exam_${getExamCode()}`;
+        // KEY SHUFFLE ĐỘC NHẤT GẮN CHẶT VỚI QUIZ_ID (KHÔNG BỊ TRÙNG GIỮA CÁC ĐỀ 101 KHÁC NHAU)
+        const shuffleKey = `shuffled_exam_${currentQuizId}_${getExamCode()}`;
         const isAdminMode = typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode();
         let shouldShuffle = (examData.isShuffled !== false) && !isAdminMode; 
+
+        // ĐẢM BẢO TẤT CẢ CÂU HỎI TRONG EXAMDATA ĐƯỢC GẮN ĐẦY ĐỦ ẢNH TRƯỚC
+        examData.questions = synchronizeExamQuestionsAndImages(examData.questions || [], examData.images || {});
 
         if (shouldShuffle) {
             const cachedShuffle = safeLocal.getItem(shuffleKey);
             if (cachedShuffle) {
                 try {
-                    const parsedQ = JSON.parse(cachedShuffle);
-                    if (Array.isArray(parsedQ)) {
+                    let parsedQ = JSON.parse(cachedShuffle);
+                    // ĐỒNG BỘ LẠI ĐƯỜNG LINK ẢNH MỚI NHẤT TỪ SUPABASE VÀO TỪNG CÂU HỎI TRONG BẢN CACHE
+                    if (Array.isArray(parsedQ) && parsedQ.length === examData.questions.length) {
+                        parsedQ.forEach(qCached => {
+                            const originalQ = examData.questions.find(orig => String(orig.id) === String(qCached.id));
+                            if (originalQ) {
+                                qCached.imageUrl = originalQ.imageUrl || getEffectiveImageUrl(originalQ, examData.images);
+                                qCached.imageKey = originalQ.imageKey;
+                                qCached.question = originalQ.question;
+                                qCached.options = originalQ.options;
+                                qCached.statements = originalQ.statements;
+                                qCached.explanation = originalQ.explanation;
+                            }
+                        });
                         examData.questions = parsedQ;
+                        safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
                     } else {
+                        // Nếu số lượng câu hỏi khác (giáo viên đã sửa đề), làm mới xáo đề ngay
                         shuffleExamData(examData);
                         safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
                     }
@@ -668,6 +721,8 @@ function fetchExamQuestions(isAutostart = false) {
         }
         
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
+        
+        // RENDER GIAO DIỆN PHÒNG THI KÈM KHO ẢNH HOÀN CHỈNH
         renderQuizLayout(examData.questions || [], examData.images || {}); 
         if (window.MathJax && MathJax.typesetPromise) {
             MathJax.typesetPromise().catch(() => {});
@@ -935,7 +990,6 @@ function restoreExamStateFromStorage() {
     return false; 
 }
 
-// BẢN FIX HIỂN THỊ KẾT QUẢ ĐẦY ĐỦ ĐÁP ÁN - KHÔNG BAO GIỜ UNDEFINED
 function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, finalScore, maxScale = 10.0, quizId = "") { 
     document.getElementById("top-navbar").style.display = "none"; 
     document.getElementById("quiz-content").style.display = "none"; 
@@ -1110,6 +1164,7 @@ function renderOriginalReviewScreen() {
     }
 }
 
+window.synchronizeExamQuestionsAndImages = synchronizeExamQuestionsAndImages;
 window.selectOption = selectOption;
 window.onStatementChange = onStatementChange;
 window.onShortInputChange = onShortInputChange;
