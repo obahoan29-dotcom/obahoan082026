@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI ĐÈ NÚT, CHỐNG TRÀN VÀ XÓA LỖI TRÙNG CHỮ CẬP NHẬT)
-// TỐI ƯU THANH TOP CHỨC NĂNG SIÊU GỌN 28PX & NÚT BẤM SIÊU MINI 22PX
+// (BẢN FIX TRIỆT ĐỂ LỖI BUNG MENU ĐỀ THI, THANH TOP SIÊU MINI 24PX CỰC GỌN)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 7 };
@@ -31,13 +30,13 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
-        /* HEADER THU GỌN CHUẨN SIÊU MINI 28PX, CẤM TRÀN DÒNG */
+        /* HEADER THU GỌN CHUẨN SIÊU MINI 24PX - 25PX, CẤM TRÀN DÒNG */
         .result-modal-header {
-            padding: 2px 8px !important;
-            min-height: 28px !important;
-            height: 28px !important;
-            max-height: 28px !important;
-            gap: 4px !important;
+            padding: 1px 6px !important;
+            min-height: 24px !important;
+            height: 24px !important;
+            max-height: 24px !important;
+            gap: 3px !important;
             background: #ffffff !important;
             border-bottom: 1.5px solid #e2e8f0 !important;
             box-sizing: border-box !important;
@@ -52,17 +51,19 @@ let isFitAllRowsActive = false;
             gap: 4px !important;
             min-width: 0 !important;
             flex: 1 1 auto !important;
-            height: 24px !important;
+            height: 22px !important;
             display: flex !important;
             align-items: center !important;
             overflow: hidden !important;
         }
 
         #btn-result-back-action {
-            padding: 1px 6px !important;
-            font-size: 10.5px !important;
-            border-radius: 6px !important;
-            height: 22px !important;
+            padding: 0 5px !important;
+            font-size: 10px !important;
+            border-radius: 4px !important;
+            height: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
             line-height: 1 !important;
             flex-shrink: 0 !important;
         }
@@ -83,15 +84,15 @@ let isFitAllRowsActive = false;
         }
 
         .result-modal-heading {
-            font-size: 11.5px !important;
-            line-height: 1.2 !important;
+            font-size: 11px !important;
+            line-height: 1.15 !important;
             margin: 0 !important;
             font-weight: 800 !important;
             color: #0f172a !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            max-width: 200px !important;
+            max-width: 190px !important;
             display: inline-block !important;
         }
 
@@ -100,8 +101,8 @@ let isFitAllRowsActive = false;
         }
 
         .result-modal-tools {
-            gap: 3px !important;
-            height: 24px !important;
+            gap: 2px !important;
+            height: 22px !important;
             display: flex !important;
             align-items: center !important;
             flex-shrink: 0 !important;
@@ -109,17 +110,21 @@ let isFitAllRowsActive = false;
         }
 
         .result-search-input {
-            padding: 1px 6px !important;
-            height: 22px !important;
-            font-size: 10.5px !important;
-            width: 95px !important;
-            border-radius: 6px !important;
+            padding: 0 5px !important;
+            height: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
+            font-size: 10px !important;
+            width: 85px !important;
+            border-radius: 4px !important;
             box-sizing: border-box !important;
+            line-height: 1 !important;
         }
         .result-search-input:focus {
-            width: 120px !important;
+            width: 110px !important;
         }
 
+        /* TẤT CẢ NÚT BẤM SIÊU MINI 20PX */
         #btn-toggle-autorefresh,
         .btn-refresh-result,
         .btn-regrade-exam,
@@ -127,12 +132,12 @@ let isFitAllRowsActive = false;
         .btn-export-excel,
         .btn-fit-all-rows,
         .btn-temp-draft-capture {
-            padding: 1px 6px !important;
-            font-size: 10.5px !important;
-            height: 22px !important;
-            min-height: 22px !important;
-            max-height: 22px !important;
-            border-radius: 6px !important;
+            padding: 0 5px !important;
+            font-size: 10px !important;
+            height: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
+            border-radius: 4px !important;
             line-height: 1 !important;
             white-space: nowrap !important;
             box-sizing: border-box !important;
@@ -140,28 +145,51 @@ let isFitAllRowsActive = false;
 
         .btn-table-settings,
         .btn-close-result-modal {
-            width: 22px !important;
-            height: 22px !important;
-            font-size: 11px !important;
+            width: 20px !important;
+            height: 20px !important;
+            font-size: 10px !important;
             line-height: 1 !important;
             padding: 0 !important;
             border-radius: 50% !important;
         }
 
+        /* THANH THỐNG KÊ SIÊU GỌN 19PX - 20PX */
         .result-modal-stats-bar {
-            padding: 1px 8px !important;
-            font-size: 9.5px !important;
-            min-height: 20px !important;
-            height: 20px !important;
-            max-height: 20px !important;
-            gap: 3px !important;
+            padding: 0 6px !important;
+            font-size: 9px !important;
+            min-height: 19px !important;
+            height: 19px !important;
+            max-height: 19px !important;
+            gap: 2px !important;
             background: #f8fafc !important;
             border-bottom: 1px solid #e2e8f0 !important;
             box-sizing: border-box !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            overflow-x: auto !important;
+            scrollbar-width: none !important;
+        }
+        .result-modal-stats-bar::-webkit-scrollbar { display: none !important; }
+
+        .stat-badge-item {
+            font-size: 9px !important;
+            padding: 0.5px 3.5px !important;
+            border-radius: 4px !important;
+            line-height: 1.1 !important;
+        }
+
+        #btn-view-detailed-stats {
+            padding: 1px 7px !important;
+            font-size: 9.5px !important;
+            height: 17px !important;
+            min-height: 17px !important;
+            border-radius: 12px !important;
+            line-height: 1 !important;
         }
 
         .result-modal-body {
-            padding: 3px 5px !important;
+            padding: 2px 4px !important;
             transform-origin: top center !important;
             transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
@@ -170,9 +198,9 @@ let isFitAllRowsActive = false;
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
             color: #ffffff !important;
             border: 1px solid #7dd3fc !important;
-            border-radius: 6px !important;
-            padding: 1px 6px !important;
-            font-size: 10.5px !important;
+            border-radius: 4px !important;
+            padding: 0 5px !important;
+            font-size: 10px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
             display: inline-flex !important;
@@ -181,7 +209,7 @@ let isFitAllRowsActive = false;
             box-shadow: 0 1px 3px rgba(2, 132, 199, 0.25) !important;
             transition: all 0.15s ease !important;
             user-select: none !important;
-            height: 22px !important;
+            height: 20px !important;
         }
         .btn-fit-all-rows.is-fitted {
             background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
@@ -194,20 +222,20 @@ let isFitAllRowsActive = false;
             gap: 1px !important;
             background: #1e293b !important;
             border: 1px solid #475569 !important;
-            border-radius: 6px !important;
-            padding: 1px 2px !important;
+            border-radius: 4px !important;
+            padding: 0 2px !important;
             user-select: none !important;
-            height: 22px !important;
+            height: 20px !important;
             box-sizing: border-box !important;
         }
         .btn-modal-zoom-step {
-            width: 16px !important;
-            height: 16px !important;
+            width: 14px !important;
+            height: 14px !important;
             border-radius: 50% !important;
             border: none !important;
             background: #334155 !important;
             color: #ffffff !important;
-            font-size: 10px !important;
+            font-size: 9px !important;
             font-weight: 900 !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -216,11 +244,11 @@ let isFitAllRowsActive = false;
             padding: 0 !important;
         }
         .modal-zoom-val-badge {
-            font-size: 9.5px !important;
+            font-size: 9px !important;
             font-weight: 800 !important;
             color: #38bdf8 !important;
-            padding: 0 3px !important;
-            min-width: 28px !important;
+            padding: 0 2px !important;
+            min-width: 24px !important;
             text-align: center !important;
             font-family: monospace !important;
             cursor: pointer !important;
@@ -236,75 +264,149 @@ let isFitAllRowsActive = false;
             align-items: center !important;
             gap: 2px !important;
             box-shadow: 0 1px 3px rgba(13, 148, 136, 0.25) !important;
-            height: 22px !important;
+            height: 20px !important;
+        }
+
+        /* FIX TRIỆT ĐỂ: MENU CHỌN ĐỀ THI TRÊN CỘT THỨ 2 PHẢI DISPLAY NONE MẶC ĐỊNH */
+        .exam-picker-wrapper {
+            position: relative !important;
+            display: inline-block !important;
+            width: 100% !important;
+        }
+        .btn-exam-picker {
+            background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #93c5fd !important;
+            border-radius: 5px !important;
+            padding: 1px 4px !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            width: 100% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 2px !important;
+            box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2) !important;
+            height: 19px !important;
+            line-height: 1 !important;
+        }
+        .exam-picker-menu {
+            display: none !important;
+            position: absolute !important;
+            top: calc(100% + 2px) !important;
+            left: 0 !important;
+            min-width: 250px !important;
+            max-width: 320px !important;
+            max-height: 260px !important;
+            overflow-y: auto !important;
+            background: #0f172a !important;
+            border: 1.5px solid #38bdf8 !important;
+            border-radius: 8px !important;
+            box-shadow: 0 14px 35px rgba(0, 0, 0, 0.45) !important;
+            z-index: 999999 !important;
+            padding: 3px !important;
+            text-transform: none !important;
+            box-sizing: border-box !important;
+        }
+        .exam-picker-menu.show {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 2px !important;
+        }
+        .exam-picker-item {
+            padding: 4px 7px !important;
+            border-radius: 5px !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            color: #f1f5f9 !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 5px !important;
+            transition: background 0.12s !important;
+            white-space: normal !important;
+            line-height: 1.25 !important;
+        }
+        .exam-picker-item:hover {
+            background: #334155 !important;
+            color: #38bdf8 !important;
+        }
+        .exam-picker-item.selected {
+            background: #0284c7 !important;
+            color: #ffffff !important;
+            font-weight: 800 !important;
         }
 
         .result-table.table-fitted-compact {
             --table-row-padding-y: 1px !important;
-            --table-row-padding-x: 3px !important;
+            --table-row-padding-x: 2px !important;
             width: 100% !important;
         }
         .result-table.table-fitted-compact thead th {
-            padding: 3px 3px !important;
-            font-size: 11px !important;
-            line-height: 1.15 !important;
+            padding: 2px 2px !important;
+            font-size: 10.5px !important;
+            line-height: 1.1 !important;
         }
         .result-table.table-fitted-compact tbody td {
-            padding: 1px 3px !important;
-            font-size: 11.5px !important;
-            line-height: 1.15 !important;
+            padding: 1px 2px !important;
+            font-size: 11px !important;
+            line-height: 1.1 !important;
         }
 
         .btn-force-submit-item {
             background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
             color: #ffffff !important;
             border: 1px solid #f87171 !important;
-            border-radius: 5px !important;
-            padding: 1px 6px !important;
-            font-size: 10.5px !important;
+            border-radius: 4px !important;
+            padding: 1px 5px !important;
+            font-size: 10px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
             display: inline-flex !important;
             align-items: center !important;
             gap: 2px !important;
             white-space: nowrap !important;
+            height: 19px !important;
         }
         .btn-force-submit-all-header {
             background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
             color: #ffffff !important;
             border: 1px solid #fdba74 !important;
-            border-radius: 5px !important;
-            padding: 1px 5px !important;
-            font-size: 9.5px !important;
+            border-radius: 4px !important;
+            padding: 1px 4px !important;
+            font-size: 9px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
+            height: 17px !important;
+            line-height: 1 !important;
         }
 
         .status-doing-heartbeat {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 4px !important;
-            padding: 2px 9px !important;
-            border-radius: 14px !important;
+            gap: 3px !important;
+            padding: 1px 6px !important;
+            border-radius: 12px !important;
             background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%) !important;
             color: #6b21a8 !important;
-            border: 1.5px solid #c084fc !important;
+            border: 1px solid #c084fc !important;
             font-weight: 900 !important;
-            font-size: 11px !important;
+            font-size: 10px !important;
             white-space: nowrap !important;
         }
         .live-doing-timer-pill {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 3px !important;
+            gap: 2px !important;
             color: #7e22ce !important;
             font-weight: 900 !important;
             font-family: monospace !important;
             background: #faf5ff !important;
-            padding: 2px 6px !important;
-            border-radius: 6px !important;
+            padding: 1px 5px !important;
+            border-radius: 5px !important;
             border: 1px solid #d8b4fe !important;
-            font-size: 11px !important;
+            font-size: 10px !important;
         }
     `;
     document.head.appendChild(style);
@@ -353,7 +455,7 @@ function adjustModalZoomStep(step) {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Thu gọn";
     }
     const table = document.getElementById("admin-result-table");
     if (table) table.classList.remove("table-fitted-compact");
@@ -365,7 +467,7 @@ function resetModalZoom() {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Thu gọn";
     }
     const table = document.getElementById("admin-result-table");
     if (table) table.classList.remove("table-fitted-compact");
@@ -383,7 +485,7 @@ function fitAllRowsInView(event) {
         isFitAllRowsActive = false;
         if (fitBtn) {
             fitBtn.classList.remove("is-fitted");
-            fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+            fitBtn.innerHTML = "📐 Thu gọn";
         }
         table.classList.remove("table-fitted-compact");
         resetTableSettings();
@@ -443,7 +545,7 @@ function fitAllRowsInView(event) {
 
         if (fitBtn) {
             fitBtn.classList.add("is-fitted");
-            fitBtn.innerHTML = "↺ Hiện 100%";
+            fitBtn.innerHTML = "↺ 100%";
         }
     }, 40);
 }
@@ -490,11 +592,11 @@ function ensureModalZoomControlsInHeader() {
         const zoomDiv = document.createElement("div");
         zoomDiv.className = "modal-independent-zoom-control";
         zoomDiv.id = "modal-independent-zoom-control";
-        zoomDiv.title = "Phóng to / Thu nhỏ độc lập bảng kết quả (hoặc giữ Ctrl + lăn chuột)";
+        zoomDiv.title = "Phóng to / Thu nhỏ độc lập bảng kết quả";
         zoomDiv.innerHTML = `
-            <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(-0.1)" title="Thu nhỏ bảng điểm">−</button>
+            <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(-0.1)" title="Thu nhỏ">−</button>
             <span class="modal-zoom-val-badge" id="modal-zoom-display-val" onclick="resetModalZoom()" title="Nhấp để về 100%">100%</span>
-            <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(0.1)" title="Phóng to bảng điểm">+</button>
+            <button type="button" class="btn-modal-zoom-step" onclick="adjustModalZoomStep(0.1)" title="Phóng to">+</button>
         `;
 
         const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
@@ -516,7 +618,7 @@ async function triggerCollectTempDraftsToDrive(event) {
     if (!client) return alert("❌ Chưa kết nối máy chủ Supabase!");
 
     const btn = document.getElementById("btn-temp-draft-capture");
-    if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang thu..."; }
+    if (btn) { btn.disabled = true; btn.innerText = "⏳..."; }
 
     try {
         const channelName = `exam_force_submit_${quizId}`;
@@ -739,13 +841,14 @@ function renderExamPickerDropdown() {
     const menu = document.getElementById("exam-picker-dropdown-list");
     if (!menu) return;
     menu.innerHTML = "";
+    menu.classList.remove("show"); // Luôn đóng khi render lại
 
     const currentCatId = currentExamResultData.categoryId || "them-11";
     let targetCat = DAY_THEM_CATEGORIES.find(c => c.id === currentCatId) || CHINH_KHOA_CATEGORIES.find(c => c.id === currentCatId);
     const examList = targetCat ? (targetCat.links || []).filter(l => !l.isDoc) : [];
 
     if (examList.length === 0) {
-        menu.innerHTML = `<div style="padding:8px; color:#64748b; font-size:12px; font-style:italic;">Chưa có đề thi nào trong mục ${getCategoryDisplayName(currentCatId)}</div>`;
+        menu.innerHTML = `<div style="padding:6px; color:#94a3b8; font-size:11px; font-style:italic;">Chưa có đề thi nào trong mục này</div>`;
         return;
     }
 
@@ -755,7 +858,7 @@ function renderExamPickerDropdown() {
         const isCur = currentExamResultData.item && (currentExamResultData.item.firebaseId === exam.firebaseId || currentExamResultData.item.title === exam.title);
         if (isCur) itemEl.classList.add("selected");
 
-        itemEl.innerHTML = `<span>${idx + 1}.</span> <span style="flex:1;">${exam.title}</span>`;
+        itemEl.innerHTML = `<span style="opacity:0.7;">${idx + 1}.</span> <span style="flex:1;">${exam.title}</span>`;
         itemEl.onclick = async (e) => {
             e.stopPropagation();
             menu.classList.remove("show");
@@ -778,8 +881,11 @@ async function switchExamResult(examItem) {
     const breadcrumbCat = document.getElementById("breadcrumb-category");
     if (breadcrumbCat) breadcrumbCat.innerText = displayCatName;
 
-    if (headTitle) headTitle.innerText = `📊 Kết quả: ${examItem.title || "Bài thi"}`;
+    if (headTitle) headTitle.innerText = `📊 ${examItem.title || "Bài thi"}`;
     if (currentExamBtnText) currentExamBtnText.innerText = `📑 ${examItem.title}`;
+
+    const examMenu = document.getElementById("exam-picker-dropdown-list");
+    if (examMenu) examMenu.classList.remove("show");
 
     const effectiveQuizId = extractQuizIdFromItem(examItem) || examItem.firebaseId || examItem.id;
     if (typeof startRealtimeSubmissionsListener === 'function') {
@@ -832,8 +938,12 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     const statsBar = document.getElementById("result-modal-stats-bar");
     if (statsBar) statsBar.style.display = "flex";
 
-    headTitle.innerText = `📊 Kết quả: ${item.title || "Bài thi"}`;
+    headTitle.innerText = `📊 ${item.title || "Bài thi"}`;
     if (currentExamBtnText) currentExamBtnText.innerText = `📑 ${item.title}`;
+
+    // ĐẢM BẢO MENU ĐỀ THI LUÔN ĐÓNG KHI VỪA MỞ BẢNG ĐIỂM
+    const examMenu = document.getElementById("exam-picker-dropdown-list");
+    if (examMenu) examMenu.classList.remove("show");
 
     ensureModalZoomControlsInHeader();
     applyModalZoomLevel(modalCustomZoomLevel || 1.0);
@@ -989,7 +1099,7 @@ function ensureActionColumnHeaders() {
     if (!thForce) {
         thForce = document.createElement("th");
         thForce.className = "th-force-submit-col";
-        thForce.style.width = "72px";
+        thForce.style.width = "68px";
         thForce.style.textAlign = "center";
         thForce.innerHTML = `
             <div>THU ÉP</div>
@@ -1004,7 +1114,7 @@ function ensureActionColumnHeaders() {
     if (!thDel) {
         thDel = document.createElement("th");
         thDel.className = "th-row-action-col";
-        thDel.style.width = "42px";
+        thDel.style.width = "38px";
         thDel.style.textAlign = "center";
         thDel.innerText = "XÓA";
         theadTr.appendChild(thDel);
@@ -1085,7 +1195,7 @@ function renderFilteredResultTable(rows) {
 
         if (attCount === 0) {
             if (row.isDoing) {
-                col_attemptCount = `<span class="status-doing-heartbeat" style="font-size:11px; padding:2px 7px;" title="Học sinh đang trong phòng thi">💓 Đang thi</span>`;
+                col_attemptCount = `<span class="status-doing-heartbeat" style="font-size:10px; padding:1px 5px;" title="Học sinh đang trong phòng thi">💓 Đang thi</span>`;
             } else {
                 col_attemptCount = `<span class="status-not-submitted">---</span>`;
             }
@@ -1156,10 +1266,10 @@ function renderFilteredResultTable(rows) {
             if (row.rank !== null && row.rank !== undefined) {
                 let rankNum = row.rank; 
                 let rankBadge = "";
-                if (rankNum === 1) { rankBadge = `<span style="background: linear-gradient(135deg, #fef08a, #fde047); color: #854d0e; border: 1.2px solid #eab308; padding: 1px 5px; border-radius: 8px; font-weight: 900; font-size: 0.95em;">🥇 Hạng 1</span>`; } 
-                else if (rankNum === 2) { rankBadge = `<span style="background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #334155; border: 1.2px solid #94a3b8; padding: 1px 5px; border-radius: 8px; font-weight: 900; font-size: 0.95em;">🥈 Hạng 2</span>`; } 
-                else if (rankNum === 3) { rankBadge = `<span style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #9a3412; border: 1.2px solid #fb923c; padding: 1px 5px; border-radius: 8px; font-weight: 900; font-size: 0.95em;">🥉 Hạng 3</span>`; } 
-                else { rankBadge = `<span style="background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; padding: 1px 5px; border-radius: 6px; font-weight: 800; font-size: 0.92em;">Hạng ${rankNum}</span>`; }
+                if (rankNum === 1) { rankBadge = `<span style="background: linear-gradient(135deg, #fef08a, #fde047); color: #854d0e; border: 1px solid #eab308; padding: 1px 4px; border-radius: 6px; font-weight: 900; font-size: 0.9em;">🥇 Hạng 1</span>`; } 
+                else if (rankNum === 2) { rankBadge = `<span style="background: linear-gradient(135deg, #f1f5f9, #e2e8f0); color: #334155; border: 1px solid #94a3b8; padding: 1px 4px; border-radius: 6px; font-weight: 900; font-size: 0.9em;">🥈 Hạng 2</span>`; } 
+                else if (rankNum === 3) { rankBadge = `<span style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #9a3412; border: 1px solid #fb923c; padding: 1px 4px; border-radius: 6px; font-weight: 900; font-size: 0.9em;">🥉 Hạng 3</span>`; } 
+                else { rankBadge = `<span style="background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; padding: 1px 4px; border-radius: 5px; font-weight: 800; font-size: 0.88em;">Hạng ${rankNum}</span>`; }
                 col_rank = rankBadge;
             }
 
@@ -1184,7 +1294,7 @@ function renderFilteredResultTable(rows) {
 
             if (!currentSub) {
                 col2_inTime = `<span style="color:#7e22ce; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
-                col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
+                col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
                 col6_status = row.isFreeDoing 
                     ? `<span class="status-doing-heartbeat free-mode"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>` 
                     : `<span class="status-doing-heartbeat"><span class="heartbeat-icon">💜</span> Đang thi</span>`;
@@ -1213,7 +1323,7 @@ function renderFilteredResultTable(rows) {
             </button>
         `;
 
-        let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:5px; padding:1px 5px; font-size:10.5px; font-weight:800; cursor:pointer;">🗑️</button>`;
+        let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; padding:0 4px; font-size:10px; font-weight:800; cursor:pointer; height:18px;">🗑️</button>`;
 
         tr.innerHTML = `
             <td class="td-stt">${col1_stt}</td>
