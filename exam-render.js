@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ: GIỮ NGUYÊN ĐÁP ÁN TRONG BỘ NHỚ, TỰ PHỤC HỒI ẢNH)
+// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ LỖI 0 ĐIỂM & BẢO TOÀN 100% ĐÁP ÁN VÀ HÌNH ẢNH)
 // =========================================================
 
 function isPart4Question(q) {
@@ -35,7 +35,7 @@ function renderQuizLayout(questions, imageMap) {
     if (!container) return;
     container.innerHTML = ''; 
     
-    // Tách riêng biệt 4 phần theo đúng chuẩn cấu trúc Bộ GD&ĐT
+    // Tách riêng biệt 4 phần theo chuẩn cấu trúc Bộ GD&ĐT
     const p1List = questions.filter(q => q.type === "multiple_choice" && !isPart4Question(q)); 
     const p2List = questions.filter(q => q.type === "true_false" && !isPart4Question(q)); 
     const p3List = questions.filter(q => (q.type === "short_answer") && !isPart4Question(q)); 
@@ -143,8 +143,8 @@ function renderQuizLayout(questions, imageMap) {
             window.SECURE_VAULT.questionData[q.id] = q; 
             const letters = ["A", "B", "C", "D"]; 
             
-            // LƯU ĐÁP ÁN AN TOÀN VÀO VAULT NHƯNG KHÔNG ĐƯỢC XÓA (DELETE) KHỎI OBJECT GỐC
-            if (q.correct !== undefined && q.correct !== null) {
+            // LƯU ĐÁP ÁN AN TOÀN VÀO VAULT - TUYỆT ĐỐI KHÔNG DÙNG delete q.correct
+            if (q.correct !== undefined && q.correct !== null && String(q.correct).trim() !== "") {
                 window.SECURE_VAULT.answers[`q${q.id}`] = (typeof q.correct === 'number') 
                     ? letters[q.correct] 
                     : String(q.correct).trim().toUpperCase();
@@ -159,7 +159,7 @@ function renderQuizLayout(questions, imageMap) {
                 <div class="q-header"><div class="q-num-badge">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
                 ${uploaderHTML}
                 ${imgHTML} 
-                <div class="options-list grid-2"> ${q.options.map((opt, oIdx) => `<label class="opt-label" id="opt-box-${q.id}-${letters[oIdx]}" onclick="selectOption(${q.id}, '${letters[oIdx]}')"> <input type="radio" name="q${q.id}" value="${letters[oIdx]}"> <span class="opt-circle">${letters[oIdx]}</span> <span class="opt-text">${opt}</span> </label>`).join('')} </div> 
+                <div class="options-list grid-2"> ${(q.options || []).map((opt, oIdx) => `<label class="opt-label" id="opt-box-${q.id}-${letters[oIdx]}" onclick="selectOption(${q.id}, '${letters[oIdx]}')"> <input type="radio" name="q${q.id}" value="${letters[oIdx]}"> <span class="opt-circle">${letters[oIdx]}</span> <span class="opt-text">${opt}</span> </label>`).join('')} </div> 
             </div>`; 
             displayIndex++; 
         }); 
@@ -177,6 +177,7 @@ function renderQuizLayout(questions, imageMap) {
             let rows = ""; 
             (q.statements || []).forEach((st) => { 
                 const subKey = `q${q.id}_${st.id}`; 
+                // LƯU ĐÁP ÁN AN TOÀN - TUYỆT ĐỐI KHÔNG DÙNG delete st.correct
                 if (st.correct !== undefined && st.correct !== null) {
                     window.SECURE_VAULT.answers[subKey] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng' || String(st.correct).toLowerCase() === 'true') ? "Đúng" : "Sai";
                 }
@@ -200,7 +201,8 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p3" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
         p3List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
+            // LƯU ĐÁP ÁN AN TOÀN - TUYỆT ĐỐI KHÔNG DÙNG delete q.correctAnswer
+            if (q.correctAnswer !== undefined && q.correctAnswer !== null && String(q.correctAnswer).trim() !== "") {
                 window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim();
             }
             if (q.explanation) {
@@ -236,7 +238,8 @@ function renderQuizLayout(questions, imageMap) {
         </div>`; 
         p4List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
+            // LƯU ĐÁP ÁN AN TOÀN - TUYỆT ĐỐI KHÔNG DÙNG delete q.correctAnswer
+            if (q.correctAnswer !== undefined && q.correctAnswer !== null && String(q.correctAnswer).trim() !== "") {
                 window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim(); 
             }
             if (q.explanation) {
@@ -285,7 +288,7 @@ function renderQuestionPalette(questions) {
     let html = ""; 
     let globalIdx = 1;
 
-    // PHẦN 1: HUY HIỆU VÀNG + CÂU PHẦN 1
+    // PHẦN 1
     if (p1List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p1')" title="Cuộn tới Phần I">Phần I</div>`;
         p1List.forEach(q => {
@@ -294,7 +297,7 @@ function renderQuestionPalette(questions) {
         });
     }
 
-    // PHẦN 2: HUY HIỆU VÀNG + CÂU PHẦN 2
+    // PHẦN 2
     if (p2List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p2')" title="Cuộn tới Phần II">Phần II</div>`;
         p2List.forEach(q => {
@@ -303,7 +306,7 @@ function renderQuestionPalette(questions) {
         });
     }
 
-    // PHẦN 3: HUY HIỆU VÀNG + CÂU PHẦN 3
+    // PHẦN 3
     if (p3List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p3')" title="Cuộn tới Phần III">Phần III</div>`;
         p3List.forEach(q => {
@@ -312,7 +315,7 @@ function renderQuestionPalette(questions) {
         });
     }
 
-    // PHẦN 4: HUY HIỆU VÀNG + CÂU PHẦN 4
+    // PHẦN 4
     if (p4List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p4')" title="Cuộn tới Phần IV">Phần IV</div>`;
         p4List.forEach(q => {
