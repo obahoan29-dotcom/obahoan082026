@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: portal-results-stats.js
 // THỐNG KÊ KPI, VẼ BIỂU ĐỒ PHỔ ĐIỂM CHART.JS & XUẤT EXCEL
-// CẬP NHẬT ĐỒNG BỘ "ĐANG THI" CHUẨN XÁC, SIÊU MINI 19PX
+// CẬP NHẬT ĐỒNG BỘ "ĐANG THI" CHUẨN XÁC VÀ ĐẸP MẮT
 // =========================================================
 
 function updateStatsAndRenderTable(rows) {
@@ -42,7 +42,7 @@ function updateStatsAndRenderTable(rows) {
     const unsubEl = document.getElementById("stat-unsubmitted-students"); const avgEl = document.getElementById("stat-avg-score");
     if (subEl) subEl.innerText = submittedCount; 
     
-    // Cập nhật khối "Đang thi" siêu mini không làm phồng chiều cao của thanh thống kê 19px
+    // Cập nhật khối "Đang thi" với hiệu ứng nhịp tim trên thanh thống kê
     if (doingEl) {
         doingEl.innerText = doingCount;
         const parentBadge = doingEl.closest('.stat-badge-item');
@@ -51,12 +51,12 @@ function updateStatsAndRenderTable(rows) {
                 parentBadge.style.background = "#fff1f2";
                 parentBadge.style.borderColor = "#fecdd3";
                 parentBadge.style.color = "#be123c";
-                parentBadge.innerHTML = `💓 Đang thi: <b id="stat-doing-students" style="color:#e11d48; margin-left:2px;">${doingCount}</b>`;
+                parentBadge.innerHTML = `💓 Đang thi: <b id="stat-doing-students" style="color:#e11d48; font-size:14px; margin-left:3px;">${doingCount}</b>`;
             } else {
                 parentBadge.style.background = "#fff";
                 parentBadge.style.borderColor = "#e2e8f0";
                 parentBadge.style.color = "#475569";
-                parentBadge.innerHTML = `⚡ Đang làm: <b id="stat-doing-students" style="color:#f59e0b; margin-left:2px;">0</b>`;
+                parentBadge.innerHTML = `⚡ Đang làm: <b id="stat-doing-students" style="color:#f59e0b; margin-left:3px;">0</b>`;
             }
         }
     }
@@ -198,7 +198,7 @@ function renderDetailedScoreChart() {
     if (rTbody) {
         rTbody.innerHTML = ratingGroups.map(g => {
             const percent = totalSubmitted > 0 ? ((g.count / totalSubmitted) * 100).toFixed(1) : "0.0";
-            return `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding:8px 10px; font-weight:800; color:${g.color};">${g.name}</td><td style="padding:8px 10px; font-weight:700; color:#475569;">${g.range}</td><td style="padding:8px 10px; text-align:center; font-weight:900; font-size:13px;">${g.count} hs</td><td style="padding:8px 10px; text-align:center; font-weight:800; color:#334155;">${percent}%</td><td style="padding:8px 10px; color:#64748b;">${g.note}</td></tr>`;
+            return `<tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding:10px 12px; font-weight:800; color:${g.color};">${g.name}</td><td style="padding:10px 12px; font-weight:700; color:#475569;">${g.range}</td><td style="padding:10px 12px; text-align:center; font-weight:900; font-size:14px;">${g.count} hs</td><td style="padding:10px 12px; text-align:center; font-weight:800; color:#334155;">${percent}%</td><td style="padding:10px 12px; color:#64748b;">${g.note}</td></tr>`;
         }).join('');
     }
 }
@@ -230,21 +230,9 @@ function exportResultsToExcel() {
     if (typeof XLSX !== "undefined") {
         const ws = XLSX.utils.aoa_to_sheet(excelData);
         ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 24 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 13 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 24 }, { wch: 55 }];
-        const wb = XLSX.utils.book_new(); 
-        XLSX.utils.book_append_sheet(wb, ws, "KetQuaThi");
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "KetQuaThi");
         let examTitle = (currentExamResultData.item && currentExamResultData.item.title) ? currentExamResultData.item.title : "KetQuaThi";
         let safeTitle = examTitle.replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
         XLSX.writeFile(wb, `${safeTitle}_${Date.now()}.xlsx`);
-    } else { 
-        alert("❌ Không thể tải thư viện XLSX. Vui lòng kiểm tra kết nối mạng!"); 
-    }
+    } else { alert("❌ Không thể tải thư viện XLSX. Vui lòng kiểm tra kết nối mạng!"); }
 }
-
-window.updateStatsAndRenderTable = updateStatsAndRenderTable;
-window.openDetailedStatsView = openDetailedStatsView;
-window.closeDetailedStatsView = closeDetailedStatsView;
-window.handleResultHeaderBack = handleResultHeaderBack;
-window.showDetailedStatsUI = showDetailedStatsUI;
-window.showMainResultTableUI = showMainResultTableUI;
-window.renderDetailedScoreChart = renderDetailedScoreChart;
-window.exportResultsToExcel = exportResultsToExcel;

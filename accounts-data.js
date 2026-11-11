@@ -20,7 +20,7 @@ window.STUDENT_ACCOUNTS["them-10"] = [
     { stt: 12, pass: "12", sbd: "1012", username: "Tưởng điền", name: "Tưởng điền", className: "10h" },
     { stt: 13, pass: "13", sbd: "1013", username: "Thanh Thảo", name: "Thanh Thảo", className: "10M" },
     { stt: 14, pass: "14", sbd: "1014", username: "Nguyễn Bảo", name: "Nguyễn Quốc Bảo", className: "10B" },
-    { stt: 15, pass: "15", sbd: "1015", username: "Đinh Đạt", name: "Đinh Đạt", className: "10D" },
+    { stt: 15, pass: "15", sbd: "1015", username: "Đức Nam", name: "Đức Nam", className: "10H" },
     { stt: 16, pass: "16", sbd: "1016", username: "Ngọc Diệp", name: "Ngọc Diệp k cư", className: "10M" },
     { stt: 17, pass: "17", sbd: "1017", username: "Tạ Tuấn Anh", name: "Tạ Tuấn Anh", className: "10A" },
     { stt: 18, pass: "18", sbd: "1018", username: "Kim Oanh", name: "Kim Oanh", className: "10PP" },
@@ -49,8 +49,8 @@ window.STUDENT_ACCOUNTS["them-10"] = [
     { stt: 41, pass: "41", sbd: "1041", username: "Tuấn vũ", name: "Tuấn vũ", className: "10E" },
     { stt: 42, pass: "42", sbd: "1042", username: "Lại Thư", name: "Lại Thư", className: "10a" },
     { stt: 43, pass: "43", sbd: "1043", username: "Sơn", name: "Sơn", className: "10PP" },
-    { stt: 44, pass: "44", sbd: "1044", username: "Vũ Bách", name: "Vũ Xuân Bách", className: "10PP" },
-    { stt: 45, pass: "45", sbd: "1045", username: "Quốc Khánh", name: "Nguyễn Quốc Khánh", className: "10E" },
+
+
     
     { stt: 99, pass: "99", sbd: "1099", username: "Nguyễn Doanh", name: "Nguyễn Doanh", className: "10C" }
 ];
@@ -97,8 +97,7 @@ window.STUDENT_ACCOUNTS["them-11"] = [
     { stt: 39, pass: "39", sbd: "1139", username: "NT Quỳnh", name: "NT Quỳnh", className: "11G" },
     { stt: 40, pass: "40", sbd: "1140", username: "Nguyễn Lâm", name: "Nguyễn Lâm", className: "11cC" },
     { stt: 41, pass: "41", sbd: "1141", username: "Phạm Sơn Trường", name: "Phạm Sơn Trường", className: "11cC" },
-    { stt: 42, pass: "42", sbd: "1142", username: "Gia Huy", name: "Gia Huy", className: "11cC" },
-    { stt: 43, pass: "43", sbd: "1142", username: "Đức", name: "Đức", className: "11h" }
+    { stt: 42, pass: "42", sbd: "1142", username: "Gia Huy", name: "Gia Huy", className: "11cC" }
 ];
 
 window.STUDENT_ACCOUNTS["them-12"] = [
