@@ -77,7 +77,6 @@
             filter: brightness(0.92);
         }
 
-        /* NÚT THAO TÁC ADMIN TRÊN PANEL */
         .btn-open-file-explorer {
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
             color: #ffffff;
@@ -148,7 +147,6 @@
             margin-bottom: 4px;
         }
 
-        /* TỐI ƯU CÔNG TẮC CHO PHÉP CLICK TRỰC TIẾP NHẠY 100% */
         .mini-switch {
             cursor: pointer;
             user-select: none;
@@ -217,25 +215,20 @@
     <!-- CÁC MODULE JAVASCRIPT HỆ THỐNG PHÂN THEO NHIỆM VỤ -->
     <script src="app-config.js"></script>
     <script src="app-utils.js"></script>
-    <!-- MODULE BIỂU ĐIỂM ĐỀ THI MỚI TẠO -->
     <script src="portal-exam-scoring.js"></script>
     <script src="portal-analytics.js"></script>
 
-    <!-- FILE MỚI: QUẢN LÝ RIÊNG ĐĂNG NHẬP, VÀO THI, NỘP BÀI 7S & NATIVE SHARE -->
     <script src="student-exam-flow.js"></script>
 
     <script src="portal-auth.js"></script>
     <script src="portal-admin.js"></script>
-    <!-- MODULE DỌN DẸP DATABASE AN TOÀN -->
     <script src="portal-db-cleanup.js"></script>
     
-    <!-- MODULE BẢNG KẾT QUẢ THI ĐÃ TÁCH NHỎ -->
     <script src="portal-results-core.js"></script>
     <script src="portal-results-table.js"></script>
     <script src="portal-results-stats.js"></script>
     <script src="portal-results-regrade.js"></script>
     
-    <!-- MODULE GIAO DIỆN, BÀI BÁO & NỘP TỰ LUẬN DRIVE 5TB MỚI -->
     <script src="portal-tuluan-core.js"></script>
     <script src="portal-tuluan-admin.js"></script>
     <script src="portal-tuluan-upload.js"></script>
@@ -246,7 +239,6 @@
     <script src="portal-ui-article.js"></script>
     <script src="portal-exam-printer.js"></script>
 
-    <!-- MODULE MỚI: CÔNG CỤ SOI ĐỀ THI & BIÊN TẬP THỜI GIAN THỰC -->
     <script src="portal-soi-de.js"></script>
 </head>
 <body>
@@ -301,7 +293,7 @@
             
             <div class="admin-gear-btn" id="gear-btn" onclick="toggleAdminPanel(event)" title="Quản trị viên">⚙️</div>
 
-            <!-- BẢNG QUẢN TRỊ XÒE RA: NÂNG CẤP KÍNH MỜ, RỘNG 570PX, NỔI KHỐI RÕ NÉT -->
+            <!-- BẢNG QUẢN TRỊ XÒE RA -->
             <div class="admin-popover-panel" id="admin-popover-panel">
                 <!-- KHỐI 1: HEADER PANEL -->
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 6px; flex-wrap: wrap;">
@@ -309,12 +301,10 @@
                     <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn-admin-header-tool" onclick="changeAdminPassword(event)" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow: 0 2px 6px rgba(245, 158, 11, 0.32);">🔑 Đổi MK</button>
                         
-                        <!-- NÚT MỞ TRANG RIÊNG QUẢN LÝ TỆP (FILE EXPLORER) -->
                         <a href="./admin-files.html" target="_blank" class="btn-open-file-explorer" title="Mở trang quản lý tệp và cấu trúc thư mục Supabase như Windows Explorer">
                             📂 Quản lý tệp
                         </a>
 
-                        <!-- NÚT CHỈNH LẮNG NGHE REALTIME TIẾT KIỆM BĂNG THÔNG -->
                         <button type="button" class="btn-admin-header-tool" onclick="openRealtimeConfigModal(event)" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); box-shadow: 0 2px 6px rgba(2, 132, 199, 0.32);" title="Bật/tắt các kênh kết nối Realtime & điều chỉnh tần suất Ping để tiết kiệm băng thông">
                             📡 Chỉnh lắng nghe
                         </button>
@@ -323,7 +313,7 @@
                     </div>
                 </div>
 
-                <!-- KHỐI 2: KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG (NỔI KHỐI) -->
+                <!-- KHỐI 2: KHU VỰC CÔNG TẮC CHUYỂN HƯỚNG WEB DỰ PHÒNG -->
                 <div class="admin-redirect-control-box">
                     <div class="admin-redirect-toggle-row">
                         <span class="admin-redirect-title" onclick="document.getElementById('admin-redirect-toggle').click();" style="cursor: pointer;">
@@ -346,7 +336,7 @@
                     </div>
                 </div>
 
-                <!-- KHỐI 3: Ô VUÔNG TÍCH CHỌN LỚP CÙNG LÚC (NỔI KHỐI CARD, LƯỚI 3 CỘT RỘNG GỌN) -->
+                <!-- KHỐI 3: Ô VUÔNG TÍCH CHỌN LỚP CÙNG LÚC -->
                 <div class="admin-section-card">
                     <div class="admin-input-group" style="margin-bottom: 0;">
                         <div class="cat-quick-actions">
@@ -354,7 +344,6 @@
                             <div style="display:flex; gap:5px; align-items:center;">
                                 <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(true)">Tất cả</button>
                                 <button type="button" class="btn-cat-quick" onclick="toggleAllAdminCategories(false)">Bỏ chọn</button>
-                                <!-- NÚT SOI ĐỀ MÀU XANH LÁ CÂY NỔI BẬT -->
                                 <button type="button" class="btn-cat-quick btn-soi-de" onclick="openSoiDeModal(event)" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; border: 1px solid #34d399; font-weight: 900; margin-left: 2px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35);">
                                     🔍 Soi đề
                                 </button>
@@ -409,7 +398,7 @@
                     </div>
                 </div>
 
-                <!-- KHỐI 4: CHỌN ICON ĐẠI DIỆN (NỔI KHỐI CARD, LƯỚI 8 CỘT RỘNG GỌN) -->
+                <!-- KHỐI 4: CHỌN ICON ĐẠI DIỆN -->
                 <div class="admin-section-card">
                     <div class="admin-input-group" style="margin-bottom: 0;">
                         <label style="font-size: 12px; color: #0f172a;">🎨 Chọn icon đại diện:</label>
@@ -417,7 +406,7 @@
                     </div>
                 </div>
 
-                <!-- KHỐI 5: TABS CHỨC NĂNG & FORM ĐĂNG BÀI (NỔI KHỐI CARD) -->
+                <!-- KHỐI 5: TABS CHỨC NĂNG & FORM ĐĂNG BÀI -->
                 <div class="admin-section-card">
                     <div class="admin-tabs">
                         <button class="admin-tab-btn active" id="tab-btn-quiz" onclick="switchAdminTab('quiz')">📝 Đề thi (JS)</button>
@@ -686,36 +675,28 @@
 
 <!-- MODAL TOÀN MÀN HÌNH BẢNG KẾT QUẢ CHO ADMIN -->
 <div class="result-fullscreen-modal" id="result-fullscreen-modal">
+    <!-- THANH TOP SIÊU MINI CAO 24PX - 25PX -->
     <div class="result-modal-header">
         <div class="result-modal-title-box">
-            <button type="button" id="btn-result-back-action" onclick="handleResultHeaderBack()" style="background:#e0f2fe; color:#0284c7; border:1.5px solid #7dd3fc; border-radius:10px; padding:7px 12px; font-weight:800; cursor:pointer; font-size:13px; display:inline-flex; align-items:center; gap:5px; flex-shrink:0;">
+            <button type="button" id="btn-result-back-action" onclick="handleResultHeaderBack()">
                 ← Quay lại
             </button>
             <div class="result-modal-icon">📊</div>
-            <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
-                <div style="font-size: 12px; color: #64748b; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                    <a href="javascript:void(0)" onclick="closeResultModal()" style="color:#0284c7; text-decoration:none;">🏠 Trang chủ</a>
-                    <span>/</span>
-                    <span id="breadcrumb-category" style="color:#475569;">Lớp học</span>
-                    <span>/</span>
-                    <span style="color:#0f172a; font-weight:800;" id="breadcrumb-current-view">📊 Bảng kết quả</span>
-                </div>
+            <div>
                 <div class="result-modal-heading" id="result-modal-heading">Bảng Kết Quả Bài Thi</div>
                 <div class="result-modal-subheading" id="result-modal-subheading">Chi tiết kết quả làm bài & nhật ký thi trực tuyến</div>
             </div>
         </div>
+
         <div class="result-modal-tools">
             <input type="text" id="result-search-input" class="result-search-input" placeholder="🔍 Tìm tên, SBD..." oninput="filterResultTable()" autocorrect="off" autocapitalize="none">
             
-            <button type="button" id="btn-toggle-autorefresh" onclick="toggleAutoRefresh(event)" 
-                style="background: #1e293b; color: #38bdf8; border: 1.5px solid #38bdf8; border-radius: 20px; padding: 7px 12px; font-size: 12px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: 0.2s;" 
-                title="Bấm để Tạm dừng hoặc Bật lại tự động cập nhật">
+            <button type="button" id="btn-toggle-autorefresh" onclick="toggleAutoRefresh(event)" title="Bấm để Tạm dừng hoặc Bật lại tự động cập nhật">
                 🟢 Tự động: BẬT
             </button>
 
             <button class="btn-refresh-result" onclick="refreshCurrentExamResults()" title="Tải lại dữ liệu mới nhất">🔄 Cập nhật</button>
             
-            <!-- NÚT THU BÀI TỰ ĐỘNG TỪ LIVE DRAFTS CLOUD -->
             <button type="button" class="btn-auto-collect-drafts" id="btn-auto-collect-drafts" onclick="triggerAutoCollectDrafts(event)" 
                 title="Tự động thu bài và chấm điểm từ bản lưu nháp Realtime cho các em học sinh quên nộp hoặc gặp sự cố mạng">
                 ⚡ Thu bài tự động
@@ -726,30 +707,30 @@
                     ⚖️ Chấm lại bài ▾
                 </button>
                 
-                <div class="regrade-inline-dropdown" id="regrade-inline-dropdown" style="display:none; position:absolute; top:calc(100% + 8px); right:0; width:340px; background:#ffffff; border-radius:14px; box-shadow:0 14px 35px rgba(15,23,42,0.25); border:1.5px solid #fde68a; padding:14px; z-index:9999999; animation:popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #f1f5f9; padding-bottom:6px;">
-                        <span style="font-weight:900; color:#b45309; font-size:13px; display:flex; align-items:center; gap:5px;">⚖️ Tải file đáp án đã sửa</span>
+                <div class="regrade-inline-dropdown" id="regrade-inline-dropdown" style="display:none; position:absolute; top:calc(100% + 5px); right:0; width:330px; background:#ffffff; border-radius:12px; box-shadow:0 14px 35px rgba(15,23,42,0.25); border:1.5px solid #fde68a; padding:12px; z-index:9999999; animation:popInBadge 0.2s cubic-bezier(0.16, 1, 0.3, 1);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid #f1f5f9; padding-bottom:5px;">
+                        <span style="font-weight:900; color:#b45309; font-size:12.5px; display:flex; align-items:center; gap:5px;">⚖️ Tải file đáp án đã sửa</span>
                         <button type="button" onclick="closeRegradeModal(event)" style="background:none; border:none; font-size:15px; font-weight:900; color:#94a3b8; cursor:pointer;">✕</button>
                     </div>
-                    <div style="font-size:11.5px; color:#475569; margin-bottom:8px; line-height:1.4;">
+                    <div style="font-size:11px; color:#475569; margin-bottom:8px; line-height:1.4;">
                         Chọn file <b>dapan.js / .txt / .json</b> mới. Hệ thống sẽ tự động tính lại điểm và cập nhật đồng bộ các bài đã nộp.
                     </div>
-                    <input type="file" id="regrade-answer-file" accept="*/*" onchange="previewRegradeFile(this)" style="width:100%; padding:6px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:12px; margin-bottom:8px; background:#f8fafc;">
-                    <div id="regrade-file-preview-status" style="font-size:11.5px; font-weight:700; color:#0284c7; margin-bottom:8px; display:none; background:#f0f9ff; padding:6px 10px; border-radius:8px; border:1px solid #bae6fd; line-height:1.3;"></div>
+                    <input type="file" id="regrade-answer-file" accept="*/*" onchange="previewRegradeFile(this)" style="width:100%; padding:5px; border:1.5px solid #cbd5e1; border-radius:6px; font-size:11px; margin-bottom:8px; background:#f8fafc;">
+                    <div id="regrade-file-preview-status" style="font-size:11px; font-weight:700; color:#0284c7; margin-bottom:8px; display:none; background:#f0f9ff; padding:5px 8px; border-radius:6px; border:1px solid #bae6fd; line-height:1.3;"></div>
                     <div style="display:flex; gap:6px;">
-                        <button type="button" onclick="closeRegradeModal(event)" style="flex:1; padding:7px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:8px; font-size:12px; font-weight:800; color:#475569; cursor:pointer;">Đóng</button>
-                        <button type="button" id="btn-confirm-regrade" onclick="processRegradeWithAnswers()" style="flex:1.5; padding:7px; background:linear-gradient(135deg, #f59e0b, #d97706); border:none; border-radius:8px; font-size:12px; font-weight:800; color:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(245,158,11,0.3);">🚀 Chấm lại ngay</button>
+                        <button type="button" onclick="closeRegradeModal(event)" style="flex:1; padding:5px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; font-size:11px; font-weight:800; color:#475569; cursor:pointer;">Đóng</button>
+                        <button type="button" id="btn-confirm-regrade" onclick="processRegradeWithAnswers()" style="flex:1.5; padding:5px; background:linear-gradient(135deg, #f59e0b, #d97706); border:none; border-radius:6px; font-size:11px; font-weight:800; color:#fff; cursor:pointer; box-shadow:0 2px 6px rgba(245,158,11,0.3);">🚀 Chấm lại ngay</button>
                     </div>
                 </div>
             </div>
 
             <!-- NÚT UPLOAD FILE JSON NỘP SÓT -->
             <button type="button" class="btn-upload-json-backup" id="btn-upload-json-backup" onclick="triggerUploadBackupJson(event)" title="Nạp bài thi từ file JSON lưu dự phòng khi học sinh bị mất mạng không nộp được">
-                📥 Upload JSON nộp sót
+                📥 Upload JSON
             </button>
             <input type="file" id="input-upload-backup-json" accept=".json,application/json" style="display: none;" onchange="handleBackupJsonFileInput(this)">
 
-            <button class="btn-export-excel" onclick="exportResultsToExcel()" title="Tải file Excel (.xlsx)">📥 Tải Excel (.xlsx)</button>
+            <button class="btn-export-excel" onclick="exportResultsToExcel()" title="Tải file Excel (.xlsx)">📥 Excel</button>
             
             <div class="table-settings-wrapper" id="table-settings-wrapper">
                 <button type="button" class="btn-table-settings" id="btn-table-settings" onclick="toggleTableSettingsPopover(event)" title="Tùy chỉnh cỡ chữ & khoảng cách giữa các dòng">
@@ -808,50 +789,48 @@
         </div>
     </div>
 
-    <!-- HÀNG THỐNG KÊ TỔNG QUAN -->
-    <div class="result-modal-stats-bar" id="result-modal-stats-bar" style="background:#f8fafc; padding:8px 18px; display:flex; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid #e2e8f0; font-size:12.5px; font-weight:700; flex-shrink:0; overflow-x:auto;">
-        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:nowrap;">
+    <!-- HÀNG THỐNG KÊ TỔNG QUAN SIÊU GỌN CAO 19PX -->
+    <div class="result-modal-stats-bar" id="result-modal-stats-bar">
+        <div style="display:flex; align-items:center; gap:3px; flex-shrink:0; flex-wrap:nowrap;">
             <div class="stat-badge-item">
-                👥 Tổng thí sinh: <b id="stat-total-students">0</b>
-                <span style="font-size:11.5px; color:#64748b; margin-left:4px; font-weight:700;">
-                    (Lớp: <b id="stat-class-students" style="color:#0284c7;">0</b>, Tự do: <b id="stat-free-students" style="color:#d97706;">0</b>)
-                </span>
+                👥 Tổng: <b id="stat-total-students">0</b>
+                <span style="color:#64748b; margin-left:2px;">(Lớp:<b id="stat-class-students" style="color:#0284c7;">0</b>, T.do:<b id="stat-free-students" style="color:#d97706;">0</b>)</span>
             </div>
             <div class="stat-badge-item">✅ Đã nộp: <b id="stat-submitted-students" style="color:#10b981;">0</b></div>
             <div class="stat-badge-item">⚡ Đang làm: <b id="stat-doing-students" style="color:#f59e0b;">0</b></div>
             <div class="stat-badge-item">⏳ Chưa thi: <b id="stat-unsubmitted-students" style="color:#ef4444;">0</b></div>
-            <div class="stat-badge-item">🎯 Điểm TB: <b id="stat-avg-score" style="color:#8b5cf6;">0.0</b></div>
+            <div class="stat-badge-item">🎯 ĐTB: <b id="stat-avg-score" style="color:#8b5cf6;">0.0</b></div>
 
-            <span style="display:inline-block; width:1.5px; height:18px; background:#cbd5e1; margin:0 3px; flex-shrink:0;"></span>
+            <span style="display:inline-block; width:1px; height:14px; background:#cbd5e1; margin:0 2px; flex-shrink:0;"></span>
 
-            <span style="color:#475569; display:inline-flex; align-items:center; gap:4px; font-size:12px; white-space:nowrap;">
-                📊 <b>Phân loại:</b>
+            <span style="color:#475569; display:inline-flex; align-items:center; gap:2px; white-space:nowrap;">
+                📊 <b>Phổ điểm:</b>
             </span>
-            <div class="stat-badge-item" style="background:#fef2f2; border-color:#fecaca; color:#991b1b; padding:3px 7px; border-radius:12px;">
-                0 đến &lt; 3: <b id="stat-score-0-to-3" style="color:#dc2626; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#fef2f2; border-color:#fecaca; color:#991b1b;">
+                &lt; 3: <b id="stat-score-0-to-3" style="color:#dc2626; margin-left:2px;">0</b>
             </div>
-            <div class="stat-badge-item" style="background:#fff1f2; border-color:#fecdd3; color:#9f1239; padding:3px 7px; border-radius:12px;">
-                3 đến &lt; 5: <b id="stat-score-3-to-5" style="color:#e11d48; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#fff1f2; border-color:#fecdd3; color:#9f1239;">
+                3-&lt;5: <b id="stat-score-3-to-5" style="color:#e11d48; margin-left:2px;">0</b>
             </div>
-            <div class="stat-badge-item" style="background:#fffbeb; border-color:#fef3c7; color:#92400e; padding:3px 7px; border-radius:12px;">
-                5 đến &le; 6: <b id="stat-score-5-to-6" style="color:#d97706; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#fffbeb; border-color:#fef3c7; color:#92400e;">
+                5-6: <b id="stat-score-5-to-6" style="color:#d97706; margin-left:2px;">0</b>
             </div>
-            <div class="stat-badge-item" style="background:#fefce8; border-color:#fef08a; color:#854d0e; padding:3px 7px; border-radius:12px;">
-                6 đến &le; 7: <b id="stat-score-6-to-7" style="color:#b45309; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#fefce8; border-color:#fef08a; color:#854d0e;">
+                6-7: <b id="stat-score-6-to-7" style="color:#b45309; margin-left:2px;">0</b>
             </div>
-            <div class="stat-badge-item" style="background:#f0fdf4; border-color:#bbf7d0; color:#166534; padding:3px 7px; border-radius:12px;">
-                7 đến &le; 8: <b id="stat-score-7-to-8" style="color:#16a34a; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#f0fdf4; border-color:#bbf7d0; color:#166534;">
+                7-8: <b id="stat-score-7-to-8" style="color:#16a34a; margin-left:2px;">0</b>
             </div>
-            <div class="stat-badge-item" style="background:#ecfdf5; border-color:#a7f3d0; color:#065f46; padding:3px 7px; border-radius:12px;">
-                8 đến &le; 9: <b id="stat-score-8-to-9" style="color:#059669; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#ecfdf5; border-color:#a7f3d0; color:#065f46;">
+                8-9: <b id="stat-score-8-to-9" style="color:#059669; margin-left:2px;">0</b>
             </div>
-            <div class="stat-badge-item" style="background:#eff6ff; border-color:#bfdbfe; color:#1e40af; padding:3px 7px; border-radius:12px;">
-                9 đến &le; 10: <b id="stat-score-9-to-10" style="color:#2563eb; margin-left:3px;">0</b>
+            <div class="stat-badge-item" style="background:#eff6ff; border-color:#bfdbfe; color:#1e40af;">
+                9-10: <b id="stat-score-9-to-10" style="color:#2563eb; margin-left:2px;">0</b>
             </div>
         </div>
 
         <div style="flex-shrink:0; margin-left:auto;">
-            <button type="button" id="btn-view-detailed-stats" onclick="openDetailedStatsView()" style="background:linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color:#fff; border:none; border-radius:18px; padding:6px 14px; font-size:12.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 3px 10px rgba(99,102,241,0.32); white-space:nowrap; transition:all 0.2s;">
+            <button type="button" id="btn-view-detailed-stats" onclick="openDetailedStatsView()" style="background:linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color:#fff; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:3px; white-space:nowrap;">
                 📈 Chi tiết ➔
             </button>
         </div>
@@ -864,51 +843,52 @@
                 <table class="result-table" id="admin-result-table">
                     <thead>
                         <tr>
-                            <th class="td-stt" style="width: 50px;">STT</th>
+                            <th class="td-stt" style="width: 42px;">STT</th>
                             <th style="width: 175px;">
                                 <div class="exam-picker-wrapper">
                                     <button type="button" class="btn-exam-picker" onclick="toggleExamPickerMenu(event)" title="Bấm vào để chuyển đổi đề thi">
                                         <span class="btn-exam-picker-text" id="current-selected-exam-name">📑 Số đề thi ▾</span>
                                     </button>
-                                    <div class="exam-picker-menu" id="exam-picker-dropdown-list"></div>
+                                    <!-- ĐÃ KHÓA display:none ĐỂ TRÁNH BUNG CHE MÀN HÌNH -->
+                                    <div class="exam-picker-menu" id="exam-picker-dropdown-list" style="display: none;"></div>
                                 </div>
                             </th>
-                            <th style="width: 105px; text-align:center;">Số lần thi</th>
-                            <th style="width: 155px;">Thời gian vào thi</th>
-                            <th style="width: 125px;">Thời gian thi</th>
-                            <th style="width: 175px;">Họ và tên</th>
-                            <th style="width: 90px; text-align:center;">Lớp</th>
-                            <th style="width: 85px;">SBD</th>
-                            <th style="width: 135px; text-align:center;">Tình trạng</th>
-                            <th style="width: 110px; text-align:center;">Số câu đúng</th>
-                            <th style="width: 120px; text-align:center;">Điểm</th>
+                            <th style="width: 95px; text-align:center;">Số lần thi</th>
+                            <th style="width: 145px;">Thời gian vào thi</th>
+                            <th style="width: 120px;">Thời gian thi</th>
+                            <th style="width: 165px;">Họ và tên</th>
+                            <th style="width: 85px; text-align:center;">Lớp</th>
+                            <th style="width: 80px;">SBD</th>
+                            <th style="width: 125px; text-align:center;">Tình trạng</th>
+                            <th style="width: 100px; text-align:center;">Số câu đúng</th>
+                            <th style="width: 90px; text-align:center;">Điểm</th>
 
-                            <th style="width: 125px; text-align:center; overflow: visible;">
+                            <th style="width: 115px; text-align:center; overflow: visible;">
                                 <div class="rank-picker-wrapper" style="position: relative; display: inline-block; width: 100%;">
-                                    <button type="button" class="btn-rank-picker" onclick="toggleRankSortMenu(event)" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; border: 1px solid #fde68a; border-radius: 8px; padding: 4px 6px; font-size: 11.5px; font-weight: 800; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 4px; box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25); user-select: none;">
-                                        <span id="rank-header-btn-text">🏅 Xếp hạng ▾</span>
+                                    <button type="button" class="btn-rank-picker" onclick="toggleRankSortMenu(event)" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; border: 1px solid #fde68a; border-radius: 4px; padding: 1px 4px; font-size: 10px; font-weight: 800; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 2px; height: 19px; line-height: 1;">
+                                        <span id="rank-header-btn-text">🏅 Hạng ▾</span>
                                     </button>
-                                    <div class="rank-picker-menu" id="rank-sort-dropdown-menu" style="display:none; position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); min-width: 185px; background: #ffffff; border-radius: 12px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.25), 0 0 0 1px #cbd5e1; z-index: 999999; padding: 6px; text-transform: none;">
-                                        <div class="rank-sort-item" id="opt-rank-desc" onclick="changeRankSort('desc', event)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" style="padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #1e293b; cursor: pointer; text-align: left; transition: 0.15s; display: flex; align-items: center; gap: 6px;">
+                                    <div class="rank-picker-menu" id="rank-sort-dropdown-menu" style="display:none; position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); min-width: 180px; background: #ffffff; border-radius: 10px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.25), 0 0 0 1px #cbd5e1; z-index: 999999; padding: 5px; text-transform: none;">
+                                        <div class="rank-sort-item" id="opt-rank-desc" onclick="changeRankSort('desc', event)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" style="padding: 6px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #1e293b; cursor: pointer; text-align: left; transition: 0.12s; display: flex; align-items: center; gap: 5px;">
                                             <span>⬇️</span> <span>Từ cao xuống thấp</span>
                                         </div>
-                                        <div class="rank-sort-item" id="opt-rank-asc" onclick="changeRankSort('asc', event)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" style="padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #1e293b; cursor: pointer; text-align: left; transition: 0.15s; display: flex; align-items: center; gap: 6px;">
+                                        <div class="rank-sort-item" id="opt-rank-asc" onclick="changeRankSort('asc', event)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" style="padding: 6px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #1e293b; cursor: pointer; text-align: left; transition: 0.12s; display: flex; align-items: center; gap: 5px;">
                                             <span>⬆️</span> <span>Xếp từ thấp đến cao</span>
                                         </div>
-                                        <div class="rank-sort-item" id="opt-rank-default" onclick="changeRankSort('default', event)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" style="padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; color: #1e293b; cursor: pointer; text-align: left; transition: 0.15s; display: flex; align-items: center; gap: 6px;">
-                                            <span>🔢</span> <span>Theo STT cột thứ tự</span>
+                                        <div class="rank-sort-item" id="opt-rank-default" onclick="changeRankSort('default', event)" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='transparent'" style="padding: 6px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #1e293b; cursor: pointer; text-align: left; transition: 0.12s; display: flex; align-items: center; gap: 5px;">
+                                            <span>🔢</span> <span>Theo STT thứ tự</span>
                                         </div>
                                     </div>
                                 </div>
                             </th>
 
-                            <th style="width: 145px; text-align:center;">Số lần chuyển tab</th>
-                            <th style="width: 175px;">Thời gian chuyển tab</th>
-                            <th style="width: 250px;">Chi tiết bài làm</th>
+                            <th style="width: 135px; text-align:center;">Số lần chuyển tab</th>
+                            <th style="width: 160px;">Thời gian chuyển tab</th>
+                            <th style="width: 240px;">Chi tiết bài làm</th>
                         </tr>
                     </thead>
                     <tbody id="result-table-tbody">
-                        <tr><td colspan="15" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">⏳ Đang tải dữ liệu kết quả thi...</td></tr>
+                        <tr><td colspan="15" style="text-align:center; padding:20px; font-weight:700; color:#64748b;">⏳ Đang tải dữ liệu kết quả thi...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -916,64 +896,64 @@
     </div>
 
     <!-- VIEW 2: MÀN HÌNH THỐNG KÊ CHI TIẾT BẰNG BIỂU ĐỒ HÌNH CỘT -->
-    <div id="result-detailed-stats-view" style="display:none; flex:1; padding:16px; overflow-y:auto; background:#f1f5f9; flex-direction:column; gap:16px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; background:#fff; padding:12px 18px; border-radius:14px; border:1px solid #e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-            <button type="button" onclick="closeDetailedStatsView()" style="background:#f8fafc; color:#1e293b; border:1.5px solid #cbd5e1; border-radius:10px; padding:7px 15px; font-weight:800; cursor:pointer; font-size:13px; display:inline-flex; align-items:center; gap:6px; transition:0.2s;">
+    <div id="result-detailed-stats-view" style="display:none; flex:1; padding:12px; overflow-y:auto; background:#f1f5f9; flex-direction:column; gap:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; background:#fff; padding:8px 14px; border-radius:10px; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+            <button type="button" onclick="closeDetailedStatsView()" style="background:#f8fafc; color:#1e293b; border:1px solid #cbd5e1; border-radius:8px; padding:5px 12px; font-weight:800; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; transition:0.15s;">
                 ⬅ Quay lại bảng kết quả
             </button>
-            <div style="font-size:13px; color:#64748b; font-weight:700;">
+            <div style="font-size:12px; color:#64748b; font-weight:700;">
                 Đang xem: <b style="color:#0284c7;" id="detail-stat-exam-name">Đề thi</b>
             </div>
         </div>
 
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
-            <div style="background:linear-gradient(135deg, #f0fdf4, #dcfce7); border-radius:14px; padding:16px; border-left:5px solid #16a34a; box-shadow:0 3px 10px rgba(22,163,74,0.1);">
-                <div style="color:#166534; font-size:12px; font-weight:800;">ĐIỂM CAO NHẤT</div>
-                <div id="kpi-max-score" style="font-size:28px; font-weight:900; color:#14532d; margin-top:4px;">0.0</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:10px;">
+            <div style="background:linear-gradient(135deg, #f0fdf4, #dcfce7); border-radius:12px; padding:12px; border-left:4px solid #16a34a; box-shadow:0 2px 8px rgba(22,163,74,0.08);">
+                <div style="color:#166534; font-size:11px; font-weight:800;">ĐIỂM CAO NHẤT</div>
+                <div id="kpi-max-score" style="font-size:24px; font-weight:900; color:#14532d; margin-top:3px;">0.0</div>
             </div>
-            <div style="background:linear-gradient(135deg, #fef2f2, #fee2e2); border-radius:14px; padding:16px; border-left:5px solid #ef4444; box-shadow:0 3px 10px rgba(239,68,68,0.1);">
-                <div style="color:#991b1b; font-size:12px; font-weight:800;">ĐIỂM THẤP NHẤT</div>
-                <div id="kpi-min-score" style="font-size:28px; font-weight:900; color:#7f1d1d; margin-top:4px;">0.0</div>
+            <div style="background:linear-gradient(135deg, #fef2f2, #fee2e2); border-radius:12px; padding:12px; border-left:4px solid #ef4444; box-shadow:0 2px 8px rgba(239,68,68,0.08);">
+                <div style="color:#991b1b; font-size:11px; font-weight:800;">ĐIỂM THẤP NHẤT</div>
+                <div id="kpi-min-score" style="font-size:24px; font-weight:900; color:#7f1d1d; margin-top:3px;">0.0</div>
             </div>
-            <div style="background:linear-gradient(135deg, #faf5ff, #f3e8ff); border-radius:14px; padding:16px; border-left:5px solid #a855f7; box-shadow:0 3px 10px rgba(168,85,247,0.1);">
-                <div style="color:#6b21a8; font-size:12px; font-weight:800;">ĐIỂM TRUNG BÌNH</div>
-                <div id="kpi-avg-score" style="font-size:28px; font-weight:900; color:#581c87; margin-top:4px;">0.0</div>
+            <div style="background:linear-gradient(135deg, #faf5ff, #f3e8ff); border-radius:12px; padding:12px; border-left:4px solid #a855f7; box-shadow:0 2px 8px rgba(168,85,247,0.08);">
+                <div style="color:#6b21a8; font-size:11px; font-weight:800;">ĐIỂM TRUNG BÌNH</div>
+                <div id="kpi-avg-score" style="font-size:24px; font-weight:900; color:#581c87; margin-top:3px;">0.0</div>
             </div>
-            <div style="background:linear-gradient(135deg, #eff6ff, #dbeafe); border-radius:14px; padding:16px; border-left:5px solid #2563eb; box-shadow:0 3px 10px rgba(37,99,235,0.1);">
-                <div style="color:#1e40af; font-size:12px; font-weight:800;">TỶ LỆ ĐẠT (≥ 5.0)</div>
-                <div id="kpi-pass-rate" style="font-size:28px; font-weight:900; color:#1e3a8a; margin-top:4px;">0%</div>
+            <div style="background:linear-gradient(135deg, #eff6ff, #dbeafe); border-radius:12px; padding:12px; border-left:4px solid #2563eb; box-shadow:0 2px 8px rgba(37,99,235,0.08);">
+                <div style="color:#1e40af; font-size:11px; font-weight:800;">TỶ LỆ ĐẠT (≥ 5.0)</div>
+                <div id="kpi-pass-rate" style="font-size:24px; font-weight:900; color:#1e3a8a; margin-top:3px;">0%</div>
             </div>
-            <div style="background:linear-gradient(135deg, #fffbeb, #fef3c7); border-radius:14px; padding:16px; border-left:5px solid #f59e0b; box-shadow:0 3px 10px rgba(245,158,11,0.1);">
-                <div style="color:#92400e; font-size:12px; font-weight:800;">TỶ LỆ KHÁ - GIỎI (≥ 7.0)</div>
-                <div id="kpi-good-rate" style="font-size:28px; font-weight:900; color:#78350f; margin-top:4px;">0%</div>
+            <div style="background:linear-gradient(135deg, #fffbeb, #fef3c7); border-radius:12px; padding:12px; border-left:4px solid #f59e0b; box-shadow:0 2px 8px rgba(245,158,11,0.08);">
+                <div style="color:#92400e; font-size:11px; font-weight:800;">TỶ LỆ KHÁ - GIỎI (≥ 7.0)</div>
+                <div id="kpi-good-rate" style="font-size:24px; font-weight:900; color:#78350f; margin-top:3px;">0%</div>
             </div>
         </div>
 
-        <div style="background:#ffffff; border-radius:16px; border:1px solid #e2e8f0; padding:20px; box-shadow:0 4px 18px rgba(0,0,0,0.05);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
-                <h3 style="margin:0; font-size:16px; font-weight:900; color:#0f172a; display:flex; align-items:center; gap:8px;">
+        <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:16px; box-shadow:0 3px 12px rgba(0,0,0,0.05);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <h3 style="margin:0; font-size:14.5px; font-weight:900; color:#0f172a; display:flex; align-items:center; gap:6px;">
                     📊 Biểu đồ hình cột Phổ điểm chi tiết
                 </h3>
-                <span style="font-size:12px; color:#64748b; font-weight:700;">Đơn vị: Số học sinh</span>
+                <span style="font-size:11px; color:#64748b; font-weight:700;">Đơn vị: Số học sinh</span>
             </div>
-            <div style="position:relative; height:340px; width:100%;">
+            <div style="position:relative; height:320px; width:100%;">
                 <canvas id="detailedScoreChart"></canvas>
             </div>
         </div>
 
-        <div style="background:#ffffff; border-radius:16px; border:1px solid #e2e8f0; padding:18px; box-shadow:0 4px 18px rgba(0,0,0,0.05);">
-            <h4 style="margin:0 0 12px 0; font-size:15px; font-weight:900; color:#0f172a;">
+        <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:16px; box-shadow:0 3px 12px rgba(0,0,0,0.05);">
+            <h4 style="margin:0 0 10px 0; font-size:13.5px; font-weight:900; color:#0f172a;">
                 📑 Bảng tổng hợp mức xếp loại học lực bài thi
             </h4>
             <div style="overflow-x:auto;">
-                <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
                     <thead>
                         <tr style="background:#f8fafc; border-bottom:2px solid #cbd5e1; color:#334155; font-weight:800;">
-                            <th style="padding:10px 12px;">Mức xếp loại</th>
-                            <th style="padding:10px 12px;">Khoảng điểm</th>
-                            <th style="padding:10px 12px; text-align:center;">Số lượng học sinh</th>
-                            <th style="padding:10px 12px; text-align:center;">Tỉ lệ phần trăm</th>
-                            <th style="padding:10px 12px;">Ghi chú đánh giá</th>
+                            <th style="padding:8px 10px;">Mức xếp loại</th>
+                            <th style="padding:8px 10px;">Khoảng điểm</th>
+                            <th style="padding:8px 10px; text-align:center;">Số lượng học sinh</th>
+                            <th style="padding:8px 10px; text-align:center;">Tỉ lệ phần trăm</th>
+                            <th style="padding:8px 10px;">Ghi chú đánh giá</th>
                         </tr>
                     </thead>
                     <tbody id="rating-breakdown-tbody"></tbody>
@@ -1157,7 +1137,6 @@
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <!-- DÒNG 1: ĐẾM NGƯỜI CÙNG THI -->
             <div style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #e2e8f0;">
                 <div>
                     <b style="font-size: 12px; color: #1e293b; display:block;">1. Đếm người cùng thi</b>
@@ -1169,7 +1148,6 @@
                 </label>
             </div>
 
-            <!-- DÒNG 2: THU BÀI ÉP BUỘC -->
             <div style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #e2e8f0;">
                 <div>
                     <b style="font-size: 12px; color: #1e293b; display:block;">2. Thu bài ép buộc từ xa</b>
@@ -1181,7 +1159,6 @@
                 </label>
             </div>
 
-            <!-- DÒNG 3: ĐỔI GIỜ THI -->
             <div style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #e2e8f0;">
                 <div>
                     <b style="font-size: 12px; color: #1e293b; display:block;">3. Cập nhật giờ thi trực tiếp</b>
@@ -1193,7 +1170,6 @@
                 </label>
             </div>
 
-            <!-- DÒNG 4: ĐỔI ẢNH CÂU HỎI -->
             <div style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #e2e8f0;">
                 <div>
                     <b style="font-size: 12px; color: #1e293b; display:block;">4. Đồng bộ ảnh câu hỏi</b>
@@ -1205,7 +1181,6 @@
                 </label>
             </div>
 
-            <!-- DÒNG 5: TẦN SUẤT PING NHỊP TIM -->
             <div style="display:flex; align-items:center; justify-content:space-between; background:#f8fafc; padding:8px 12px; border-radius:10px; border:1px solid #e2e8f0;">
                 <div>
                     <b style="font-size: 12px; color: #1e293b; display:block;">5. Tần suất ping nhịp tim</b>
