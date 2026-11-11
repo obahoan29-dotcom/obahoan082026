@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: exam-render.js (BẢN TỰ ĐỘNG CHÈN PHẦN I, II, III, IV & PHÂN MÀU CHUẨN QUỐC TẾ)
+// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ: GIỮ NGUYÊN ĐÁP ÁN TRONG BỘ NHỚ, TỰ PHỤC HỒI ẢNH)
 // =========================================================
 
 function isPart4Question(q) {
@@ -32,6 +32,7 @@ function scrollToSection(partId) {
 
 function renderQuizLayout(questions, imageMap) { 
     const container = document.getElementById('dynamic-questions-container'); 
+    if (!container) return;
     container.innerHTML = ''; 
     
     // Tách riêng biệt 4 phần theo đúng chuẩn cấu trúc Bộ GD&ĐT
@@ -142,14 +143,13 @@ function renderQuizLayout(questions, imageMap) {
             window.SECURE_VAULT.questionData[q.id] = q; 
             const letters = ["A", "B", "C", "D"]; 
             
-            if (q.correct !== undefined) {
+            // LƯU ĐÁP ÁN AN TOÀN VÀO VAULT NHƯNG KHÔNG ĐƯỢC XÓA (DELETE) KHỎI OBJECT GỐC
+            if (q.correct !== undefined && q.correct !== null) {
                 window.SECURE_VAULT.answers[`q${q.id}`] = (typeof q.correct === 'number') 
                     ? letters[q.correct] 
                     : String(q.correct).trim().toUpperCase();
             }
             if (q.explanation) window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-            delete q.correct;
-            delete q.explanation;
 
             const imgUrl = getEffectiveImageUrl(q, imageMap);
             const imgHTML = buildImgHtml(imgUrl, q.id); 
@@ -175,17 +175,15 @@ function renderQuizLayout(questions, imageMap) {
             const uploaderHTML = buildAdminImageUploader(q, p1List.length + qIdx);
 
             let rows = ""; 
-            q.statements.forEach((st) => { 
+            (q.statements || []).forEach((st) => { 
                 const subKey = `q${q.id}_${st.id}`; 
-                if (st.correct !== undefined) {
+                if (st.correct !== undefined && st.correct !== null) {
                     window.SECURE_VAULT.answers[subKey] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng' || String(st.correct).toLowerCase() === 'true') ? "Đúng" : "Sai";
                 }
-                delete st.correct;
                 rows += `<tr><td><b>${st.id})</b> ${st.statement}</td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Đúng" onchange="onStatementChange('${subKey}')"></td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Sai" onchange="onStatementChange('${subKey}')"></td></tr>`; 
             }); 
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                delete q.explanation;
             }
             html += `<div class="question-card" id="q-card-${q.id}" data-qid="${q.id}" data-imgkey="${q.imageKey || ''}" data-qidx="${p1List.length + qIdx}"> 
                 <div class="q-header"><div class="q-num-badge" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
@@ -202,13 +200,11 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p3" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
         p3List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            if (q.correctAnswer !== undefined) {
+            if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
                 window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim();
-                delete q.correctAnswer;
             }
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                delete q.explanation;
             }
             const imgUrl = getEffectiveImageUrl(q, imageMap);
             const imgHTML = buildImgHtml(imgUrl, q.id); 
@@ -240,13 +236,11 @@ function renderQuizLayout(questions, imageMap) {
         </div>`; 
         p4List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            if (q.correctAnswer !== undefined) {
+            if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
                 window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim(); 
-                delete q.correctAnswer;
             }
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                delete q.explanation;
             }
             const imgUrl = getEffectiveImageUrl(q, imageMap);
             const imgHTML = buildImgHtml(imgUrl, q.id); 
