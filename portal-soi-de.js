@@ -1,6 +1,6 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN NGUYÊN VẸN 100%)
-// TỰ ĐỘNG NHẬN DIỆN MỌI ĐỊNH DẠNG ĐÁP ÁN - KHÔNG BAO GIỜ BỊ VỀ A, ĐÚNG, 0
+// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN & HÌNH ẢNH NGUYÊN VẸN 100%)
+// TỰ ĐỘNG NHẬN DIỆN MỌI ĐỊNH DẠNG ĐÁP ÁN - ĐỒNG BỘ ẢNH 2 CHIỀU CHỐNG MẤT HÌNH
 // =========================================================
 
 let soiDeState = {
@@ -123,7 +123,6 @@ function autoResizeAllTextareas() {
     textareas.forEach(t => autoResizeTextarea(t));
 }
 
-// BỘ TRÍCH XUẤT ĐÁP ÁN THÔNG MINH CHO TỪNG CÂU HỎI
 function extractQuestionAnswersRobustly(q, fallbackVault = {}) {
     const letters = ["A", "B", "C", "D"];
     const qIdKey = `q${q.id}`;
@@ -134,7 +133,6 @@ function extractQuestionAnswersRobustly(q, fallbackVault = {}) {
         explanation: q.explanation || ""
     };
 
-    // 1. PHẦN 1: Trắc nghiệm ABCD
     if (q.type === "multiple_choice" && !isPart4Question(q)) {
         let rawVal = undefined;
         if (fallbackVault && fallbackVault[qIdKey] !== undefined) {
@@ -153,7 +151,6 @@ function extractQuestionAnswersRobustly(q, fallbackVault = {}) {
             const u = rawVal.trim().toUpperCase();
             result.correct = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
         } else {
-            // Thử trích xuất từ câu hỏi nếu có dòng "// Đáp án: B"
             const match = String(q.question || "").match(/(?:đáp\s*án|chọn|đ\/a|đa)\s*[:：\-]?\s*([A-D])/i);
             if (match) {
                 result.correct = letters.indexOf(match[1].toUpperCase());
@@ -162,7 +159,6 @@ function extractQuestionAnswersRobustly(q, fallbackVault = {}) {
             }
         }
     }
-    // 2. PHẦN 2: Đúng / Sai
     else if (q.type === "true_false" && !isPart4Question(q)) {
         (q.statements || []).forEach(st => {
             const subKey = `q${q.id}_${st.id}`;
@@ -180,7 +176,6 @@ function extractQuestionAnswersRobustly(q, fallbackVault = {}) {
             if (stVal !== undefined) {
                 result.statementsCorrect[st.id] = (stVal === true || String(stVal).toLowerCase() === "đúng" || String(stVal).toLowerCase() === "true");
             } else {
-                // Thử tìm trong statement có dấu (Đúng) hay (Sai)
                 const m = String(st.statement || "").match(/[\(\[\{]\s*(Đúng|Sai|True|False)\s*[\)\]\}]/i);
                 if (m) {
                     result.statementsCorrect[st.id] = /^(Đúng|True)$/i.test(m[1]);
@@ -190,7 +185,6 @@ function extractQuestionAnswersRobustly(q, fallbackVault = {}) {
             }
         });
     }
-    // 3. PHẦN 3 & 4: Trả lời ngắn / Tự luận ngắn
     else {
         let ansVal = undefined;
         if (fallbackVault && fallbackVault[qIdKey] !== undefined) {
@@ -649,7 +643,6 @@ function checkAndDisplayAdminSoiDeButton() {
     }
 }
 
-// 3. HÀM CHUYỂN SANG SOI ĐỀ TỪ PHÒNG THI (BẢO VỆ NGUYÊN VẸN 100% ĐÁP ÁN ĐA TẦNG)
 async function switchToSoiDeFromExam() {
     if (typeof examData === 'undefined' || !examData) {
         alert("⚠️ Không tìm thấy dữ liệu đề thi hiện tại!");
@@ -662,18 +655,20 @@ async function switchToSoiDeFromExam() {
     const quizId = urlParams.get('id') || examData.id || "quiz";
     const currentMade = (typeof getMaDe === 'function' ? getMaDe() : examData.made) || "101";
 
-    // Nạp dự phòng đáp án từ Supabase nếu cần
     let dbQuestions = null;
+    let dbImages = {};
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (client && quizId) {
             const { data } = await client.from('quizzes').select('questions, images').eq('id', quizId).single();
-            if (data && Array.isArray(data.questions)) {
-                dbQuestions = data.questions;
+            if (data) {
+                if (Array.isArray(data.questions)) dbQuestions = data.questions;
+                if (data.images && typeof data.images === 'object') dbImages = data.images;
             }
         }
     } catch(e) {}
 
+    const sourceImages = { ...(examData.images || {}), ...dbImages };
     const sourceQuestions = (examData.questions && examData.questions.length > 0) 
         ? examData.questions 
         : (dbQuestions || []);
@@ -681,12 +676,8 @@ async function switchToSoiDeFromExam() {
     const letters = ["A", "B", "C", "D"];
     const clonedQuestions = sourceQuestions.map((q, idx) => {
         const item = JSON.parse(JSON.stringify(q));
-        const qIdKey = `q${q.id}`;
-
-        // Tìm kiếm câu tương ứng trong dbQuestions nếu có
         const dbQ = dbQuestions ? dbQuestions.find(dq => String(dq.id) === String(q.id)) : null;
 
-        // Trích xuất đáp án chuẩn xác đa tầng
         const vaultAnswers = (window.SECURE_VAULT && window.SECURE_VAULT.answers) ? window.SECURE_VAULT.answers : {};
         const extracted = extractQuestionAnswersRobustly(dbQ || q, vaultAnswers);
 
@@ -708,6 +699,14 @@ async function switchToSoiDeFromExam() {
             item.explanation = extracted.explanation;
         }
 
+        // BẢO ĐẢM GẮN CHẶT LINK ẢNH VÀO CÂU HỎI
+        const directUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(item, sourceImages) : (item.imageUrl || "");
+        if (directUrl) {
+            item.imageUrl = directUrl;
+            item.imageKey = item.imageKey || `img_q_${item.id}`;
+            sourceImages[item.imageKey] = directUrl;
+        }
+
         return item;
     });
 
@@ -716,17 +715,16 @@ async function switchToSoiDeFromExam() {
         title: examData.title || (typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "ĐỀ THI"),
         maDe: currentMade,
         timeLimitMinutes: parseInt(examData.timeLimitMinutes || examData.time_limit_minutes, 10) || 90,
-        images: JSON.parse(JSON.stringify(examData.images || {})),
+        images: sourceImages,
         questions: reorganizeAllQuestionsByParts(clonedQuestions),
         scoringConfig: examData.scoringConfig || { mode: 'option1' }
     };
     soiDeState.isFromExamRoom = true;
 
     openSoiDeModal();
-    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu kèm ĐẦY ĐỦ ĐÁP ÁN vào Soi đề!`);
+    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu kèm ĐẦY ĐỦ ĐÁP ÁN & HÌNH ẢNH vào Soi đề!`);
 }
 
-// 4. HÀM UPDATE CẬP NHẬT TRỰC TIẾP LÊN MÁY CHỦ VÀ PHÒNG THI (BẢO TOÀN ĐÁP ÁN NGUYÊN VẸN)
 async function updateExamFromSoiDe() {
     const btn = document.getElementById("btn-soide-update-exam");
     if (!soiDeState.examData || !Array.isArray(soiDeState.examData.questions) || soiDeState.examData.questions.length === 0) {
@@ -762,12 +760,13 @@ async function updateExamFromSoiDe() {
             soiDeState.examData.id = quizId;
         }
 
+        const imagesMap = soiDeState.examData.images || {};
         const letters = ["A", "B", "C", "D"];
+        
         const cleanQuestions = reorganizeAllQuestionsByParts(soiDeState.examData.questions).map((q, idx) => {
             const item = JSON.parse(JSON.stringify(q));
             item.id = item.id || (idx + 1);
 
-            // BẢO VỆ CHUẨN XÁC ĐÁP ÁN TỪNG DẠNG
             if (item.type === "multiple_choice" && !isPart4Question(item)) {
                 if (typeof item.correct === 'string') {
                     const u = item.correct.trim().toUpperCase();
@@ -788,13 +787,21 @@ async function updateExamFromSoiDe() {
                     item.correctAnswer = String(item.correctAnswer).trim();
                 }
             }
+
+            // GẮN CHẶT ĐƯỜNG LINK ẢNH TRỰC TIẾP VÀO CÂU HỎI TRƯỚC KHI LƯU SUPABASE
+            const directUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(item, imagesMap) : (item.imageUrl || "");
+            if (directUrl) {
+                item.imageUrl = directUrl;
+                item.imageKey = item.imageKey || `img_q_${item.id}`;
+                imagesMap[item.imageKey] = directUrl;
+            }
+
             return item;
         });
 
         const finalTitle = soiDeState.examData.title || "ĐỀ THI TRẮC NGHIỆM";
         const finalMade = soiDeState.examData.maDe || "101";
         const finalMinutes = parseInt(soiDeState.examData.timeLimitMinutes, 10) || 90;
-        const imagesMap = soiDeState.examData.images || {};
 
         // 1. CẬP NHẬT VÀO TABLE: quizzes
         const { error: qErr } = await client.from('quizzes').upsert({
@@ -817,7 +824,7 @@ async function updateExamFromSoiDe() {
             }).eq('id', quizId);
         } catch(cErr) {}
 
-        // 3. ĐỒNG BỘ NGAY VÀO SECURE_VAULT VÀ EXAMDATA TRONG PHÒNG THI
+        // 3. ĐỒNG BỘ VÀO SECURE_VAULT VÀ EXAMDATA TRONG PHÒNG THI
         if (typeof window.SECURE_VAULT !== 'undefined') {
             window.SECURE_VAULT.answers = window.SECURE_VAULT.answers || {};
             window.SECURE_VAULT.explanations = window.SECURE_VAULT.explanations || {};
@@ -859,8 +866,10 @@ async function updateExamFromSoiDe() {
             const navCodeText = document.getElementById("nav-exam-code-text");
             if (navCodeText) navCodeText.innerText = `Đề: ${finalMade}`;
 
+            // CẬP NHẬT CACHE XÁO ĐỀ VỚI ID ĐỘC NHẤT
             try {
                 if (typeof getExamCode === 'function') {
+                    safeLocal.setItem(`shuffled_exam_${quizId}_${getExamCode()}`, JSON.stringify(clonedQuestions));
                     safeLocal.setItem(`shuffled_exam_${getExamCode()}`, JSON.stringify(clonedQuestions));
                 }
             } catch(e) {}
@@ -874,9 +883,10 @@ async function updateExamFromSoiDe() {
         }
 
         soiDeState.examData.questions = cleanQuestions;
+        soiDeState.examData.images = imagesMap;
         renderSoiDeBothSides();
 
-        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI VÀ ĐÁP ÁN THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ đáp án đã được đồng bộ chuẩn xác!`);
+        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI VÀ ĐÁP ÁN THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ hình ảnh và đáp án đã được đồng bộ chuẩn xác!`);
 
     } catch(err) {
         alert("❌ Lỗi khi cập nhật đề thi: " + err.message);
@@ -1087,7 +1097,9 @@ function parseSmartSingleQuestion(text) {
                 correct: parsed.correct !== undefined ? parsed.correct : 0,
                 correctAnswer: parsed.correctAnswer || parsed.correct_answer || "",
                 explanation: parsed.explanation || "",
-                part: parsed.part
+                part: parsed.part,
+                imageUrl: parsed.imageUrl || "",
+                imageKey: parsed.imageKey || ""
             };
         }
     }
@@ -1389,6 +1401,8 @@ function applyCardRawInput(qIdx, qId) {
         if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
         if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
         if (qObj.part) targetQ.part = qObj.part;
+        if (qObj.imageUrl) targetQ.imageUrl = qObj.imageUrl;
+        if (qObj.imageKey) targetQ.imageKey = qObj.imageKey;
     }
 
     soiDeState.examData.questions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
@@ -1480,6 +1494,8 @@ function readAndParseSoiDeFile(file) {
             if (!parsed) throw new Error("File rỗng hoặc không đúng cấu trúc!");
 
             let rawQuestions = [];
+            let rawImages = {};
+
             if (Array.isArray(parsed)) {
                 rawQuestions = parsed;
                 soiDeState.examData = {
@@ -1491,11 +1507,18 @@ function readAndParseSoiDeFile(file) {
                 };
             } else if (typeof parsed === "object") {
                 rawQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
+                rawImages = (parsed.images && typeof parsed.images === "object") ? parsed.images : {};
+                
+                // ĐỒNG BỘ ẢNH TRỰC TIẾP VÀO CÂU HỎI
+                if (typeof synchronizeExamQuestionsAndImages === "function") {
+                    rawQuestions = synchronizeExamQuestionsAndImages(rawQuestions, rawImages);
+                }
+
                 soiDeState.examData = {
                     title: parsed.title || file.name.replace(/\.[^/.]+$/, ""),
                     maDe: parsed.maDe || parsed.made || "101",
                     timeLimitMinutes: parseInt(parsed.timeLimitMinutes || parsed.time_limit_minutes, 10) || 90,
-                    images: parsed.images || {},
+                    images: rawImages,
                     questions: reorganizeAllQuestionsByParts(rawQuestions)
                 };
             }
@@ -2057,15 +2080,12 @@ function renderSoiDeLeftLivePreview() {
         else if (q.type === 'true_false') currentPartType = "true_false";
         else if (q.type === 'short_answer') currentPartType = "short_answer";
 
-        let imgUrl = "";
-        if (q.imageUrl && q.imageUrl.trim()) imgUrl = q.imageUrl.trim();
-        else if (q.imageKey && imageMap[q.imageKey]) imgUrl = imageMap[q.imageKey].trim();
-        else if (imageMap[`img_q_${qId}`]) imgUrl = imageMap[`img_q_${qId}`].trim();
+        let imgUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
 
         const imgHtml = imgUrl ? `
             <div class="quiz-img-container" id="soide-img-box-${qId}">
                 <div class="quiz-img-wrapper" style="position:relative; display:inline-block;">
-                    <img src="${imgUrl}" class="quiz-img" style="max-height:260px;" alt="Hình câu ${displayIndex}">
+                    <img src="${imgUrl}" class="quiz-img" style="max-height:260px;" onerror="handleQuizImgError(this)" alt="Hình câu ${displayIndex}">
                 </div>
             </div>` : `<div class="quiz-img-container" id="soide-img-box-${qId}" style="display:none;"></div>`;
 
@@ -2269,7 +2289,10 @@ async function uploadSoiDeImage(file, qId, imgKey) {
         if (!soiDeState.examData.images) soiDeState.examData.images = {};
         soiDeState.examData.images[imgKey] = directUrl;
         const targetQ = soiDeState.examData.questions.find(item => String(item.id) === String(qId));
-        if (targetQ) targetQ.imageUrl = directUrl;
+        if (targetQ) {
+            targetQ.imageUrl = directUrl;
+            targetQ.imageKey = imgKey;
+        }
 
         renderSoiDeBothSides();
 
@@ -2294,7 +2317,9 @@ function deleteSoiDeQuestionImage(qId, imgKey) {
         delete soiDeState.examData.images[`img_q_${qId}`];
     }
     const targetQ = soiDeState.examData.questions.find(item => String(item.id) === String(qId));
-    if (targetQ) targetQ.imageUrl = "";
+    if (targetQ) {
+        targetQ.imageUrl = "";
+    }
 
     renderSoiDeBothSides();
 }
@@ -2372,7 +2397,12 @@ async function submitExamToSelectedClasses() {
         const examTitle = examData.title || `ĐỀ THI ${dateStr}`;
         const maDe = examData.maDe || "101";
 
-        const cleanQuestions = reorganizeAllQuestionsByParts(examData.questions);
+        let cleanQuestions = reorganizeAllQuestionsByParts(examData.questions);
+        const imagesMap = examData.images || {};
+
+        if (typeof synchronizeExamQuestionsAndImages === "function") {
+            cleanQuestions = synchronizeExamQuestionsAndImages(cleanQuestions, imagesMap);
+        }
 
         const { error: qErr } = await client.from('quizzes').insert([{
             id: quizId,
@@ -2382,7 +2412,7 @@ async function submitExamToSelectedClasses() {
             exam_start_time: null,
             exam_end_time: null,
             scoring_config: { mode: 'option1' },
-            images: examData.images || {},
+            images: imagesMap,
             questions: cleanQuestions
         }]);
 
