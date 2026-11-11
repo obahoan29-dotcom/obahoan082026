@@ -1,11 +1,11 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER / IOS - ZERO CRASH)
+// (BẢN TỰ ĐỘNG CỨU ĐIỂM KHI FILE ĐỀ GỐC CHƯA CÓ ĐÁP ÁN)
+// BẢO VỆ 100% KẾT QUẢ THI CỦA HỌC SINH - KHÔNG BAO GIỜ BỊ 0 ĐIỂM OAN
 // =========================================================
 
 let submissionCountdownTimer = null;
 
-// HÀM GIẢI MÃ THAM SỐ URL AN TOÀN TRÊN IOS SAFARI/MESSENGER (CHỐNG LỖI KÝ TỰ VIỆT)
 function safeDecodeParam(val) {
     if (!val) return "";
     try {
@@ -15,9 +15,6 @@ function safeDecodeParam(val) {
     }
 }
 
-// =========================================================================
-// HÀM ÁNH XẠ CHÍNH XÁC TÊN LỚP DỰA TRÊN SỐ BÁO DANH (ƯU TIÊN TUYỆT ĐỐI)
-// =========================================================================
 function getStrictStandardClassName(rawClass, rawSbd) {
     const sbd = String(rawSbd || "").trim().toLowerCase();
     const s = String(rawClass || "").trim().toLowerCase();
@@ -94,7 +91,6 @@ async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
 
     try {
         const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
-        // Đặt timeout 1.8s để tránh treo trên iOS WebKit
         const queryPromise = client
             .from('submissions')
             .select('id, created_at')
@@ -430,7 +426,6 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
     } catch(e) {}
 }
 
-// BẢN FIX MẠNH: THÍCH ỨNG CAO ĐỘ (RESILIENT) VỚI WEBKIT TRONG MESSENGER
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -460,8 +455,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     const nowMs = Date.now();
 
-    // Thử gửi kết nối tới Supabase nhưng ĐẶT TIMEOUT 2 GIÂY
-    // Nếu mạng Messenger bị chậm, KHÔNG CRASH MÀ VẪN CHO HỌC SINH VÀO THI NGAY (Offline-first)!
     if (client) {
         try {
             const handshakeTask = async () => {
@@ -539,7 +532,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     document.getElementById("nav-student-class").innerText = strictClassName; 
     document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
     
-    // ẨN CÁC THẺ ĐĂNG NHẬP, BẬT PHÒNG THI & THANH CÔNG CỤ
     document.getElementById("student-card").style.display = "none"; 
     const waitingCard = document.getElementById("waiting-room-card"); 
     if (waitingCard) waitingCard.style.display = "none"; 
@@ -571,6 +563,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     return true;
 }
 
+// BỘ ĐÓNG GÓI KẾT QUẢ CÓ KIỂM TRA ĐA TẦNG VÀ PHỤC HỒI ĐÁP ÁN (CHỐNG LỖI 0 ĐIỂM)
 function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
@@ -595,6 +588,11 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const completionTimeStr = isForceSubmit 
         ? `Thu ép ${spentMins}p${spentSecs}s` 
         : `${spentMins} phút ${spentSecs} giây`;
+
+    // TRƯỚC KHI TÍNH ĐIỂM: ÉP BẢO VỆ VAULT ĐÁP ÁN
+    if (typeof ensureAnswerVaultCompleteness === 'function') {
+        ensureAnswerVaultCompleteness();
+    }
 
     let scoreResult = null;
     if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData) {
@@ -648,7 +646,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// BỘ GỬI GOOGLE DRIVE CÓ EXPONENTIAL BACKOFF VÀ JITTER RETRY
 async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5, timeoutMs = 60000) {
     let lastError = null;
 
@@ -996,6 +993,7 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
+// HÀM SUBMIT CHÍNH CÓ CƠ CHẾ TỰ CỨU ĐIỂM (EMERGENCY RE-CALCULATION)
 async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
@@ -1027,7 +1025,29 @@ async function executeSubmitExam(isForceSubmit = false) {
     if (typeof lockExamInteractions === 'function') lockExamInteractions();
     if (typeof saveExamStateToStorage === 'function') saveExamStateToStorage();
 
-    const payload = buildCompleteSubmissionPayload(isForceSubmit);
+    // KIỂM TRA TỰ CỨU ĐIỂM NẾU VAULT BỊ TRỐNG
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
+
+    const currentVaultAnsCount = Object.keys(window.SECURE_VAULT.answers || {}).length;
+    if (currentVaultAnsCount === 0 && client && currentQuizId) {
+        try {
+            console.warn("⚠️ Phát hiện VAULT đáp án đang trống. Đang tự động truy vấn đáp án gốc từ Supabase...");
+            const { data: freshQ } = await client.from('quizzes').select('questions, scoring_config').eq('id', currentQuizId).single();
+            if (freshQ && Array.isArray(freshQ.questions)) {
+                examData.questions = freshQ.questions;
+                if (freshQ.scoring_config) examData.scoringConfig = freshQ.scoring_config;
+                if (typeof ensureAnswerVaultCompleteness === 'function') {
+                    ensureAnswerVaultCompleteness();
+                }
+            }
+        } catch(fetchQErr) {
+            console.warn("Không thể truy vấn bổ sung đáp án:", fetchQErr);
+        }
+    }
+
+    let payload = buildCompleteSubmissionPayload(isForceSubmit);
     const currentAttemptNumber = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(payload.quiz_id, payload.sbd);
 
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
@@ -1061,7 +1081,6 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     updateProgressStatus(`⏳ Đang nộp kết quả bài thi Lần ${currentAttemptNumber}...`);
 
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     let submitOk = false;
     let serverErrorMessage = "";
 
@@ -1246,8 +1265,8 @@ function showSubmitConfirmModal() {
     
     document.getElementById("modal-actions-container").innerHTML = `
         <div class="modal-btn-row">
-            <button type="button" class="btn-modal-cancel" onclick="closeSubmitConfirmModal()">Tiếp tục làm</button>
-            <button type="button" class="btn-modal-confirm" onclick="executeSubmitExam(false)">✓ Nộp bài</button>
+            <button type="button" class="btn-modal-cancel" id="btn-modal-cancel-action" onclick="closeSubmitConfirmModal()">Tiếp tục làm</button>
+            <button type="button" class="btn-modal-confirm" id="btn-modal-submit-now" onclick="executeSubmitExam(false)">✓ Nộp bài</button>
         </div>
         <div style="margin-top: 10px; width: 100%;">
             <button type="button" onclick="downloadCompletedOrDraftSubmission()" style="width: 100%; padding: 10px; background: #f0f9ff; color: #0284c7; border: 1.5px solid #7dd3fc; border-radius: 11px; font-weight: 800; font-size: 0.92rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;">
