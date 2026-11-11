@@ -1,6 +1,5 @@
 // =========================================================
-// FILE 2: portal-admin.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN KHI UPLOAD)
-// CHUẨN HÓA ĐÁP ÁN PHẦN 1, 2, 3, 4 NGAY TỪ LÚC TẢI LÊN DATABASE
+// FILE: portal-admin.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN & ĐỒNG BỘ ẢNH KHI UPLOAD)
 // =========================================================
 
 let currentEditingTimeQuizId = null;
@@ -217,7 +216,7 @@ function readFileAsTextAsync(file) {
     });
 }
 
-// BỘ CHUẨN HÓA ĐÁP ÁN KHI UP ĐỀ THI LÊN SUPABASE
+// BỘ CHUẨN HÓA ĐÁP ÁN & ĐỒNG BỘ ẢNH KHI UP ĐỀ THI LÊN SUPABASE
 async function processUpload() {
     const fileInput = document.getElementById("admin-file-upload");
     const answerFileInput = document.getElementById("admin-answer-file-upload");
@@ -243,10 +242,24 @@ async function processUpload() {
         }
 
         const letters = ["A", "B", "C", "D"];
+        const imageMap = parsedExam.images || {};
 
-        // CHUẨN HÓA TOÀN BỘ ĐÁP ÁN CHO TỪNG CÂU
+        // CHUẨN HÓA TOÀN BỘ ĐÁP ÁN VÀ ĐỒNG BỘ ĐƯỜNG LINK ẢNH VÀO TỪNG CÂU HỎI
         parsedExam.questions = parsedExam.questions.map((q, idx) => {
             q.id = q.id || (idx + 1);
+
+            // Gắn chặt ảnh trực tiếp nếu có key tương ứng
+            if (!q.imageUrl && q.imageKey && imageMap[q.imageKey]) {
+                q.imageUrl = String(imageMap[q.imageKey]).trim();
+            } else if (!q.imageUrl && imageMap[`img_q_${q.id}`]) {
+                q.imageUrl = String(imageMap[`img_q_${q.id}`]).trim();
+                q.imageKey = `img_q_${q.id}`;
+            }
+
+            if (q.imageUrl && !q.imageKey) {
+                q.imageKey = `img_q_${q.id}`;
+                imageMap[q.imageKey] = q.imageUrl;
+            }
 
             // Phần 1:
             if (q.type === "multiple_choice" && !q.part && q.type !== "essay") {
@@ -282,6 +295,8 @@ async function processUpload() {
 
             return q;
         });
+
+        parsedExam.images = imageMap;
 
         const customTitle = customTitleInput ? customTitleInput.value.trim() : "";
         if (customTitle) parsedExam.title = customTitle;
@@ -331,7 +346,7 @@ async function processUpload() {
 
         await supabaseClient.from('custom_links').insert(linkRows);
 
-        alert(`✨ Đăng đề thi "${parsedExam.title}" (${finalTimeLimitMinutes} phút) thành công!\nToàn bộ đáp án đã được chuẩn hóa và lưu trữ an toàn.`);
+        alert(`✨ Đăng đề thi "${parsedExam.title}" (${finalTimeLimitMinutes} phút) thành công!\nToàn bộ hình ảnh và đáp án đã được chuẩn hóa, lưu trữ an toàn.`);
         window.location.reload(); 
     } catch (err) { 
         alert("❌ Lỗi: " + err.message); 
@@ -787,7 +802,7 @@ async function changeAvatarSize(categoryId, itemId, sizePx, event) {
 }
 
 // =========================================================
-// QUẢN LÝ CẤU HÌNH LẮNG NGHE REALTIME (TIẾT KIỆM BĂNG THÔNG)
+// QUẢN LÝ CẤU HÌNH LẮNG NGHE REALTIME
 // =========================================================
 
 const DEFAULT_REALTIME_CONFIG = {
