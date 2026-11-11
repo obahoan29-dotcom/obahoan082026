@@ -1,6 +1,6 @@
 // =========================================================
-// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN KHI SOI ĐỀ)
-// Đã loại bỏ các lệnh "delete" phá hủy cấu trúc đề gốc
+// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN & HIỂN THỊ UNDEFINED)
+// CƠ CHẾ NẠP ĐÁP ÁN ĐA TẦNG CHO SECURE_VAULT TỪ MỌI ĐỊNH DẠNG ĐỀ
 // =========================================================
 
 function isPart4Question(q) {
@@ -33,6 +33,7 @@ function scrollToSection(partId) {
 
 function renderQuizLayout(questions, imageMap) { 
     const container = document.getElementById('dynamic-questions-container'); 
+    if (!container) return;
     container.innerHTML = ''; 
     
     // Tách riêng biệt 4 phần theo đúng chuẩn cấu trúc Bộ GD&ĐT
@@ -45,11 +46,17 @@ function renderQuizLayout(questions, imageMap) {
     let displayIndex = 1; 
     let html = ""; 
     const isAdminMode = typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode();
+    const letters = ["A", "B", "C", "D"];
+
+    window.SECURE_VAULT = window.SECURE_VAULT || {};
+    window.SECURE_VAULT.answers = window.SECURE_VAULT.answers || {};
+    window.SECURE_VAULT.explanations = window.SECURE_VAULT.explanations || {};
+    window.SECURE_VAULT.questionData = window.SECURE_VAULT.questionData || {};
 
     function buildAdminImageUploader(q, qIdx) {
         if (!isAdminMode) return "";
         const imgKey = q.imageKey || `img_q_${q.id}`;
-        const currentImg = getEffectiveImageUrl(q, imageMap);
+        const currentImg = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
 
         const hasOriginalImg = Boolean(
             (currentImg && currentImg.trim() !== "") ||
@@ -141,21 +148,25 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p1"><div class="section-icon">📑</div><div class="section-text"><h3>PHẦN 1. TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN</h3><p>Chọn duy nhất 01 phương án đúng trong các phương án A, B, C, D</p></div></div>`; 
         p1List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            const letters = ["A", "B", "C", "D"]; 
             
-            if (q.correct !== undefined) {
-                window.SECURE_VAULT.answers[`q${q.id}`] = (typeof q.correct === 'number') 
-                    ? letters[q.correct] 
-                    : String(q.correct).trim().toUpperCase();
-            }
-            if (q.explanation) window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-            
-            // BỎ DELETE Ở ĐÂY: Để bảo vệ đáp án cho Soi Đề và Xuất PDF
-            // delete q.correct;
-            // delete q.explanation;
+            // Nạp đáp án an toàn đa tầng cho Phần 1:
+            let resolvedCorrect = undefined;
+            if (q.correct !== undefined) resolvedCorrect = q.correct;
+            else if (q.answer !== undefined) resolvedCorrect = q.answer;
+            else if (q.dapan !== undefined) resolvedCorrect = q.dapan;
 
-            const imgUrl = getEffectiveImageUrl(q, imageMap);
-            const imgHTML = buildImgHtml(imgUrl, q.id); 
+            if (typeof resolvedCorrect === 'number') {
+                window.SECURE_VAULT.answers[`q${q.id}`] = letters[resolvedCorrect] || "A";
+            } else if (typeof resolvedCorrect === 'string') {
+                window.SECURE_VAULT.answers[`q${q.id}`] = resolvedCorrect.trim().toUpperCase();
+            } else if (!window.SECURE_VAULT.answers[`q${q.id}`]) {
+                window.SECURE_VAULT.answers[`q${q.id}`] = "A";
+            }
+
+            if (q.explanation) window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
+
+            const imgUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
+            const imgHTML = (typeof buildImgHtml === 'function') ? buildImgHtml(imgUrl, q.id) : ""; 
             const uploaderHTML = buildAdminImageUploader(q, qIdx);
 
             html += `<div class="question-card" id="q-card-${q.id}" data-qid="${q.id}" data-imgkey="${q.imageKey || ''}" data-qidx="${qIdx}"> 
@@ -173,25 +184,30 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p2" style="background: linear-gradient(135deg, #7c3aed, #4f46e5);"><div class="section-icon">⚖️</div><div class="section-text"><h3>PHẦN 2. TRẮC NGHIỆM ĐÚNG SAI</h3><p>Thí sinh chọn Đúng hoặc Sai cho từng mệnh đề a), b), c), d)</p></div></div>`; 
         p2List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            const imgUrl = getEffectiveImageUrl(q, imageMap);
-            const imgHTML = buildImgHtml(imgUrl, q.id); 
+            const imgUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
+            const imgHTML = (typeof buildImgHtml === 'function') ? buildImgHtml(imgUrl, q.id) : ""; 
             const uploaderHTML = buildAdminImageUploader(q, p1List.length + qIdx);
 
             let rows = ""; 
-            q.statements.forEach((st) => { 
+            (q.statements || []).forEach((st) => { 
                 const subKey = `q${q.id}_${st.id}`; 
-                if (st.correct !== undefined) {
-                    window.SECURE_VAULT.answers[subKey] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng' || String(st.correct).toLowerCase() === 'true') ? "Đúng" : "Sai";
+                
+                // Nạp đáp án an toàn đa tầng cho từng mệnh đề Phần 2:
+                let stVal = undefined;
+                if (st.correct !== undefined) stVal = st.correct;
+                else if (st.answer !== undefined) stVal = st.answer;
+                else if (st.dapan !== undefined) stVal = st.dapan;
+
+                if (stVal !== undefined) {
+                    window.SECURE_VAULT.answers[subKey] = (stVal === true || String(stVal).toLowerCase() === 'đúng' || String(stVal).toLowerCase() === 'true') ? "Đúng" : "Sai";
+                } else if (!window.SECURE_VAULT.answers[subKey]) {
+                    window.SECURE_VAULT.answers[subKey] = "Đúng";
                 }
-                // BỎ DELETE Ở ĐÂY
-                // delete st.correct;
                 
                 rows += `<tr><td><b>${st.id})</b> ${st.statement}</td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Đúng" onchange="onStatementChange('${subKey}')"></td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Sai" onchange="onStatementChange('${subKey}')"></td></tr>`; 
             }); 
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                // BỎ DELETE Ở ĐÂY
-                // delete q.explanation;
             }
             html += `<div class="question-card" id="q-card-${q.id}" data-qid="${q.id}" data-imgkey="${q.imageKey || ''}" data-qidx="${p1List.length + qIdx}"> 
                 <div class="q-header"><div class="q-num-badge" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
@@ -208,18 +224,25 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p3" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
         p3List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            if (q.correctAnswer !== undefined) {
-                window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim();
-                // BỎ DELETE Ở ĐÂY
-                // delete q.correctAnswer;
+            
+            // Nạp đáp án an toàn đa tầng cho Phần 3:
+            let resolvedAns = undefined;
+            if (q.correctAnswer !== undefined) resolvedAns = q.correctAnswer;
+            else if (q.correct !== undefined) resolvedAns = q.correct;
+            else if (q.answer !== undefined) resolvedAns = q.answer;
+            else if (q.dapan !== undefined) resolvedAns = q.dapan;
+
+            if (resolvedAns !== undefined) {
+                window.SECURE_VAULT.answers[`q${q.id}`] = String(resolvedAns).trim();
+            } else if (!window.SECURE_VAULT.answers[`q${q.id}`]) {
+                window.SECURE_VAULT.answers[`q${q.id}`] = "0";
             }
+
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                // BỎ DELETE Ở ĐÂY
-                // delete q.explanation;
             }
-            const imgUrl = getEffectiveImageUrl(q, imageMap);
-            const imgHTML = buildImgHtml(imgUrl, q.id); 
+            const imgUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
+            const imgHTML = (typeof buildImgHtml === 'function') ? buildImgHtml(imgUrl, q.id) : ""; 
             const uploaderHTML = buildAdminImageUploader(q, p1List.length + p2List.length + qIdx);
 
             html += `
@@ -248,18 +271,25 @@ function renderQuizLayout(questions, imageMap) {
         </div>`; 
         p4List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
-            if (q.correctAnswer !== undefined) {
-                window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim(); 
-                // BỎ DELETE Ở ĐÂY
-                // delete q.correctAnswer;
+            
+            // Nạp đáp án an toàn đa tầng cho Phần 4:
+            let resolvedAns = undefined;
+            if (q.correctAnswer !== undefined) resolvedAns = q.correctAnswer;
+            else if (q.correct !== undefined) resolvedAns = q.correct;
+            else if (q.answer !== undefined) resolvedAns = q.answer;
+            else if (q.dapan !== undefined) resolvedAns = q.dapan;
+
+            if (resolvedAns !== undefined) {
+                window.SECURE_VAULT.answers[`q${q.id}`] = String(resolvedAns).trim();
+            } else if (!window.SECURE_VAULT.answers[`q${q.id}`]) {
+                window.SECURE_VAULT.answers[`q${q.id}`] = "0";
             }
+
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                // BỎ DELETE Ở ĐÂY
-                // delete q.explanation;
             }
-            const imgUrl = getEffectiveImageUrl(q, imageMap);
-            const imgHTML = buildImgHtml(imgUrl, q.id); 
+            const imgUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
+            const imgHTML = (typeof buildImgHtml === 'function') ? buildImgHtml(imgUrl, q.id) : ""; 
             const uploaderHTML = buildAdminImageUploader(q, p1List.length + p2List.length + p3List.length + qIdx);
 
             html += `
@@ -301,7 +331,7 @@ function renderQuestionPalette(questions) {
     let html = ""; 
     let globalIdx = 1;
 
-    // PHẦN 1: HUY HIỆU VÀNG + CÂU PHẦN 1
+    // PHẦN 1
     if (p1List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p1')" title="Cuộn tới Phần I">Phần I</div>`;
         p1List.forEach(q => {
@@ -310,7 +340,7 @@ function renderQuestionPalette(questions) {
         });
     }
 
-    // PHẦN 2: HUY HIỆU VÀNG + CÂU PHẦN 2
+    // PHẦN 2
     if (p2List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p2')" title="Cuộn tới Phần II">Phần II</div>`;
         p2List.forEach(q => {
@@ -319,7 +349,7 @@ function renderQuestionPalette(questions) {
         });
     }
 
-    // PHẦN 3: HUY HIỆU VÀNG + CÂU PHẦN 3
+    // PHẦN 3
     if (p3List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p3')" title="Cuộn tới Phần III">Phần III</div>`;
         p3List.forEach(q => {
@@ -328,7 +358,7 @@ function renderQuestionPalette(questions) {
         });
     }
 
-    // PHẦN 4: HUY HIỆU VÀNG + CÂU PHẦN 4
+    // PHẦN 4
     if (p4List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p4')" title="Cuộn tới Phần IV">Phần IV</div>`;
         p4List.forEach(q => {
