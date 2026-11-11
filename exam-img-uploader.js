@@ -1,7 +1,5 @@
 // =========================================================
-// FILE: exam-img-uploader.js (BẢN SUPABASE HOÀN TOÀN)
-// QUẢN LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V), TỰ ĐỘNG UPLOAD & ĐỒNG BỘ SUPABASE
-// TÍCH HỢP: CÔNG TẮC LẮNG NGHE ĐỒNG BỘ ẢNH (watchImageSync)
+// FILE: exam-img-uploader.js (BẢN FIX TRIỆT ĐỂ MẤT ẢNH: QUÉT MỌI PATTERN & FALLBACK ĐA TẦNG)
 // =========================================================
 
 let imageSyncChannel = null;
@@ -87,41 +85,111 @@ function detectImageSource(url) {
     return { text: "Kho ảnh", cls: "" };
 }
 
+// HÀM LẤY ẢNH ĐA TẦNG: QUÉT TOÀN BỘ CÁC BIẾN THỂ KEY VÀ LINK CHUẨN HÓA
 function getEffectiveImageUrl(q, imageMap) {
     if (!q) return "";
     if (!imageMap || typeof imageMap !== 'object') imageMap = {};
 
+    // 1. Kiểm tra trực tiếp trên trường imageUrl của câu hỏi
     if (q.imageUrl && String(q.imageUrl).trim() !== "") {
-        return q.imageUrl.trim();
+        let clean = String(q.imageUrl).trim();
+        return (typeof toDirectGoogleDriveImageUrl === 'function') ? toDirectGoogleDriveImageUrl(clean) : clean;
     }
+
+    // 2. Kiểm tra theo imageKey được gán
     if (q.imageKey && imageMap[q.imageKey] && String(imageMap[q.imageKey]).trim() !== "") {
-        return imageMap[q.imageKey].trim();
+        let clean = String(imageMap[q.imageKey]).trim();
+        return (typeof toDirectGoogleDriveImageUrl === 'function') ? toDirectGoogleDriveImageUrl(clean) : clean;
     }
+
+    // 3. Quét thông minh qua tất cả các pattern key thường gặp trong đề thi
+    const qIdStr = String(q.id || "").trim();
     const possibleKeys = [
-        `img_q_${q.id}`, `q${q.id}`, `${q.id}`,
-        `dh_p1_c${q.id}`, `hy_p1_c${q.id}`, `pbc_p1_c${q.id}`, `dethem_p3_c${q.id}`
+        `img_q_${qIdStr}`, `q${qIdStr}`, `${qIdStr}`,
+        `pbc_p1_c${qIdStr}`, `pbc_p2_c${qIdStr}`, `pbc_p3_c${qIdStr}`, `pbc_p4_c${qIdStr}`,
+        `dh_p1_c${qIdStr}`, `dh_p2_c${qIdStr}`, `dh_p3_c${qIdStr}`,
+        `hy_p1_c${qIdStr}`, `hy_p2_c${qIdStr}`, `hy_p3_c${qIdStr}`,
+        `dethem_p1_c${qIdStr}`, `dethem_p2_c${qIdStr}`, `dethem_p3_c${qIdStr}`,
+        `cau_${qIdStr}`, `cau${qIdStr}`
     ];
+
     for (let k of possibleKeys) {
         if (imageMap[k] && String(imageMap[k]).trim() !== "") {
-            return imageMap[k].trim();
+            let clean = String(imageMap[k]).trim();
+            return (typeof toDirectGoogleDriveImageUrl === 'function') ? toDirectGoogleDriveImageUrl(clean) : clean;
         }
     }
+
+    // 4. Nếu imageKey có nhưng chưa có tiền tố (case insensitive)
+    if (q.imageKey) {
+        const lowerKey = String(q.imageKey).toLowerCase();
+        for (let mKey in imageMap) {
+            if (mKey.toLowerCase() === lowerKey && imageMap[mKey] && String(imageMap[mKey]).trim() !== "") {
+                let clean = String(imageMap[mKey]).trim();
+                return (typeof toDirectGoogleDriveImageUrl === 'function') ? toDirectGoogleDriveImageUrl(clean) : clean;
+            }
+        }
+    }
+
     return "";
 }
 
+// BỘ XỬ LÝ LỖI ẢNH GOOGLE DRIVE TỰ ĐỘNG CHUYỂN ENDPOINT (CHỐNG MẤT ẢNH SAU VÀI NGÀY)
+function handleQuizImgError(imgEl) {
+    if (!imgEl || !imgEl.src) return;
+    const currentSrc = imgEl.src;
+    
+    // Nếu là Google Drive, tự động thử đổi sang các endpoint dự phòng
+    if (currentSrc.includes('googleusercontent.com') || currentSrc.includes('drive.google.com')) {
+        let m = currentSrc.match(/(?:file\/d\/|id=|open\?id=|\/d\/)([a-zA-Z0-9_-]{25,})/);
+        if (m && m[1]) {
+            const fileId = m[1];
+            const triedLevel = parseInt(imgEl.dataset.fallbackLevel || "0", 10);
+            
+            if (triedLevel === 0) {
+                imgEl.dataset.fallbackLevel = "1";
+                imgEl.src = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1400`;
+                return;
+            } else if (triedLevel === 1) {
+                imgEl.dataset.fallbackLevel = "2";
+                imgEl.src = `https://lh3.googleusercontent.com/u/0/d/${fileId}`;
+                return;
+            } else if (triedLevel === 2) {
+                imgEl.dataset.fallbackLevel = "3";
+                imgEl.src = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                return;
+            }
+        }
+    }
+
+    // Nếu vẫn không tải được sau các lần thử, hiển thị thông báo nhẹ nhàng
+    imgEl.style.display = "none";
+    const parent = imgEl.closest('.quiz-img-container');
+    if (parent && !parent.querySelector('.img-load-fail-notice')) {
+        const notice = document.createElement('div');
+        notice.className = 'img-load-fail-notice';
+        notice.style.cssText = 'padding:8px 12px; background:#fff1f2; border:1px solid #fecdd3; border-radius:8px; color:#be123c; font-size:12px; font-weight:700; text-align:center; margin:6px 0;';
+        notice.innerHTML = `⚠️ Hình vẽ minh họa tải chậm. <a href="${currentSrc}" target="_blank" style="color:#0284c7; text-decoration:underline;">Nhấn vào đây để xem ảnh gốc</a>`;
+        parent.appendChild(notice);
+    }
+}
+
+// TẠO HTML KHUNG ẢNH: ĐÃ LOẠI BỎ loading="lazy" GÂY ẨN ẢNH TRÊN IOS WEBKIT
 function buildImgHtml(imgUrl, qId) {
-    const hasUrl = Boolean(imgUrl && String(imgUrl).trim() !== "");
-    const srcInfo = detectImageSource(imgUrl);
+    const cleanUrl = imgUrl ? String(imgUrl).trim() : "";
+    const hasUrl = Boolean(cleanUrl !== "");
+    const srcInfo = detectImageSource(cleanUrl);
+    
     return `
     <div class="quiz-img-container" id="img-container-${qId}" style="${hasUrl ? '' : 'display:none;'}">
         <div class="quiz-img-wrapper">
-            <img src="${imgUrl || ''}" class="quiz-img" id="img-display-${qId}" referrerpolicy="no-referrer" loading="lazy" alt="Hình minh họa">
+            <img src="${cleanUrl}" class="quiz-img" id="img-display-${qId}" onerror="handleQuizImgError(this)" alt="Hình minh họa">
             <span class="img-source-badge ${srcInfo.cls}" id="img-source-${qId}" style="${hasUrl ? '' : 'display:none;'}">${srcInfo.text}</span>
         </div>
     </div>`;
 }
 
-// 4. KÊNH ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL: KIỂM TRA CÔNG TẮC watchImageSync
+// KÊNH ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL
 function startImageSyncWatcher(quizId) {
     if (!quizId) return;
 
@@ -189,29 +257,41 @@ function applyRealtimeImageUpdate(syncData) {
             const targetQ = examData.questions.find(item => item && String(item.id) === String(qId));
             if (targetQ) {
                 targetQ.imageUrl = isDeleteAction ? "" : newUrl;
+                targetQ.imageKey = imgKey;
                 if (isDeleteAction && targetQ.imageKey) delete examData.images[targetQ.imageKey];
             }
         }
     }
 
+    // CẬP NHẬT ĐỒNG THỜI VÀO BẢN CACHE XÁO ĐỀ NẾU CÓ
     try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? examData.id : "");
         const examCode = typeof getExamCode === 'function' ? getExamCode() : "";
-        const shuffleKey = `shuffled_exam_${examCode}`;
-        const rawCached = safeLocal.getItem(shuffleKey);
-        if (rawCached) {
-            const parsedList = JSON.parse(rawCached);
-            if (Array.isArray(parsedList)) {
-                const qInCache = parsedList.find(item => item && String(item.id) === String(qId));
-                if (qInCache) {
-                    qInCache.imageUrl = isDeleteAction ? "" : newUrl;
-                    safeLocal.setItem(shuffleKey, JSON.stringify(parsedList));
+        
+        const candidateKeys = [
+            `shuffled_exam_${quizId}_${examCode}`,
+            `shuffled_exam_${examCode}`
+        ];
+
+        candidateKeys.forEach(k => {
+            const rawCached = safeLocal.getItem(k);
+            if (rawCached) {
+                const parsedList = JSON.parse(rawCached);
+                if (Array.isArray(parsedList)) {
+                    const qInCache = parsedList.find(item => item && String(item.id) === String(qId));
+                    if (qInCache) {
+                        qInCache.imageUrl = isDeleteAction ? "" : newUrl;
+                        qInCache.imageKey = imgKey;
+                        safeLocal.setItem(k, JSON.stringify(parsedList));
+                    }
                 }
             }
-        }
+        });
     } catch(e) {}
 
     const containerEl = document.getElementById(`img-container-${qId}`);
-    const imgEl = document.getElementById(`img-display-${qId}`);
+    let imgEl = document.getElementById(`img-display-${qId}`);
     const badgeSrcEl = document.getElementById(`img-source-${qId}`);
     const delBtn = document.getElementById(`btn-del-img-${qId}`);
     const badgeEl = document.getElementById(`badge-has-img-${qId}`);
@@ -224,17 +304,19 @@ function applyRealtimeImageUpdate(syncData) {
         if (badgeEl) badgeEl.style.display = "none";
     } else {
         const srcInfo = detectImageSource(newUrl);
-        if (imgEl) {
-            imgEl.src = newUrl;
-            imgEl.style.display = "inline-block";
-            if (containerEl) containerEl.style.display = "block";
-        } else if (containerEl) {
-            containerEl.innerHTML = `
-                <div class="quiz-img-wrapper">
-                    <img src="${newUrl}" class="quiz-img" id="img-display-${qId}" referrerpolicy="no-referrer" loading="lazy" alt="Hình minh họa">
-                    <span class="img-source-badge ${srcInfo.cls}" id="img-source-${qId}">${srcInfo.text}</span>
-                </div>`;
+        if (containerEl) {
             containerEl.style.display = "block";
+            if (!imgEl) {
+                containerEl.innerHTML = `
+                    <div class="quiz-img-wrapper">
+                        <img src="${newUrl}" class="quiz-img" id="img-display-${qId}" onerror="handleQuizImgError(this)" alt="Hình minh họa">
+                        <span class="img-source-badge ${srcInfo.cls}" id="img-source-${qId}">${srcInfo.text}</span>
+                    </div>`;
+            } else {
+                imgEl.src = newUrl;
+                imgEl.style.display = "inline-block";
+                delete imgEl.dataset.fallbackLevel;
+            }
         }
         if (badgeSrcEl) {
             badgeSrcEl.innerText = srcInfo.text;
@@ -359,7 +441,6 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
         const quizId = urlParams.get('id');
         const effectiveKey = imageKey || `img_q_${qId}`;
 
-        // Cập nhật giao diện trang tại chỗ
         applyRealtimeImageUpdate({
             qId: qId,
             imageKey: effectiveKey,
@@ -450,7 +531,6 @@ async function deleteQuestionImage(qId, imageKey, qIdx) {
             action: "delete"
         });
 
-        // XÓA TRÊN SUPABASE (TABLE: quizzes)
         if (quizId) {
             const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
             if (client) {
@@ -542,5 +622,9 @@ window.handleAdminFileSelected = function(input, qId, imgKey, qIdx) {
     }
 };
 
+window.getEffectiveImageUrl = getEffectiveImageUrl;
+window.handleQuizImgError = handleQuizImgError;
+window.buildImgHtml = buildImgHtml;
 window.startImageSyncWatcher = startImageSyncWatcher;
+window.applyRealtimeImageUpdate = applyRealtimeImageUpdate;
 window.deleteQuestionImage = deleteQuestionImage;
