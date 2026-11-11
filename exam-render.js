@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN & HIỂN THỊ UNDEFINED)
-// CƠ CHẾ NẠP ĐÁP ÁN ĐA TẦNG CHO SECURE_VAULT TỪ MỌI ĐỊNH DẠNG ĐỀ
+// FILE: exam-render.js (BẢN FIX ĐỒNG BỘ ẢNH 4 PHẦN VÀ HIỂN THỊ CHUẨN XÁC)
 // =========================================================
 
 function isPart4Question(q) {
@@ -36,7 +35,11 @@ function renderQuizLayout(questions, imageMap) {
     if (!container) return;
     container.innerHTML = ''; 
     
-    // Tách riêng biệt 4 phần theo đúng chuẩn cấu trúc Bộ GD&ĐT
+    // ĐỒNG BỘ LINK ẢNH TRỰC TIẾP CHO TOÀN BỘ CÂU HỎI TRƯỚC KHI CHIA PHẦN
+    if (typeof synchronizeExamQuestionsAndImages === 'function') {
+        questions = synchronizeExamQuestionsAndImages(questions, imageMap);
+    }
+
     const p1List = questions.filter(q => q.type === "multiple_choice" && !isPart4Question(q)); 
     const p2List = questions.filter(q => q.type === "true_false" && !isPart4Question(q)); 
     const p3List = questions.filter(q => (q.type === "short_answer") && !isPart4Question(q)); 
@@ -143,13 +146,12 @@ function renderQuizLayout(questions, imageMap) {
         </div>
     `;
 
-    // PHẦN 1
+    // PHẦN 1: TRẮC NGHIỆM ABCD
     if (p1List.length > 0) { 
         html += `<div class="exam-section-banner" id="exam-section-p1"><div class="section-icon">📑</div><div class="section-text"><h3>PHẦN 1. TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN</h3><p>Chọn duy nhất 01 phương án đúng trong các phương án A, B, C, D</p></div></div>`; 
         p1List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
             
-            // Nạp đáp án an toàn đa tầng cho Phần 1:
             let resolvedCorrect = undefined;
             if (q.correct !== undefined) resolvedCorrect = q.correct;
             else if (q.answer !== undefined) resolvedCorrect = q.answer;
@@ -179,7 +181,7 @@ function renderQuizLayout(questions, imageMap) {
         }); 
     } 
 
-    // PHẦN 2
+    // PHẦN 2: TRẮC NGHIỆM ĐÚNG SAI
     if (p2List.length > 0) { 
         html += `<div class="exam-section-banner" id="exam-section-p2" style="background: linear-gradient(135deg, #7c3aed, #4f46e5);"><div class="section-icon">⚖️</div><div class="section-text"><h3>PHẦN 2. TRẮC NGHIỆM ĐÚNG SAI</h3><p>Thí sinh chọn Đúng hoặc Sai cho từng mệnh đề a), b), c), d)</p></div></div>`; 
         p2List.forEach((q, qIdx) => { 
@@ -192,7 +194,6 @@ function renderQuizLayout(questions, imageMap) {
             (q.statements || []).forEach((st) => { 
                 const subKey = `q${q.id}_${st.id}`; 
                 
-                // Nạp đáp án an toàn đa tầng cho từng mệnh đề Phần 2:
                 let stVal = undefined;
                 if (st.correct !== undefined) stVal = st.correct;
                 else if (st.answer !== undefined) stVal = st.answer;
@@ -219,13 +220,12 @@ function renderQuizLayout(questions, imageMap) {
         }); 
     } 
 
-    // PHẦN 3
+    // PHẦN 3: TRẢ LỜI NGẮN
     if (p3List.length > 0) { 
         html += `<div class="exam-section-banner" id="exam-section-p3" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
         p3List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
             
-            // Nạp đáp án an toàn đa tầng cho Phần 3:
             let resolvedAns = undefined;
             if (q.correctAnswer !== undefined) resolvedAns = q.correctAnswer;
             else if (q.correct !== undefined) resolvedAns = q.correct;
@@ -260,7 +260,7 @@ function renderQuizLayout(questions, imageMap) {
         }); 
     } 
 
-    // PHẦN 4
+    // PHẦN 4: TỰ LUẬN ĐIỀN ĐÁP ÁN NGẮN & NỘP DRIVE
     if (p4List.length > 0) { 
         html += `<div class="exam-section-banner" id="exam-section-p4" style="background: linear-gradient(135deg, #ea580c, #c2410c); margin-top: 20px;"> 
             <div class="section-icon">📝</div> 
@@ -272,7 +272,6 @@ function renderQuizLayout(questions, imageMap) {
         p4List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
             
-            // Nạp đáp án an toàn đa tầng cho Phần 4:
             let resolvedAns = undefined;
             if (q.correctAnswer !== undefined) resolvedAns = q.correctAnswer;
             else if (q.correct !== undefined) resolvedAns = q.correct;
@@ -308,7 +307,6 @@ function renderQuizLayout(questions, imageMap) {
 
     container.innerHTML = globalDriveUploadBanner + html; 
     
-    // TẠO THANH ĐIỀU HƯỚNG CÂU HỎI KÈM BADGE PHẦN I, II, III, IV
     renderQuestionPalette(questions); 
     setupScrollObserver(); 
     if (typeof updateProgress === 'function') updateProgress(); 
@@ -318,7 +316,6 @@ function renderQuizLayout(questions, imageMap) {
     }
 }
 
-// BỘ TẠO CÁC NÚT VÀNG PHẦN I, II, III, IV KÈM PHÂN MÀU TỪNG CÂU
 function renderQuestionPalette(questions) { 
     const container = document.getElementById('q-nav-scroll-container'); 
     if (!container) return; 
