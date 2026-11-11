@@ -1,9 +1,7 @@
 // =========================================================
 // FILE 3: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI TRẮNG MÀN HÌNH & OUT TRÊN IPHONE / MESSENGER / IOS)
-// ĐÃ TỐI ƯU 180+ THÍ SINH - TIẾT KIỆM TÀI NGUYÊN SUPABASE FREE
-// ĐÃ TÍCH HỢP: ZERO-BLANK-SCREEN WATCHDOG (KHÔNG BAO GIỜ BỊ TRẮNG MÀN HÌNH)
-// OFFLINE-FIRST: LƯU TỨC THÌ LOCAL/INDEXEDDB, BẢO LƯU 100% BÀI THI
+// (BẢN FIX TRIỆT ĐỂ LỖI TRẮNG MÀN HÌNH VÀ BẢO VỆ ĐÁP ÁN)
+// ĐÃ TÍCH HỢP: ZERO-BLANK-SCREEN WATCHDOG
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
