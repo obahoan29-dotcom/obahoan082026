@@ -1,6 +1,6 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN)
-// Cập nhật tính năng Deep Clone để ngăn chặn lây chéo xóa bộ nhớ
+// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN KHI UPDATE)
+// BẢO TỒN ĐÁP ÁN ĐA TẦNG CHO PHẦN 1, 2, 3, 4 KHI CHUYỂN VÀ UPDATE
 // =========================================================
 
 let soiDeState = {
@@ -138,7 +138,6 @@ function injectSoiDeStyles() {
     const style = document.createElement("style");
     style.id = styleId;
     style.innerHTML = `
-        /* MODAL OVERLAY */
         .soide-modal-overlay {
             position: fixed; inset: 0; background: rgba(15, 23, 42, 0.88);
             backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -156,7 +155,6 @@ function injectSoiDeStyles() {
             display: flex; flex-direction: column; overflow: hidden; position: relative;
         }
 
-        /* HEADER CHÍNH */
         .soide-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 6px 14px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -174,7 +172,6 @@ function injectSoiDeStyles() {
         .btn-soide-tool:hover { filter: brightness(1.12); transform: translateY(-1px); }
         .btn-soide-tool:active { transform: translateY(1.5px) scale(0.96); }
 
-        /* NÚT UPDATE CẬP NHẬT ĐỀ THI */
         .btn-soide-update {
             background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
             color: #ffffff !important; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.45) !important;
@@ -199,7 +196,6 @@ function injectSoiDeStyles() {
         .btn-soide-close { background: #334155; color: #f87171; border-radius: 50%; width: 28px; height: 28px; padding: 0; justify-content: center; font-size: 14px; font-weight: 900; }
         .btn-soide-close:hover { background: #ef4444; color: #ffffff; }
 
-        /* DROPDOWN CHỌN 8 LỚP ĐĂNG ĐỀ */
         .soide-class-dropdown {
             position: absolute; top: calc(100% + 8px); right: 120px; width: 260px;
             background: #ffffff; border-radius: 14px; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.45);
@@ -219,7 +215,6 @@ function injectSoiDeStyles() {
         .soide-class-chk-item.checked { border-color: #0284c7; background: #e0f2fe; color: #0369a1; }
         .soide-class-chk-item input { margin: 0; accent-color: #0284c7; cursor: pointer; }
 
-        /* BODY SPLIT */
         .soide-split-body {
             flex: 1; display: flex; width: 100%; height: calc(100% - 46px);
             overflow: hidden; position: relative; user-select: none;
@@ -416,7 +411,6 @@ function ensureSoiDeModalInDOM() {
     modalDiv.id = "modal-soi-de";
     modalDiv.innerHTML = `
         <div class="soide-modal-card" onclick="event.stopPropagation()">
-            <!-- HEADER -->
             <div class="soide-header">
                 <div class="soide-header-left">
                     <span style="font-size: 18px;">🔬</span>
@@ -426,17 +420,14 @@ function ensureSoiDeModalInDOM() {
                     </div>
                 </div>
                 <div class="soide-header-tools">
-                    <!-- NÚT UPDATE CẬP NHẬT TỨC THÌ LÊN MÁY CHỦ VÀ PHÒNG THI -->
                     <button type="button" class="btn-soide-tool btn-soide-update" id="btn-soide-update-exam" onclick="updateExamFromSoiDe()" title="Cập nhật trực tiếp toàn bộ thay đổi lên máy chủ Supabase và phòng thi">
                         ⚡ Update
                     </button>
 
-                    <!-- NÚT TẢI ĐỀ LÊN LỚP -->
                     <button type="button" class="btn-soide-tool btn-soide-upload-class" id="btn-soide-class-picker" onclick="toggleSoiDeClassDropdown(event)">
                         🚀 Tải đề lên lớp ▾
                     </button>
 
-                    <!-- DROPDOWN 8 LỚP -->
                     <div class="soide-class-dropdown" id="soide-class-dropdown" onclick="event.stopPropagation()">
                         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:5px;">
                             <b style="font-size:12px; color:#0284c7;">🎯 Chọn lớp đăng đề:</b>
@@ -479,9 +470,7 @@ function ensureSoiDeModalInDOM() {
                 </div>
             </div>
 
-            <!-- BODY SPLIT -->
             <div class="soide-split-body" id="soide-split-body">
-                <!-- NỬA TRÁI: LIVE RENDER -->
                 <div class="soide-left-pane" id="soide-left-pane" style="width: 50%;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 5px;">
                         <span style="font-size: 13px; font-weight: 900; color: #0f172a; display: flex; align-items: center; gap: 5px;">
@@ -493,12 +482,9 @@ function ensureSoiDeModalInDOM() {
                     <div id="soide-live-preview-content"></div>
                 </div>
 
-                <!-- VẠCH CHIA KÉO ĐỘ RỘNG -->
                 <div class="soide-resizer" id="soide-resizer" title="Giữ chuột và kéo sang trái/phải để chỉnh độ rộng"></div>
 
-                <!-- NỬA PHẢI: LATEX EDITOR -->
                 <div class="soide-right-pane" id="soide-right-pane" style="width: 50%;">
-                    <!-- VÙNG KÉO THẢ TỆP -->
                     <div class="soide-drop-zone" id="soide-drop-zone">
                         <div class="soide-drop-text">
                             <span>📥</span> <span>Kéo thả file <b>.json / .js / .txt</b> vào đây hoặc bấm nút <b>Upload Đề</b> ở góc trên!</span>
@@ -508,7 +494,6 @@ function ensureSoiDeModalInDOM() {
                         </button>
                     </div>
 
-                    <!-- THÔNG TIN CHUNG ĐỀ THI -->
                     <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 6px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 8px; border-radius: 9px;">
                         <div>
                             <div class="soide-textarea-label">Tên đề thi:</div>
@@ -524,10 +509,8 @@ function ensureSoiDeModalInDOM() {
                         </div>
                     </div>
 
-                    <!-- KHỐI SOẠN THẢO DẠNG CARDS -->
                     <div id="soide-cards-container" style="display: flex; flex-direction: column; gap: 7px;"></div>
 
-                    <!-- KHỐI SOẠN THẢO DẠNG RAW CODE -->
                     <div id="soide-raw-container" style="display: none; flex: 1; flex-direction: column;">
                         <textarea id="soide-raw-editor" class="soide-raw-textarea" spellcheck="false" oninput="handleSoiDeRawInput(this.value)"></textarea>
                     </div>
@@ -549,7 +532,6 @@ function ensureSoiDeModalInDOM() {
         }
     });
 
-    // Bắt phím tắt Ctrl + S để update nhanh
     window.addEventListener("keydown", function(e) {
         if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
             const modal = document.getElementById("modal-soi-de");
@@ -563,7 +545,6 @@ function ensureSoiDeModalInDOM() {
     return modalDiv;
 }
 
-// TỰ ĐỘNG KHỞI TẠO NÚT "CHUYỂN SANG SOI" TRONG GIAO DIỆN BÀI THI KHI Ở CHẾ ĐỘ ADMIN
 function checkAndDisplayAdminSoiDeButton() {
     const btn = document.getElementById("btn-admin-switch-soide");
     if (!btn) return;
@@ -576,41 +557,80 @@ function checkAndDisplayAdminSoiDeButton() {
     }
 }
 
-// 3. HÀM CHUYỂN SANG SOI ĐỀ TỪ PHÒNG THI (THI.HTML)
+// 3. HÀM CHUYỂN SANG SOI ĐỀ TỪ PHÒNG THI (ĐÃ FIX: BẢO VỆ 100% ĐÁP ÁN ĐA TẦNG)
 function switchToSoiDeFromExam() {
     if (typeof examData === 'undefined' || !examData) {
         alert("⚠️ Không tìm thấy dữ liệu đề thi hiện tại!");
         return;
     }
 
-    // Đảm bảo cấu trúc modal tồn tại
     ensureSoiDeModalInDOM();
 
-    // Khôi phục đầy đủ đáp án & giải thích từ SECURE_VAULT nếu có
-    const clonedQuestions = (examData.questions || []).map(q => {
+    const letters = ["A", "B", "C", "D"];
+    const clonedQuestions = (examData.questions || []).map((q, idx) => {
         const item = JSON.parse(JSON.stringify(q));
-        if (window.SECURE_VAULT) {
-            if (window.SECURE_VAULT.answers && window.SECURE_VAULT.answers[`q${q.id}`] !== undefined) {
-                if (item.type === "multiple_choice") {
-                    const letters = ["A", "B", "C", "D"];
-                    item.correct = letters.indexOf(window.SECURE_VAULT.answers[`q${q.id}`]);
-                    if (item.correct === -1) item.correct = 0;
-                } else if (item.type === "short_answer" || isPart4Question(item)) {
-                    item.correctAnswer = window.SECURE_VAULT.answers[`q${q.id}`];
-                }
+        const qIdKey = `q${q.id}`;
+
+        // 1. Phục hồi Phần 1
+        if (item.type === "multiple_choice" && !isPart4Question(item)) {
+            let foundCorrect = undefined;
+            if (window.SECURE_VAULT && window.SECURE_VAULT.answers && window.SECURE_VAULT.answers[qIdKey] !== undefined) {
+                foundCorrect = window.SECURE_VAULT.answers[qIdKey];
+            } else if (item.correct !== undefined) {
+                foundCorrect = item.correct;
+            } else if (item.answer !== undefined) {
+                foundCorrect = item.answer;
             }
-            if (item.type === "true_false" && Array.isArray(item.statements) && window.SECURE_VAULT.answers) {
+
+            if (typeof foundCorrect === 'string') {
+                const upper = foundCorrect.trim().toUpperCase();
+                item.correct = letters.indexOf(upper) !== -1 ? letters.indexOf(upper) : 0;
+            } else if (typeof foundCorrect === 'number') {
+                item.correct = foundCorrect;
+            } else {
+                item.correct = 0;
+            }
+        }
+        // 2. Phục hồi Phần 2 (Đúng / Sai)
+        else if (item.type === "true_false" && !isPart4Question(item)) {
+            if (Array.isArray(item.statements)) {
                 item.statements.forEach(st => {
-                    const val = window.SECURE_VAULT.answers[`q${q.id}_${st.id}`];
+                    const stKey = `q${q.id}_${st.id}`;
+                    let val = undefined;
+                    if (window.SECURE_VAULT && window.SECURE_VAULT.answers && window.SECURE_VAULT.answers[stKey] !== undefined) {
+                        val = window.SECURE_VAULT.answers[stKey];
+                    } else if (st.correct !== undefined) {
+                        val = st.correct;
+                    }
+
                     if (val !== undefined) {
-                        st.correct = (val === "Đúng" || val === true);
+                        st.correct = (val === true || String(val).toLowerCase() === "đúng" || String(val).toLowerCase() === "true");
+                    } else {
+                        st.correct = true;
                     }
                 });
             }
-            if (window.SECURE_VAULT.explanations && window.SECURE_VAULT.explanations[`q${q.id}`]) {
-                item.explanation = window.SECURE_VAULT.explanations[`q${q.id}`];
-            }
         }
+        // 3. Phục hồi Phần 3 & 4 (Trả lời ngắn / Tự luận ngắn)
+        else {
+            let ansVal = "";
+            if (window.SECURE_VAULT && window.SECURE_VAULT.answers && window.SECURE_VAULT.answers[qIdKey] !== undefined) {
+                ansVal = String(window.SECURE_VAULT.answers[qIdKey]).trim();
+            } else if (item.correctAnswer !== undefined) {
+                ansVal = String(item.correctAnswer).trim();
+            } else if (item.correct !== undefined) {
+                ansVal = String(item.correct).trim();
+            } else if (item.answer !== undefined) {
+                ansVal = String(item.answer).trim();
+            }
+            item.correctAnswer = ansVal;
+        }
+
+        // Phục hồi Lời giải
+        if (window.SECURE_VAULT && window.SECURE_VAULT.explanations && window.SECURE_VAULT.explanations[qIdKey]) {
+            item.explanation = window.SECURE_VAULT.explanations[qIdKey];
+        }
+
         return item;
     });
 
@@ -630,10 +650,10 @@ function switchToSoiDeFromExam() {
     soiDeState.isFromExamRoom = true;
 
     openSoiDeModal();
-    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu từ bài thi vào Soi đề! Bấm '⚡ Update' sau khi sửa.`);
+    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu kèm ĐẦY ĐỦ ĐÁP ÁN vào Soi đề!`);
 }
 
-// 4. HÀM UPDATE CẬP NHẬT TRỰC TIẾP LÊN MÁY CHỦ VÀ PHÒNG THI
+// 4. HÀM UPDATE CẬP NHẬT TRỰC TIẾP LÊN MÁY CHỦ VÀ PHÒNG THI (BẢO TOÀN ĐÁP ÁN 100%)
 async function updateExamFromSoiDe() {
     const btn = document.getElementById("btn-soide-update-exam");
     if (!soiDeState.examData || !Array.isArray(soiDeState.examData.questions) || soiDeState.examData.questions.length === 0) {
@@ -669,7 +689,35 @@ async function updateExamFromSoiDe() {
             soiDeState.examData.id = quizId;
         }
 
-        const cleanQuestions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
+        const letters = ["A", "B", "C", "D"];
+        const cleanQuestions = reorganizeAllQuestionsByParts(soiDeState.examData.questions).map((q, idx) => {
+            const item = JSON.parse(JSON.stringify(q));
+            item.id = item.id || (idx + 1);
+
+            // Bảo vệ đáp án từng dạng:
+            if (item.type === "multiple_choice" && !isPart4Question(item)) {
+                if (typeof item.correct === 'string') {
+                    const u = item.correct.trim().toUpperCase();
+                    item.correct = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
+                } else if (item.correct === undefined || item.correct === null) {
+                    item.correct = 0;
+                }
+            } else if (item.type === "true_false" && !isPart4Question(item)) {
+                if (Array.isArray(item.statements)) {
+                    item.statements.forEach(st => {
+                        st.correct = (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true");
+                    });
+                }
+            } else {
+                if (item.correctAnswer === undefined || item.correctAnswer === null) {
+                    item.correctAnswer = String(item.correct || item.answer || "0").trim();
+                } else {
+                    item.correctAnswer = String(item.correctAnswer).trim();
+                }
+            }
+            return item;
+        });
+
         const finalTitle = soiDeState.examData.title || "ĐỀ THI TRẮC NGHIỆM";
         const finalMade = soiDeState.examData.maDe || "101";
         const finalMinutes = parseInt(soiDeState.examData.timeLimitMinutes, 10) || 90;
@@ -696,9 +744,30 @@ async function updateExamFromSoiDe() {
             }).eq('id', quizId);
         } catch(cErr) {}
 
-        // 3. NẾU ĐANG TRONG PHÒNG THI (thi.html): CẬP NHẬT TỨC THÌ GIAO DIỆN BÀI THI
+        // 3. ĐỒNG BỘ NGAY VÀO SECURE_VAULT VÀ EXAMDATA TRONG PHÒNG THI
+        if (typeof window.SECURE_VAULT !== 'undefined') {
+            window.SECURE_VAULT.answers = window.SECURE_VAULT.answers || {};
+            window.SECURE_VAULT.explanations = window.SECURE_VAULT.explanations || {};
+
+            cleanQuestions.forEach(q => {
+                const qKey = `q${q.id}`;
+                if (q.type === "multiple_choice" && !isPart4Question(q)) {
+                    window.SECURE_VAULT.answers[qKey] = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
+                } else if (q.type === "true_false" && !isPart4Question(q)) {
+                    (q.statements || []).forEach(st => {
+                        window.SECURE_VAULT.answers[`q${q.id}_${st.id}`] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng') ? "Đúng" : "Sai";
+                    });
+                } else {
+                    window.SECURE_VAULT.answers[qKey] = String(q.correctAnswer || "").trim();
+                }
+
+                if (q.explanation) {
+                    window.SECURE_VAULT.explanations[qKey] = q.explanation;
+                }
+            });
+        }
+
         if (typeof examData !== 'undefined' && examData) {
-            // TẠO BẢN SAO SÂU (DEEP CLONE) ĐỂ CÁCH LY BỘ NHỚ GIỮA SOI ĐỀ VÀ PHÒNG THI
             const clonedQuestions = JSON.parse(JSON.stringify(cleanQuestions));
             const clonedImages = JSON.parse(JSON.stringify(imagesMap));
 
@@ -717,14 +786,12 @@ async function updateExamFromSoiDe() {
             const navCodeText = document.getElementById("nav-exam-code-text");
             if (navCodeText) navCodeText.innerText = `Đề: ${finalMade}`;
 
-            // Lưu vào bộ nhớ đệm đảo đề để không bị mất khi load lại
             try {
                 if (typeof getExamCode === 'function') {
                     safeLocal.setItem(`shuffled_exam_${getExamCode()}`, JSON.stringify(clonedQuestions));
                 }
             } catch(e) {}
 
-            // Vẽ lại toàn bộ câu hỏi và công thức toán học
             if (typeof renderQuizLayout === 'function') {
                 renderQuizLayout(clonedQuestions, clonedImages);
             }
@@ -733,10 +800,10 @@ async function updateExamFromSoiDe() {
             }
         }
 
-        // Cập nhật lại 2 nửa của Soi đề
+        soiDeState.examData.questions = cleanQuestions;
         renderSoiDeBothSides();
 
-        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ thay đổi đã được đồng bộ trực tiếp lên máy chủ Supabase và phòng thi!`);
+        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI VÀ ĐÁP ÁN THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ đáp án đã được đồng bộ chuẩn xác!`);
 
     } catch(err) {
         alert("❌ Lỗi khi cập nhật đề thi: " + err.message);
@@ -1519,7 +1586,6 @@ function renderSoiDeRightEditor() {
         }
 
         card.innerHTML = `
-            <!-- 2 VÙNG PASTE -->
             <div class="soide-paste-zones-row">
                 <div class="soide-paste-box zone-overwrite" id="paste-zone-overwrite-${qIdx}" tabindex="0"
                      onclick="handlePasteZoneClick(${qIdx}, 'overwrite')"
@@ -1537,7 +1603,6 @@ function renderSoiDeRightEditor() {
                 </div>
             </div>
 
-            <!-- HEADER CÂU HỎI -->
             <div class="soide-qcard-head">
                 <div class="soide-qcard-num" style="color:${palette.text};">
                     <span>Câu ${qIdx + 1}</span>
