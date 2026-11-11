@@ -230,6 +230,21 @@ function exportResultsToExcel() {
     if (typeof XLSX !== "undefined") {
         const ws = XLSX.utils.aoa_to_sheet(excelData);
         ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 24 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 13 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 24 }, { wch: 55 }];
-        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "KetQuaThi");
+        const wb = XLSX.utils.book_new(); 
+        XLSX.utils.book_append_sheet(wb, ws, "KetQuaThi");
         let examTitle = (currentExamResultData.item && currentExamResultData.item.title) ? currentExamResultData.item.title : "KetQuaThi";
-        let safeTitle = examTitle.replace
+        let safeTitle = examTitle.replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+        XLSX.writeFile(wb, `${safeTitle}_${Date.now()}.xlsx`);
+    } else { 
+        alert("❌ Không thể tải thư viện XLSX. Vui lòng kiểm tra kết nối mạng!"); 
+    }
+}
+
+window.updateStatsAndRenderTable = updateStatsAndRenderTable;
+window.openDetailedStatsView = openDetailedStatsView;
+window.closeDetailedStatsView = closeDetailedStatsView;
+window.handleResultHeaderBack = handleResultHeaderBack;
+window.showDetailedStatsUI = showDetailedStatsUI;
+window.showMainResultTableUI = showMainResultTableUI;
+window.renderDetailedScoreChart = renderDetailedScoreChart;
+window.exportResultsToExcel = exportResultsToExcel;
