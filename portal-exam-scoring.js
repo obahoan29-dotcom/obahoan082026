@@ -1,5 +1,6 @@
 // =========================================================
-// FILE: portal-exam-scoring.js (BẢN SUPABASE TỐI ƯU BĂNG THÔNG & NHẬN DIỆN PHẦN IV CHUẨN XÁC)
+// FILE: portal-exam-scoring.js (BẢN FIX TRIỆT ĐỂ LỖI CHẤM 0 ĐIỂM)
+// HỖ TRỢ TRÍCH XUẤT ĐÁP ÁN DỰ PHÒNG TỪ CHÍNH OBJECT CÂU HỎI
 // =========================================================
 
 let currentScoringQuizId = null;
@@ -88,7 +89,6 @@ function ensureScoringModalInDOM() {
     document.body.appendChild(modalDiv);
 }
 
-// HÀM BỔ TRỢ: NHẬN DIỆN CÂU HỎI THUỘC PHẦN IV ĐỒNG BỘ 100% VỚI PHÒNG THI & SOI ĐỀ
 function isPart4QuestionScoring(q) {
     if (!q) return false;
     if (typeof isPart4Question === 'function') return isPart4Question(q);
@@ -101,7 +101,6 @@ function isPart4QuestionScoring(q) {
     return false;
 }
 
-// BỘ ĐẾM SỐ CÂU TỪNG PHẦN ĐÃ ĐƯỢC SỬA LỖI: TÁCH RIÊNG P3 VÀ P4 CHÍNH XÁC
 function countQuestionsByPart(questions) {
     if (!Array.isArray(questions)) return { p1: 0, p2: 0, p3: 0, p4: 0, total: 0 };
     let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
@@ -251,7 +250,7 @@ async function saveGradingScaleConfig() {
     }
 }
 
-// BỘ CHẤM ĐIỂM CHÍNH XÁC THEO BIỂU ĐIỂM ĐÃ SỬA: PHÂN BIỆT RÕ RÀNG P3 VÀ P4
+// BỘ CHẤM ĐIỂM CHÍNH XÁC: TỰ ĐỘNG FALLBACK ĐÁP ÁN NẾU VAULT RỖNG
 function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scoringConfig) {
     const cfg = scoringConfig || { mode: "option1" };
     const mode = cfg.mode || "option1";
@@ -267,60 +266,110 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
     }
 
     let correctCount = 0; let wrongCount = 0; let totalScore = 0; let maxScoreOfExam = 0; let dataDetails = [];
+    const letters = ["A", "B", "C", "D"];
 
     questions.forEach(q => {
         const isP4 = isPart4QuestionScoring(q);
         
+        // 1. PHẦN I
         if (q.type === "multiple_choice" && !isP4) {
             maxScoreOfExam += isOption1 ? 1.0 : p1PerQ;
             const uVal = userAnswers[`q${q.id}`] || "Chưa chọn";
-            const cVal = answerVault[`q${q.id}`];
-            if (cVal && String(uVal).trim().toUpperCase() === String(cVal).trim().toUpperCase()) {
-                correctCount++; totalScore += isOption1 ? 1.0 : p1PerQ; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
-            } else {
-                wrongCount++; dataDetails.push(`${q.id}-${uVal} [SAI: ${cVal || "---"}]`);
+            let cVal = answerVault ? answerVault[`q${q.id}`] : undefined;
+
+            // Fallback trực tiếp vào object q nếu answerVault chưa có
+            if (cVal === undefined || cVal === null) {
+                if (q.correct !== undefined) {
+                    cVal = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
+                } else if (q.answer !== undefined) {
+                    cVal = typeof q.answer === 'number' ? letters[q.answer] : String(q.answer).trim().toUpperCase();
+                }
             }
-        } else if (q.type === "true_false" && !isP4) {
+
+            if (cVal && String(uVal).trim().toUpperCase() === String(cVal).trim().toUpperCase()) {
+                correctCount++; 
+                totalScore += isOption1 ? 1.0 : p1PerQ; 
+                dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
+            } else {
+                wrongCount++; 
+                dataDetails.push(`${q.id}-${uVal} [SAI: ${cVal || "---"}]`);
+            }
+        } 
+        // 2. PHẦN II (ĐÚNG / SAI)
+        else if (q.type === "true_false" && !isP4) {
             maxScoreOfExam += isOption1 ? 1.0 : p2PerQ;
             let cSt = 0;
-            (q.statements || []).forEach(st => {
+            const statements = q.statements || [];
+
+            statements.forEach(st => {
                 const subKey = `q${q.id}_${st.id}`;
                 const uVal = userAnswers[subKey] || "Chưa chọn";
-                const cVal = answerVault[subKey];
+                let cVal = answerVault ? answerVault[subKey] : undefined;
+
+                if (cVal === undefined || cVal === null) {
+                    if (st.correct !== undefined) {
+                        cVal = (st.correct === true || String(st.correct).toLowerCase() === 'đúng') ? "Đúng" : "Sai";
+                    }
+                }
+
                 if (cVal && uVal === cVal) {
-                    cSt++; dataDetails.push(`${q.id}${st.id}-${uVal} [ĐÚNG]`);
+                    cSt++; 
+                    dataDetails.push(`${q.id}${st.id}-${uVal} [ĐÚNG]`);
                 } else {
                     dataDetails.push(`${q.id}${st.id}-${uVal} [SAI]`);
                 }
             });
+
             let qScore = 0;
             if (cSt === 1) qScore = 0.1 * (isOption1 ? 1.0 : p2PerQ);
             else if (cSt === 2) qScore = 0.25 * (isOption1 ? 1.0 : p2PerQ);
             else if (cSt === 3) qScore = 0.5 * (isOption1 ? 1.0 : p2PerQ);
             else if (cSt === 4) qScore = 1.0 * (isOption1 ? 1.0 : p2PerQ);
+            
             totalScore += qScore;
-            if (cSt === (q.statements ? q.statements.length : 4)) correctCount++; else wrongCount++;
-        } else if (isP4) {
-            // XỬ LÝ CHẤM RIÊNG CHO PHẦN IV
+            if (cSt === (statements.length || 4)) correctCount++; 
+            else wrongCount++;
+        } 
+        // 3. PHẦN IV (TỰ LUẬN ĐIỀN ĐÁP ÁN NGẮN)
+        else if (isP4) {
             maxScoreOfExam += isOption1 ? 1.0 : p4PerQ;
             const uVal = String(userAnswers[`q${q.id}`] || "").trim().replace(',', '.');
-            const cVal = String(answerVault[`q${q.id}`] || "").trim().replace(',', '.');
+            let cVal = answerVault ? answerVault[`q${q.id}`] : undefined;
+
+            if (cVal === undefined || cVal === null) {
+                cVal = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : (q.answer !== undefined ? q.answer : ""));
+            }
+            cVal = String(cVal || "").trim().replace(',', '.');
+
             const isRight = (uVal !== "" && cVal !== "" && (uVal === cVal || Number(uVal) === Number(cVal)));
             if (isRight) {
-                correctCount++; totalScore += isOption1 ? 1.0 : p4PerQ; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
+                correctCount++; 
+                totalScore += isOption1 ? 1.0 : p4PerQ; 
+                dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
             } else {
-                wrongCount++; dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal}]`);
+                wrongCount++; 
+                dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal || "---"}]`);
             }
-        } else {
-            // XỬ LÝ CHẤM CHO PHẦN III
+        } 
+        // 4. PHẦN III (TRẢ LỜI NGẮN)
+        else {
             maxScoreOfExam += isOption1 ? 1.0 : p3PerQ;
             const uVal = String(userAnswers[`q${q.id}`] || "").trim().replace(',', '.');
-            const cVal = String(answerVault[`q${q.id}`] || "").trim().replace(',', '.');
+            let cVal = answerVault ? answerVault[`q${q.id}`] : undefined;
+
+            if (cVal === undefined || cVal === null) {
+                cVal = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : (q.answer !== undefined ? q.answer : ""));
+            }
+            cVal = String(cVal || "").trim().replace(',', '.');
+
             const isRight = (uVal !== "" && cVal !== "" && (uVal === cVal || Number(uVal) === Number(cVal)));
             if (isRight) {
-                correctCount++; totalScore += isOption1 ? 1.0 : p3PerQ; dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
+                correctCount++; 
+                totalScore += isOption1 ? 1.0 : p3PerQ; 
+                dataDetails.push(`${q.id}-${uVal} [ĐÚNG]`);
             } else {
-                wrongCount++; dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal}]`);
+                wrongCount++; 
+                dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal || "---"}]`);
             }
         }
     });
@@ -338,3 +387,10 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
         dataDetails
     };
 }
+
+window.openGradingScaleModal = openGradingScaleModal;
+window.closeGradingScaleModal = closeGradingScaleModal;
+window.handleScoringModeChange = handleScoringModeChange;
+window.updateScoringPreview = updateScoringPreview;
+window.saveGradingScaleConfig = saveGradingScaleConfig;
+window.calculateExamScoreWithConfig = calculateExamScoreWithConfig;
