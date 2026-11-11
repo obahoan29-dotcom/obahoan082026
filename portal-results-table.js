@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-results-table.js 
 // (BẢN FIX TRIỆT ĐỂ LỖI ĐÈ NÚT, CHỐNG TRÀN VÀ XÓA LỖI TRÙNG CHỮ CẬP NHẬT)
+// TỐI ƯU THANH TOP CHỨC NĂNG SIÊU GỌN 28PX & NÚT BẤM SIÊU MINI 22PX
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 7 };
@@ -30,12 +31,12 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
-        /* HEADER THU GỌN CHUẨN, KHÔNG BỊ TRÀN CHỮ */
+        /* HEADER THU GỌN CHUẨN SIÊU MINI 28PX, CẤM TRÀN DÒNG */
         .result-modal-header {
-            padding: 3px 8px !important;
-            min-height: 32px !important;
-            height: 32px !important;
-            max-height: 34px !important;
+            padding: 2px 8px !important;
+            min-height: 28px !important;
+            height: 28px !important;
+            max-height: 28px !important;
             gap: 4px !important;
             background: #ffffff !important;
             border-bottom: 1.5px solid #e2e8f0 !important;
@@ -44,23 +45,24 @@ let isFitAllRowsActive = false;
             align-items: center !important;
             justify-content: space-between !important;
             flex-wrap: nowrap !important;
+            overflow: visible !important;
         }
 
         .result-modal-title-box {
-            gap: 5px !important;
+            gap: 4px !important;
             min-width: 0 !important;
             flex: 1 1 auto !important;
-            height: 26px !important;
+            height: 24px !important;
             display: flex !important;
             align-items: center !important;
             overflow: hidden !important;
         }
 
         #btn-result-back-action {
-            padding: 2px 7px !important;
-            font-size: 11px !important;
+            padding: 1px 6px !important;
+            font-size: 10.5px !important;
             border-radius: 6px !important;
-            height: 24px !important;
+            height: 22px !important;
             line-height: 1 !important;
             flex-shrink: 0 !important;
         }
@@ -73,7 +75,7 @@ let isFitAllRowsActive = false;
             display: flex !important;
             flex-direction: row !important;
             align-items: center !important;
-            gap: 5px !important;
+            gap: 4px !important;
             min-width: 0 !important;
             overflow: hidden !important;
             white-space: nowrap !important;
@@ -81,7 +83,7 @@ let isFitAllRowsActive = false;
         }
 
         .result-modal-heading {
-            font-size: 12px !important;
+            font-size: 11.5px !important;
             line-height: 1.2 !important;
             margin: 0 !important;
             font-weight: 800 !important;
@@ -89,7 +91,7 @@ let isFitAllRowsActive = false;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            max-width: 260px !important;
+            max-width: 200px !important;
             display: inline-block !important;
         }
 
@@ -99,22 +101,23 @@ let isFitAllRowsActive = false;
 
         .result-modal-tools {
             gap: 3px !important;
-            height: 26px !important;
+            height: 24px !important;
             display: flex !important;
             align-items: center !important;
             flex-shrink: 0 !important;
+            position: relative !important;
         }
 
         .result-search-input {
-            padding: 2px 7px !important;
-            height: 24px !important;
-            font-size: 11px !important;
-            width: 100px !important;
-            border-radius: 12px !important;
+            padding: 1px 6px !important;
+            height: 22px !important;
+            font-size: 10.5px !important;
+            width: 95px !important;
+            border-radius: 6px !important;
             box-sizing: border-box !important;
         }
         .result-search-input:focus {
-            width: 125px !important;
+            width: 120px !important;
         }
 
         #btn-toggle-autorefresh,
@@ -124,10 +127,12 @@ let isFitAllRowsActive = false;
         .btn-export-excel,
         .btn-fit-all-rows,
         .btn-temp-draft-capture {
-            padding: 2px 7px !important;
-            font-size: 11px !important;
-            height: 24px !important;
-            border-radius: 12px !important;
+            padding: 1px 6px !important;
+            font-size: 10.5px !important;
+            height: 22px !important;
+            min-height: 22px !important;
+            max-height: 22px !important;
+            border-radius: 6px !important;
             line-height: 1 !important;
             white-space: nowrap !important;
             box-sizing: border-box !important;
@@ -135,9 +140,9 @@ let isFitAllRowsActive = false;
 
         .btn-table-settings,
         .btn-close-result-modal {
-            width: 24px !important;
-            height: 24px !important;
-            font-size: 12px !important;
+            width: 22px !important;
+            height: 22px !important;
+            font-size: 11px !important;
             line-height: 1 !important;
             padding: 0 !important;
             border-radius: 50% !important;
@@ -145,10 +150,11 @@ let isFitAllRowsActive = false;
 
         .result-modal-stats-bar {
             padding: 1px 8px !important;
-            font-size: 10px !important;
-            min-height: 22px !important;
-            height: 22px !important;
-            gap: 4px !important;
+            font-size: 9.5px !important;
+            min-height: 20px !important;
+            height: 20px !important;
+            max-height: 20px !important;
+            gap: 3px !important;
             background: #f8fafc !important;
             border-bottom: 1px solid #e2e8f0 !important;
             box-sizing: border-box !important;
@@ -164,18 +170,18 @@ let isFitAllRowsActive = false;
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
             color: #ffffff !important;
             border: 1px solid #7dd3fc !important;
-            border-radius: 12px !important;
-            padding: 2px 7px !important;
-            font-size: 11px !important;
+            border-radius: 6px !important;
+            padding: 1px 6px !important;
+            font-size: 10.5px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
             display: inline-flex !important;
             align-items: center !important;
             gap: 2px !important;
-            box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25) !important;
+            box-shadow: 0 1px 3px rgba(2, 132, 199, 0.25) !important;
             transition: all 0.15s ease !important;
             user-select: none !important;
-            height: 24px !important;
+            height: 22px !important;
         }
         .btn-fit-all-rows.is-fitted {
             background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
@@ -188,20 +194,20 @@ let isFitAllRowsActive = false;
             gap: 1px !important;
             background: #1e293b !important;
             border: 1px solid #475569 !important;
-            border-radius: 12px !important;
+            border-radius: 6px !important;
             padding: 1px 2px !important;
             user-select: none !important;
-            height: 24px !important;
+            height: 22px !important;
             box-sizing: border-box !important;
         }
         .btn-modal-zoom-step {
-            width: 18px !important;
-            height: 18px !important;
+            width: 16px !important;
+            height: 16px !important;
             border-radius: 50% !important;
             border: none !important;
             background: #334155 !important;
             color: #ffffff !important;
-            font-size: 11px !important;
+            font-size: 10px !important;
             font-weight: 900 !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -210,11 +216,11 @@ let isFitAllRowsActive = false;
             padding: 0 !important;
         }
         .modal-zoom-val-badge {
-            font-size: 10px !important;
+            font-size: 9.5px !important;
             font-weight: 800 !important;
             color: #38bdf8 !important;
             padding: 0 3px !important;
-            min-width: 32px !important;
+            min-width: 28px !important;
             text-align: center !important;
             font-family: monospace !important;
             cursor: pointer !important;
@@ -229,8 +235,8 @@ let isFitAllRowsActive = false;
             display: inline-flex !important;
             align-items: center !important;
             gap: 2px !important;
-            box-shadow: 0 1px 4px rgba(13, 148, 136, 0.25) !important;
-            height: 24px !important;
+            box-shadow: 0 1px 3px rgba(13, 148, 136, 0.25) !important;
+            height: 22px !important;
         }
 
         .result-table.table-fitted-compact {
@@ -1249,10 +1255,26 @@ function filterResultTable() {
     renderFilteredResultTable(filtered);
 }
 
+// LẮNG NGHE SỰ KIỆN CLICK NGOÀI ĐỂ ĐÓNG TẤT CẢ DROPDOWN / POPOVER
 document.addEventListener("click", function(event) {
     if (!event.target.closest('.attempt-picker-wrapper')) {
         document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
         document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
+    }
+    if (!event.target.closest('.table-settings-wrapper')) {
+        closeTableSettingsPopover();
+    }
+    if (!event.target.closest('.regrade-action-wrapper')) {
+        const regradeDd = document.getElementById("regrade-inline-dropdown");
+        if (regradeDd) regradeDd.style.display = "none";
+    }
+    if (!event.target.closest('.rank-picker-wrapper')) {
+        const rankMenu = document.getElementById("rank-sort-dropdown-menu");
+        if (rankMenu) rankMenu.style.display = "none";
+    }
+    if (!event.target.closest('.exam-picker-wrapper')) {
+        const examMenu = document.getElementById("exam-picker-dropdown-list");
+        if (examMenu) examMenu.classList.remove("show");
     }
 });
 
