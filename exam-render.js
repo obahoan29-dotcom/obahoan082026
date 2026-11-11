@@ -1,5 +1,6 @@
 // =========================================================
-// FILE: exam-render.js (BẢN TỰ ĐỘNG CHÈN PHẦN I, II, III, IV & PHÂN MÀU CHUẨN QUỐC TẾ)
+// FILE: exam-render.js (BẢN FIX TRIỆT ĐỂ LỖI MẤT ĐÁP ÁN KHI SOI ĐỀ)
+// Đã loại bỏ các lệnh "delete" phá hủy cấu trúc đề gốc
 // =========================================================
 
 function isPart4Question(q) {
@@ -148,8 +149,10 @@ function renderQuizLayout(questions, imageMap) {
                     : String(q.correct).trim().toUpperCase();
             }
             if (q.explanation) window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-            delete q.correct;
-            delete q.explanation;
+            
+            // BỎ DELETE Ở ĐÂY: Để bảo vệ đáp án cho Soi Đề và Xuất PDF
+            // delete q.correct;
+            // delete q.explanation;
 
             const imgUrl = getEffectiveImageUrl(q, imageMap);
             const imgHTML = buildImgHtml(imgUrl, q.id); 
@@ -180,12 +183,15 @@ function renderQuizLayout(questions, imageMap) {
                 if (st.correct !== undefined) {
                     window.SECURE_VAULT.answers[subKey] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng' || String(st.correct).toLowerCase() === 'true') ? "Đúng" : "Sai";
                 }
-                delete st.correct;
+                // BỎ DELETE Ở ĐÂY
+                // delete st.correct;
+                
                 rows += `<tr><td><b>${st.id})</b> ${st.statement}</td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Đúng" onchange="onStatementChange('${subKey}')"></td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Sai" onchange="onStatementChange('${subKey}')"></td></tr>`; 
             }); 
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                delete q.explanation;
+                // BỎ DELETE Ở ĐÂY
+                // delete q.explanation;
             }
             html += `<div class="question-card" id="q-card-${q.id}" data-qid="${q.id}" data-imgkey="${q.imageKey || ''}" data-qidx="${p1List.length + qIdx}"> 
                 <div class="q-header"><div class="q-num-badge" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
@@ -204,11 +210,13 @@ function renderQuizLayout(questions, imageMap) {
             window.SECURE_VAULT.questionData[q.id] = q; 
             if (q.correctAnswer !== undefined) {
                 window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim();
-                delete q.correctAnswer;
+                // BỎ DELETE Ở ĐÂY
+                // delete q.correctAnswer;
             }
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                delete q.explanation;
+                // BỎ DELETE Ở ĐÂY
+                // delete q.explanation;
             }
             const imgUrl = getEffectiveImageUrl(q, imageMap);
             const imgHTML = buildImgHtml(imgUrl, q.id); 
@@ -242,11 +250,13 @@ function renderQuizLayout(questions, imageMap) {
             window.SECURE_VAULT.questionData[q.id] = q; 
             if (q.correctAnswer !== undefined) {
                 window.SECURE_VAULT.answers[`q${q.id}`] = String(q.correctAnswer).trim(); 
-                delete q.correctAnswer;
+                // BỎ DELETE Ở ĐÂY
+                // delete q.correctAnswer;
             }
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
-                delete q.explanation;
+                // BỎ DELETE Ở ĐÂY
+                // delete q.explanation;
             }
             const imgUrl = getEffectiveImageUrl(q, imageMap);
             const imgHTML = buildImgHtml(imgUrl, q.id); 
@@ -392,3 +402,4 @@ function setupScrollObserver() {
 window.isPart4Question = isPart4Question;
 window.scrollToSection = scrollToSection;
 window.renderQuestionPalette = renderQuestionPalette;
+window.renderQuizLayout = renderQuizLayout;
