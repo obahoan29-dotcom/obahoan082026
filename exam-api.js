@@ -569,6 +569,7 @@ function startTimeWatcherRealtime(quizId) {
             const freshData = payload.new;
             if (!freshData || isSubmitted || !examStartTime) return;
 
+            // Cập nhật thời gian thi
             if (freshData.time_limit_minutes && freshData.time_limit_minutes !== TIME_LIMIT_MINUTES) {
                 TIME_LIMIT_MINUTES = freshData.time_limit_minutes;
                 totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
@@ -577,6 +578,7 @@ function startTimeWatcherRealtime(quizId) {
                 showTimeChangeToast(`⏱ Giáo viên vừa cập nhật thời gian: ${TIME_LIMIT_MINUTES} phút!`);
             }
 
+            // Cập nhật khung giờ làm bài
             if (freshData.exam_start_time || freshData.exam_end_time) {
                 if (examData) {
                     examData.exam_start_time = freshData.exam_start_time || examData.exam_start_time;
@@ -592,9 +594,18 @@ function startTimeWatcherRealtime(quizId) {
                 showTimeChangeToast(`📅 Giáo viên vừa cập nhật lại khung giờ làm bài!`);
             }
 
+            // Cập nhật cấu hình hiển thị sĩ số
             if (freshData.show_online_count !== undefined) {
-                examData.show_online_count = freshData.show_online_count;
+                if (examData) examData.show_online_count = freshData.show_online_count;
                 applyOnlineCountVisibility();
+            }
+
+            // ĐỒNG BỘ TIÊU ĐỀ NẾU ADMIN CẬP NHẬT TỪ SOI ĐỀ
+            if (freshData.title && freshData.title !== EXAM_NAME) {
+                EXAM_NAME = freshData.title;
+                if (examData) examData.title = freshData.title;
+                const bannerTitle = document.getElementById("banner-title");
+                if (bannerTitle) bannerTitle.innerText = freshData.title;
             }
         }).subscribe();
 }
