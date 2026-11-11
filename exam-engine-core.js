@@ -1,9 +1,7 @@
 // =========================================================
 // FILE 3: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI TRẮNG MÀN HÌNH & OUT TRÊN IPHONE / MESSENGER / IOS)
-// ĐÃ TỐI ƯU 180+ THÍ SINH - TIẾT KIỆM TÀI NGUYÊN SUPABASE FREE
-// ĐÃ TÍCH HỢP: ZERO-BLANK-SCREEN WATCHDOG (KHÔNG BAO GIỜ BỊ TRẮNG MÀN HÌNH)
-// OFFLINE-FIRST: LƯU TỨC THÌ LOCAL/INDEXEDDB, BẢO LƯU 100% BÀI THI
+// (BẢN FIX TRIỆT ĐỂ LỖI TRẮNG MÀN HÌNH, MẤT ẢNH & LỖI 0 ĐIỂM)
+// BẢO VỆ 100% ĐÁP ÁN GỐC & TỰ ĐỘNG KHÔI PHỤC KHI BỊ THIẾU
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -86,7 +84,52 @@ function checkAndInjectIOSMessengerBanner() {
     } catch(e) {}
 }
 
+// BỘ TỰ ĐỘNG KIỂM TRA VÀ NẠP ĐÁP ÁN VÀO VAULT (CHỐNG LỖI 0 ĐIỂM)
+function ensureAnswerVaultCompleteness() {
+    if (!examData || !Array.isArray(examData.questions)) return;
+    const letters = ["A", "B", "C", "D"];
+    examData.questions.forEach(q => {
+        if (!q) return;
+        const qKey = `q${q.id}`;
+        
+        // Phần 1: Trắc nghiệm
+        if (q.type === "multiple_choice" && !q.part && !isPart4Question(q)) {
+            if (window.SECURE_VAULT.answers[qKey] === undefined || window.SECURE_VAULT.answers[qKey] === "") {
+                if (q.correct !== undefined && q.correct !== null && String(q.correct).trim() !== "") {
+                    window.SECURE_VAULT.answers[qKey] = (typeof q.correct === 'number') 
+                        ? letters[q.correct] 
+                        : String(q.correct).trim().toUpperCase();
+                }
+            }
+        }
+        // Phần 2: Đúng / Sai
+        else if (q.type === "true_false" && Array.isArray(q.statements)) {
+            q.statements.forEach(st => {
+                const subKey = `q${q.id}_${st.id}`;
+                if (window.SECURE_VAULT.answers[subKey] === undefined) {
+                    if (st.correct !== undefined && st.correct !== null) {
+                        window.SECURE_VAULT.answers[subKey] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng' || String(st.correct).toLowerCase() === 'true') ? "Đúng" : "Sai";
+                    }
+                }
+            });
+        }
+        // Phần 3 & Phần 4: Trả lời ngắn / Tự luận
+        else {
+            if (window.SECURE_VAULT.answers[qKey] === undefined || window.SECURE_VAULT.answers[qKey] === "") {
+                if (q.correctAnswer !== undefined && q.correctAnswer !== null && String(q.correctAnswer).trim() !== "") {
+                    window.SECURE_VAULT.answers[qKey] = String(q.correctAnswer).trim();
+                }
+            }
+        }
+
+        if (q.explanation && !window.SECURE_VAULT.explanations[qKey]) {
+            window.SECURE_VAULT.explanations[qKey] = q.explanation;
+        }
+    });
+}
+
 function calculateTemporaryDraftScore() {
+    ensureAnswerVaultCompleteness();
     if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData && Array.isArray(examData.questions)) {
         return calculateExamScoreWithConfig(
             examData.questions,
@@ -299,7 +342,7 @@ function ensureSomeUIElementsAreVisible() {
 
     // Nếu không có bất kỳ màn hình nào được bật -> Ép bật student-card ngay lập tức
     if (!isQuizShown && !isStudentShown && !isLoginShown && !isResShown && !isErrShown) {
-        console.warn("⚠️ Watchdog: Phát hiện nguy cơ trắng màn hình trên WebKit Messenger. Đang bật student-card ngay!");
+        console.warn("⚠️ Watchdog: Phát hiện nguy cơ trắng màn hình. Đang bật student-card ngay!");
         if (studentCard) studentCard.style.display = "block";
     }
 }
@@ -319,7 +362,6 @@ async function initExamEngine() {
         if (gl) gl.style.display = 'none';
     };
 
-    // Đặt hẹn giờ 1.5 giây cứu cánh tối đa: Bất kể chuyện gì xảy ra, màn hình loading phải biến mất
     setTimeout(ensureSomeUIElementsAreVisible, 1500);
 
     if (!quizId) {
@@ -332,7 +374,6 @@ async function initExamEngine() {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (!client) throw new Error("Chưa khởi tạo được Supabase Client");
 
-        // Đặt timeout 6 giây cho truy vấn Supabase quizzes để không bị treo vĩnh viễn trên mạng di động
         const fetchPromise = client.from('quizzes').select('*').eq('id', quizId).single();
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Mạng kết nối tới máy chủ quá thời gian")), 6000));
         
@@ -352,6 +393,9 @@ async function initExamEngine() {
             isShuffled: data.is_shuffled,
             scoringConfig: data.scoring_config
         };
+
+        // BẢO VỆ ĐÁP ÁN: Sao chép toàn bộ đáp án vào VAULT ngay từ đầu
+        ensureAnswerVaultCompleteness();
 
         if (urlParams.get('review') === "1") {
             if (examData.allowReviewOriginal !== true) {
@@ -473,7 +517,6 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
-// BẢN FIX TOÀN DIỆN: CHỐNG TRẮNG MÀN HÌNH KHI VỪA VÀO PHÒNG THI TỪ MESSENGER
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -511,7 +554,6 @@ async function checkSessionStatus(isAutostart = false) {
     let isRestored = restoreExamStateFromStorage();
     if (!isRestored && typeof examIndexedDB !== 'undefined') {
         try {
-            // Đặt timeout 300ms cho IndexedDB tránh treo trên iOS WebKit
             const idbPromise = examIndexedDB.getItem('exam_states', getStorageKey(attempt));
             const timeoutPromise = new Promise(res => setTimeout(() => res(null), 300));
             const idbState = await Promise.race([idbPromise, timeoutPromise]);
@@ -581,7 +623,7 @@ async function checkSessionStatus(isAutostart = false) {
         }
     }
 
-    // XỬ LÝ AUTOSTART CHO HỌC SINH TỪ TRANG CHỦ VÀO (ĐÃ FIX: KHÔNG BAO GIỜ BỊ TRẮNG MÀN HÌNH)
+    // XỬ LÝ AUTOSTART CHO HỌC SINH TỪ TRANG CHỦ VÀO
     if (isAutostart) {
         let sIdVal = document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || "";
         let sNameVal = document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || "";
@@ -612,7 +654,6 @@ async function checkSessionStatus(isAutostart = false) {
             ensureSomeUIElementsAreVisible();
             return;
         } else {
-            // Nếu thông tin rỗng do Messenger cắt query -> Hiện ngay student-card để học sinh vào bình thường
             document.getElementById("student-card").style.display = "block";
             hideLoading();
             ensureSomeUIElementsAreVisible();
@@ -676,6 +717,9 @@ function fetchExamQuestions(isAutostart = false) {
                 safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
             }
         }
+
+        // BẢO VỆ ĐÁP ÁN: Đảm bảo đáp án được bảo tồn sau khi shuffle
+        ensureAnswerVaultCompleteness();
 
         if (!isAutostart) {
             if (EXAM_PASSWORD !== "") document.getElementById("login-box").style.display = "block"; 
@@ -845,7 +889,6 @@ function startCountdownTimer() {
         const elapsedTimeSec = examStartTime ? Math.floor((now - examStartTime) / 1000) : 0; 
         remainingSeconds = totalTimeSeconds - elapsedTimeSec; 
 
-        // LỚP BẢO VỆ: Nếu học sinh mới vào dưới 15 giây mà phát hiện hết giờ hoặc hết hạn, không tự nộp bài trắng
         if (elapsedTimeSec < 15 && (remainingSeconds <= 0 || now >= currentEndTimeMs)) {
             if (now >= currentEndTimeMs) {
                 clearInterval(timerInterval);
@@ -1031,7 +1074,7 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
                 const letters = ["A", "B", "C", "D"]; 
                 const uAns = window.SECURE_VAULT.userAnswers[`q${q.id}`]; 
                 const cAns = window.SECURE_VAULT.answers[`q${q.id}`]; 
-                revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge" style="background:${uAns===cAns?'#22c55e':'#ef4444'}">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div class="options-list grid-2">${q.options.map((opt, oIdx) => { const L = letters[oIdx]; let cls = ""; let icon = ""; if (L === cAns) { cls = "is-correct"; icon = " ✓"; } else if (L === uAns && uAns !== cAns) { cls = "is-wrong"; icon = " ✗"; } return `<div class="opt-label ${cls}"><span class="opt-circle">${L}</span><span class="opt-text">${opt} <b>${icon}</b></span></div>`; }).join('')}</div>${explainText}</div>`; 
+                revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge" style="background:${uAns===cAns?'#22c55e':'#ef4444'}">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div class="options-list grid-2">${(q.options || []).map((opt, oIdx) => { const L = letters[oIdx]; let cls = ""; let icon = ""; if (L === cAns) { cls = "is-correct"; icon = " ✓"; } else if (L === uAns && uAns !== cAns) { cls = "is-wrong"; icon = " ✗"; } return `<div class="opt-label ${cls}"><span class="opt-circle">${L}</span><span class="opt-text">${opt} <b>${icon}</b></span></div>`; }).join('')}</div>${explainText}</div>`; 
             } else if (q.type === "true_false") { 
                 let rows = ""; 
                 (q.statements || []).forEach(st => { 
@@ -1039,13 +1082,13 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
                     const uVal = window.SECURE_VAULT.userAnswers[sub] || "Chưa chọn"; 
                     const cVal = window.SECURE_VAULT.answers[sub]; 
                     const ok = (uVal === cVal); 
-                    rows += `<tr><td><b>${st.id})</b> ${st.statement}</td><td align="center">${uVal==="Đúng"?(ok?"🟢 Đúng":"🔴 Đúng (Sai)"):""}</td><td align="center">${uVal==="Sai"?(ok?"🟢 Sai":"🔴 Sai (Sai)"):""}</td><td align="center"><b>${cVal}</b></td></tr>`; 
+                    rows += `<tr><td><b>${st.id})</b> ${st.statement}</td><td align="center">${uVal==="Đúng"?(ok?"🟢 Đúng":"🔴 Đúng (Sai)"):""}</td><td align="center">${uVal==="Sai"?(ok?"🟢 Sai":"🔴 Sai (Sai)"):""}</td><td align="center"><b>${cVal || '---'}</b></td></tr>`; 
                 }); 
                 revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div class="tf-table-box"><table class="tf-table"><thead><tr><th>Mệnh đề</th><th>Bạn chọn</th><th>Đ.Á Đúng</th></tr></thead><tbody>${rows}</tbody></table></div>${explainText}</div>`; 
             } else { 
                 const uVal = window.SECURE_VAULT.userAnswers[`q${q.id}`] || "(Để trống)"; 
                 const cVal = window.SECURE_VAULT.answers[`q${q.id}`]; 
-                revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div style="margin-top:14px; font-size:1.05rem; font-weight:600;"><div style="color:#15803d; font-weight:800; margin-top:6px;">Đáp án đúng / tham khảo: ${cVal}</div><div>Tr.lời của bạn: <b>${uVal}</b></div></div>${explainText}</div>`; 
+                revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div style="margin-top:14px; font-size:1.05rem; font-weight:600;"><div style="color:#15803d; font-weight:800; margin-top:6px;">Đáp án đúng / tham khảo: ${cVal || '---'}</div><div>Tr.lời của bạn: <b>${uVal}</b></div></div>${explainText}</div>`; 
             } 
             idx++; 
         }); 
@@ -1093,18 +1136,18 @@ function renderOriginalReviewScreen() {
         
         if (q.type === "multiple_choice") { 
             const cAns = generatedAnswerKey[`q${q.id}`]; 
-            revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div class="options-list grid-2">${q.options.map((opt, oIdx) => { const L = letters[oIdx]; let cls = ""; let icon = ""; if (L === cAns) { cls = "is-correct"; icon = " ✓ Đ.Án"; } return `<div class="opt-label ${cls}"><span class="opt-circle">${L}</span><span class="opt-text">${opt} <b>${icon}</b></span></div>`; }).join('')}</div>${explainText}</div>`; 
+            revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div class="options-list grid-2">${(q.options || []).map((opt, oIdx) => { const L = letters[oIdx]; let cls = ""; let icon = ""; if (L === cAns) { cls = "is-correct"; icon = " ✓ Đ.Án"; } return `<div class="opt-label ${cls}"><span class="opt-circle">${L}</span><span class="opt-text">${opt} <b>${icon}</b></span></div>`; }).join('')}</div>${explainText}</div>`; 
         } else if (q.type === "true_false") { 
             let rows = ""; 
             (q.statements || []).forEach(st => { 
                 const sub = `q${q.id}_${st.id}`; 
                 const cVal = generatedAnswerKey[sub]; 
-                rows += `<tr><td><b>${st.id})</b> ${st.statement}</td><td align="center" style="color:#15803d; font-weight:800;">${cVal}</td></tr>`; 
+                rows += `<tr><td><b>${st.id})</b> ${st.statement}</td><td align="center" style="color:#15803d; font-weight:800;">${cVal || '---'}</td></tr>`; 
             }); 
             revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div class="tf-table-box"><table class="tf-table"><thead><tr><th>Mệnh đề</th><th>Đáp án gốc</th></tr></thead><tbody>${rows}</tbody></table></div>${explainText}</div>`; 
         } else { 
             const cVal = generatedAnswerKey[`q${q.id}`]; 
-            revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div style="margin-top:14px; font-size:1.05rem; font-weight:600;"><div style="color:#15803d; font-weight:800; margin-top:6px;">Đáp án chuẩn: ${cVal}</div></div>${explainText}</div>`; 
+            revHTML += `<div class="question-card"><div class="q-header"><div class="q-num-badge">${idx}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div>${imgTag} <div style="margin-top:14px; font-size:1.05rem; font-weight:600;"><div style="color:#15803d; font-weight:800; margin-top:6px;">Đáp án chuẩn: ${cVal || '---'}</div></div>${explainText}</div>`; 
         } 
         idx++; 
     }); 
@@ -1129,3 +1172,4 @@ window.autoSaveAnswerToCloud = autoSaveAnswerToCloud;
 window.ensureActiveSessionAndDraft = ensureActiveSessionAndDraft;
 window.renderResultSummaryScreen = renderResultSummaryScreen;
 window.sendDraftToGoogleSheetTemp = sendDraftToGoogleSheetTemp;
+window.ensureAnswerVaultCompleteness = ensureAnswerVaultCompleteness;
