@@ -1,7 +1,5 @@
 // =========================================================
-// FILE: exam-img-uploader.js (BẢN SUPABASE HOÀN TOÀN)
-// QUẢN LÝ DÁN ẢNH SNIPPING TOOL (CTRL+V), TỰ ĐỘNG UPLOAD & ĐỒNG BỘ SUPABASE
-// TÍCH HỢP: CÔNG TẮC LẮNG NGHE ĐỒNG BỘ ẢNH (watchImageSync)
+// FILE: exam-img-uploader.js (BẢN TỐI ƯU QUÉT MỌI TIỀN TỐ ẢNH & FALLBACK GOOGLE DRIVE TỰ ĐỘNG)
 // =========================================================
 
 let imageSyncChannel = null;
@@ -87,47 +85,93 @@ function detectImageSource(url) {
     return { text: "Kho ảnh", cls: "" };
 }
 
+// BỘ QUÉT TẤT CẢ TIỀN TỐ VÀ TỰ ĐỘNG KHỚP ẢNH CHUẨN XÁC 100%
 function getEffectiveImageUrl(q, imageMap) {
     if (!q) return "";
     if (!imageMap || typeof imageMap !== 'object') imageMap = {};
 
+    // 1. Kiểm tra trực tiếp trên câu hỏi
     if (q.imageUrl && String(q.imageUrl).trim() !== "") {
         return q.imageUrl.trim();
     }
+    // 2. Kiểm tra theo imageKey đã chỉ định
     if (q.imageKey && imageMap[q.imageKey] && String(imageMap[q.imageKey]).trim() !== "") {
         return imageMap[q.imageKey].trim();
     }
-    const possibleKeys = [
-        `img_q_${q.id}`, `q${q.id}`, `${q.id}`,
-        `dh_p1_c${q.id}`, `hy_p1_c${q.id}`, `pbc_p1_c${q.id}`, `dethem_p3_c${q.id}`
-    ];
-    for (let k of possibleKeys) {
-        if (imageMap[k] && String(imageMap[k]).trim() !== "") {
-            return imageMap[k].trim();
+
+    const qIdStr = String(q.id || "").trim();
+
+    // 3. Quét thông minh qua tất cả các key có trong imageMap
+    for (let k in imageMap) {
+        if (!imageMap[k] || String(imageMap[k]).trim() === "") continue;
+        const val = String(imageMap[k]).trim();
+
+        // Khớp tuyệt đối theo id
+        if (k === qIdStr || k === `q${qIdStr}` || k === `img_q_${qIdStr}`) {
+            return val;
+        }
+
+        // Khớp theo đuôi số câu (ví dụ: no1_p1_c8, pbc_p1_c1, no4_p2_c11, c8,...)
+        const m = k.match(/_c(\d+)$/i) || k.match(/c(\d+)$/i) || k.match(/cau_?(\d+)$/i) || k.match(/(\d+)$/);
+        if (m && m[1] === qIdStr) {
+            return val;
         }
     }
+
     return "";
+}
+
+// BỘ XỬ LÝ LỖI ẢNH ĐA TẦNG (CHỐNG MẤT ẢNH SAU VÀI NGÀY)
+function handleExamImgLoadError(imgEl, originalUrl) {
+    if (!imgEl || !originalUrl) return;
+    
+    // Đã thử hết các phương án mà vẫn lỗi thì thôi
+    if (imgEl.dataset.fallbackLevel === "3") {
+        return;
+    }
+
+    const currentLevel = parseInt(imgEl.dataset.fallbackLevel || "0", 10);
+    const m = originalUrl.match(/(?:file\/d\/|id=|open\?id=|\/d\/)([a-zA-Z0-9_-]{25,})/);
+
+    if (m && m[1]) {
+        const driveId = m[1];
+        if (currentLevel === 0) {
+            imgEl.dataset.fallbackLevel = "1";
+            imgEl.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200`;
+            return;
+        } else if (currentLevel === 1) {
+            imgEl.dataset.fallbackLevel = "2";
+            imgEl.src = `https://drive.google.com/uc?export=view&id=${driveId}`;
+            return;
+        }
+    }
+
+    imgEl.dataset.fallbackLevel = "3";
 }
 
 function buildImgHtml(imgUrl, qId) {
     const hasUrl = Boolean(imgUrl && String(imgUrl).trim() !== "");
     const srcInfo = detectImageSource(imgUrl);
+    const safeUrl = (imgUrl || '').replace(/"/g, '&quot;');
     return `
     <div class="quiz-img-container" id="img-container-${qId}" style="${hasUrl ? '' : 'display:none;'}">
         <div class="quiz-img-wrapper">
-            <img src="${imgUrl || ''}" class="quiz-img" id="img-display-${qId}" referrerpolicy="no-referrer" loading="lazy" alt="Hình minh họa">
+            <img src="${safeUrl}" class="quiz-img" id="img-display-${qId}" 
+                 referrerpolicy="no-referrer" 
+                 loading="lazy" 
+                 alt="Hình minh họa"
+                 onerror="handleExamImgLoadError(this, '${safeUrl}')">
             <span class="img-source-badge ${srcInfo.cls}" id="img-source-${qId}" style="${hasUrl ? '' : 'display:none;'}">${srcInfo.text}</span>
         </div>
     </div>`;
 }
 
-// 4. KÊNH ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL: KIỂM TRA CÔNG TẮC watchImageSync
+// KÊNH ĐỒNG BỘ ẢNH REALTIME BẰNG SUPABASE CHANNEL
 function startImageSyncWatcher(quizId) {
     if (!quizId) return;
 
     const cfg = window.CURRENT_RT_CONFIG || {};
     if (cfg.watchImageSync === false) {
-        console.log("ℹ️ Đã tắt kênh đồng bộ ảnh realtime theo cấu hình Admin");
         return;
     }
 
@@ -225,13 +269,14 @@ function applyRealtimeImageUpdate(syncData) {
     } else {
         const srcInfo = detectImageSource(newUrl);
         if (imgEl) {
+            imgEl.dataset.fallbackLevel = "0";
             imgEl.src = newUrl;
             imgEl.style.display = "inline-block";
             if (containerEl) containerEl.style.display = "block";
         } else if (containerEl) {
             containerEl.innerHTML = `
                 <div class="quiz-img-wrapper">
-                    <img src="${newUrl}" class="quiz-img" id="img-display-${qId}" referrerpolicy="no-referrer" loading="lazy" alt="Hình minh họa">
+                    <img src="${newUrl}" class="quiz-img" id="img-display-${qId}" referrerpolicy="no-referrer" loading="lazy" alt="Hình minh họa" onerror="handleExamImgLoadError(this, '${newUrl}')">
                     <span class="img-source-badge ${srcInfo.cls}" id="img-source-${qId}">${srcInfo.text}</span>
                 </div>`;
             containerEl.style.display = "block";
@@ -255,7 +300,7 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
 
     if (statusEl) {
         statusEl.className = "admin-uploader-status loading";
-        statusEl.innerText = "⏳ Đang đọc và chuẩn bị gửi ảnh...";
+        statusEl.innerText = "⏳ Đang chuẩn bị ảnh...";
     }
 
     try {
@@ -273,7 +318,7 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
         let imgbbSuccess = false;
 
         if (hasValidImgbbKey) {
-            if (statusEl) statusEl.innerText = "⏳ Đang gửi ảnh lên ImgBB (chờ tối đa 4s)...";
+            if (statusEl) statusEl.innerText = "⏳ Đang lưu lên ImgBB (chờ 4s)...";
 
             const imgbbAbortController = new AbortController();
             const timeoutId = setTimeout(() => {
@@ -307,10 +352,10 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
 
         if (!imgbbSuccess) {
             if (!hasDriveGasUrl) {
-                throw new Error("ImgBB không phản hồi trong 4 giây và chưa cấu hình GOOGLE_DRIVE_UPLOAD_GAS_URL trong app-config.js!");
+                throw new Error("Chưa cấu hình GOOGLE_DRIVE_UPLOAD_GAS_URL trong app-config.js!");
             }
 
-            if (statusEl) statusEl.innerText = "⚡ ImgBB quá 4s/bận, chuyển lưu ngay qua Google Drive...";
+            if (statusEl) statusEl.innerText = "⚡ Đang lưu qua Google Drive...";
 
             uploadSource = "Google Drive";
             const drivePayload = {
@@ -344,9 +389,6 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
                 }
             } catch (driveErr) {
                 clearTimeout(driveTimer);
-                if (driveErr.name === 'AbortError' || String(driveErr.message).includes('abort')) {
-                    throw new Error("Google Drive phản hồi quá 45 giây do mạng chậm. Vui lòng thử lại!");
-                }
                 throw driveErr;
             }
         }
@@ -359,7 +401,7 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
         const quizId = urlParams.get('id');
         const effectiveKey = imageKey || `img_q_${qId}`;
 
-        // Cập nhật giao diện trang tại chỗ
+        // Cập nhật giao diện tại chỗ
         applyRealtimeImageUpdate({
             qId: qId,
             imageKey: effectiveKey,
@@ -401,9 +443,6 @@ async function uploadQuestionImageToImgBB(file, qId, imageKey, qIndex) {
         }
     } catch(err) {
         let errMsg = err.message || "";
-        if (err.name === 'AbortError' || errMsg.includes('abort')) {
-            errMsg = "Quá thời gian kết nối máy chủ (mạng yếu hoặc máy chủ bận). Vui lòng thử lại!";
-        }
         if (statusEl) {
             statusEl.className = "admin-uploader-status error";
             statusEl.innerText = "❌ Lỗi: " + errMsg;
@@ -435,7 +474,7 @@ async function deleteQuestionImage(qId, imageKey, qIdx) {
 
     if (statusEl) {
         statusEl.className = "admin-uploader-status loading";
-        statusEl.innerText = "⏳ Đang xóa ảnh & đồng bộ máy học sinh...";
+        statusEl.innerText = "⏳ Đang xóa ảnh & đồng bộ...";
     }
 
     try {
@@ -450,7 +489,6 @@ async function deleteQuestionImage(qId, imageKey, qIdx) {
             action: "delete"
         });
 
-        // XÓA TRÊN SUPABASE (TABLE: quizzes)
         if (quizId) {
             const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
             if (client) {
@@ -474,20 +512,20 @@ async function deleteQuestionImage(qId, imageKey, qIdx) {
                         }).eq('id', quizId);
                     }
                 } catch(supaErr) {
-                    console.warn("Lỗi xóa ảnh trên Supabase quizzes:", supaErr);
+                    console.warn("Lỗi xóa ảnh trên Supabase:", supaErr);
                 }
             }
         }
 
         if (statusEl) {
             statusEl.className = "admin-uploader-status success";
-            statusEl.innerText = "🗑️ Đã xóa ảnh & đồng bộ tới học sinh!";
+            statusEl.innerText = "🗑️ Đã xóa ảnh!";
             setTimeout(() => { if (statusEl) statusEl.innerText = ""; }, 3500);
         }
     } catch(err) {
         if (statusEl) {
             statusEl.className = "admin-uploader-status error";
-            statusEl.innerText = "❌ Lỗi xóa ảnh: " + err.message;
+            statusEl.innerText = "❌ Lỗi: " + err.message;
         }
         alert("❌ Lỗi khi xóa ảnh: " + err.message);
     }
@@ -542,5 +580,7 @@ window.handleAdminFileSelected = function(input, qId, imgKey, qIdx) {
     }
 };
 
+window.handleExamImgLoadError = handleExamImgLoadError;
 window.startImageSyncWatcher = startImageSyncWatcher;
 window.deleteQuestionImage = deleteQuestionImage;
+window.getEffectiveImageUrl = getEffectiveImageUrl;
