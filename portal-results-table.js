@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN SIÊU HẸP HEADER - TÍCH HỢP NÚT THU BÀI TẠM THỜI QUA REALTIME & GAS)
+// (BẢN FIX TRIỆT ĐỂ: THANH CÔNG CỤ GỌN ĐẸP, CHỐNG ĐÈ NÚT, SỬA LỖI ĐÚP CHỮ CẬP NHẬT)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -30,97 +30,85 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
+        /* HEADER MODAL KẾT QUẢ - BỐ CỤC CHUẨN GỌN GÀNG KHÔNG BAO GIỜ BỊ ĐÈ */
         .result-modal-header {
-            padding: 2px 8px !important;
-            min-height: 28px !important;
-            height: 28px !important;
-            max-height: 28px !important;
-            gap: 4px !important;
+            padding: 5px 12px !important;
+            min-height: 40px !important;
+            height: auto !important;
+            gap: 8px !important;
             background: #ffffff !important;
-            border-bottom: 1.5px solid #e2e8f0 !important;
+            border-bottom: 2px solid #e2e8f0 !important;
             box-sizing: border-box !important;
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
+            flex-wrap: wrap !important;
         }
 
         .result-modal-title-box {
-            gap: 5px !important;
+            gap: 8px !important;
             min-width: 0 !important;
             flex: 1 1 auto !important;
-            height: 24px !important;
             display: flex !important;
             align-items: center !important;
         }
 
         #btn-result-back-action {
-            padding: 1px 7px !important;
-            font-size: 10.5px !important;
-            border-radius: 5px !important;
-            height: 22px !important;
+            padding: 4px 10px !important;
+            font-size: 11.5px !important;
+            border-radius: 7px !important;
+            height: 28px !important;
             line-height: 1 !important;
             flex-shrink: 0 !important;
-        }
-
-        .result-modal-icon {
-            display: none !important;
+            font-weight: 800 !important;
         }
 
         .result-modal-title-box > div:last-child {
             display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            gap: 5px !important;
+            flex-direction: column !important;
             min-width: 0 !important;
-            overflow: hidden !important;
-            white-space: nowrap !important;
-            text-overflow: ellipsis !important;
-        }
-
-        .result-modal-title-box > div:last-child > div:first-child {
-            font-size: 11px !important;
-            white-space: nowrap !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
-            color: #64748b !important;
-            flex-shrink: 0 !important;
+            gap: 2px !important;
         }
 
         .result-modal-heading {
-            font-size: 11.5px !important;
-            line-height: 1.2 !important;
+            font-size: 13.5px !important;
+            line-height: 1.25 !important;
             margin: 0 !important;
-            font-weight: 800 !important;
+            font-weight: 900 !important;
             color: #0f172a !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            max-width: 280px !important;
-            display: inline-block !important;
+            max-width: 380px !important;
         }
 
-        .result-modal-subheading {
-            display: none !important;
-        }
-
+        /* THANH CÔNG CỤ CÁC NÚT: CUỘN NGANG TỰ ĐỘNG, KHÔNG BAO GIỜ BỊ LẤP */
         .result-modal-tools {
-            gap: 3px !important;
-            height: 24px !important;
             display: flex !important;
             align-items: center !important;
-            flex-shrink: 0 !important;
+            gap: 5px !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            scrollbar-width: none !important;
+            padding: 2px 0 !important;
+            max-width: 100% !important;
         }
+        .result-modal-tools::-webkit-scrollbar { display: none !important; }
 
         .result-search-input {
-            padding: 2px 7px !important;
-            height: 22px !important;
-            font-size: 11px !important;
-            width: 105px !important;
-            border-radius: 11px !important;
+            padding: 4px 10px !important;
+            height: 28px !important;
+            font-size: 11.5px !important;
+            width: 125px !important;
+            border-radius: 14px !important;
+            border: 1.5px solid #cbd5e1 !important;
+            outline: none !important;
+            flex-shrink: 0 !important;
+            transition: width 0.2s !important;
         }
         .result-search-input:focus {
-            width: 130px !important;
+            width: 155px !important;
+            border-color: #0284c7 !important;
         }
 
         #btn-toggle-autorefresh,
@@ -130,106 +118,90 @@ let isFitAllRowsActive = false;
         .btn-export-excel,
         .btn-fit-all-rows,
         .btn-temp-draft-capture {
-            padding: 2px 7px !important;
-            font-size: 10.5px !important;
-            height: 22px !important;
-            border-radius: 11px !important;
+            padding: 4px 9px !important;
+            font-size: 11.5px !important;
+            height: 28px !important;
+            border-radius: 14px !important;
             line-height: 1 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            white-space: nowrap !important;
+            flex-shrink: 0 !important;
+            font-weight: 800 !important;
+            cursor: pointer !important;
+            user-select: none !important;
         }
 
-        /* NÚT THU BÀI TẠM THỜI RẤT NHỎ TRÊN TOOLBAR */
+        /* NÚT THU BÀI TẠM THỜI */
         .btn-temp-draft-capture {
             background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
             color: #ffffff !important;
             border: 1px solid #5eead4 !important;
-            font-weight: 900 !important;
-            cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 2px !important;
             box-shadow: 0 1px 4px rgba(13, 148, 136, 0.25) !important;
-            transition: all 0.15s ease !important;
-            white-space: nowrap !important;
-            user-select: none !important;
-            font-family: inherit !important;
         }
         .btn-temp-draft-capture:hover {
             filter: brightness(1.15) !important;
             transform: translateY(-1px) !important;
-            box-shadow: 0 2px 6px rgba(13, 148, 136, 0.35) !important;
-        }
-        .btn-temp-draft-capture:active {
-            transform: translateY(1.5px) scale(0.96) !important;
         }
 
         .btn-table-settings,
         .btn-close-result-modal {
-            width: 22px !important;
-            height: 22px !important;
-            font-size: 12px !important;
+            width: 28px !important;
+            height: 28px !important;
+            font-size: 14px !important;
             line-height: 1 !important;
             padding: 0 !important;
+            flex-shrink: 0 !important;
+            border-radius: 50% !important;
         }
 
         .result-modal-stats-bar {
-            padding: 1px 8px !important;
-            font-size: 10px !important;
-            min-height: 20px !important;
-            height: 22px !important;
-            gap: 3px !important;
+            padding: 3px 12px !important;
+            font-size: 11px !important;
+            min-height: 26px !important;
+            height: auto !important;
+            gap: 5px !important;
             background: #f8fafc !important;
             border-bottom: 1px solid #e2e8f0 !important;
             box-sizing: border-box !important;
+            display: flex !important;
+            align-items: center !important;
+            overflow-x: auto !important;
         }
 
         .result-modal-stats-bar .stat-badge-item {
-            padding: 0px 4px !important;
-            font-size: 9.5px !important;
-            border-radius: 4px !important;
-            height: 18px !important;
+            padding: 2px 6px !important;
+            font-size: 11px !important;
+            border-radius: 6px !important;
+            height: 22px !important;
             display: inline-flex !important;
             align-items: center !important;
+            white-space: nowrap !important;
         }
 
         #btn-view-detailed-stats {
-            padding: 1px 6px !important;
-            font-size: 9.5px !important;
-            height: 18px !important;
-            border-radius: 9px !important;
+            padding: 2px 8px !important;
+            font-size: 11px !important;
+            height: 22px !important;
+            border-radius: 11px !important;
         }
 
         .result-modal-body {
-            padding: 2px 4px !important;
+            padding: 4px 8px !important;
             transform-origin: top center !important;
             transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
 
         .result-table-card {
-            border-radius: 6px !important;
+            border-radius: 8px !important;
         }
 
         .btn-fit-all-rows {
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
             color: #ffffff !important;
             border: 1px solid #7dd3fc !important;
-            border-radius: 11px !important;
-            padding: 2px 7px !important;
-            font-size: 10.5px !important;
-            font-weight: 800 !important;
-            cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            gap: 3px !important;
             box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25) !important;
-            transition: all 0.15s ease !important;
-            white-space: nowrap !important;
-            user-select: none !important;
-            height: 22px !important;
-            font-family: inherit !important;
-        }
-        .btn-fit-all-rows:hover {
-            filter: brightness(1.12) !important;
-            transform: translateY(-1px) !important;
         }
         .btn-fit-all-rows.is-fitted {
             background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
@@ -239,29 +211,29 @@ let isFitAllRowsActive = false;
         .modal-independent-zoom-control {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 1px !important;
+            gap: 2px !important;
             background: #1e293b !important;
             border: 1px solid #475569 !important;
-            border-radius: 11px !important;
-            padding: 1px 2px !important;
+            border-radius: 14px !important;
+            padding: 2px 4px !important;
             user-select: none !important;
-            height: 22px !important;
+            height: 28px !important;
             box-sizing: border-box !important;
+            flex-shrink: 0 !important;
         }
         .btn-modal-zoom-step {
-            width: 18px !important;
-            height: 18px !important;
+            width: 22px !important;
+            height: 22px !important;
             border-radius: 50% !important;
             border: none !important;
             background: #334155 !important;
             color: #ffffff !important;
-            font-size: 11px !important;
+            font-size: 13px !important;
             font-weight: 900 !important;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
             cursor: pointer !important;
-            transition: all 0.15s ease !important;
             padding: 0 !important;
             line-height: 1 !important;
         }
@@ -269,63 +241,15 @@ let isFitAllRowsActive = false;
             background: #0284c7 !important;
         }
         .modal-zoom-val-badge {
-            font-size: 10px !important;
+            font-size: 11px !important;
             font-weight: 800 !important;
             color: #38bdf8 !important;
-            padding: 0 3px !important;
-            min-width: 32px !important;
+            padding: 0 4px !important;
+            min-width: 36px !important;
             text-align: center !important;
-            font-family: 'Be Vietnam Pro', monospace !important;
+            font-family: monospace !important;
             cursor: pointer !important;
         }
-
-        .result-table.table-fitted-compact {
-            --table-row-padding-y: 0px !important;
-            --table-row-padding-x: 2px !important;
-            width: 100% !important;
-        }
-        .result-table.table-fitted-compact thead th {
-            padding: 2px 2px !important;
-            font-size: calc(var(--table-font-size, 12px) - 1px) !important;
-            line-height: 1.15 !important;
-            border-right: 1px solid #334155 !important;
-            border-bottom: 1.5px solid #0284c7 !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-        .result-table.table-fitted-compact tbody tr {
-            height: auto !important;
-        }
-        .result-table.table-fitted-compact tbody td {
-            padding: 0px 2px !important;
-            font-size: var(--table-font-size, 12px) !important;
-            line-height: 1.15 !important;
-            border-right: 1px solid #cbd5e1 !important;
-            border-bottom: 1px solid #cbd5e1 !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-
-        .result-table.table-fitted-compact th.td-stt { width: 34px !important; }
-        .result-table.table-fitted-compact th.td-exam-col,
-        .result-table.table-fitted-compact th:nth-child(2) { width: 125px !important; }
-        .result-table.table-fitted-compact th:nth-child(3) { width: 66px !important; }
-        .result-table.table-fitted-compact th:nth-child(4) { width: 110px !important; }
-        .result-table.table-fitted-compact th:nth-child(5) { width: 85px !important; }
-        .result-table.table-fitted-compact th:nth-child(6) { width: 125px !important; }
-        .result-table.table-fitted-compact th:nth-child(7) { width: 55px !important; }
-        .result-table.table-fitted-compact th:nth-child(8) { width: 50px !important; }
-        .result-table.table-fitted-compact th:nth-child(9) { width: 82px !important; }
-        .result-table.table-fitted-compact th:nth-child(10) { width: 68px !important; }
-        .result-table.table-fitted-compact th:nth-child(11) { width: 50px !important; }
-        .result-table.table-fitted-compact th:nth-child(12) { width: 72px !important; }
-        .result-table.table-fitted-compact th:nth-child(13) { width: 65px !important; }
-        .result-table.table-fitted-compact th:nth-child(14) { width: 78px !important; }
-        .result-table.table-fitted-compact th:nth-child(15) { width: 120px !important; }
-        .result-table.table-fitted-compact th.th-force-submit-col { width: 68px !important; }
-        .result-table.table-fitted-compact th.th-row-action-col { width: 42px !important; }
 
         .btn-force-submit-item {
             background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
@@ -345,7 +269,6 @@ let isFitAllRowsActive = false;
             white-space: nowrap !important;
         }
         .btn-force-submit-item:hover { filter: brightness(1.15) !important; transform: scale(1.04) !important; }
-        .btn-force-submit-item:active { transform: translateY(1.5px) scale(0.96) !important; }
 
         .btn-force-submit-all-header {
             background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important;
@@ -362,45 +285,39 @@ let isFitAllRowsActive = false;
             transition: 0.15s !important;
             margin-top: 2px !important;
         }
-        .btn-force-submit-all-header:hover { filter: brightness(1.1) !important; }
 
         @keyframes heartbeatDoing {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65), 0 0 10px rgba(192, 132, 252, 0.5); }
-            14% { transform: scale(1.13); box-shadow: 0 0 18px 5px rgba(168, 85, 247, 0.85), 0 0 30px rgba(147, 51, 234, 0.7); }
-            28% { transform: scale(1.02); box-shadow: 0 0 8px 2px rgba(168, 85, 247, 0.5), 0 0 16px rgba(192, 132, 252, 0.4); }
-            42% { transform: scale(1.18); box-shadow: 0 0 22px 6px rgba(147, 51, 234, 0.95), 0 0 38px rgba(126, 34, 206, 0.8); }
-            70% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0), 0 0 8px rgba(192, 132, 252, 0.25); }
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.65); }
+            14% { transform: scale(1.12); box-shadow: 0 0 14px 4px rgba(168, 85, 247, 0.8); }
+            28% { transform: scale(1.02); box-shadow: 0 0 6px 2px rgba(168, 85, 247, 0.5); }
+            42% { transform: scale(1.16); box-shadow: 0 0 18px 5px rgba(147, 51, 234, 0.85); }
+            70% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
         }
 
         .status-doing-heartbeat {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 6px !important;
-            padding: 4px 13px !important;
-            border-radius: 20px !important;
-            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 50%, #e9d5ff 100%) !important;
+            gap: 5px !important;
+            padding: 3px 10px !important;
+            border-radius: 16px !important;
+            background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%) !important;
             color: #6b21a8 !important;
-            border: 1.8px solid #a855f7 !important;
+            border: 1.5px solid #a855f7 !important;
             font-weight: 900 !important;
-            font-size: 0.95em !important;
+            font-size: 0.9em !important;
             animation: heartbeatDoing 1.35s infinite ease-in-out !important;
             white-space: nowrap !important;
             user-select: none !important;
-            letter-spacing: -0.2px !important;
-            text-shadow: 0 0 2px rgba(168, 85, 247, 0.4) !important;
         }
         .status-doing-heartbeat.free-mode {
-            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%) !important;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
             color: #92400e !important;
             border-color: #f59e0b !important;
-            box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
         }
-        .status-doing-heartbeat .heartbeat-icon { font-size: 15px !important; line-height: 1 !important; }
 
         tr.row-student-is-doing td { background-color: #faf5ff !important; }
         tr.row-student-is-doing:hover td { background-color: #f3e8ff !important; }
-        tr.row-student-is-doing .td-stt { background-color: #e9d5ff !important; color: #581c87 !important; font-weight: 900 !important; }
 
         .live-doing-timer-pill {
             display: inline-flex !important;
@@ -408,12 +325,11 @@ let isFitAllRowsActive = false;
             gap: 4px !important;
             color: #7e22ce !important;
             font-weight: 900 !important;
-            font-family: 'Courier New', Courier, monospace !important;
+            font-family: monospace !important;
             background: #faf5ff !important;
-            padding: 3px 8px !important;
-            border-radius: 8px !important;
-            border: 1.5px solid #d8b4fe !important;
-            box-shadow: 0 1px 4px rgba(168, 85, 247, 0.2) !important;
+            padding: 2px 7px !important;
+            border-radius: 6px !important;
+            border: 1.2px solid #d8b4fe !important;
             white-space: nowrap !important;
         }
 
@@ -431,14 +347,12 @@ let isFitAllRowsActive = false;
             background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
             color: #ffffff !important;
             border: none !important;
-            padding: 3px 12px !important;
-            border-radius: 14px !important;
-            font-size: 12px !important;
+            padding: 2px 10px !important;
+            border-radius: 12px !important;
+            font-size: 11.5px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            box-shadow: 0 2px 7px rgba(225, 29, 72, 0.35) !important;
-            transition: all 0.15s ease !important;
-            user-select: none !important;
+            box-shadow: 0 2px 6px rgba(225, 29, 72, 0.3) !important;
             white-space: nowrap !important;
         }
         .btn-attempt-badge-single {
@@ -448,26 +362,24 @@ let isFitAllRowsActive = false;
             background: #ffffff !important;
             color: #1e293b !important;
             border: 1.2px solid #cbd5e1 !important;
-            padding: 3px 12px !important;
-            border-radius: 14px !important;
-            font-size: 12px !important;
+            padding: 2px 10px !important;
+            border-radius: 12px !important;
+            font-size: 11.5px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
-            transition: all 0.15s ease !important;
             white-space: nowrap !important;
         }
         .attempt-picker-wrapper { position: relative !important; display: inline-block !important; }
         .attempt-dropdown-menu {
             display: none; position: absolute !important; top: calc(100% + 4px) !important; left: 0 !important;
-            min-width: 255px !important; background: #ffffff !important; border-radius: 12px !important;
+            min-width: 240px !important; background: #ffffff !important; border-radius: 12px !important;
             box-shadow: 0 14px 35px rgba(15, 23, 42, 0.22), 0 0 0 1px #cbd5e1 !important;
-            border: 1.5px solid #cbd5e1 !important; padding: 8px 10px !important; z-index: 9999999 !important;
+            border: 1.5px solid #cbd5e1 !important; padding: 6px 8px !important; z-index: 9999999 !important;
             animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important; text-align: left !important; white-space: nowrap !important;
         }
-        .attempt-dropdown-menu.show { display: flex !important; flex-direction: column !important; gap: 4px !important; }
-        .attempt-dropdown-header { font-size: 11px !important; font-weight: 900 !important; color: #334155 !important; text-align: center !important; margin-bottom: 5px !important; }
-        .attempt-menu-item { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 10px !important; padding: 6px 10px !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; }
+        .attempt-dropdown-menu.show { display: flex !important; flex-direction: column !important; gap: 3px !important; }
+        .attempt-dropdown-header { font-size: 11px !important; font-weight: 900 !important; color: #334155 !important; text-align: center !important; margin-bottom: 4px !important; }
+        .attempt-menu-item { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; padding: 5px 8px !important; border-radius: 6px !important; font-size: 11.5px !important; font-weight: 700 !important; cursor: pointer !important; }
         .attempt-menu-item:hover { background: #f1f5f9 !important; }
         .attempt-menu-item.selected { background: #ede9fe !important; color: #6d28d9 !important; font-weight: 900 !important; }
     `;
@@ -517,7 +429,7 @@ function adjustModalZoomStep(step) {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Thu vừa";
     }
     const table = document.getElementById("admin-result-table");
     if (table) table.classList.remove("table-fitted-compact");
@@ -529,7 +441,7 @@ function resetModalZoom() {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Thu vừa";
     }
     const table = document.getElementById("admin-result-table");
     if (table) table.classList.remove("table-fitted-compact");
@@ -547,7 +459,7 @@ function fitAllRowsInView(event) {
         isFitAllRowsActive = false;
         if (fitBtn) {
             fitBtn.classList.remove("is-fitted");
-            fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+            fitBtn.innerHTML = "📐 Thu vừa";
         }
         table.classList.remove("table-fitted-compact");
         resetTableSettings();
@@ -607,17 +519,16 @@ function fitAllRowsInView(event) {
 
         if (fitBtn) {
             fitBtn.classList.add("is-fitted");
-            fitBtn.innerHTML = "↺ Hiện 100%";
+            fitBtn.innerHTML = "↺ 100%";
         }
     }, 40);
 }
 
-// BỔ SUNG NÚT "THU TẠM" & CÁC NÚT ĐIỀU KHIỂN VÀO HEADER MODAL
 function ensureModalZoomControlsInHeader() {
     const toolsWrap = document.querySelector(".result-modal-tools");
     if (!toolsWrap) return;
 
-    // 1. NÚT "📋 Thu tạm"
+    // 1. Nút Thu tạm
     if (!document.getElementById("btn-temp-draft-capture")) {
         const tempBtn = document.createElement("button");
         tempBtn.type = "button";
@@ -635,14 +546,14 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
-    // 2. NÚT "📐 Thu hiện đủ dòng"
+    // 2. Nút Thu vừa dòng
     if (!document.getElementById("btn-fit-all-rows")) {
         const fitBtn = document.createElement("button");
         fitBtn.type = "button";
         fitBtn.className = "btn-fit-all-rows";
         fitBtn.id = "btn-fit-all-rows";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ học sinh trên 1 màn hình mà không cần cuộn chuột";
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Thu vừa";
         fitBtn.onclick = (e) => fitAllRowsInView(e);
 
         const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
@@ -653,7 +564,7 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
-    // 3. BỘ ZOOM
+    // 3. Bộ Zoom độc lập
     if (!document.getElementById("modal-independent-zoom-control")) {
         const zoomDiv = document.createElement("div");
         zoomDiv.className = "modal-independent-zoom-control";
@@ -674,9 +585,6 @@ function ensureModalZoomControlsInHeader() {
     }
 }
 
-// =========================================================================
-// HÀM XỬ LÝ KHI BẤM NÚT "THU TẠM": GỬI LỆNH REALTIME VÀ PUSH SANG GAS
-// =========================================================================
 async function triggerCollectTempDraftsToDrive(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
@@ -690,7 +598,6 @@ async function triggerCollectTempDraftsToDrive(event) {
     if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang thu..."; }
 
     try {
-        // 1. Phát sóng Realtime TEMP_DRAFT_CAPTURE tới các máy học sinh đang thi
         const channelName = `exam_force_submit_${quizId}`;
         const tempChannel = client.channel(channelName);
         tempChannel.subscribe(async (status) => {
@@ -704,7 +611,6 @@ async function triggerCollectTempDraftsToDrive(event) {
             }
         });
 
-        // 2. Phía Admin: Quét đồng thời các bản nháp từ Supabase live_drafts để đẩy bù sang GAS
         const { data: drafts } = await client.from('live_drafts').select('*').eq('quiz_id', quizId);
         let sentCount = 0;
 
@@ -762,7 +668,7 @@ async function triggerCollectTempDraftsToDrive(event) {
             }
         }
 
-        alert(`📋 ĐÃ KÍCH HOẠT THU BÀI TẠM THỜI!\n\n1. Đã gửi lệnh tới toàn bộ thí sinh đang trong bài thi để tự động tạm tính điểm và gửi sang Drive.\n2. Đã quét ${sentCount} bản nháp từ Supabase để ghi vào Sheet thu tạm trên Google Drive.`);
+        alert(`📋 ĐÃ KÍCH HOẠT THU BÀI TẠM THỜI!\n\n1. Đã gửi lệnh tới toàn bộ thí sinh đang trong bài thi để tự động gửi bản lưu nháp sang Drive.\n2. Đã quét ${sentCount} bản nháp từ Supabase gửi bổ sung.`);
         setTimeout(refreshCurrentExamResults, 1500);
     } catch(err) {
         alert("❌ Lỗi kích hoạt thu tạm: " + err.message);
@@ -800,7 +706,7 @@ function initTableSettings() {
     
     const btn = document.getElementById("btn-toggle-autorefresh");
     if (btn) {
-        btn.innerHTML = isAutoRefreshEnabled ? "🟢 Tự động: BẬT" : "⚪ Tự động: TẮT";
+        btn.innerHTML = isAutoRefreshEnabled ? "🟢 Auto: BẬT" : "⚪ Auto: TẮT";
         btn.style.color = isAutoRefreshEnabled ? "#38bdf8" : "#94a3b8";
         btn.style.borderColor = isAutoRefreshEnabled ? "#38bdf8" : "#64748b";
     }
@@ -1142,7 +1048,6 @@ async function sendForceSubmitCommand(targetSbd = 'all', studentName = '') {
 
     try {
         const cleanTarget = isAll ? 'all' : String(targetSbd).replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-        
         const channelName = `exam_force_submit_${quizId}`;
         const tempChannel = client.channel(channelName);
         
@@ -1161,7 +1066,7 @@ async function sendForceSubmitCommand(targetSbd = 'all', studentName = '') {
 
                 try { client.removeChannel(tempChannel); } catch(e) {}
 
-                alert(`🚀 ĐÃ GỬI LỆNH THU BÀI ÉP BUỘC TỚI ${isAll ? 'TẤT CẢ THÍ SINH' : `[${targetSbd}] ${studentName}`}!\n\nMáy học sinh sẽ tự động tính điểm và lưu kết quả là 'Thu ép' về máy chủ.`);
+                alert(`🚀 ĐÃ GỬI LỆNH THU BÀI ÉP BUỘC TỚI ${isAll ? 'TẤT CẢ THÍ SINH' : `[${targetSbd}] ${studentName}`}!\n\nMáy học sinh sẽ tự động tính điểm và lưu kết quả về máy chủ.`);
                 setTimeout(refreshCurrentExamResults, 1200);
             }
         });
@@ -1432,7 +1337,7 @@ function renderFilteredResultTable(rows) {
 }
 
 function filterResultTable() {
-    const query = (document.getElementById("result-search-input").value || "").trim().toLowerCase();
+    const query = (document.getElementById("result-search-input")?.value || "").trim().toLowerCase();
     if (!query) { renderFilteredResultTable(currentExamResultData.rawRows); return; }
 
     const filtered = currentExamResultData.rawRows.filter(r => {
