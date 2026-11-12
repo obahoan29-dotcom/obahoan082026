@@ -44,22 +44,131 @@ html, body {
     overflow-x: hidden;
 }
 
-/* BANNER ĐẦU TRANG */
+/* ========================================================= */
+/* BANNER ĐẦU TRANG: TỐI ƯU HIỂN THỊ 100% HÌNH ẢNH SẮC NÉT */
+/* ========================================================= */
 .top-banner-box { 
-    width: 100%; height: 155px; border-radius: 18px; margin-bottom: 12px; 
-    box-shadow: var(--shadow-md); background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); 
-    border: 2px solid rgba(255, 215, 0, 0.35); position: relative; z-index: 100;
+    width: 100%; 
+    height: 155px; 
+    border-radius: 18px; 
+    margin-bottom: 12px; 
+    box-shadow: 0 8px 25px rgba(2, 132, 199, 0.18), var(--shadow-md); 
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #0f172a 100%); 
+    border: 2px solid rgba(255, 215, 0, 0.5); 
+    position: relative; 
+    z-index: 100;
+    overflow: hidden;
 }
-.top-banner-img-wrap { width:100%; height:100%; position:absolute; inset:0; border-radius:16px; overflow:hidden;}
-.top-banner-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); filter: brightness(1.15) contrast(1.05); }
-.top-banner-box:hover .top-banner-img { transform: scale(1.03); }
-.banner-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(15,23,42,0.15) 0%, rgba(15,23,42,0.55) 100%); pointer-events: none; border-radius:16px;}
-.banner-avatar { position: absolute; top: 12px; left: 14px; width: 54px; height: 54px; border-radius: 14px; object-fit: cover; border: 2.5px solid #ffffff; box-shadow: 0 0 16px rgba(255, 255, 255, 0.9), 0 4px 10px rgba(0,0,0,0.3); z-index: 2; filter: brightness(1.2) contrast(1.05); animation: pulseAvatar 3s ease-in-out infinite; }
-@keyframes pulseAvatar { 0%, 100% { transform: scale(1); box-shadow: 0 0 12px rgba(255,255,255,0.7); } 50% { transform: scale(1.06); box-shadow: 0 0 20px rgba(255,255,255,1); } }
-.banner-title { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 13.5px; font-weight: 800; color: #ffffff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 12px rgba(2, 132, 199, 0.8); letter-spacing: 0.3px; white-space: nowrap; pointer-events: none; text-align: center; background: rgba(15, 23, 42, 0.6); padding: 6px 16px; border-radius: 12px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.35); }
-.banner-rocket { position: absolute; top: 12px; right: 14px; font-size: 26px; animation: flyRocket 4s ease-in-out infinite; z-index: 2; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
-@keyframes flyRocket { 0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); } 50% { transform: translateY(-8px) rotate(-10deg) scale(1.1); } }
-.banner-watermark { position: absolute; bottom: 10px; left: 16px; z-index: 2; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: rgba(255, 255, 255, 0.95); text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9); pointer-events: none; user-select: none; }
+
+.top-banner-img-wrap { 
+    width: 100%; 
+    height: 100%; 
+    position: absolute; 
+    inset: 0; 
+    border-radius: 16px; 
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f172a;
+}
+
+/* HIỂN THỊ 100% TOÀN BỘ BỨC TRANH ĐÚNG TỶ LỆ, SẮC NÉT */
+.top-banner-img { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    object-position: center 30%; 
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.25)) contrast(1.04) brightness(1.02);
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.top-banner-box:hover .top-banner-img { 
+    transform: scale(1.025); 
+}
+
+/* LỚP OVERLAY gradient nhẹ trong trẻo, không che mờ tranh */
+.banner-overlay { 
+    position: absolute; 
+    inset: 0; 
+    background: linear-gradient(to bottom, rgba(15,23,42,0.05) 0%, rgba(15,23,42,0.18) 70%, rgba(15,23,42,0.45) 100%); 
+    pointer-events: none; 
+    border-radius: 16px;
+}
+
+.banner-avatar { 
+    position: absolute; 
+    top: 12px; 
+    left: 14px; 
+    width: 54px; 
+    height: 54px; 
+    border-radius: 14px; 
+    object-fit: cover; 
+    border: 2.5px solid #ffffff; 
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.95), 0 4px 10px rgba(0,0,0,0.35); 
+    z-index: 2; 
+    filter: brightness(1.08) contrast(1.05); 
+    animation: pulseAvatar 3s ease-in-out infinite; 
+    background: #ffffff;
+}
+
+@keyframes pulseAvatar { 
+    0%, 100% { transform: scale(1); box-shadow: 0 0 12px rgba(255,255,255,0.7); } 
+    50% { transform: scale(1.06); box-shadow: 0 0 20px rgba(255,255,255,1); } 
+}
+
+.banner-title { 
+    position: absolute; 
+    top: 12px; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    z-index: 2; 
+    font-size: 13.5px; 
+    font-weight: 800; 
+    color: #ffffff; 
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7); 
+    letter-spacing: 0.3px; 
+    white-space: nowrap; 
+    pointer-events: none; 
+    text-align: center; 
+    background: rgba(15, 23, 42, 0.65); 
+    padding: 5px 16px; 
+    border-radius: 12px; 
+    backdrop-filter: blur(8px); 
+    -webkit-backdrop-filter: blur(8px); 
+    border: 1.2px solid rgba(255,255,255,0.45); 
+}
+
+.banner-rocket { 
+    position: absolute; 
+    top: 10px; 
+    right: 14px; 
+    font-size: 26px; 
+    animation: flyRocket 4s ease-in-out infinite; 
+    z-index: 2; 
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); 
+}
+
+@keyframes flyRocket { 
+    0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); } 
+    50% { transform: translateY(-8px) rotate(-10deg) scale(1.1); } 
+}
+
+.banner-watermark { 
+    position: absolute; 
+    bottom: 10px; 
+    left: 16px; 
+    z-index: 2; 
+    font-size: 20px; 
+    font-weight: 900; 
+    letter-spacing: 2px; 
+    color: rgba(255, 255, 255, 0.95); 
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9); 
+    pointer-events: none; 
+    user-select: none; 
+}
 
 .section-header-title { font-size: 16px; font-weight: 800; margin: 14px 0 8px 0; display: flex; align-items: center; gap: 8px; padding-left: 4px; }
 .section-header-title.red-title { color: var(--primary-red-dark); }
@@ -79,7 +188,6 @@ html, body {
     transition: margin-bottom 0.2s ease;
 }
 
-/* KHI CÓ TAB ĐƯỢC CHỌN: TRIỆT TIÊU KẼ HỞ ĐỂ NỐI LIỀN VÀO PANEL */
 .full-width-nav-row:has(.dantri-nav-btn.active) {
     margin-bottom: 0px !important;
 }
@@ -114,7 +222,6 @@ html, body {
 .dantri-nav-btn .caret-icon { font-size: 11px; transition: transform 0.22s ease; color: inherit; opacity: 0.8; flex-shrink: 0; }
 .dantri-nav-btn.active .caret-icon { transform: rotate(180deg); opacity: 1; }
 
-/* KHI CÓ TAB ACTIVE: CÁC TAB CÒN LẠI HƠI MỜ ĐỂ LÀM NỔI BẬT TAB ĐANG MỞ */
 .full-width-nav-row:has(.dantri-nav-btn.active) .dantri-nav-btn:not(.active) {
     opacity: 0.85;
 }
@@ -122,7 +229,6 @@ html, body {
     opacity: 1;
 }
 
-/* THIẾT KẾ ĐÁY NÚT ACTIVE LIỀN KHỐI & CÓ MẪU CHỈ HƯỚNG */
 .full-width-nav-row .dantri-nav-btn.active {
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
@@ -131,7 +237,6 @@ html, body {
     transform: translateY(0) !important;
 }
 
-/* MẪU TAM GIÁC NỐI LIỀN TỪ TAB XUỐNG PANEL */
 .full-width-nav-row .dantri-nav-btn.active::after {
     content: "";
     position: absolute;
@@ -300,7 +405,6 @@ html, body {
 .dantri-dropdown-panel.show { display: block; }
 @keyframes expandDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
-/* THANH ĐỊNH DANH LỚP TỰ ĐỘNG BẰNG ::before TRÊN DROPDOWN PANEL */
 .dantri-dropdown-panel.show::before {
     display: flex;
     align-items: center;
@@ -516,7 +620,7 @@ html, body {
 
 /* KHỐI NHẮC NHỞ QUAN TRỌNG */
 .reminder-section { 
-    position: relative;
+    position: relative; 
     z-index: 35;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 241, 242, 0.88) 100%); 
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
