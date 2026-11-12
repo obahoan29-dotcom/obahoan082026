@@ -254,8 +254,8 @@ const PRESET_AVATARS = [
 ];
 const PRESET_20_AVATARS = PRESET_AVATARS.slice(0, 20);
 
-// BANNER TRÊN CÙNG: FILE ẢNH 3 BẠN NHỎ ĐẠP XE TRÊN ĐƯỜNG QUÊ
-const TOP_BANNER_URL = "./top_banner13.jpg"; 
+// BANNER TRÊN CÙNG: ẢNH 3 BẠN NHỎ ĐẠP XE TRÊN ĐƯỜNG QUÊ (LINK TRỰC TIẾP IMGBB)
+const TOP_BANNER_URL = "https://i.ibb.co/q3jLByWC/top-banner131126.png"; 
 
 // AVATAR TRÒN GÓC TRÁI VÀ BANNER DƯỚI
 const WEB_AVATAR_URL = "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=150";
