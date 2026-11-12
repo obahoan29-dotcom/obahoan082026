@@ -267,7 +267,8 @@ const PRESET_AVATARS = [
 ];
 const PRESET_20_AVATARS = PRESET_AVATARS.slice(0, 20);
 
-const TOP_BANNER_URL = "https://files.catbox.moe/cf5o9u.jpg"; 
+// BANNER TRÊN CÙNG: ẢNH 3 BẠN NHỎ ĐẠP XE TRÊN ĐƯỜNG QUÊ TUYỆT ĐẸP
+const TOP_BANNER_URL = "./banner-top.jpg"; 
 const WEB_AVATAR_URL = "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=150";
 const BOTTOM_BANNER_URL = "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1000";
 
