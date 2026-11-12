@@ -44,6 +44,7 @@ function isSafeAdminBypass() {
 }
 
 // HÀM KIỂM TRA HỌC SINH CÓ ĐANG TRONG PHÒNG THI HAY KHÔNG
+// (Bảo vệ tuyệt đối: Học sinh đang thi dở ở thi.html KHÔNG BAO GIỜ bị chuyển hướng làm hỏng bài thi)
 function isExamInProgress() {
     try {
         const currentPath = window.location.pathname.toLowerCase();
@@ -57,7 +58,10 @@ function isExamInProgress() {
 
 // HÀM THỰC HIỆN CHUYỂN HƯỚNG SANG WEB DỰ PHÒNG CHO HỌC SINH
 function executeStudentRedirect(targetUrl) {
+    // 1. Thầy là Admin -> Không chuyển
     if (isSafeAdminBypass()) return;
+    
+    // 2. Học sinh đang trong phòng thi thi.html -> Không chuyển để không làm mất bài thi
     if (isExamInProgress()) return;
     
     let destination = targetUrl || DEFAULT_BACKUP_WEB_URL;
@@ -77,13 +81,16 @@ function executeStudentRedirect(targetUrl) {
     window.location.replace(destination);
 }
 
-// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE
+// LẮNG NGHE & ĐỒNG BỘ CHUYỂN HƯỚNG TỪ SUPABASE (ĐÃ FIX: KHÔNG BỊ KẸT LOCALSTORAGE CŨ)
 async function initGlobalSiteRedirectWatcher() {
+    // Nếu không phải là Admin: Xóa ngay cache redirect cũ trong localStorage của học sinh
+    // để tránh việc máy học sinh tự chuyển hướng khi Thầy đã tắt trên Supabase
     if (!isSafeAdminBypass()) {
         try {
             localStorage.removeItem("site_redirect_config");
         } catch(e) {}
     } else {
+        // Nếu là Admin: đọc để hiển thị đúng vị trí công tắc trên bảng điều khiển
         try {
             const rawRedirect = localStorage.getItem("site_redirect_config");
             if (rawRedirect) {
@@ -101,6 +108,7 @@ async function initGlobalSiteRedirectWatcher() {
     const client = getSupabaseClient();
     if (!client) return;
 
+    // Luôn truy vấn trực tiếp từ Supabase để lấy trạng thái mới nhất 100%
     try {
         const { data, error } = await client
             .from('app_key_values')
@@ -114,6 +122,7 @@ async function initGlobalSiteRedirectWatcher() {
                 targetUrl: data.value.targetUrl || DEFAULT_BACKUP_WEB_URL
             };
 
+            // Lưu cache chỉ khi là Admin
             if (isSafeAdminBypass()) {
                 try {
                     localStorage.setItem("site_redirect_config", JSON.stringify(SITE_REDIRECT_CONFIG));
@@ -124,10 +133,12 @@ async function initGlobalSiteRedirectWatcher() {
                 updateRedirectUIElements();
             }
 
+            // CHỈ CHUYỂN HƯỚNG KHI MÁY CHỦ SUPABASE XÁC NHẬN LÀ ENABLED = TRUE
             if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                 executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
             }
         } else {
+            // Nếu không có dữ liệu hoặc Thầy chưa cấu hình -> Luôn coi là TẮT
             SITE_REDIRECT_CONFIG.enabled = false;
             if (typeof updateRedirectUIElements === 'function') {
                 updateRedirectUIElements();
@@ -137,6 +148,7 @@ async function initGlobalSiteRedirectWatcher() {
         SITE_REDIRECT_CONFIG.enabled = false;
     }
 
+    // Lắng nghe Realtime: Khi Thầy gạt BẬT hoặc TẮT, máy học sinh cập nhật ngay
     try {
         client.channel('realtime_redirect_watcher')
             .on('postgres_changes', {
@@ -162,6 +174,7 @@ async function initGlobalSiteRedirectWatcher() {
                         updateRedirectUIElements();
                     }
 
+                    // Nếu Thầy BẬT: Chỉ chuyển những ai đang ở trang chủ (index.html), không chuyển người đang thi
                     if (SITE_REDIRECT_CONFIG.enabled && !isSafeAdminBypass() && !isExamInProgress()) {
                         executeStudentRedirect(SITE_REDIRECT_CONFIG.targetUrl);
                     }
@@ -195,7 +208,7 @@ let activeStudentLogin = {
 };
 
 // =========================================================================
-// DANH SÁCH 50 ICON AVATAR MẪU
+// DANH SÁCH 50 ICON AVATAR MẪU (30 CŨ + 20 MỚI: DORAEMON, SIÊU NHÂN, XE, MÁY BAY, QUÁI DỊ...)
 // =========================================================================
 const PRESET_AVATARS = [
     // 30 ICON GỐC
@@ -230,7 +243,7 @@ const PRESET_AVATARS = [
     "https://cdn-icons-png.flaticon.com/512/1048/1048953.png", 
     "https://cdn-icons-png.flaticon.com/512/3135/3135768.png",
 
-    // 20 ICON MỚI
+    // 20 ICON MỚI THÊM: DORAEMON, SIÊU NHÂN, NGƯỜI NHỆN, Ô TÔ, MÁY BAY, QUÁI DỊ...
     "https://cdn-icons-png.flaticon.com/512/18551/18551183.png", // 31. Mèo máy Doraemon
     "https://cdn-icons-png.flaticon.com/512/86/86489.png",         // 32. Mặt nạ Người nhện (Spider-Man)
     "https://cdn-icons-png.flaticon.com/512/86/86511.png",         // 33. Đầu Người nhện Spider-Man
@@ -254,10 +267,7 @@ const PRESET_AVATARS = [
 ];
 const PRESET_20_AVATARS = PRESET_AVATARS.slice(0, 20);
 
-// BANNER TRÊN CÙNG: ẢNH 3 BẠN NHỎ ĐẠP XE TRÊN ĐƯỜNG QUÊ (LINK TRỰC TIẾP IMGBB)
-const TOP_BANNER_URL = "https://i.ibb.co/q3jLByWC/top-banner131126.png"; 
-
-// AVATAR TRÒN GÓC TRÁI VÀ BANNER DƯỚI
+const TOP_BANNER_URL = "https://files.catbox.moe/cf5o9u.jpg"; 
 const WEB_AVATAR_URL = "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=150";
 const BOTTOM_BANNER_URL = "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1000";
 
