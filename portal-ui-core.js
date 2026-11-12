@@ -90,19 +90,10 @@ function initBannerAndAvatars() {
     const botImg = document.getElementById("bottom-banner-img");
 
     if (topImg) {
-        topImg.src = TOP_BANNER_URL || "./top_banner13.jpg";
+        // Luôn nạp đúng link ảnh mới của Thầy, xóa bỏ vĩnh viễn fallback sang Unsplash
+        topImg.src = TOP_BANNER_URL || "https://i.ibb.co/q3jLByWC/top-banner131126.png";
         topImg.onerror = function() {
-            // Tự động tìm thử các đuôi file khác của chính bức ảnh top_banner13, không nhảy sang ảnh Unsplash lạ
-            if (!this.dataset.triedExt) {
-                this.dataset.triedExt = "png";
-                this.src = "./top_banner13.png";
-            } else if (this.dataset.triedExt === "png") {
-                this.dataset.triedExt = "jpeg";
-                this.src = "./top_banner13.jpeg";
-            } else if (this.dataset.triedExt === "jpeg") {
-                this.dataset.triedExt = "webp";
-                this.src = "./top_banner13.webp";
-            }
+            this.src = "https://i.ibb.co/q3jLByWC/top-banner131126.png";
         };
     }
     if (avatarImg) {
