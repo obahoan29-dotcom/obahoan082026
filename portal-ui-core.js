@@ -2,7 +2,7 @@
 // FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s)
 // =========================================================
 
-let activeDayThemCatId = null; /* SỬA TẠI ĐÂY: Chuyển "them-11" thành null để mặc định thu gọn */
+let activeDayThemCatId = null;
 let activeChinhKhoaRow1CatId = null;
 let activeChinhKhoaRow2CatId = null;
 let activeDantriCatId = null;
@@ -74,11 +74,11 @@ document.addEventListener("DOMContentLoaded", async function() {
     const padletCat = CHINH_KHOA_CATEGORIES.find(c => c.id === "tu-luan-padlet");
     if (padletCat) padletCat.links = [...DEFAULT_PADLET_LINKS];
 
-    // 1. NẠP DỮ LIỆU TỪ CACHE (BỘ NHỚ ĐỆM) ĐỂ HIỂN THỊ NGAY LẬP TỨC 0s
+    // 1. NẠP DỮ LIỆU TỪ CACHE ĐỂ HIỂN THỊ TỨC THÌ 0s
     loadDataFromCache();
     refreshAllViews();
 
-    // 2. NGẦM TẢI DỮ LIỆU MỚI TỪ SUPABASE (KHÔNG LÀM KHỰNG GIAO DIỆN)
+    // 2. TẢI DỮ LIỆU MỚI TỪ SUPABASE
     await loadDataFromSupabase();
     
     if (typeof initSiteVisitTracker === "function") initSiteVisitTracker();
@@ -90,8 +90,20 @@ function initBannerAndAvatars() {
     const botImg = document.getElementById("bottom-banner-img");
 
     if (topImg) {
-        topImg.src = TOP_BANNER_URL || "https://files.catbox.moe/cf5o9u.jpg";
-        topImg.onerror = function() { this.src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200"; };
+        topImg.src = TOP_BANNER_URL || "./top_banner13.jpg";
+        topImg.onerror = function() {
+            // Tự động tìm thử các đuôi file khác của chính bức ảnh top_banner13, không nhảy sang ảnh Unsplash lạ
+            if (!this.dataset.triedExt) {
+                this.dataset.triedExt = "png";
+                this.src = "./top_banner13.png";
+            } else if (this.dataset.triedExt === "png") {
+                this.dataset.triedExt = "jpeg";
+                this.src = "./top_banner13.jpeg";
+            } else if (this.dataset.triedExt === "jpeg") {
+                this.dataset.triedExt = "webp";
+                this.src = "./top_banner13.webp";
+            }
+        };
     }
     if (avatarImg) {
         avatarImg.src = WEB_AVATAR_URL || "https://images.unsplash.com/photo-1509062522246-3755977927d7?w=150";
@@ -195,9 +207,7 @@ async function loadDataFromSupabase() {
         }
 
         if (Array.isArray(links)) {
-            // Lưu dữ liệu vào LocalStorage để lần truy cập sau hiển thị ngay lập tức
             try { safeLocal.setItem("cached_custom_links", JSON.stringify(links)); } catch(e) {}
-            
             processLinksData(links);
         }
 
@@ -208,7 +218,6 @@ async function loadDataFromSupabase() {
             }
         } catch(e) {}
 
-        // Đọc cấu hình chuyển hướng web dự phòng và cập nhật giao diện Admin
         try {
             const { data: redirectData } = await client.from('app_key_values').select('value').eq('key', 'site_redirect_config').single();
             if (redirectData && redirectData.value) {
