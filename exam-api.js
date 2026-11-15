@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
-// ĐÃ TỐI ƯU HOÀN TOÀN CHO IPHONE TRONG TRÌNH DUYỆT NHÚNG MESSENGER
+// ĐÃ TỐI ƯU HOÀN TOÀN CHO IPHONE TRONG TRÌNH DUYỆT NHÚNG MESSENGER & SAFARI (IOS WEBKIT)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -68,25 +68,27 @@ async function loadRealtimeExamConfig() {
 
 loadRealtimeExamConfig();
 
-// Chỉ đăng ký Service Worker nếu KHÔNG PHẢI trình duyệt nhúng Messenger/Facebook (tránh văng WebKit)
-if ('serviceWorker' in navigator && !isMobileInAppBrowser()) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then((reg) => {
-            console.log('✅ Service Worker đã sẵn sàng:', reg.scope);
-        }).catch((err) => {
-            console.warn('Cảnh báo Service Worker:', err);
-        });
-    });
+// CHỦ ĐỘNG GỠ BỎ TOÀN BỘ SERVICE WORKER ĐỂ CHỐNG VĂNG VÀ TREO TRÊN IOS WEBKIT
+if ('serviceWorker' in navigator) {
+    try {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (let reg of registrations) {
+                reg.unregister().catch(() => {});
+            }
+        }).catch(() => {});
+    } catch(e) {}
 }
 
 let wakeLockSentinel = null;
 async function requestWakeLock() {
     try {
-        if ('wakeLock' in navigator && navigator.wakeLock) {
+        if ('wakeLock' in navigator && navigator.wakeLock && typeof navigator.wakeLock.request === 'function') {
             wakeLockSentinel = await navigator.wakeLock.request('screen');
             wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
         }
-    } catch (err) {}
+    } catch (err) {
+        wakeLockSentinel = null;
+    }
 }
 
 function getExamCategory() {
@@ -317,8 +319,9 @@ function triggerOnlineBoxAnimation() {
     const box = document.getElementById("nav-online-box");
     if (box) {
         box.classList.remove("nav-online-pulse");
-        void box.offsetWidth; 
-        box.classList.add("nav-online-pulse");
+        requestAnimationFrame(() => {
+            box.classList.add("nav-online-pulse");
+        });
     }
 }
 
@@ -386,7 +389,7 @@ function startOnlineRealtimeWatcher(quizId) {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
     if (onlineRealtimeChannel) {
-        client.removeChannel(onlineRealtimeChannel);
+        try { client.removeChannel(onlineRealtimeChannel); } catch(e) {}
         onlineRealtimeChannel = null;
     }
 
@@ -562,7 +565,9 @@ function startTimeWatcherRealtime(quizId) {
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
-    if (realtimeConfigChannel) { client.removeChannel(realtimeConfigChannel); }
+    if (realtimeConfigChannel) { 
+        try { client.removeChannel(realtimeConfigChannel); } catch(e) {}
+    }
 
     realtimeConfigChannel = client.channel(`exam_config_${quizId}`)
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'quizzes', filter: `id=eq.${quizId}` }, payload => {
@@ -610,22 +615,34 @@ function startTimeWatcherRealtime(quizId) {
         }).subscribe();
 }
 
+// BỘ CHỐNG THOÁT TRANG: ĐÃ FIX TRIỆT ĐỂ LỖI CRASH WEBKIT TRÊN IPHONE KHI VUỐT MÀN HÌNH
 function setupBackPrevention() { 
     try {
         window.history.pushState({ page: 'quiz' }, "", ""); 
         window.addEventListener('popstate', function () { 
             if (!isSubmitted && examStartTime) { 
                 window.history.pushState({ page: 'quiz' }, "", ""); 
-                confirm("⚠️ BẠN ĐANG TRONG BÀI THI!\nThoát hoặc quay lại sẽ làm gián đoạn bài làm của bạn."); 
+                // TUYỆT ĐỐI KHÔNG DÙNG confirm() ĐỒNG BỘ Ở ĐÂY VÌ GÂY SẬP TRẮNG MÀN HÌNH WEBKIT TRÊN IOS!
+                if (typeof showTimeChangeToast === 'function') {
+                    showTimeChangeToast("⚠️ BẠN ĐANG TRONG BÀI THI! Hãy làm bài và bấm nút NỘP BÀI.");
+                }
             } 
         }); 
+
         window.addEventListener('beforeunload', function (e) { 
             if (!isSubmitted && examStartTime) { 
                 if (typeof window.__saveExamState === 'function') window.__saveExamState(); 
                 e.preventDefault(); 
                 e.returnValue = 'Bài làm của bạn chưa được nộp. Dữ liệu đã được lưu tạm an toàn.'; 
             } 
-        }); 
+        });
+
+        // Chuẩn hóa cho Safari iOS khi chuyển app hoặc đóng tab
+        window.addEventListener('pagehide', function() {
+            if (!isSubmitted && examStartTime) {
+                if (typeof window.__saveExamState === 'function') window.__saveExamState();
+            }
+        });
     } catch(e) {}
 
     window.addEventListener('online', function() { 
@@ -689,7 +706,9 @@ async function checkPendingSubmissionOnLoad() {
 }
 
 document.addEventListener("visibilitychange", async function() { 
-    if (wakeLockSentinel === null && !document.hidden) { await requestWakeLock(); }
+    if (wakeLockSentinel === null && !document.hidden) { 
+        await requestWakeLock(); 
+    }
     if (!examStartTime || isSubmitted) return; 
 
     if (!document.hidden) {
@@ -703,7 +722,11 @@ document.addEventListener("visibilitychange", async function() {
     }
 
     if (document.hidden) { 
-        if (!isTabHidden) { isTabHidden = true; leaveTime = Date.now(); tabSwitchCount++; } 
+        if (!isTabHidden) { 
+            isTabHidden = true; 
+            leaveTime = Date.now(); 
+            tabSwitchCount++; 
+        } 
     } else { 
         if (isTabHidden && leaveTime > 0) { 
             isTabHidden = false; 
@@ -713,7 +736,9 @@ document.addEventListener("visibilitychange", async function() {
             let secs = durationSec % 60; 
             let durationStr = mins > 0 ? `${mins} phút ${secs} giây` : `${secs} giây`; 
             sendTabSwitchLog(tabSwitchCount, durationStr, durationSec); 
-            setTimeout(() => alert(`⚠️ CẢNH BÁO GIAN LẬN:\nBạn vừa rời bài thi ${durationStr} (Lần ${tabSwitchCount}).`), 100); 
+            if (typeof showTimeChangeToast === 'function') {
+                showTimeChangeToast(`⚠️ Bạn vừa rời bài thi ${durationStr} (Lần ${tabSwitchCount})!`);
+            }
         } 
     } 
 });
