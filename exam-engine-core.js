@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI MẤT HÌNH ẢNH SAU VÀI NGÀY & ĐỒNG BỘ CACHE THÔNG MINH)
+// (BẢN FIX TRIỆT ĐỂ LỖI VĂNG TRẮNG MÀN HÌNH TRÊN IPHONE & BẢO VỆ GIAO DIỆN PHÒNG THI)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -217,10 +217,12 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (!draftData) return;
 
     if (typeof examIndexedDB !== 'undefined') {
-        examIndexedDB.setItem('live_drafts', {
-            key: draftData.id,
-            ...draftData
-        }).catch(() => {});
+        try {
+            examIndexedDB.setItem('live_drafts', {
+                key: draftData.id,
+                ...draftData
+            }).catch(() => {});
+        } catch(e) {}
     }
 }
 
@@ -275,25 +277,29 @@ function lockExamInteractions() {
     }
 }
 
+// BỘ GIÁM SÁT GIAO DIỆN CHỐNG TRẮNG MÀN HÌNH (WATCHDOG LIÊN TỤC)
 function ensureSomeUIElementsAreVisible() {
     const gl = document.getElementById('global-loading');
-    if (gl) gl.style.display = 'none';
-
     const quizContent = document.getElementById("quiz-content");
     const studentCard = document.getElementById("student-card");
     const loginBox = document.getElementById("login-box");
     const resView = document.getElementById("result-view-container");
     const errorCard = document.getElementById("error-card");
 
-    const isQuizShown = quizContent && quizContent.style.display === "block";
-    const isStudentShown = studentCard && studentCard.style.display === "block";
-    const isLoginShown = loginBox && loginBox.style.display === "block";
-    const isResShown = resView && resView.style.display === "block";
-    const isErrShown = errorCard && errorCard.style.display === "block";
+    const isQuizShown = quizContent && (quizContent.style.display === "block" || getComputedStyle(quizContent).display === "block");
+    const isStudentShown = studentCard && (studentCard.style.display === "block" || getComputedStyle(studentCard).display === "block");
+    const isLoginShown = loginBox && (loginBox.style.display === "block" || getComputedStyle(loginBox).display === "block");
+    const isResShown = resView && (resView.style.display === "block" || getComputedStyle(resView).display === "block");
+    const isErrShown = errorCard && (errorCard.style.display === "block" || getComputedStyle(errorCard).display === "block");
 
     if (!isQuizShown && !isStudentShown && !isLoginShown && !isResShown && !isErrShown) {
-        console.warn("⚠️ Watchdog: Đang kích hoạt student-card");
-        if (studentCard) studentCard.style.display = "block";
+        if (studentCard) {
+            studentCard.style.display = "block";
+        }
+    }
+
+    if (gl && (isQuizShown || isStudentShown || isLoginShown || isResShown || isErrShown)) {
+        gl.style.display = 'none';
     }
 }
 
@@ -318,6 +324,23 @@ function synchronizeExamQuestionsAndImages(questionsList, imageMap) {
     return questionsList;
 }
 
+// HÀM PARSE NGÀY AN TOÀN TRÊN SAFARI IOS
+function parseUniversalDate(str) {
+    if (!str) return null;
+    let s = String(str).trim();
+    // Định dạng YYYY-MM-DD HH:mm:ss -> đổi thành YYYY-MM-DDTHH:mm:ss cho Safari
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
+        s = s.replace(/\s+/, 'T');
+    }
+    let d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    if (typeof parseDateString === 'function') {
+        let t = parseDateString(s);
+        if (t) return new Date(t);
+    }
+    return null;
+}
+
 async function initExamEngine() {
     if (hasInitExamEngine) return;
     hasInitExamEngine = true;
@@ -333,8 +356,6 @@ async function initExamEngine() {
         if (gl) gl.style.display = 'none';
     };
 
-    setTimeout(ensureSomeUIElementsAreVisible, 1500);
-
     if (!quizId) {
         hideLoading();
         showError("Lỗi đường dẫn", "Không tìm thấy mã đề thi (thiếu tham số ?id=...)");
@@ -346,7 +367,7 @@ async function initExamEngine() {
         if (!client) throw new Error("Chưa khởi tạo được Supabase Client");
 
         const fetchPromise = client.from('quizzes').select('*').eq('id', quizId).single();
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Mạng kết nối tới máy chủ quá thời gian")), 6000));
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Mạng kết nối tới máy chủ quá thời gian")), 8000));
         
         const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
         if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
@@ -354,7 +375,6 @@ async function initExamEngine() {
         const rawQuestions = Array.isArray(data.questions) ? data.questions : [];
         const rawImages = (data.images && typeof data.images === 'object') ? { ...data.images } : {};
 
-        // CHUẨN HÓA GẮN LINK ẢNH THẬT VÀO TỪNG CÂU HỎI NGAY TỪ LÚC TẢI VỀ
         const synchronizedQuestions = synchronizeExamQuestionsAndImages(rawQuestions, rawImages);
 
         examData = {
@@ -406,7 +426,7 @@ async function initExamEngine() {
         setupBackPrevention();
 
         if (typeof requestWakeLock === 'function') {
-            try { requestWakeLock(); } catch(e) {}
+            try { await requestWakeLock(); } catch(e) {}
         }
         
         await checkSessionStatus(isAutostart);
@@ -478,14 +498,15 @@ function resetToFreshLoginScreen() {
         safeLocal.removeItem(getStorageKey(3));
     }
     
-    // XÓA ĐÚNG CÁC KEY SHUFFLE ĐỂ KHÔNG BỊ KẸT BẢN CŨ
     safeLocal.removeItem(`shuffled_exam_${quizId}_${getExamCode()}`);
     safeLocal.removeItem(`shuffled_exam_${getExamCode()}`);
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem("last_submission_cleared");
 
     if (typeof examIndexedDB !== 'undefined') {
-        examIndexedDB.removeItem('exam_states', getStorageKey()).catch(() => {});
+        try {
+            examIndexedDB.removeItem('exam_states', getStorageKey()).catch(() => {});
+        } catch(e) {}
     }
 
     if (quizId && sId) {
@@ -555,7 +576,9 @@ async function checkSessionStatus(isAutostart = false) {
                     safeLocal.removeItem(getStorageKey());
                 }
                 if (typeof examIndexedDB !== 'undefined') {
-                    examIndexedDB.removeItem('exam_states', getStorageKey(attempt)).catch(() => {});
+                    try {
+                        examIndexedDB.removeItem('exam_states', getStorageKey(attempt)).catch(() => {});
+                    } catch(e) {}
                 }
                 isRestored = false;
                 isExamLocked = false;
@@ -640,7 +663,6 @@ async function checkSessionStatus(isAutostart = false) {
     ensureSomeUIElementsAreVisible();
 }
 
-// BỘ TẢI VÀ XÁO ĐỀ: ĐỒNG BỘ 100% ẢNH MỚI NHẤT TỪ SUPABASE, KHÔNG ĐỂ CACHE CŨ LÀM MẤT ẢNH
 function fetchExamQuestions(isAutostart = false) { 
     try { 
         if (typeof examData === 'undefined' || !examData) { 
@@ -662,8 +684,10 @@ function fetchExamQuestions(isAutostart = false) {
             remainingSeconds = totalTimeSeconds; 
         } 
         if (examData.examStartTimeStr && examData.examEndTimeStr) { 
-            const st = new Date(examData.examStartTimeStr).toLocaleString("vi-VN"); 
-            const et = new Date(examData.examEndTimeStr).toLocaleString("vi-VN"); 
+            const stObj = parseUniversalDate(examData.examStartTimeStr);
+            const etObj = parseUniversalDate(examData.examEndTimeStr);
+            const st = stObj ? stObj.toLocaleString("vi-VN") : examData.examStartTimeStr;
+            const et = etObj ? etObj.toLocaleString("vi-VN") : examData.examEndTimeStr;
             const noticeEl = document.getElementById("exam-time-notice"); 
             noticeEl.innerText = `⏱ Mở từ: ${st} - Đến: ${et}`; 
             noticeEl.style.display = "inline-block"; 
@@ -672,12 +696,10 @@ function fetchExamQuestions(isAutostart = false) {
         const urlParams = new URLSearchParams(window.location.search);
         const currentQuizId = urlParams.get('id') || examData.id || "quiz";
         
-        // KEY SHUFFLE ĐỘC NHẤT GẮN CHẶT VỚI QUIZ_ID (KHÔNG BỊ TRÙNG GIỮA CÁC ĐỀ 101 KHÁC NHAU)
         const shuffleKey = `shuffled_exam_${currentQuizId}_${getExamCode()}`;
         const isAdminMode = typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode();
         let shouldShuffle = (examData.isShuffled !== false) && !isAdminMode; 
 
-        // ĐẢM BẢO TẤT CẢ CÂU HỎI TRONG EXAMDATA ĐƯỢC GẮN ĐẦY ĐỦ ẢNH TRƯỚC
         examData.questions = synchronizeExamQuestionsAndImages(examData.questions || [], examData.images || {});
 
         if (shouldShuffle) {
@@ -685,7 +707,6 @@ function fetchExamQuestions(isAutostart = false) {
             if (cachedShuffle) {
                 try {
                     let parsedQ = JSON.parse(cachedShuffle);
-                    // ĐỒNG BỘ LẠI ĐƯỜNG LINK ẢNH MỚI NHẤT TỪ SUPABASE VÀO TỪNG CÂU HỎI TRONG BẢN CACHE
                     if (Array.isArray(parsedQ) && parsedQ.length === examData.questions.length) {
                         parsedQ.forEach(qCached => {
                             const originalQ = examData.questions.find(orig => String(orig.id) === String(qCached.id));
@@ -701,7 +722,6 @@ function fetchExamQuestions(isAutostart = false) {
                         examData.questions = parsedQ;
                         safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
                     } else {
-                        // Nếu số lượng câu hỏi khác (giáo viên đã sửa đề), làm mới xáo đề ngay
                         shuffleExamData(examData);
                         safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
                     }
@@ -722,10 +742,11 @@ function fetchExamQuestions(isAutostart = false) {
         
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
         
-        // RENDER GIAO DIỆN PHÒNG THI KÈM KHO ẢNH HOÀN CHỈNH
         renderQuizLayout(examData.questions || [], examData.images || {}); 
         if (window.MathJax && MathJax.typesetPromise) {
-            MathJax.typesetPromise().catch(() => {});
+            try {
+                MathJax.typesetPromise().catch(() => {});
+            } catch(mjxErr) {}
         }
     } catch (err) { 
         showError("Lỗi", err.message); 
@@ -782,7 +803,9 @@ function onStatementChange(subKey) {
 
 function onShortInputChange(qId) { 
     if (isSubmitted || isExamLocked) return; 
-    const val = document.getElementById(`q${qId}-input`).value.trim(); 
+    const inputEl = document.getElementById(`q${qId}-input`);
+    if (!inputEl) return;
+    const val = inputEl.value.trim(); 
     if (val) {
         window.SECURE_VAULT.userAnswers[`q${qId}`] = val; 
     } else {
@@ -878,8 +901,8 @@ function startCountdownTimer() {
         const now = Date.now(); 
         let currentEndTimeMs = Infinity; 
         if (typeof examData !== 'undefined' && examData && examData.examEndTimeStr) { 
-            let t = new Date(examData.examEndTimeStr).getTime();
-            if (!isNaN(t)) currentEndTimeMs = t;
+            let dEnd = parseUniversalDate(examData.examEndTimeStr);
+            if (dEnd && !isNaN(dEnd.getTime())) currentEndTimeMs = dEnd.getTime();
         } 
 
         const elapsedTimeSec = examStartTime ? Math.floor((now - examStartTime) / 1000) : 0; 
@@ -921,9 +944,9 @@ function saveExamStateToStorage() {
         examStartTime: examStartTime, 
         tabSwitchCount: tabSwitchCount, 
         timeLimitMinutes: TIME_LIMIT_MINUTES, 
-        studentId: document.getElementById("student-id").value.trim(), 
-        studentName: document.getElementById("student-name").value.trim(), 
-        studentClass: document.getElementById("student-class").value.trim(), 
+        studentId: document.getElementById("student-id")?.value?.trim() || safeLocal.getItem("saved_student_sbd") || "", 
+        studentName: document.getElementById("student-name")?.value?.trim() || safeLocal.getItem("saved_student_name") || "", 
+        studentClass: document.getElementById("student-class")?.value?.trim() || safeLocal.getItem("saved_student_class") || "", 
         isStarted: true,
         attemptNumber: currentAttempt,
         isExamLocked: isExamLocked,
@@ -932,11 +955,13 @@ function saveExamStateToStorage() {
     safeLocal.setItem(getStorageKey(currentAttempt), JSON.stringify(dataToSave)); 
 
     if (typeof examIndexedDB !== 'undefined') {
-        examIndexedDB.setItem('exam_states', {
-            key: getStorageKey(currentAttempt),
-            data: dataToSave,
-            updatedAt: Date.now()
-        }).catch(() => {});
+        try {
+            examIndexedDB.setItem('exam_states', {
+                key: getStorageKey(currentAttempt),
+                data: dataToSave,
+                updatedAt: Date.now()
+            }).catch(() => {});
+        } catch(e) {}
     }
 }
 
@@ -964,7 +989,9 @@ function restoreExamStateFromStorage() {
             if (elapsed > limitSec || parsed.isExamLocked) {
                 safeLocal.removeItem(storageKey);
                 if (typeof examIndexedDB !== 'undefined') {
-                    examIndexedDB.removeItem('exam_states', storageKey).catch(() => {});
+                    try {
+                        examIndexedDB.removeItem('exam_states', storageKey).catch(() => {});
+                    } catch(e) {}
                 }
                 return false;
             }
@@ -978,9 +1005,9 @@ function restoreExamStateFromStorage() {
                 TIME_LIMIT_MINUTES = parseInt(parsed.timeLimitMinutes, 10);
                 totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
             }
-            if (parsed.studentId) document.getElementById("student-id").value = parsed.studentId; 
-            if (parsed.studentName) document.getElementById("student-name").value = parsed.studentName; 
-            if (parsed.studentClass) document.getElementById("student-class").value = parsed.studentClass; 
+            if (parsed.studentId && document.getElementById("student-id")) document.getElementById("student-id").value = parsed.studentId; 
+            if (parsed.studentName && document.getElementById("student-name")) document.getElementById("student-name").value = parsed.studentName; 
+            if (parsed.studentClass && document.getElementById("student-class")) document.getElementById("student-class").value = parsed.studentClass; 
             
             isExamLocked = false;
             lockedDurationSec = 0;
@@ -1014,9 +1041,9 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
     document.getElementById("res-stat-correct").innerText = correct; 
     document.getElementById("res-stat-wrong").innerText = wrong; 
     document.getElementById("res-stat-time").innerText = spentMins; 
-    document.getElementById("res-user-name").innerText = document.getElementById("student-name").value.trim() || "Thí sinh"; 
-    document.getElementById("res-user-class").innerText = document.getElementById("student-class").value.trim() || "---"; 
-    document.getElementById("res-user-id").innerText = document.getElementById("student-id").value.trim() || "---"; 
+    document.getElementById("res-user-name").innerText = document.getElementById("student-name")?.value?.trim() || "Thí sinh"; 
+    document.getElementById("res-user-class").innerText = document.getElementById("student-class")?.value?.trim() || "---"; 
+    document.getElementById("res-user-id").innerText = document.getElementById("student-id")?.value?.trim() || "---"; 
     document.getElementById("res-spent-time").innerText = spentTimeStr; 
 
     let existingDownloadBtn = document.getElementById("res-btn-download-backup");
@@ -1101,7 +1128,9 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
         }); 
         reviewBodyEl.innerHTML = revHTML; 
         if (window.MathJax && MathJax.typesetPromise) {
-            MathJax.typesetPromise().catch(() => {});
+            try {
+                MathJax.typesetPromise().catch(() => {});
+            } catch(e) {}
         }
     }
     window.scrollTo({ top: 0, behavior: 'smooth' }); 
@@ -1160,7 +1189,9 @@ function renderOriginalReviewScreen() {
     }); 
     reviewBodyEl.innerHTML = revHTML; 
     if (window.MathJax && MathJax.typesetPromise) {
-        MathJax.typesetPromise().catch(() => {});
+        try {
+            MathJax.typesetPromise().catch(() => {});
+        } catch(e) {}
     }
 }
 
