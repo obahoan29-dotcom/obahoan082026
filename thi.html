@@ -7,9 +7,10 @@
     <!-- FAVICON: Chữ P nghệ thuật uốn lượn đa sắc -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='neonFlow' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%2300E5FF'/%3E%3Cstop offset='25%25' stop-color='%2310B981'/%3E%3Cstop offset='50%25' stop-color='%23FFEA00'/%3E%3Cstop offset='75%25' stop-color='%23FF007F'/%3E%3Cstop offset='100%25' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3Cfilter id='glow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeDropShadow dx='0' dy='2' stdDeviation='3' flood-color='%23FF007F' flood-opacity='0.6'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='%230f172a' stroke='%23334155' stroke-width='2'/%3E%3Cpath d='M28,82 C34,80 32,50 33,28 C33,18 48,12 66,16 C82,20 84,40 68,52 C52,61 32,54 32,54' fill='none' stroke='url(%23neonFlow)' stroke-width='13' stroke-linecap='round' stroke-linejoin='round' filter='url(%23glow)'/%3E%3Cpath d='M25,82 Q32,80 35,76' fill='none' stroke='%2300E5FF' stroke-width='8' stroke-linecap='round'/%3E%3Cpath d='M72,20 L74,25 L79,27 L74,29 L72,34 L70,29 L65,27 L70,25 Z' fill='%23FFFFFF' opacity='0.95'/%3E%3Cpath d='M30,34 L31,37 L34,38 L31,39 L30,42 L29,39 L26,38 L29,37 Z' fill='%23FFEA00' opacity='0.9'/%3E%3Ccircle cx='76' cy='46' r='2.5' fill='%23FFFFFF' opacity='0.8'/%3E%3C/svg%3E">
     
-    <!-- BỘ BẢO VỆ PHÒNG THI TỐI ƯU AN TOÀN CHO IPHONE/MESSENGER (KHÔNG DÙNG EVAL/DEBUGGER CRASH) -->
+    <!-- BỘ BẢO VỆ PHÒNG THI & CHỐNG SẬP TRẮNG MÀN HÌNH CHO IPHONE (IOS WEBKIT) -->
     <script>
         (function() {
+            // 1. Chống chuột phải và phím tắt can thiệp
             document.addEventListener('contextmenu', function(e) { e.preventDefault(); return false; }, { capture: true });
 
             document.addEventListener('keydown', function(e) {
@@ -27,7 +28,26 @@
                 }
             }, { capture: true });
 
-            // Quét công cụ hack trên mobile mà không dùng reload gây đơ máy
+            // 2. TỰ ĐỘNG GỠ BỎ TẬN GỐC SERVICE WORKER CŨ VÀ XOÁ CACHE LỖI TRÊN IPHONE
+            if ('serviceWorker' in navigator) {
+                try {
+                    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                        for (var i = 0; i < registrations.length; i++) {
+                            registrations[i].unregister();
+                        }
+                    }).catch(function() {});
+                } catch(e) {}
+                
+                if (window.caches && caches.keys) {
+                    try {
+                        caches.keys().then(function(keys) {
+                            keys.forEach(function(k) { caches.delete(k); });
+                        }).catch(function() {});
+                    } catch(e) {}
+                }
+            }
+
+            // 3. Quét công cụ hack nhẹ nhàng, an toàn
             function purgeMobileHackTools() {
                 try {
                     if (window.eruda) { try { window.eruda.destroy(); } catch(err) {} delete window.eruda; }
@@ -36,15 +56,53 @@
                     var vcEl = document.getElementById('__vconsole'); if (vcEl) vcEl.remove();
                 } catch(e) {}
             }
-            setInterval(purgeMobileHackTools, 2500);
+            setInterval(purgeMobileHackTools, 3500);
 
-            // BỘ THOÁT CHỜ AN TOÀN (SAFETY TIMEOUT): Chống văng trắng màn hình nếu MathJax hoặc mạng chập chờn
+            // 4. BỘ WATCHDOG AN TOÀN TUYỆT ĐỐI: KHÔNG BAO GIỜ ĐỂ TRẮNG MÀN HÌNH
+            window.__rescueWatchdogTimer = setInterval(function() {
+                var gl = document.getElementById('global-loading');
+                var qc = document.getElementById('quiz-content');
+                var sc = document.getElementById('student-card');
+                var lb = document.getElementById('login-box');
+                var ec = document.getElementById('error-card');
+                var rv = document.getElementById('result-view-container');
+
+                var isAnyContentVisible = (
+                    (qc && qc.style.display === 'block') ||
+                    (sc && sc.style.display === 'block') ||
+                    (lb && lb.style.display === 'block') ||
+                    (ec && ec.style.display === 'block') ||
+                    (rv && rv.style.display === 'block')
+                );
+
+                if (isAnyContentVisible && gl && gl.style.display !== 'none') {
+                    gl.style.display = 'none';
+                    clearInterval(window.__rescueWatchdogTimer);
+                }
+            }, 300);
+
+            // Cứu cánh khẩn cấp nếu sau 4.5s mạng quá chậm, tự động bật thẻ học sinh lên
             setTimeout(function() {
                 var gl = document.getElementById('global-loading');
-                if (gl && gl.style.display !== 'none') {
+                var qc = document.getElementById('quiz-content');
+                var sc = document.getElementById('student-card');
+                if (gl && gl.style.display !== 'none' && (!qc || qc.style.display !== 'block')) {
                     gl.style.display = 'none';
+                    if (sc) sc.style.display = 'block';
                 }
-            }, 3200);
+                if (window.__rescueWatchdogTimer) clearInterval(window.__rescueWatchdogTimer);
+            }, 4500);
+
+            // Xử lý khi iPhone khôi phục trang từ bộ nhớ tạm (Back-Forward Cache / pageshow)
+            window.addEventListener('pageshow', function(event) {
+                if (event.persisted) {
+                    var gl = document.getElementById('global-loading');
+                    if (gl) gl.style.display = 'none';
+                    if (typeof checkSessionStatus === 'function') {
+                        checkSessionStatus(true);
+                    }
+                }
+            });
         })();
     </script>
 
