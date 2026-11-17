@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-core.js 
-// (BẢN FIX ĐỒNG BỘ 100% MỌI LẦN THI KHÔNG BỊ NUỐT & BẢO LƯU TẤT CẢ LẦN THI)
+// (BẢN FIX ĐỒNG BỘ 100%: REALTIME CHÍNH XÁC, KHÔNG BỊ MẤT ĐANG THI KHI RỜI APP)
 // =========================================================
 
 let currentExamResultData = {
@@ -20,7 +20,7 @@ window._userSelectedAttemptsBySbd = window._userSelectedAttemptsBySbd || {};
 let realtimeSubmissionsChannel = null;
 let realtimeDebounceTimer = null;
 
-function debouncedRefreshResults(delayMs = 350) {
+function debouncedRefreshResults(delayMs = 250) {
     if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
     realtimeDebounceTimer = setTimeout(() => {
         if (currentExamResultData.item) {
@@ -126,6 +126,7 @@ function stopRealtimeSubmissionsListener() {
     }
 }
 
+// BẢN FIX: KHÔNG CHẶN SỰ KIỆN UPDATE CỦA ACTIVE_SESSIONS -> ADMIN CẬP NHẬT ĐANG THI NGAY SAU 0.2S
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
@@ -149,6 +150,7 @@ function startRealtimeSubmissionsListener(quizId) {
         let channel = client.channel(`admin_realtime_${targetQuizId}_${Date.now()}`);
 
         candidateIds.forEach(id => {
+            // Lắng nghe bài nộp
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
@@ -156,23 +158,16 @@ function startRealtimeSubmissionsListener(quizId) {
                 filter: `quiz_id=eq.${id}` 
             }, () => debouncedRefreshResults(200));
 
+            // Lắng nghe phiên làm bài: nhận tất cả sự kiện (INSERT, UPDATE, DELETE) không bị chặn
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'active_sessions', 
                 filter: `quiz_id=eq.${id}` 
-            }, (payload) => {
-                if (payload.eventType === 'UPDATE') {
-                    const oldStartTime = payload.old ? payload.old.start_time : null;
-                    const newStartTime = payload.new ? payload.new.start_time : null;
-                    if (oldStartTime && newStartTime && oldStartTime === newStartTime) {
-                        return;
-                    }
-                }
-                debouncedRefreshResults(200);
-            });
+            }, () => debouncedRefreshResults(200));
         });
 
+        // Lắng nghe nháp trực tiếp
         channel = channel.on('postgres_changes', { 
             event: '*', 
             schema: 'public', 
@@ -357,6 +352,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     }
 }
 
+// BẢN FIX: XÁC ĐỊNH CHÍNH XÁC "ĐANG THI" & ĐẾM ĐỦ THỜI GIAN LÀM BÀI, KHÔNG BỊ TỤT VỀ CHƯA THI KHI RỜI APP
 function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, activeSessionsMap, liveDraftsMap, examItem, examMeta = {}) {
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(categoryId) : [];
 
@@ -405,6 +401,10 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     const usedPendingKeys = new Set();
     const usedSubIds = new Set();
 
+    // LẤY THỜI LƯỢNG ĐỀ THI ĐỂ TÍNH HẠN CÒN ĐANG THI
+    const timeLimitMinutes = parseInt(examItem?.timeLimitMinutes || examItem?.time_limit_minutes || examMeta?.quizObj?.time_limit_minutes || 90, 10);
+    const maxExamDurationMs = (timeLimitMinutes + 15) * 60 * 1000; // Cho phép trôi thêm 15 phút gia hạn
+
     classAccounts.forEach((acc, idx) => {
         const accSbdClean = cleanSbdStandard(acc.sbd);
         const accNameNorm = typeof normalizeName === 'function' ? normalizeName(acc.name) : acc.name.toLowerCase();
@@ -424,6 +424,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         matchedSubs = deduplicateAttempts(matchedSubs);
 
         let isDoing = false;
+        let isAwayApp = false;
         let doingStartTime = null;
 
         let activeSess = activeUsersMap[accSbdClean] || activeUsersMap[acc.sbd];
@@ -436,22 +437,30 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             }
         }
 
-        // CHỈ COI LÀ ĐANG THI NẾU PHIÊN DIỄN RA SAU LẦN THI CUỐI VÀ PING TRONG VÒNG 90 GIÂY
+        // BẢN FIX: XÁC ĐỊNH ĐANG THI CHÍNH XÁC KỂ CẢ KHI HỌC SINH MỞ APP KHÁC
         if (activeSess) {
-            const sessTime = Number(activeSess.lastPing || activeSess.startTime || 0);
-            const isPingFresh = (nowMs - sessTime) < 90000;
+            const rawStartTime = Number(activeSess.startTime || 0);
+            const sessPingTime = Number(activeSess.lastPing || activeSess.startTime || 0);
+            const timeSincePing = nowMs - sessPingTime;
+            const timeSinceStart = rawStartTime > 0 ? (nowMs - rawStartTime) : 0;
+
+            const isPingFresh = (timeSincePing < 180000); // Dưới 3 phút: Đang thao tác trực tiếp
+            // Nếu học sinh rời sang app khác (máy tính, Zalo): vẫn giữ ĐANG THI trong suốt thời lượng bài thi
+            const isStillWithinExamTime = (timeSinceStart < maxExamDurationMs) && (timeSincePing < 25 * 60 * 1000);
 
             if (matchedSubs.length === 0) {
-                if (isPingFresh) {
+                if (isPingFresh || isStillWithinExamTime) {
                     isDoing = true;
-                    doingStartTime = activeSess.startTime || sessTime || nowMs;
+                    isAwayApp = !isPingFresh;
+                    doingStartTime = rawStartTime > 0 ? rawStartTime : sessPingTime;
                     usedPendingKeys.add(cleanSbdStandard(activeSess.sbd));
                 }
             } else {
                 const latestSubTime = getSubmissionTimestamp(matchedSubs[matchedSubs.length - 1]);
-                if (sessTime > (latestSubTime + 10000) && isPingFresh) {
+                if (rawStartTime > (latestSubTime + 3000) && (isPingFresh || isStillWithinExamTime)) {
                     isDoing = true;
-                    doingStartTime = activeSess.startTime || sessTime || nowMs;
+                    isAwayApp = !isPingFresh;
+                    doingStartTime = rawStartTime;
                     usedPendingKeys.add(cleanSbdStandard(activeSess.sbd));
                 }
             }
@@ -461,7 +470,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         let cheatLogsTabCount = maxCheatCountBySbd[accSbdClean] || cheatDurations.length;
         let cheatTimeString = cheatDurations.length > 0 ? cheatDurations.join(" | ") : "0s";
 
-        // Mặc định hiển thị Lần 1 (chỉ mục 0) như ảnh mẫu, trừ khi giáo viên chọn xem lần khác
+        // Mặc định hiển thị Lần 1 (chỉ mục 0), trừ khi giáo viên chọn xem lần khác
         let selectedAttemptIndex = 0;
         const savedAttemptIdx = window._userSelectedAttemptsBySbd[accSbdClean];
         if (savedAttemptIdx !== undefined && savedAttemptIdx >= 0 && savedAttemptIdx < matchedSubs.length) {
@@ -476,6 +485,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             allAttempts: matchedSubs,
             selectedAttemptIndex: selectedAttemptIndex,
             isDoing: isDoing,
+            isAwayApp: isAwayApp,
             doingStartTime: doingStartTime,
             isFreeDoing: false,
             cheatTimeString: cheatTimeString,
@@ -497,8 +507,15 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             if (!isSbdBelongsToCategory(sess.sbd || sessKey, categoryId)) continue;
         }
 
-        const sessTime = Number(sess.lastPing || sess.startTime || 0);
-        if ((nowMs - sessTime) >= 90000) continue;
+        const rawStartTime = Number(sess.startTime || 0);
+        const sessPingTime = Number(sess.lastPing || sess.startTime || 0);
+        const timeSincePing = nowMs - sessPingTime;
+        const timeSinceStart = rawStartTime > 0 ? (nowMs - rawStartTime) : 0;
+
+        const isPingFresh = (timeSincePing < 180000);
+        const isStillWithinExamTime = (timeSinceStart < maxExamDurationMs) && (timeSincePing < 25 * 60 * 1000);
+
+        if (!isPingFresh && !isStillWithinExamTime) continue;
 
         usedPendingKeys.add(cleanKey);
 
@@ -516,7 +533,8 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             allAttempts: [],
             selectedAttemptIndex: 0,
             isDoing: true,
-            doingStartTime: sess.startTime || nowMs,
+            isAwayApp: !isPingFresh,
+            doingStartTime: rawStartTime > 0 ? rawStartTime : sessPingTime,
             isFreeDoing: true,
             cheatTimeString: "0s",
             cheatLogsTabCount: 0
@@ -561,6 +579,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             allAttempts: [sub],
             selectedAttemptIndex: 0,
             isDoing: false,
+            isAwayApp: false,
             doingStartTime: null,
             isFreeDoing: false,
             cheatTimeString: "0s",
