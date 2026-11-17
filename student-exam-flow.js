@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER / IOS - ZERO CRASH)
+// (BẢN FIX TRIỆT ĐỂ: BẢO LƯU THỜI GIAN GỐC & ĐỒNG BỘ ĐANG THI CHÍNH XÁC 100%)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -94,7 +94,6 @@ async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
 
     try {
         const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
-        // Đặt timeout 1.8s để tránh treo trên iOS WebKit
         const queryPromise = client
             .from('submissions')
             .select('id, created_at')
@@ -430,7 +429,7 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
     } catch(e) {}
 }
 
-// BẢN FIX MẠNH: THÍCH ỨNG CAO ĐỘ (RESILIENT) VỚI WEBKIT TRONG MESSENGER
+// BẢN FIX MẠNH: THÍCH ỨNG CAO ĐỘ (RESILIENT) VỚI WEBKIT TRONG MESSENGER & GIỮ MỐC THỜI GIAN GỐC
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -457,16 +456,35 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     }
     window.currentStudentAttemptNumber = currentAttempt;
 
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    const originKey = `exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`;
     const nowMs = Date.now();
+    let effectiveStartTime = nowMs;
 
-    // Thử gửi kết nối tới Supabase nhưng ĐẶT TIMEOUT 2 GIÂY
-    // Nếu mạng Messenger bị chậm, KHÔNG CRASH MÀ VẪN CHO HỌC SINH VÀO THI NGAY (Offline-first)!
+    // KIỂM TRA MỐC THỜI GIAN BẮT ĐẦU GỐC NẾU ĐÃ CÓ (TRÁNH BỊ RESET KHI RELOAD MẠNG)
+    const existingOrigin = safeLocal.getItem(originKey);
+    const maxLimitSec = ((typeof TIME_LIMIT_MINUTES !== 'undefined' ? TIME_LIMIT_MINUTES : 90) * 60) + 1800;
+    if (existingOrigin) {
+        const parsedOrigin = parseInt(existingOrigin, 10);
+        if (!isNaN(parsedOrigin) && (nowMs - parsedOrigin) < (maxLimitSec * 1000)) {
+            effectiveStartTime = parsedOrigin;
+        } else {
+            safeLocal.setItem(originKey, String(nowMs));
+            effectiveStartTime = nowMs;
+        }
+    } else {
+        safeLocal.setItem(originKey, String(nowMs));
+        effectiveStartTime = nowMs;
+    }
+
+    examStartTime = effectiveStartTime;
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+
+    // CẬP NHẬT ACTIVE_SESSIONS: GỬI LẬP TỨC ĐỂ ADMIN NHẬN ĐƯỢC REALTIME NGAY
     if (client) {
         try {
             const handshakeTask = async () => {
-                await client.from('active_sessions').delete().match({ quiz_id: currentQuizId, sbd: cleanSbd });
-                await client.from('active_sessions').insert([{
+                const sessionPayload = {
                     quiz_id: currentQuizId,
                     sbd: cleanSbd,
                     name: sName,
@@ -475,9 +493,28 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                     is_free: isFreeStudent,
                     ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                     exam_title: exactExamTitle,
-                    start_time: nowMs,
+                    start_time: effectiveStartTime,
                     last_ping: nowMs
-                }]);
+                };
+
+                const { data: updated } = await client.from('active_sessions')
+                    .update({
+                        name: sName,
+                        class_name: strictClassName,
+                        category_id: currentCat,
+                        is_free: isFreeStudent,
+                        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                        exam_title: exactExamTitle,
+                        start_time: effectiveStartTime,
+                        last_ping: nowMs
+                    })
+                    .match({ quiz_id: currentQuizId, sbd: cleanSbd })
+                    .select();
+
+                if (!updated || updated.length === 0) {
+                    await client.from('active_sessions').insert([sessionPayload]);
+                }
+
                 client.from('cheating_logs').insert([{
                     quiz_id: currentQuizId,
                     sbd: cleanSbd,
@@ -501,10 +538,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem("last_submission_cleared");
-    if (typeof getStorageKey === 'function') {
-        safeLocal.removeItem(getStorageKey());
-        safeLocal.removeItem(getStorageKey(currentAttempt));
-    }
 
     if (typeof examIndexedDB !== 'undefined') {
         examIndexedDB.setItem('live_drafts', {
@@ -518,21 +551,27 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
         }).catch(() => {});
     }
 
-    if (window.SECURE_VAULT) {
+    if (!window.SECURE_VAULT) {
+        window.SECURE_VAULT = { userAnswers: {}, explanations: {}, answers: {}, padletClicked: {} };
+    }
+    
+    // Nếu là phiên mới tinh thì reset câu trả lời, nếu là reload thì giữ nguyên câu trả lời đã lưu
+    const hasCachedAnswers = window.SECURE_VAULT.userAnswers && Object.keys(window.SECURE_VAULT.userAnswers).length > 0;
+    if (!hasCachedAnswers) {
         window.SECURE_VAULT.userAnswers = {};
         window.SECURE_VAULT.padletClicked = {};
+        const allRadios = document.querySelectorAll('#quiz-content input[type="radio"]');
+        allRadios.forEach(r => { r.checked = false; });
+        const allTexts = document.querySelectorAll('#quiz-content input[type="text"]');
+        allTexts.forEach(t => { t.value = ""; });
+        const allOpts = document.querySelectorAll('.opt-label.selected');
+        allOpts.forEach(o => o.classList.remove('selected'));
     }
+
     tabSwitchCount = 0;
     isExamLocked = false;
     lockedDurationSec = 0;
     isSubmitted = false;
-
-    const allRadios = document.querySelectorAll('#quiz-content input[type="radio"]');
-    allRadios.forEach(r => { r.checked = false; });
-    const allTexts = document.querySelectorAll('#quiz-content input[type="text"]');
-    allTexts.forEach(t => { t.value = ""; });
-    const allOpts = document.querySelectorAll('.opt-label.selected');
-    allOpts.forEach(o => o.classList.remove('selected'));
 
     document.getElementById("nav-student-name").innerText = sName; 
     document.getElementById("nav-student-id").innerText = (currentAttempt > 1) ? `${sId} (Lần ${currentAttempt})` : sId; 
@@ -547,10 +586,10 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     document.getElementById("top-navbar").style.display = "block"; 
     document.getElementById("quiz-content").style.display = "block"; 
     
-    examStartTime = Date.now(); 
     if (typeof TIME_LIMIT_MINUTES !== 'undefined') {
         totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
-        remainingSeconds = totalTimeSeconds;
+        const elapsedSoFar = Math.max(0, Math.floor((nowMs - effectiveStartTime) / 1000));
+        remainingSeconds = Math.max(0, totalTimeSeconds - elapsedSoFar);
     }
     
     if (typeof window.__saveExamState === 'function') window.__saveExamState();
@@ -562,6 +601,13 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(false);
 
     renderStudentSubmissionHistoryButtons();
+
+    // SỬA LỖI RELOAD TRÊN DI ĐỘNG: GỠ BỎ THAM SỐ AUTOSTART KHỎI URL ĐỂ KHÔNG BỊ LOAD LẠI TRẮNG
+    try {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('autostart');
+        window.history.replaceState({ page: 'quiz' }, "", cleanUrl.toString());
+    } catch(e) {}
 
     if (startBtn) { 
         startBtn.disabled = false; 
@@ -586,8 +632,22 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const isClassAcc = classAccounts.some(acc => String(acc.sbd || "").trim().toLowerCase() === sId.toLowerCase());
     const isFreeStudent = !isClassAcc;
 
+    const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
+    const currentAttempt = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(currentQuizId, cleanSbd);
+    const originKey = `exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`;
+
+    // LẤY MỐC THỜI GIAN BẮT ĐẦU CHÍNH XÁC NHẤT (ƯU TIÊN THỜI ĐIỂM GỐC)
+    let reliableStartTime = examStartTime;
+    const originStored = safeLocal.getItem(originKey);
+    if (originStored) {
+        const parsedT = parseInt(originStored, 10);
+        if (!isNaN(parsedT) && parsedT > 0 && parsedT <= Date.now()) {
+            reliableStartTime = parsedT;
+        }
+    }
+
     const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
-    let actualElapsedSec = lockedDurationSec || (examStartTime ? Math.round((Date.now() - examStartTime) / 1000) : 0);
+    let actualElapsedSec = lockedDurationSec || (reliableStartTime ? Math.round((Date.now() - reliableStartTime) / 1000) : 0);
     const durationSec = Math.min(Math.max(1, actualElapsedSec), maxAllowedSec);
     const spentMins = Math.floor(durationSec / 60);
     const spentSecs = durationSec % 60;
@@ -614,10 +674,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         dataDetails.push(`[THU BÀI ÉP BUỘC TỪ XA]`);
     }
 
-    const cleanSbd = sId.replace(/[^a-zA-Z0-9]/g, '_');
     const submissionTimestampMs = Date.now();
-    const currentAttempt = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(currentQuizId, cleanSbd);
-
     const submissionId = `sub_${currentQuizId}_${cleanSbd}_lan${currentAttempt}_${submissionTimestampMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
