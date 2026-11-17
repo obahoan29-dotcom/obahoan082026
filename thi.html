@@ -2,7 +2,8 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- FIX CHO IPHONE: Khóa thu phóng tuyệt đối -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>HỆ THỐNG THI TRẮC NGHIỆM ONLINE</title>
     <!-- FAVICON: Chữ P nghệ thuật uốn lượn đa sắc -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='neonFlow' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%2300E5FF'/%3E%3Cstop offset='25%25' stop-color='%2310B981'/%3E%3Cstop offset='50%25' stop-color='%23FFEA00'/%3E%3Cstop offset='75%25' stop-color='%23FF007F'/%3E%3Cstop offset='100%25' stop-color='%238B5CF6'/%3E%3C/linearGradient%3E%3Cfilter id='glow' x='-20%25' y='-20%25' width='140%25' height='140%25'%3E%3CfeDropShadow dx='0' dy='2' stdDeviation='3' flood-color='%23FF007F' flood-opacity='0.6'/%3E%3C/filter%3E%3C/defs%3E%3Crect width='100' height='100' rx='24' fill='%230f172a' stroke='%23334155' stroke-width='2'/%3E%3Cpath d='M28,82 C34,80 32,50 33,28 C33,18 48,12 66,16 C82,20 84,40 68,52 C52,61 32,54 32,54' fill='none' stroke='url(%23neonFlow)' stroke-width='13' stroke-linecap='round' stroke-linejoin='round' filter='url(%23glow)'/%3E%3Cpath d='M25,82 Q32,80 35,76' fill='none' stroke='%2300E5FF' stroke-width='8' stroke-linecap='round'/%3E%3Cpath d='M72,20 L74,25 L79,27 L74,29 L72,34 L70,29 L65,27 L70,25 Z' fill='%23FFFFFF' opacity='0.95'/%3E%3Cpath d='M30,34 L31,37 L34,38 L31,39 L30,42 L29,39 L26,38 L29,37 Z' fill='%23FFEA00' opacity='0.9'/%3E%3Ccircle cx='76' cy='46' r='2.5' fill='%23FFFFFF' opacity='0.8'/%3E%3C/svg%3E">
@@ -220,6 +221,40 @@
         }
         .btn-switch-to-soi-de:active {
             transform: translateY(1.5px) scale(0.96) !important;
+        }
+
+        /* ======================================================= */
+        /* FIX LỖI CRASH (TRẮNG MÀN HÌNH) TRÊN IPHONE (IOS WEBKIT) */
+        /* ======================================================= */
+        @supports (-webkit-touch-callout: none) {
+            html, body {
+                background-attachment: scroll !important;
+            }
+            /* 1. ÉP FONT 16PX CHO TẤT CẢ INPUT CHỐNG IOS AUTO-ZOOM GÂY CRASH */
+            .input-group input,
+            .short-input-box,
+            .st-input-field,
+            #exam-pass-input,
+            #student-id,
+            #student-name,
+            #student-class {
+                font-size: 16px !important;
+            }
+            /* 2. TẮT BLUR (LÀM MỜ) ĐỂ CHỐNG TRÀN VRAM KHI BÀN PHÍM BẬT LÊN TRÊN IPHONE */
+            .modal-overlay,
+            .move-modal-overlay {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(15, 23, 42, 0.95) !important;
+            }
+            .modal-box,
+            .card-panel,
+            .student-login-box {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: #ffffff !important;
+                transform: translateZ(0); /* Bật tăng tốc phần cứng 2D */
+            }
         }
     </style>
 
