@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ LỖI VĂNG TRẮNG MÀN HÌNH TRÊN IPHONE & BẢO VỆ GIAO DIỆN PHÒNG THI)
+// (BẢN FIX TRIỆT ĐỂ: KHÔNG RESET THỜI GIAN KHI RELOAD & GIỮ NGUYÊN BÀI THI)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -125,6 +125,11 @@ async function ensureActiveSessionAndDraft() {
     try {
         const cfg = window.CURRENT_RT_CONFIG || {};
         if (cfg.pingIntervalSec !== 0) {
+            // LẤY START_TIME GỐC KHÔNG THAY ĐỔI
+            const currentAttempt = window.currentStudentAttemptNumber || 1;
+            const originStored = safeLocal.getItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`);
+            const trueStartTime = originStored ? parseInt(originStored, 10) : (examStartTime || nowMs);
+
             const { data: updatedAct } = await client.from('active_sessions')
                 .update({
                     name: sName,
@@ -148,7 +153,7 @@ async function ensureActiveSessionAndDraft() {
                     is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat)),
                     ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                     exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                    start_time: examStartTime || nowMs,
+                    start_time: trueStartTime,
                     last_ping: nowMs
                 }]);
             }
@@ -328,7 +333,6 @@ function synchronizeExamQuestionsAndImages(questionsList, imageMap) {
 function parseUniversalDate(str) {
     if (!str) return null;
     let s = String(str).trim();
-    // Định dạng YYYY-MM-DD HH:mm:ss -> đổi thành YYYY-MM-DDTHH:mm:ss cho Safari
     if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2})?$/.test(s)) {
         s = s.replace(/\s+/, 'T');
     }
@@ -503,6 +507,13 @@ function resetToFreshLoginScreen() {
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem("last_submission_cleared");
 
+    if (quizId && sId) {
+        const cleanSbd = String(sId).replace(/[^a-zA-Z0-9]/g, '_');
+        safeLocal.removeItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan1`);
+        safeLocal.removeItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan2`);
+        safeLocal.removeItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan3`);
+    }
+
     if (typeof examIndexedDB !== 'undefined') {
         try {
             examIndexedDB.removeItem('exam_states', getStorageKey()).catch(() => {});
@@ -517,6 +528,7 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
+// BẢN FIX: KHÔNG XÓA NHẦM PHIÊN THI KHI HỌC SINH LÀM 10 PHÚT CHƯA KỊP TÍCH ĐÁP ÁN
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -567,26 +579,24 @@ async function checkSessionStatus(isAutostart = false) {
     if (isRestored) { 
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
-        const currentAnsCount = Object.keys(window.SECURE_VAULT.userAnswers || {}).length;
 
-        if (isAutostart || timeRemaining <= 0 || isExamLocked) {
-            if (timeRemaining <= 0 || isExamLocked || currentAnsCount === 0) {
-                safeLocal.removeItem(getStorageKey(attempt));
-                if (typeof getStorageKey === 'function') {
-                    safeLocal.removeItem(getStorageKey());
-                }
-                if (typeof examIndexedDB !== 'undefined') {
-                    try {
-                        examIndexedDB.removeItem('exam_states', getStorageKey(attempt)).catch(() => {});
-                    } catch(e) {}
-                }
-                isRestored = false;
-                isExamLocked = false;
-                lockedDurationSec = 0;
-                examStartTime = null;
-                window.SECURE_VAULT.userAnswers = {};
-                window.SECURE_VAULT.padletClicked = {};
+        // CHỈ XÓA PHIÊN KHI ĐÃ THỰC SỰ HẾT GIỜ THI, TUYỆT ĐỐI KHÔNG XÓA KHI HỌC SINH CHƯA TÍCH ĐÁP ÁN (VẪN ĐANG NGHĨ NHÁP)
+        if (timeRemaining <= 0 && totalTimeSeconds > 0) {
+            safeLocal.removeItem(getStorageKey(attempt));
+            if (typeof getStorageKey === 'function') {
+                safeLocal.removeItem(getStorageKey());
             }
+            if (typeof examIndexedDB !== 'undefined') {
+                try {
+                    examIndexedDB.removeItem('exam_states', getStorageKey(attempt)).catch(() => {});
+                } catch(e) {}
+            }
+            isRestored = false;
+            isExamLocked = false;
+            lockedDurationSec = 0;
+            examStartTime = null;
+            window.SECURE_VAULT.userAnswers = {};
+            window.SECURE_VAULT.padletClicked = {};
         }
     }
 
@@ -938,13 +948,24 @@ function startCountdownTimer() {
 function saveExamStateToStorage() { 
     if (!examStartTime || isSubmitted) return; 
     const currentAttempt = window.currentStudentAttemptNumber || 1;
+    const sbd = document.getElementById("student-id")?.value?.trim() || safeLocal.getItem("saved_student_sbd") || "";
+    const cleanSbd = sbd.replace(/[^a-zA-Z0-9]/g, '_');
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "quiz";
+
+    // BẢO VỆ MỐC THỜI GIAN GỐC
+    const originKey = `exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`;
+    if (!safeLocal.getItem(originKey)) {
+        safeLocal.setItem(originKey, String(examStartTime));
+    }
+
     const dataToSave = { 
         userAnswers: window.SECURE_VAULT.userAnswers, 
         padletClickedMap: window.SECURE_VAULT.padletClicked, 
         examStartTime: examStartTime, 
         tabSwitchCount: tabSwitchCount, 
         timeLimitMinutes: TIME_LIMIT_MINUTES, 
-        studentId: document.getElementById("student-id")?.value?.trim() || safeLocal.getItem("saved_student_sbd") || "", 
+        studentId: sbd, 
         studentName: document.getElementById("student-name")?.value?.trim() || safeLocal.getItem("saved_student_name") || "", 
         studentClass: document.getElementById("student-class")?.value?.trim() || safeLocal.getItem("saved_student_class") || "", 
         isStarted: true,
@@ -982,7 +1003,13 @@ function restoreExamStateFromStorage() {
         }
 
         if (parsed && parsed.isStarted) { 
-            const savedStartTime = parsed.examStartTime || Date.now();
+            const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "quiz";
+            const cleanSbd = String(parsed.studentId || "").replace(/[^a-zA-Z0-9]/g, '_');
+            const originKey = `exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`;
+            const originStored = safeLocal.getItem(originKey);
+
+            // ƯU TIÊN MỐC THỜI GIAN GỐC ĐỂ KHÔNG BỊ NHẢY PHÚT
+            const savedStartTime = originStored ? parseInt(originStored, 10) : (parsed.examStartTime || Date.now());
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
 
