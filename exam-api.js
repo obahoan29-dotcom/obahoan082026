@@ -45,7 +45,7 @@ window.CURRENT_RT_CONFIG = {
     watchForceSubmit: true,
     watchTimeConfig: true,
     watchImageSync: true,
-    pingIntervalSec: 30
+    pingIntervalSec: 25
 };
 
 async function loadRealtimeExamConfig() {
@@ -477,7 +477,7 @@ async function startPresenceSystem(sId) {
         startForceSubmitWatcher(currentQuizId);
     }
 
-    const intervalSec = (cfg.pingIntervalSec !== undefined) ? parseInt(cfg.pingIntervalSec, 10) : 30;
+    const intervalSec = (cfg.pingIntervalSec !== undefined) ? parseInt(cfg.pingIntervalSec, 10) : 25;
     if (presenceInterval) {
         clearInterval(presenceInterval);
         presenceInterval = null;
@@ -491,6 +491,7 @@ async function startPresenceSystem(sId) {
     }
 }
 
+// BẢN FIX: GIỮ NGUYÊN START_TIME GỐC KHÔNG BAO GIỜ BỊ ĐÈ THỜI GIAN HIỆN TẠI
 async function updatePresence(cleanSbd) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -502,6 +503,10 @@ async function updatePresence(cleanSbd) {
         const sName = document.getElementById("student-name")?.value.trim() || "Thí sinh";
         const sClass = document.getElementById("student-class")?.value.trim() || "Lớp";
         const nowMs = Date.now();
+
+        const currentAttempt = window.currentStudentAttemptNumber || 1;
+        const originStored = safeLocal.getItem(`exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`);
+        const reliableStartTime = originStored ? parseInt(originStored, 10) : (examStartTime || nowMs);
 
         const { data: updated } = await client.from('active_sessions')
             .update({ last_ping: nowMs })
@@ -518,7 +523,7 @@ async function updatePresence(cleanSbd) {
                 is_free: false,
                 ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                 exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
-                start_time: examStartTime || nowMs,
+                start_time: reliableStartTime,
                 last_ping: nowMs
             }]);
         }
@@ -622,7 +627,6 @@ function setupBackPrevention() {
         window.addEventListener('popstate', function () { 
             if (!isSubmitted && examStartTime) { 
                 window.history.pushState({ page: 'quiz' }, "", ""); 
-                // TUYỆT ĐỐI KHÔNG DÙNG confirm() ĐỒNG BỘ Ở ĐÂY VÌ GÂY SẬP TRẮNG MÀN HÌNH WEBKIT TRÊN IOS!
                 if (typeof showTimeChangeToast === 'function') {
                     showTimeChangeToast("⚠️ BẠN ĐANG TRONG BÀI THI! Hãy làm bài và bấm nút NỘP BÀI.");
                 }
@@ -705,13 +709,20 @@ async function checkPendingSubmissionOnLoad() {
     updateTopBackupStatus(isSubmitted);
 }
 
+// BẢN FIX: KHI HỌC SINH TỪ ỨNG DỤNG KHÁC QUAY LẠI, PING NGAY LẬP TỨC ĐỂ ADMIN KHÔNG BỊ BÁO CHƯA THI
 document.addEventListener("visibilitychange", async function() { 
     if (wakeLockSentinel === null && !document.hidden) { 
         await requestWakeLock(); 
     }
     if (!examStartTime || isSubmitted) return; 
 
+    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
+
     if (!document.hidden) {
+        // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase!
+        updatePresence(cleanSbd);
+
         const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
         if (elapsedSec >= totalTimeSeconds) {
             if (typeof window.executeSubmitExam === 'function') {
@@ -726,6 +737,7 @@ document.addEventListener("visibilitychange", async function() {
             isTabHidden = true; 
             leaveTime = Date.now(); 
             tabSwitchCount++; 
+            if (typeof window.__saveExamState === 'function') window.__saveExamState();
         } 
     } else { 
         if (isTabHidden && leaveTime > 0) { 
@@ -741,6 +753,14 @@ document.addEventListener("visibilitychange", async function() {
             }
         } 
     } 
+});
+
+window.addEventListener("focus", function() {
+    if (examStartTime && !isSubmitted) {
+        const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+        const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
+        updatePresence(cleanSbd);
+    }
 });
 
 function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) { 
