@@ -2,7 +2,8 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- FIX CHO IPHONE: Khóa thu phóng tuyệt đối -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -178,6 +179,40 @@
             .btn-upload-json-backup, .btn-auto-collect-drafts {
                 font-size: 11px !important;
                 padding: 6px 10px !important;
+            }
+        }
+
+        /* ======================================================= */
+        /* FIX LỖI CRASH (TRẮNG MÀN HÌNH) TRÊN IPHONE (IOS WEBKIT) */
+        /* ======================================================= */
+        @supports (-webkit-touch-callout: none) {
+            /* 1. Ép font 16px chống Safari tự động Zoom */
+            input[type="text"],
+            input[type="password"],
+            input[type="number"],
+            .st-input-field,
+            .auth-input,
+            .tuluan-search-box {
+                font-size: 16px !important;
+            }
+            /* 2. Tắt hiệu ứng kính mờ (blur) để chống tràn bộ nhớ GPU khi bàn phím bật */
+            .move-modal-overlay,
+            .result-fullscreen-modal,
+            .visit-stats-modal-overlay,
+            .dantri-article-modal,
+            .tuluan-lightbox-overlay {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: rgba(15, 23, 42, 0.95) !important;
+            }
+            .student-login-box,
+            .auth-container,
+            .admin-popover-panel,
+            .tuluan-modal-card {
+                backdrop-filter: none !important;
+                -webkit-backdrop-filter: none !important;
+                background: #ffffff !important;
+                transform: translateZ(0); /* Kích hoạt tăng tốc phần cứng */
             }
         }
     </style>
