@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN SIÊU HẸP HEADER - TÍCH HỢP NÚT THU BÀI TẠM THỜI QUA REALTIME & GAS)
+// (BẢN SIÊU HẸP HEADER - TÍCH HỢP NÚT THU BÀI TẠM THỜI QUA REALTIME & GAS - BẢN FIX HIỂN THỊ ĐANG THI CHÍNH XÁC)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -137,7 +137,7 @@ let isFitAllRowsActive = false;
             line-height: 1 !important;
         }
 
-        /* NÚT THU BÀI TẠM THỜI RẤT NHỎ TRÊN TOOLBAR */
+        /* NÚT THU BÀI TẠM THỜI */
         .btn-temp-draft-capture {
             background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
             color: #ffffff !important;
@@ -395,6 +395,13 @@ let isFitAllRowsActive = false;
             color: #92400e !important;
             border-color: #f59e0b !important;
             box-shadow: 0 0 10px rgba(245, 158, 11, 0.45) !important;
+        }
+        .status-doing-heartbeat.is-away {
+            animation: none !important;
+            background: #fff7ed !important;
+            color: #c2410c !important;
+            border-color: #fb923c !important;
+            box-shadow: 0 1px 4px rgba(249, 115, 22, 0.25) !important;
         }
         .status-doing-heartbeat .heartbeat-icon { font-size: 15px !important; line-height: 1 !important; }
 
@@ -674,9 +681,7 @@ function ensureModalZoomControlsInHeader() {
     }
 }
 
-// =========================================================================
 // HÀM XỬ LÝ KHI BẤM NÚT "THU TẠM": GỬI LỆNH REALTIME VÀ PUSH SANG GAS
-// =========================================================================
 async function triggerCollectTempDraftsToDrive(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
@@ -1202,6 +1207,7 @@ function ensureActionColumnHeaders() {
     }
 }
 
+// BẢN FIX: CẬP NHẬT ĐỒNG HỒ ĐANG THI CHÍNH XÁC TỪ MỐC THỜI GIAN GỐC
 function startLiveDoingTicker() {
     if (_liveDoingTickerInterval) clearInterval(_liveDoingTickerInterval);
     _liveDoingTickerInterval = setInterval(() => {
@@ -1276,7 +1282,9 @@ function renderFilteredResultTable(rows) {
 
         if (attCount === 0) {
             if (row.isDoing) {
-                col_attemptCount = `<span class="status-doing-heartbeat" style="font-size:11px; padding:3px 8px;" title="Học sinh đang trong phòng thi">💓 Đang thi</span>`;
+                col_attemptCount = row.isAwayApp 
+                    ? `<span class="status-doing-heartbeat is-away" style="font-size:11px; padding:3px 8px;" title="Học sinh đang mở app khác">📱 Đang thi</span>`
+                    : `<span class="status-doing-heartbeat" style="font-size:11px; padding:3px 8px;" title="Học sinh đang làm bài trên màn hình">💓 Đang thi</span>`;
             } else {
                 col_attemptCount = `<span class="status-not-submitted">---</span>`;
             }
@@ -1368,6 +1376,7 @@ function renderFilteredResultTable(rows) {
             }
         }
 
+        // BẢN FIX: HIỂN THỊ CHÍNH XÁC ĐANG THI VÀ ĐẾM THỜI GIAN THEO START_TIME GỐC
         if (row.isDoing) {
             let startMs = row.doingStartTime || Date.now();
             let formattedIn = formatDateTimeFull(startMs);
@@ -1376,11 +1385,18 @@ function renderFilteredResultTable(rows) {
             if (!currentSub) {
                 col2_inTime = `<span style="color:#7e22ce; font-weight:800; font-family:monospace;">${formattedIn}</span>`;
                 col3_spentTime = `<span class="live-doing-timer-pill" title="Thời gian đang thi (tự động đếm)"><span class="timer-clock-icon">⏱</span> <span class="live-doing-timer-val" data-starttime="${startMs}">${liveDuration}</span></span>`;
-                col6_status = row.isFreeDoing 
-                    ? `<span class="status-doing-heartbeat free-mode"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>` 
-                    : `<span class="status-doing-heartbeat"><span class="heartbeat-icon">💜</span> Đang thi</span>`;
+                
+                if (row.isFreeDoing) {
+                    col6_status = `<span class="status-doing-heartbeat free-mode"><span class="heartbeat-icon">💜</span> Đang thi-tự do</span>`;
+                } else if (row.isAwayApp) {
+                    col6_status = `<span class="status-doing-heartbeat is-away" title="Học sinh đang mở app khác (Zalo, máy tính, ...)"><span class="heartbeat-icon">📱</span> Đang thi (Tạm rời)</span>`;
+                } else {
+                    col6_status = `<span class="status-doing-heartbeat"><span class="heartbeat-icon">💓</span> Đang thi</span>`;
+                }
             } else {
-                col6_status = `<span class="status-doing-heartbeat" title="Đang làm bài lần ${attCount + 1}"><span class="heartbeat-icon">💜</span> Đang thi Lần ${attCount + 1}</span>`;
+                col6_status = row.isAwayApp 
+                    ? `<span class="status-doing-heartbeat is-away" title="Học sinh đang mở app khác"><span class="heartbeat-icon">📱</span> Đang thi Lần ${attCount + 1}</span>`
+                    : `<span class="status-doing-heartbeat" title="Đang làm bài lần ${attCount + 1}"><span class="heartbeat-icon">💓</span> Đang thi Lần ${attCount + 1}</span>`;
             }
 
             let doingTabs = row.cheatLogsTabCount || 0;
