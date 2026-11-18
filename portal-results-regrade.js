@@ -34,10 +34,10 @@ function toggleAutoRefresh(event) {
     isAutoRefreshEnabled = !isAutoRefreshEnabled;
     const btn = document.getElementById("btn-toggle-autorefresh");
     if (isAutoRefreshEnabled) {
-        if (btn) { btn.innerHTML = "🟢 Tự động: BẬT"; btn.style.color = "#38bdf8"; btn.style.borderColor = "#38bdf8"; }
+        if (btn) { btn.innerHTML = "🟢 Auto: BẬT"; btn.style.color = "#38bdf8"; btn.style.borderColor = "#38bdf8"; }
         startAutoRefreshResult();
     } else {
-        if (btn) { btn.innerHTML = "⚪ Tự động: TẮT"; btn.style.color = "#94a3b8"; btn.style.borderColor = "#64748b"; }
+        if (btn) { btn.innerHTML = "⚪ Auto: TẮT"; btn.style.color = "#94a3b8"; btn.style.borderColor = "#64748b"; }
         stopAutoRefreshResult();
     }
 }
@@ -300,7 +300,7 @@ async function handleBackupJsonFileInput(input) {
         input.value = "";
         if (btn) {
             btn.disabled = false;
-            btn.innerText = "📥 Upload JSON nộp sót";
+            btn.innerText = "📥 Nạp JSON";
         }
     }
 }
