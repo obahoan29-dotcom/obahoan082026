@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// (BẢN SIÊU HẸP HEADER - TÍCH HỢP NÚT THU BÀI TẠM THỜI QUA REALTIME & GAS - BẢN FIX HIỂN THỊ ĐANG THI CHÍNH XÁC)
+// BẢNG KẾT QUẢ THI: ĐÃ BỔ SUNG CẢM ỨNG 2 NGÓN TAY PHÓNG TO THU NHỎ
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -783,7 +783,9 @@ async function triggerCollectTempDraftsToDrive(event) {
     }
 }
 
-(function setupIsolatedWheelZoom() {
+// BỘ NHẬN DIỆN ZOOM MỚI: HỖ TRỢ CẢ CTRL+WHEEL VÀ PINCH-TO-ZOOM (TOUCH 2 NGÓN TAY)
+(function setupIsolatedWheelAndTouchZoom() {
+    // 1. Dành cho chuột / trackpad (Ctrl + Cuộn)
     window.addEventListener("wheel", function(e) {
         const modal = document.getElementById("result-fullscreen-modal");
         if (!modal || modal.style.display !== "flex") return;
@@ -795,6 +797,81 @@ async function triggerCollectTempDraftsToDrive(event) {
             adjustModalZoomStep(delta);
         }
     }, { passive: false });
+
+    // 2. Dành cho màn hình cảm ứng (Pinch-to-zoom 2 ngón tay)
+    let initialPinchDist = 0;
+    let initialZoom = 1;
+
+    window.addEventListener("touchstart", function(e) {
+        const modal = document.getElementById("result-fullscreen-modal");
+        if (!modal || modal.style.display !== "flex") return;
+
+        if (e.touches && e.touches.length === 2 && modal.contains(e.target)) {
+            // Chỉ chặn hành vi vuốt mặc định khi 2 ngón chạm vào vùng bảng dữ liệu
+            if (e.target.closest('.result-table-card') || e.target.closest('#result-detailed-stats-view')) {
+                if (e.cancelable) e.preventDefault();
+            }
+            initialPinchDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            initialZoom = modalCustomZoomLevel;
+        }
+    }, { passive: false });
+
+    window.addEventListener("touchmove", function(e) {
+        const modal = document.getElementById("result-fullscreen-modal");
+        if (!modal || modal.style.display !== "flex") return;
+
+        if (e.touches && e.touches.length === 2 && initialPinchDist > 0 && modal.contains(e.target)) {
+            if (e.cancelable) e.preventDefault(); // CHỐNG ZOOM NATIVE MẶC ĐỊNH TRÊN MOBILE/WINDOWS TOUCH
+            const currentDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const scale = currentDist / initialPinchDist;
+            let newZoom = initialZoom * scale;
+            
+            // Giới hạn thu phóng từ 40% đến 180%
+            newZoom = Math.min(1.8, Math.max(0.40, newZoom));
+            modalCustomZoomLevel = newZoom;
+            
+            const mainView = document.getElementById("result-modal-main-view");
+            const detailView = document.getElementById("result-detailed-stats-view");
+            
+            const applyToEl = (el) => {
+                if (!el) return;
+                if ('zoom' in el.style) {
+                    el.style.zoom = modalCustomZoomLevel;
+                } else {
+                    el.style.transform = `scale(${modalCustomZoomLevel})`;
+                    el.style.transformOrigin = "top center";
+                }
+            };
+
+            applyToEl(mainView);
+            applyToEl(detailView);
+
+            const badge = document.getElementById("modal-zoom-display-val");
+            if (badge) badge.innerText = `${Math.round(modalCustomZoomLevel * 100)}%`;
+
+            // Tắt chế độ "Vừa màn" nếu người dùng chủ động zoom
+            isFitAllRowsActive = false;
+            const fitBtn = document.getElementById("btn-fit-all-rows");
+            if (fitBtn) {
+                fitBtn.classList.remove("is-fitted");
+                fitBtn.innerHTML = "📐 Vừa màn";
+            }
+            const table = document.getElementById("admin-result-table");
+            if (table) table.classList.remove("table-fitted-compact");
+        }
+    }, { passive: false });
+
+    window.addEventListener("touchend", function(e) {
+        if (!e.touches || e.touches.length < 2) {
+            initialPinchDist = 0;
+        }
+    });
 })();
 
 function initTableSettings() {
