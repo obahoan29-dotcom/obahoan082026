@@ -1,5 +1,6 @@
 // =========================================================
 // FILE: portal-tuluan-lightbox.js (BẢN MA TRẬN 10 CỘT ĐIỂM TP CHUẨN XÁC 100% THEO ẢNH 2)
+// ĐÃ SỬA: KHÓA BẰNG e.preventDefault() ĐỂ NGĂN TRÌNH DUYỆT WINDOWS/MOBILE PHÓNG TO TRANG
 // =========================================================
 
 let _compScoreAutoSaveTimer = null;
@@ -536,6 +537,170 @@ async function saveStudentCrossScore(cleanSbd, stt, sbd, studentName, scoreVal) 
     }
 }
 
+// KHỞI TẠO BỘ NHẬN DIỆN ZOOM BẰNG 2 NGÓN TAY CHO LIGHTBOX (ĐÃ SỬA)
+function setupLightboxTouchAndZoom() {
+    const area = document.getElementById("lightbox-touch-area");
+    if (!area) return;
+
+    function getDistance(t1, t2) {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        return Math.hypot(dx, dy);
+    }
+
+    area.addEventListener("touchstart", function(e) {
+        if (!e.touches) return;
+
+        if (e.touches.length === 2) {
+            if (e.cancelable) e.preventDefault(); // KHÓA ZOOM TRANG WEB CỦA TRÌNH DUYỆT (WINDOWS TOUCH/MOBILE)
+            lightboxZoomState.initialDistance = getDistance(e.touches[0], e.touches[1]);
+            lightboxZoomState.initialScale = lightboxZoomState.scale;
+            lightboxZoomState.isDragging = false;
+        } else if (e.touches.length === 1) {
+            const touch = e.touches[0];
+            const now = Date.now();
+
+            if (now - lightboxZoomState.lastTapTime < 280) {
+                if (lightboxZoomState.scale > 1.1) {
+                    resetLightboxZoom(true);
+                } else {
+                    lightboxZoomState.scale = 2.4;
+                    lightboxZoomState.posX = 0;
+                    lightboxZoomState.posY = 0;
+                    applyImageTransform(true);
+                }
+                lightboxZoomState.lastTapTime = 0;
+                return;
+            }
+            lightboxZoomState.lastTapTime = now;
+
+            if (lightboxZoomState.scale > 1.05) {
+                if (e.cancelable) e.preventDefault(); // CHỐNG SCROLL PAGE KHI ĐANG PAN ẢNH
+                lightboxZoomState.isDragging = true;
+                lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX;
+                lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY;
+            } else {
+                lightboxZoomState.swipeStartX = touch.clientX;
+                lightboxZoomState.swipeStartY = touch.clientY;
+                lightboxZoomState.isDragging = false;
+            }
+        }
+    }, { passive: false });
+
+    area.addEventListener("touchmove", function(e) {
+        if (!e.touches) return;
+
+        if (e.touches.length === 2 && lightboxZoomState.initialDistance > 0) {
+            if (e.cancelable) e.preventDefault(); // KHÓA ZOOM TRANG WEB CỦA TRÌNH DUYỆT
+            const currentDist = getDistance(e.touches[0], e.touches[1]);
+            const factor = currentDist / lightboxZoomState.initialDistance;
+            let newScale = lightboxZoomState.initialScale * factor;
+            newScale = Math.min(Math.max(1, newScale), 5);
+
+            lightboxZoomState.scale = newScale;
+            if (newScale === 1) {
+                lightboxZoomState.posX = 0;
+                lightboxZoomState.posY = 0;
+            }
+            applyImageTransform(false);
+        } else if (e.touches.length === 1 && lightboxZoomState.isDragging && lightboxZoomState.scale > 1.05) {
+            if (e.cancelable) e.preventDefault(); // KHÓA SCROLL
+            const touch = e.touches[0];
+            lightboxZoomState.posX = touch.clientX - lightboxZoomState.startX;
+            lightboxZoomState.posY = touch.clientY - lightboxZoomState.startY;
+            applyImageTransform(false);
+        }
+    }, { passive: false });
+
+    area.addEventListener("touchend", function(e) {
+        if (e.touches && e.touches.length === 1) {
+            const touch = e.touches[0];
+            lightboxZoomState.startX = touch.clientX - lightboxZoomState.posX;
+            lightboxZoomState.startY = touch.clientY - lightboxZoomState.posY;
+            lightboxZoomState.isDragging = (lightboxZoomState.scale > 1.05);
+            return;
+        }
+
+        if (!e.touches || e.touches.length === 0) {
+            lightboxZoomState.isDragging = false;
+            lightboxZoomState.initialDistance = 0;
+
+            if (lightboxZoomState.scale <= 1.05 && e.changedTouches && e.changedTouches.length > 0) {
+                const endX = e.changedTouches[0].clientX;
+                const endY = e.changedTouches[0].clientY;
+                const diffX = endX - lightboxZoomState.swipeStartX;
+                const diffY = endY - lightboxZoomState.swipeStartY;
+
+                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 38) {
+                    if (diffX < 0) {
+                        if (typeof navigateLightbox === 'function') navigateLightbox(1);
+                    } else {
+                        if (typeof navigateLightbox === 'function') navigateLightbox(-1);
+                    }
+                }
+            }
+        }
+    }, { passive: true });
+
+    area.addEventListener("wheel", function(e) {
+        if (e.cancelable) e.preventDefault(); // ĐẢM BẢO CHẶN CUỘN
+        const delta = e.deltaY < 0 ? 0.25 : -0.25;
+        zoomLightboxStep(delta);
+    }, { passive: false });
+
+    let isMouseDown = false;
+    area.addEventListener("mousedown", function(e) {
+        if (lightboxZoomState.scale > 1.05) {
+            isMouseDown = true;
+            lightboxZoomState.startX = e.clientX - lightboxZoomState.posX;
+            lightboxZoomState.startY = e.clientY - lightboxZoomState.posY;
+        }
+    });
+
+    window.addEventListener("mousemove", function(e) {
+        if (isMouseDown && lightboxZoomState.scale > 1.05) {
+            lightboxZoomState.posX = e.clientX - lightboxZoomState.startX;
+            lightboxZoomState.posY = e.clientY - lightboxZoomState.startY;
+            applyImageTransform(false);
+        }
+    });
+
+    window.addEventListener("mouseup", function() { isMouseDown = false; });
+
+    document.addEventListener("keydown", function(e) {
+        const lb = document.getElementById("tuluan-lightbox");
+        if (lb && lb.style.display === "flex") {
+            if (e.key === "ArrowLeft" && typeof navigateLightbox === 'function') navigateLightbox(-1);
+            else if (e.key === "ArrowRight" && typeof navigateLightbox === 'function') navigateLightbox(1);
+            else if (e.key === "Escape" && typeof closeTuLuanLightbox === 'function') closeTuLuanLightbox();
+        }
+    });
+}
+
+function applyImageTransform(smooth = false) {
+    const img = document.getElementById("lightbox-full-img");
+    const area = document.getElementById("lightbox-touch-area");
+    const resetBtn = document.getElementById("btn-zoom-reset");
+    if (!img) return;
+
+    if (smooth) {
+        img.style.transition = "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)";
+    } else {
+        img.style.transition = "none";
+    }
+
+    img.style.transform = `translate3d(${lightboxZoomState.posX}px, ${lightboxZoomState.posY}px, 0) scale(${lightboxZoomState.scale})`;
+
+    if (area) {
+        area.classList.toggle("is-zoomed", lightboxZoomState.scale > 1.05);
+    }
+    if (resetBtn) {
+        const roundScale = Math.round(lightboxZoomState.scale * 10) / 10;
+        resetBtn.innerText = roundScale > 1 ? `↺ ${roundScale}x` : `↺ 1x`;
+        resetBtn.style.color = roundScale > 1 ? "#38bdf8" : "#ffffff";
+    }
+}
+
 window.onThumbnailItemClicked = onThumbnailItemClicked;
 window.updateLightboxView = updateLightboxView;
 window.navigateLightbox = navigateLightbox;
@@ -552,3 +717,5 @@ window.saveComponentScoresAction = saveComponentScoresAction;
 window.saveStudentCrossScore = saveStudentCrossScore;
 window.persistComponentScoreData = persistComponentScoreData;
 window.triggerAutoSaveComponentScore = triggerAutoSaveComponentScore;
+window.setupLightboxTouchAndZoom = setupLightboxTouchAndZoom;
+window.applyImageTransform = applyImageTransform;
