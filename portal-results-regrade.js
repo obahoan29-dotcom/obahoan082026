@@ -45,6 +45,7 @@ function toggleAutoRefresh(event) {
 function openRegradeModal(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const dropdown = document.getElementById("regrade-inline-dropdown");
+    const btn = document.getElementById("btn-regrade-exam");
     const preview = document.getElementById("regrade-file-preview-status");
     const fileInput = document.getElementById("regrade-answer-file");
 
@@ -54,6 +55,16 @@ function openRegradeModal(event) {
     if (fileInput) fileInput.value = "";
     if (preview) { preview.style.display = "none"; preview.innerText = ""; }
     _regradeFileParsedAnswers = null; 
+    
+    // FIX LỖI 1: Tính toán tọa độ tuyệt đối (fixed) để tránh bị cắt xén bởi overflow-x của header
+    if (btn) {
+        const rect = btn.getBoundingClientRect();
+        dropdown.style.position = 'fixed';
+        dropdown.style.top = (rect.bottom + 8) + 'px';
+        dropdown.style.left = 'auto';
+        dropdown.style.right = Math.max(10, (window.innerWidth - rect.right)) + 'px';
+    }
+
     dropdown.style.display = "block";
 }
 
