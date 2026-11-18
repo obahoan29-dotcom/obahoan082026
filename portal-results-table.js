@@ -30,6 +30,7 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
+        /* ĐÃ SỬA LỖI Ở ĐÂY: KHÔNG CHO PHÉP RỚT DÒNG ĐỂ TRÁNH CHE KHUẤT BAR BÊN DƯỚI */
         .result-modal-header {
             padding: 2px 8px !important;
             min-height: 28px !important;
@@ -42,7 +43,11 @@ let isFitAllRowsActive = false;
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
+            flex-wrap: nowrap !important; /* KHÔNG RỚT DÒNG */
+            overflow-x: auto !important;  /* TRƯỢT NGANG NẾU MÀN HÌNH QUÁ BÉ */
+            scrollbar-width: none !important;
         }
+        .result-modal-header::-webkit-scrollbar { display: none; }
 
         .result-modal-title-box {
             gap: 5px !important;
@@ -135,6 +140,7 @@ let isFitAllRowsActive = false;
             height: 22px !important;
             border-radius: 11px !important;
             line-height: 1 !important;
+            white-space: nowrap !important;
         }
 
         /* NÚT THU BÀI TẠM THỜI */
@@ -169,6 +175,7 @@ let isFitAllRowsActive = false;
             font-size: 12px !important;
             line-height: 1 !important;
             padding: 0 !important;
+            flex-shrink: 0 !important;
         }
 
         .result-modal-stats-bar {
@@ -524,7 +531,7 @@ function adjustModalZoomStep(step) {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
     }
     const table = document.getElementById("admin-result-table");
     if (table) table.classList.remove("table-fitted-compact");
@@ -536,7 +543,7 @@ function resetModalZoom() {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
     }
     const table = document.getElementById("admin-result-table");
     if (table) table.classList.remove("table-fitted-compact");
@@ -554,7 +561,7 @@ function fitAllRowsInView(event) {
         isFitAllRowsActive = false;
         if (fitBtn) {
             fitBtn.classList.remove("is-fitted");
-            fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+            fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
         }
         table.classList.remove("table-fitted-compact");
         resetTableSettings();
@@ -614,7 +621,7 @@ function fitAllRowsInView(event) {
 
         if (fitBtn) {
             fitBtn.classList.add("is-fitted");
-            fitBtn.innerHTML = "↺ Hiện 100%";
+            fitBtn.innerHTML = "↺ 100%";
         }
     }, 40);
 }
@@ -642,14 +649,14 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
-    // 2. NÚT "📐 Thu hiện đủ dòng"
+    // 2. NÚT "📐 Vừa màn" (ĐÃ ĐỔI TÊN RÚT GỌN CHỐNG TRÀN DÒNG)
     if (!document.getElementById("btn-fit-all-rows")) {
         const fitBtn = document.createElement("button");
         fitBtn.type = "button";
         fitBtn.className = "btn-fit-all-rows";
         fitBtn.id = "btn-fit-all-rows";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ học sinh trên 1 màn hình mà không cần cuộn chuột";
-        fitBtn.innerHTML = "📐 Thu hiện đủ dòng";
+        fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
         fitBtn.onclick = (e) => fitAllRowsInView(e);
 
         const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
@@ -805,7 +812,7 @@ function initTableSettings() {
     
     const btn = document.getElementById("btn-toggle-autorefresh");
     if (btn) {
-        btn.innerHTML = isAutoRefreshEnabled ? "🟢 Tự động: BẬT" : "⚪ Tự động: TẮT";
+        btn.innerHTML = isAutoRefreshEnabled ? "🟢 Auto: BẬT" : "⚪ Auto: TẮT";
         btn.style.color = isAutoRefreshEnabled ? "#38bdf8" : "#94a3b8";
         btn.style.borderColor = isAutoRefreshEnabled ? "#38bdf8" : "#64748b";
     }
