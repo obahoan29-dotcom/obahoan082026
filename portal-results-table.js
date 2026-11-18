@@ -847,8 +847,16 @@ function toggleTableSettingsPopover(event) {
         popover.classList.remove("show");
         if (btn) btn.classList.remove("active");
     } else {
+        // FIX LỖI 2: Tính toán tọa độ tuyệt đối (fixed) để tránh bị cắt xén bởi overflow-x của header
+        if (btn) {
+            btn.classList.add("active");
+            const rect = btn.getBoundingClientRect();
+            popover.style.position = 'fixed';
+            popover.style.top = (rect.bottom + 8) + 'px';
+            popover.style.left = 'auto';
+            popover.style.right = Math.max(10, (window.innerWidth - rect.right)) + 'px';
+        }
         popover.classList.add("show");
-        if (btn) btn.classList.add("active");
     }
 }
 
@@ -1473,6 +1481,24 @@ document.addEventListener("click", function(event) {
     if (!event.target.closest('.attempt-picker-wrapper')) {
         document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
         document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
+    }
+    
+    // FIX: Đóng menu Chấm lại khi click ra ngoài
+    if (!event.target.closest('.regrade-action-wrapper')) {
+        const regradeDrop = document.getElementById("regrade-inline-dropdown");
+        if (regradeDrop && regradeDrop.style.display === "block") {
+            regradeDrop.style.display = "none";
+        }
+    }
+    
+    // FIX: Đóng menu Cài đặt bảng (bánh răng) khi click ra ngoài
+    if (!event.target.closest('.table-settings-wrapper')) {
+        const settingsDrop = document.getElementById("table-settings-popover");
+        const settingsBtn = document.getElementById("btn-table-settings");
+        if (settingsDrop && settingsDrop.classList.contains("show")) {
+            settingsDrop.classList.remove("show");
+            if (settingsBtn) settingsBtn.classList.remove("active");
+        }
     }
 });
 
