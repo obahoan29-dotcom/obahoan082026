@@ -1,5 +1,6 @@
 // =========================================================
 // FILE: exam-render.js (BẢN FIX ĐỒNG BỘ ẢNH 4 PHẦN VÀ HIỂN THỊ CHUẨN XÁC)
+// ĐÃ SỬA: XỬ LÝ LỖI LATEX UNKNOWN ENVIRONMENT CENTER & TABULAR
 // =========================================================
 
 function isPart4Question(q) {
@@ -15,7 +16,17 @@ function isPart4Question(q) {
 
 function formatQuestionText(text) {
     if (!text) return "";
-    return text.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
+    
+    // FIX 1: Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ (center, tabular)
+    let formatted = text.replace(/\\begin\{center\}/gi, '<div style="width:100%; overflow-x:auto; text-align:center; margin: 10px 0; padding-bottom: 5px;">');
+    formatted = formatted.replace(/\\end\{center\}/gi, '</div>');
+    
+    // Đổi tabular thành array và bọc $$ để MathJax có thể vẽ được bảng
+    formatted = formatted.replace(/\\begin\{tabular\}/gi, '$$ \\begin{array}');
+    formatted = formatted.replace(/\\end\{tabular\}/gi, '\\end{array} $$');
+
+    // Giữ nguyên tính năng làm nổi bật comment //
+    return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
         return prefix + '<span style="color: #78350f; font-weight: 800;">// ' + content.trim() + '</span>';
     });
 }
