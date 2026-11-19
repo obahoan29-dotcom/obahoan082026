@@ -1,6 +1,9 @@
+--- START OF FILE exam-export.js ---
+
 // =========================================================
 // FILE: exam-export.js
 // QUẢN LÝ DỰ PHÒNG BÀI LÀM: TẢI FILE JSON TRỰC TIẾP & BẢO LƯU 100%
+// ĐÃ FIX: TỰ ĐỘNG DỊCH KẾT QUẢ ĐÁP ÁN UI (BỊ TRỘN) VỀ BẢN GỐC KHI EXPORT JSON
 // =========================================================
 
 function getPendingOrLiveSubmissionPayload() {
@@ -25,13 +28,21 @@ function getPendingOrLiveSubmissionPayload() {
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
     const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
 
+    const uiAnswers = (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {};
+    let origAnswers = uiAnswers;
+
+    // PHIÊN DỊCH VỀ BẢN GỐC NẾU CÓ DỮ LIỆU ĐỀ GỐC
+    if (typeof translateUserAnswersToOriginal === 'function' && typeof examData !== 'undefined' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
+        origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
+    }
+
     return {
         sbd: sId,
         studentId: sId,
         studentName: sName,
         className: sClass,
         studentClass: sClass,
-        userAnswers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
+        userAnswers: origAnswers,
         quizId: quizId,
         maDe: typeof getMaDe === 'function' ? getMaDe() : "101",
         examTitle: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
