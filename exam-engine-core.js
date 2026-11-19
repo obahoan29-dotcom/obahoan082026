@@ -856,9 +856,9 @@ function fetchExamQuestions(isAutostart = false) {
                                 qCached.imageUrl = originalQ.imageUrl || getEffectiveImageUrl(originalQ, examData.images);
                                 qCached.imageKey = originalQ.imageKey;
                                 qCached.question = originalQ.question;
-                                qCached.options = originalQ.options;
-                                qCached.statements = originalQ.statements;
                                 qCached.explanation = originalQ.explanation;
+                                // KHÔNG ĐƯỢC OVERWRITE OPTIONS VÀ STATEMENTS BẰNG BẢN GỐC Ở ĐÂY NỮA
+                                // Nếu làm thế sẽ ghi đè và làm mất trật tự xáo trộn đã lưu trong Cache
                             }
                         });
                         examData.questions = parsedQ;
