@@ -139,7 +139,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
             htmlContent += `
             <div class="doc-question-card">
                 <div class="doc-q-title">
-                    <b>Câu ${questionGlobalIdx}.</b> ${q.question}
+                    <b>Câu ${questionGlobalIdx}.</b> ${typeof formatQuestionText === 'function' ? formatQuestionText(q.question) : q.question}
                 </div>
                 ${imgHtml}
                 <div class="doc-options-wrapper ${optLayoutClass}">
@@ -185,7 +185,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
             htmlContent += `
             <div class="doc-question-card">
                 <div class="doc-q-title">
-                    <b>Câu ${questionGlobalIdx}.</b> ${q.question}
+                    <b>Câu ${questionGlobalIdx}.</b> ${typeof formatQuestionText === 'function' ? formatQuestionText(q.question) : q.question}
                 </div>
                 ${imgHtml}
                 <div class="doc-statements-list">
@@ -222,7 +222,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
             htmlContent += `
             <div class="doc-question-card">
                 <div class="doc-q-title">
-                    <b>Câu ${questionGlobalIdx}.</b> ${q.question}
+                    <b>Câu ${questionGlobalIdx}.</b> ${typeof formatQuestionText === 'function' ? formatQuestionText(q.question) : q.question}
                 </div>
                 ${imgHtml}
                 ${answerBoxHtml}
@@ -257,7 +257,7 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
             htmlContent += `
             <div class="doc-question-card">
                 <div class="doc-q-title">
-                    <b>Câu ${questionGlobalIdx}.</b> ${q.question}
+                    <b>Câu ${questionGlobalIdx}.</b> ${typeof formatQuestionText === 'function' ? formatQuestionText(q.question) : q.question}
                 </div>
                 ${imgHtml}
                 ${answerBoxHtml}
