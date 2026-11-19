@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: BẢO LƯU THỜI GIAN GỐC & ĐỒNG BỘ ĐANG THI CHÍNH XÁC 100%)
+// (BẢN FIX TRIỆT ĐỂ: BẢO LƯU THỜI GIAN GỐC & PHIÊN DỊCH ĐÁP ÁN GỐC KHI NỘP BÀI)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -429,7 +429,6 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
     } catch(e) {}
 }
 
-// BẢN FIX MẠNH: THÍCH ỨNG CAO ĐỘ (RESILIENT) VỚI WEBKIT TRONG MESSENGER & GIỮ MỐC THỜI GIAN GỐC
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -460,7 +459,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     const nowMs = Date.now();
     let effectiveStartTime = nowMs;
 
-    // KIỂM TRA MỐC THỜI GIAN BẮT ĐẦU GỐC NẾU ĐÃ CÓ (TRÁNH BỊ RESET KHI RELOAD MẠNG)
     const existingOrigin = safeLocal.getItem(originKey);
     const maxLimitSec = ((typeof TIME_LIMIT_MINUTES !== 'undefined' ? TIME_LIMIT_MINUTES : 90) * 60) + 1800;
     if (existingOrigin) {
@@ -480,7 +478,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-    // CẬP NHẬT ACTIVE_SESSIONS: GỬI LẬP TỨC ĐỂ ADMIN NHẬN ĐƯỢC REALTIME NGAY
     if (client) {
         try {
             const handshakeTask = async () => {
@@ -555,7 +552,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
         window.SECURE_VAULT = { userAnswers: {}, explanations: {}, answers: {}, padletClicked: {} };
     }
     
-    // Nếu là phiên mới tinh thì reset câu trả lời, nếu là reload thì giữ nguyên câu trả lời đã lưu
     const hasCachedAnswers = window.SECURE_VAULT.userAnswers && Object.keys(window.SECURE_VAULT.userAnswers).length > 0;
     if (!hasCachedAnswers) {
         window.SECURE_VAULT.userAnswers = {};
@@ -578,7 +574,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     document.getElementById("nav-student-class").innerText = strictClassName; 
     document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
     
-    // ẨN CÁC THẺ ĐĂNG NHẬP, BẬT PHÒNG THI & THANH CÔNG CỤ
     document.getElementById("student-card").style.display = "none"; 
     const waitingCard = document.getElementById("waiting-room-card"); 
     if (waitingCard) waitingCard.style.display = "none"; 
@@ -602,7 +597,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     renderStudentSubmissionHistoryButtons();
 
-    // SỬA LỖI RELOAD TRÊN DI ĐỘNG: GỠ BỎ THAM SỐ AUTOSTART KHỎI URL ĐỂ KHÔNG BỊ LOAD LẠI TRẮNG
     try {
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete('autostart');
@@ -636,7 +630,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const currentAttempt = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(currentQuizId, cleanSbd);
     const originKey = `exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`;
 
-    // LẤY MỐC THỜI GIAN BẮT ĐẦU CHÍNH XÁC NHẤT (ƯU TIÊN THỜI ĐIỂM GỐC)
     let reliableStartTime = examStartTime;
     const originStored = safeLocal.getItem(originKey);
     if (originStored) {
@@ -656,16 +649,45 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         ? `Thu ép ${spentMins}p${spentSecs}s` 
         : `${spentMins} phút ${spentSecs} giây`;
 
+    let uiAnswers = window.SECURE_VAULT.userAnswers || {};
+    let origAnswers = uiAnswers;
     let scoreResult = null;
-    if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData) {
+    
+    // TIẾN HÀNH PHIÊN DỊCH VỀ BẢN GỐC TRƯỚC KHI NỘP ĐỂ GIÁO VIÊN ĐỌC ĐƯỢC CHUẨN XÁC
+    if (typeof translateUserAnswersToOriginal === 'function' && typeof examData !== 'undefined' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
+        origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
+        
+        let originalAnswerVault = {};
+        const letters = ["A", "B", "C", "D"];
+        window.ORIGINAL_EXAM_DATA.questions.forEach(q => {
+            if (q.type === "multiple_choice" && q.correct !== undefined) {
+                originalAnswerVault[`q${q.id}`] = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
+            } else if (q.type === "true_false" && q.statements) {
+                q.statements.forEach(st => {
+                    originalAnswerVault[`q${q.id}_${st.id}`] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng') ? "Đúng" : "Sai";
+                });
+            } else if (q.correctAnswer !== undefined) {
+                originalAnswerVault[`q${q.id}`] = String(q.correctAnswer).trim();
+            }
+        });
+
         scoreResult = calculateExamScoreWithConfig(
-            examData.questions || [],
-            window.SECURE_VAULT.userAnswers || {},
-            window.SECURE_VAULT.answers || {},
-            examData.scoringConfig || { mode: 'option1' }
+            window.ORIGINAL_EXAM_DATA.questions,
+            origAnswers,
+            originalAnswerVault,
+            window.ORIGINAL_EXAM_DATA.scoringConfig || { mode: 'option1' }
         );
     } else {
-        scoreResult = { correctCount: 0, wrongCount: 0, totalRawScore: 0, finalScore: 0, maxScale: 10.0, dataDetails: [] };
+        if (typeof calculateExamScoreWithConfig === 'function' && typeof examData !== 'undefined' && examData) {
+            scoreResult = calculateExamScoreWithConfig(
+                examData.questions || [],
+                uiAnswers,
+                window.SECURE_VAULT.answers || {},
+                examData.scoringConfig || { mode: 'option1' }
+            );
+        } else {
+            scoreResult = { correctCount: 0, wrongCount: 0, totalRawScore: 0, finalScore: 0, maxScale: 10.0, dataDetails: [] };
+        }
     }
 
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
@@ -696,7 +718,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         spent_mins: isNaN(spentMins) ? 0 : parseInt(spentMins, 10),
         tab_switch_count: `${tabSwitchCount} lần`,
         data_string: dataDetails.join(" | "),
-        user_answers: (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {},
+        user_answers: origAnswers,
         category_id: currentCat,
         is_free: isFreeStudent,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
@@ -705,7 +727,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     };
 }
 
-// BỘ GỬI GOOGLE DRIVE CÓ EXPONENTIAL BACKOFF VÀ JITTER RETRY
 async function sendToDriveWithExponentialBackoff(gasUrl, payload, maxRetries = 5, timeoutMs = 60000) {
     let lastError = null;
 
