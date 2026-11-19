@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ: KHÔNG RESET THỜI GIAN KHI RELOAD & GIỮ NGUYÊN BÀI THI)
-// ĐÃ BỔ SUNG: TRỘN PHƯƠNG ÁN A,B,C,D VÀ TRỘN MỆNH ĐỀ ĐÚNG/SAI
+// (BẢN FIX TRIỆT ĐỂ: XÁO TRỘN ĐÁP ÁN A,B,C,D VÀ DỊCH NGƯỢC VỀ ĐỀ GỐC KHI NỘP BÀI)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -11,6 +10,9 @@ window.SECURE_VAULT = window.SECURE_VAULT || {
     padletClicked: {},
     questionData: {}
 };
+
+// BẢO LƯU TOÀN BỘ CẤU TRÚC ĐỀ GỐC CHƯA XÁO TRỘN ĐỂ DÙNG CHẤM ĐIỂM
+window.ORIGINAL_EXAM_DATA = null;
 
 let hasInitExamEngine = false;
 let isExamLocked = false;
@@ -158,9 +160,61 @@ async function ensureActiveSessionAndDraft() {
                 }]);
             }
         }
-    } catch(err) {
-        console.warn("Lỗi ping active_session:", err);
+    } catch(err) {}
+}
+
+// BỘ PHIÊN DỊCH TỪ ĐÁP ÁN UI (BỊ TRỘN) SANG ĐÁP ÁN GỐC CỦA ĐỀ
+function translateUserAnswersToOriginal(uiAnswers, shuffledQuestions) {
+    if (!window.ORIGINAL_EXAM_DATA) return uiAnswers;
+    let origAnswers = {};
+    const letters = ["A", "B", "C", "D"];
+    
+    for (let key in uiAnswers) {
+        let val = uiAnswers[key];
+        let qIdMatch = key.match(/^q(\d+)(?:_(.+))?$/);
+        if (!qIdMatch) {
+            origAnswers[key] = val;
+            continue;
+        }
+        
+        let qId = qIdMatch[1];
+        let stId = qIdMatch[2]; 
+        let q = shuffledQuestions.find(x => String(x.id) === String(qId));
+        
+        if (!q) {
+            origAnswers[key] = val;
+            continue;
+        }
+
+        if (q.type === "multiple_choice" && !stId) {
+            if (q.originalLettersMap && val) {
+                let uiIdx = letters.indexOf(val.toUpperCase());
+                if (uiIdx !== -1 && q.originalLettersMap[uiIdx]) {
+                    origAnswers[key] = q.originalLettersMap[uiIdx];
+                } else {
+                    origAnswers[key] = val;
+                }
+            } else {
+                origAnswers[key] = val;
+            }
+        } 
+        else if (q.type === "true_false" && stId) {
+            if (q.statements) {
+                let st = q.statements.find(x => String(x.id) === String(stId));
+                if (st && st.originalId) {
+                    origAnswers[`q${qId}_${st.originalId}`] = val;
+                } else {
+                    origAnswers[key] = val;
+                }
+            } else {
+                origAnswers[key] = val;
+            }
+        } 
+        else {
+            origAnswers[key] = val;
+        }
     }
+    return origAnswers;
 }
 
 function buildCurrentLiveDraftPayload() {
@@ -184,13 +238,42 @@ function buildCurrentLiveDraftPayload() {
         ? EXAM_NAME 
         : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
 
-    const tempScoreResult = calculateTemporaryDraftScore();
     const elapsedSec = examStartTime ? Math.max(1, Math.round((Date.now() - examStartTime) / 1000)) : 0;
     const spentMins = Math.floor(elapsedSec / 60);
     const spentSecs = elapsedSec % 60;
     const completionTimeStr = `${spentMins} phút ${spentSecs} giây`;
 
-    const clonedAnswers = JSON.parse(JSON.stringify(window.SECURE_VAULT.userAnswers || {}));
+    const uiAnswers = window.SECURE_VAULT.userAnswers || {};
+    let origAnswers = uiAnswers;
+    let scoreResult;
+
+    // PHIÊN DỊCH ĐỂ LƯU LÊN SUPABASE LÀ BẢN GỐC TỪ ĐÓ GIÁO VIÊN NHÌN VÀ CHẤM SẼ HOÀN TOÀN CHUẨN XÁC
+    if (typeof translateUserAnswersToOriginal === 'function' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
+        origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
+        
+        let originalAnswerVault = {};
+        const letters = ["A", "B", "C", "D"];
+        window.ORIGINAL_EXAM_DATA.questions.forEach(q => {
+            if (q.type === "multiple_choice" && q.correct !== undefined) {
+                originalAnswerVault[`q${q.id}`] = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
+            } else if (q.type === "true_false" && q.statements) {
+                q.statements.forEach(st => {
+                    originalAnswerVault[`q${q.id}_${st.id}`] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng') ? "Đúng" : "Sai";
+                });
+            } else if (q.correctAnswer !== undefined) {
+                originalAnswerVault[`q${q.id}`] = String(q.correctAnswer).trim();
+            }
+        });
+
+        scoreResult = calculateExamScoreWithConfig(
+            window.ORIGINAL_EXAM_DATA.questions,
+            origAnswers,
+            originalAnswerVault,
+            window.ORIGINAL_EXAM_DATA.scoringConfig || { mode: 'option1' }
+        );
+    } else {
+        scoreResult = calculateTemporaryDraftScore();
+    }
 
     return {
         id: primaryDocId,
@@ -201,16 +284,16 @@ function buildCurrentLiveDraftPayload() {
         category_id: currentCat,
         ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
         exam_title: exactExamTitle,
-        user_answers: clonedAnswers,
-        score10: tempScoreResult.finalScore,
-        raw_score: tempScoreResult.totalRawScore,
-        max_scale: tempScoreResult.maxScale,
-        correct_count: tempScoreResult.correctCount,
-        wrong_count: tempScoreResult.wrongCount,
+        user_answers: origAnswers,
+        score10: scoreResult.finalScore,
+        raw_score: scoreResult.totalRawScore,
+        max_scale: scoreResult.maxScale,
+        correct_count: scoreResult.correctCount,
+        wrong_count: scoreResult.wrongCount,
         completion_time: completionTimeStr,
         spent_mins: spentMins,
         tab_switch_count: `${tabSwitchCount} lần`,
-        data_string: tempScoreResult.dataDetails.join(" | "),
+        data_string: scoreResult.dataDetails.join(" | "),
         last_updated: new Date().toISOString()
     };
 }
@@ -394,6 +477,9 @@ async function initExamEngine() {
             scoringConfig: data.scoring_config
         };
 
+        // BẢO LƯU ĐỀ GỐC TRƯỚC KHI TRỘN VÀ HIỂN THỊ UI
+        window.ORIGINAL_EXAM_DATA = JSON.parse(JSON.stringify(examData));
+
         if (urlParams.get('review') === "1") {
             if (examData.allowReviewOriginal !== true) {
                 hideLoading();
@@ -465,10 +551,12 @@ function shuffleArray(arr) {
     return array;
 }
 
-// BỘ TRỘN CÂU HỎI & PHƯƠNG ÁN A,B,C,D / MỆNH ĐỀ (FIX CHUẨN XÁC)
+// BỘ TRỘN CÂU HỎI & PHƯƠNG ÁN A,B,C,D (ĐÃ FIX TẠO MAP ÁNH XẠ originalLettersMap)
 function shuffleExamData(data) {
     if (!data || !data.questions) return;
     const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 || q.type === "essay" || q.type === "essay_answer"));
+    const letters = ["A", "B", "C", "D"];
+    const tfLetters = ['a', 'b', 'c', 'd'];
     
     // 1. TRỘN ĐÁP ÁN TRONG TỪNG CÂU HỎI TRƯỚC
     data.questions.forEach(q => {
@@ -479,35 +567,39 @@ function shuffleExamData(data) {
                 originalCorrectIdx = q.correct;
             } else if (typeof q.correct === 'string') {
                 const u = q.correct.trim().toUpperCase();
-                const letters = ["A", "B", "C", "D"];
                 originalCorrectIdx = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
             }
             
-            // Gắn cờ đánh dấu phương án đúng ban đầu
+            // Gắn cờ và lưu Original Letter
             let mappedOptions = q.options.map((opt, idx) => ({
                 text: opt,
+                originalLetter: letters[idx],
                 isCorrect: (idx === originalCorrectIdx)
             }));
             
             // Đảo vị trí mảng
             mappedOptions = shuffleArray(mappedOptions);
             
-            // Ghi nhận lại mảng mới và tìm vị trí mới của đáp án đúng
+            // Ghi nhận lại mảng mới
             q.options = mappedOptions.map(o => o.text);
-            q.correct = mappedOptions.findIndex(o => o.isCorrect);
+            q.originalLettersMap = mappedOptions.map(o => o.originalLetter); // Mảng dịch ngược
+            q.correct = mappedOptions.findIndex(o => o.isCorrect); // Vị trí đúng ở UI
             if (q.correct === -1) q.correct = 0;
         } 
         // Trộn mệnh đề Đúng/Sai (Phần 2)
         else if (q.type === "true_false" && !isP4(q) && Array.isArray(q.statements) && q.statements.length > 0) {
-            let shuffledStatements = shuffleArray(q.statements);
-            // Gắn lại ID a, b, c, d theo thứ tự mới để giao diện luôn hiển thị xuôi mắt
-            const letters = ['a', 'b', 'c', 'd'];
-            q.statements = shuffledStatements.map((st, idx) => {
-                return {
-                    ...st,
-                    id: letters[idx] || st.id 
-                };
-            });
+            let mappedStatements = q.statements.map((st, idx) => ({
+                ...st,
+                originalId: st.id || tfLetters[idx]
+            }));
+            
+            mappedStatements = shuffleArray(mappedStatements);
+            
+            q.statements = mappedStatements.map((st, idx) => ({
+                ...st,
+                id: tfLetters[idx], // Hiển thị chuẩn a,b,c,d
+                originalId: st.originalId // Giữ nguyên ID gốc để chấm
+            }));
         }
     });
 
