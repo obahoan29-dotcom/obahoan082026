@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN, ẢNH & THỨ TỰ CÂU HỎI)
-// ĐÃ SỬA: ĐẢM BẢO SOI ĐỀ LUÔN LOAD ĐÚNG THỨ TỰ DB KỂ CẢ KHI HỌC SINH ĐANG BỊ TRỘN
-// ĐÃ SỬA: HỖ TRỢ HIỂN THỊ ĐÚNG MÔI TRƯỜNG CENTER VÀ TABULAR LATEX TRONG SOI ĐỀ
+// ĐÃ SỬA: KHÔI PHỤC ĐÚNG THỨ TỰ CÂU HỎI GỐC KỂ CẢ KHI HỌC SINH ĐANG BỊ TRỘN
+// ĐÃ SỬA: HIỂN THỊ CHUẨN XÁC MÔI TRƯỜNG LATEX (tabular, center)
 // =========================================================
 
 let soiDeState = {
@@ -109,11 +109,10 @@ function insertQuestionsOrganizedByPart(newQuestions) {
 function formatQuestionText(text) {
     if (!text) return "";
     
-    // FIX 1: Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ
+    // Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ
     let formatted = text.replace(/\\begin\{center\}/gi, '<div style="width:100%; overflow-x:auto; text-align:center; margin: 10px 0; padding-bottom: 5px;">');
     formatted = formatted.replace(/\\end\{center\}/gi, '</div>');
     
-    // FIX 2: Xử lý tabular - Loại bỏ $, \(, \) bên trong tabular vì toàn bộ bảng đã nằm trong Block Math ($$ ... $$)
     formatted = formatted.replace(/\\begin\{tabular\}([\s\S]*?)\\end\{tabular\}/gi, function(match, tabularContent) {
         let cleanContent = tabularContent.replace(/\$/g, '').replace(/\\\(/g, '').replace(/\\\)/g, '');
         return '$$ \\begin{array}' + cleanContent + '\\end{array} $$';
@@ -655,7 +654,7 @@ function checkAndDisplayAdminSoiDeButton() {
     }
 }
 
-// FIX: Đảm bảo Soi đề luôn lấy mảng câu hỏi đúng thứ tự (Không bị ảnh hưởng bởi xáo trộn Đảo đề)
+// BẢO ĐẢM KHÔI PHỤC ĐÚNG THỨ TỰ TỪ DB BẤT CHẤP VIỆC HỌC SINH ĐANG THI BỊ TRỘN
 async function switchToSoiDeFromExam() {
     if (typeof examData === 'undefined' || !examData) {
         alert("⚠️ Không tìm thấy dữ liệu đề thi hiện tại!");
@@ -683,10 +682,12 @@ async function switchToSoiDeFromExam() {
 
     const sourceImages = { ...(examData.images || {}), ...dbImages };
     
-    // FIX: LẤY DB NẾU CÓ, NẾU KHÔNG CÓ DB MỚI DÙNG LOCAL VÀ ÉP SORT LẠI THEO ID ĐỂ KHÔI PHỤC ĐÚNG THỨ TỰ
+    // Ưu tiên 1: Đề từ DB, Ưu tiên 2: Đề Gốc lưu tạm, Ưu tiên 3: Ép sắp xếp lại theo ID
     let sourceQuestions = [];
     if (dbQuestions && dbQuestions.length > 0) {
         sourceQuestions = dbQuestions;
+    } else if (window.ORIGINAL_EXAM_DATA && window.ORIGINAL_EXAM_DATA.questions) {
+        sourceQuestions = JSON.parse(JSON.stringify(window.ORIGINAL_EXAM_DATA.questions));
     } else if (examData.questions && examData.questions.length > 0) {
         sourceQuestions = [...examData.questions].sort((a, b) => {
             let idA = parseInt(a.id, 10) || 0;
@@ -721,7 +722,6 @@ async function switchToSoiDeFromExam() {
             item.explanation = extracted.explanation;
         }
 
-        // BẢO ĐẢM GẮN CHẶT LINK ẢNH VÀO CÂU HỎI
         const directUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(item, sourceImages) : (item.imageUrl || "");
         if (directUrl) {
             item.imageUrl = directUrl;
@@ -872,6 +872,16 @@ async function updateExamFromSoiDe() {
         if (typeof examData !== 'undefined' && examData) {
             const clonedQuestions = JSON.parse(JSON.stringify(cleanQuestions));
             const clonedImages = JSON.parse(JSON.stringify(imagesMap));
+
+            // ĐỒNG BỘ ĐỀ GỐC
+            window.ORIGINAL_EXAM_DATA = JSON.parse(JSON.stringify({
+                ...examData,
+                title: finalTitle,
+                made: finalMade,
+                time_limit_minutes: finalMinutes,
+                questions: clonedQuestions,
+                images: clonedImages
+            }));
 
             examData.title = finalTitle;
             examData.made = finalMade;
