@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-render.js (BẢN FIX ĐỒNG BỘ ẢNH 4 PHẦN VÀ HIỂN THỊ CHUẨN XÁC)
-// ĐÃ SỬA: XỬ LÝ LỖI LATEX UNKNOWN ENVIRONMENT CENTER & TABULAR
+// ĐÃ SỬA: XỬ LÝ TẬN GỐC LỖI LATEX UNKNOWN ENVIRONMENT CENTER & TABULAR (LỖI BẢNG)
 // =========================================================
 
 function isPart4Question(q) {
@@ -21,9 +21,12 @@ function formatQuestionText(text) {
     let formatted = text.replace(/\\begin\{center\}/gi, '<div style="width:100%; overflow-x:auto; text-align:center; margin: 10px 0; padding-bottom: 5px;">');
     formatted = formatted.replace(/\\end\{center\}/gi, '</div>');
     
-    // Đổi tabular thành array và bọc $$ để MathJax có thể vẽ được bảng
-    formatted = formatted.replace(/\\begin\{tabular\}/gi, '$$ \\begin{array}');
-    formatted = formatted.replace(/\\end\{tabular\}/gi, '\\end{array} $$');
+    // FIX 2: Xử lý tabular - Tìm toàn bộ khối tabular, gỡ bỏ dấu $ nội bộ để tránh phá vỡ block MathJax $$, sau đó bọc lại
+    formatted = formatted.replace(/\\begin\{tabular\}([\s\S]*?)\\end\{tabular\}/gi, function(match, tabularContent) {
+        // Loại bỏ $, \(, \) bên trong tabular vì toàn bộ bảng đã nằm trong Block Math ($$ ... $$)
+        let cleanContent = tabularContent.replace(/\$/g, '').replace(/\\\(/g, '').replace(/\\\)/g, '');
+        return '$$ \\begin{array}' + cleanContent + '\\end{array} $$';
+    });
 
     // Giữ nguyên tính năng làm nổi bật comment //
     return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
@@ -46,7 +49,6 @@ function renderQuizLayout(questions, imageMap) {
     if (!container) return;
     container.innerHTML = ''; 
     
-    // ĐỒNG BỘ LINK ẢNH TRỰC TIẾP CHO TOÀN BỘ CÂU HỎI TRƯỚC KHI CHIA PHẦN
     if (typeof synchronizeExamQuestionsAndImages === 'function') {
         questions = synchronizeExamQuestionsAndImages(questions, imageMap);
     }
@@ -441,3 +443,4 @@ window.isPart4Question = isPart4Question;
 window.scrollToSection = scrollToSection;
 window.renderQuestionPalette = renderQuestionPalette;
 window.renderQuizLayout = renderQuizLayout;
+window.formatQuestionText = formatQuestionText;
