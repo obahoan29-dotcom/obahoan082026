@@ -1,6 +1,7 @@
 // =========================================================
-// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN & HÌNH ẢNH NGUYÊN VẸN 100%)
-// TỰ ĐỘNG NHẬN DIỆN MỌI ĐỊNH DẠNG ĐÁP ÁN - ĐỒNG BỘ ẢNH 2 CHIỀU CHỐNG MẤT HÌNH
+// FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN, ẢNH & THỨ TỰ CÂU HỎI)
+// ĐÃ SỬA: ĐẢM BẢO SOI ĐỀ LUÔN LOAD ĐÚNG THỨ TỰ DB KỂ CẢ KHI HỌC SINH ĐANG BỊ TRỘN
+// ĐÃ SỬA: HỖ TRỢ HIỂN THỊ ĐÚNG MÔI TRƯỜNG CENTER VÀ TABULAR LATEX TRONG SOI ĐỀ
 // =========================================================
 
 let soiDeState = {
@@ -107,7 +108,15 @@ function insertQuestionsOrganizedByPart(newQuestions) {
 
 function formatQuestionText(text) {
     if (!text) return "";
-    return text.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
+    
+    // FIX: Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ
+    let formatted = text.replace(/\\begin\{center\}/gi, '<div style="width:100%; overflow-x:auto; text-align:center; margin: 10px 0; padding-bottom: 5px;">');
+    formatted = formatted.replace(/\\end\{center\}/gi, '</div>');
+    
+    formatted = formatted.replace(/\\begin\{tabular\}/gi, '$$ \\begin{array}');
+    formatted = formatted.replace(/\\end\{tabular\}/gi, '\\end{array} $$');
+
+    return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
         return prefix + '<span style="color: #78350f; font-weight: 800;">// ' + content.trim() + '</span>';
     });
 }
@@ -643,6 +652,7 @@ function checkAndDisplayAdminSoiDeButton() {
     }
 }
 
+// FIX: Đảm bảo Soi đề luôn lấy mảng câu hỏi đúng thứ tự (Không bị ảnh hưởng bởi xáo trộn Đảo đề)
 async function switchToSoiDeFromExam() {
     if (typeof examData === 'undefined' || !examData) {
         alert("⚠️ Không tìm thấy dữ liệu đề thi hiện tại!");
@@ -669,9 +679,18 @@ async function switchToSoiDeFromExam() {
     } catch(e) {}
 
     const sourceImages = { ...(examData.images || {}), ...dbImages };
-    const sourceQuestions = (examData.questions && examData.questions.length > 0) 
-        ? examData.questions 
-        : (dbQuestions || []);
+    
+    // FIX: LẤY DB NẾU CÓ, NẾU KHÔNG CÓ DB MỚI DÙNG LOCAL VÀ ÉP SORT LẠI THEO ID ĐỂ KHÔI PHỤC ĐÚNG THỨ TỰ
+    let sourceQuestions = [];
+    if (dbQuestions && dbQuestions.length > 0) {
+        sourceQuestions = dbQuestions;
+    } else if (examData.questions && examData.questions.length > 0) {
+        sourceQuestions = [...examData.questions].sort((a, b) => {
+            let idA = parseInt(a.id, 10) || 0;
+            let idB = parseInt(b.id, 10) || 0;
+            return idA - idB;
+        });
+    }
 
     const letters = ["A", "B", "C", "D"];
     const clonedQuestions = sourceQuestions.map((q, idx) => {
@@ -722,7 +741,7 @@ async function switchToSoiDeFromExam() {
     soiDeState.isFromExamRoom = true;
 
     openSoiDeModal();
-    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu kèm ĐẦY ĐỦ ĐÁP ÁN & HÌNH ẢNH vào Soi đề!`);
+    showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu (KHÔI PHỤC ĐÚNG THỨ TỰ) kèm Đ.Á & ẢNH vào Soi đề!`);
 }
 
 async function updateExamFromSoiDe() {
@@ -1509,7 +1528,6 @@ function readAndParseSoiDeFile(file) {
                 rawQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
                 rawImages = (parsed.images && typeof parsed.images === "object") ? parsed.images : {};
                 
-                // ĐỒNG BỘ ẢNH TRỰC TIẾP VÀO CÂU HỎI
                 if (typeof synchronizeExamQuestionsAndImages === "function") {
                     rawQuestions = synchronizeExamQuestionsAndImages(rawQuestions, rawImages);
                 }
