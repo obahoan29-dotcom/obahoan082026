@@ -78,9 +78,9 @@ function sortDataString(str) {
         if (!isLogA && isLogB) return -1;
         if (isLogA && isLogB) return a.localeCompare(b);
 
-        // 2. Lấy con số ID ở đầu mỗi mục (Ví dụ: "1-A", "10-C", "2a-Đúng")
-        let matchA = a.match(/^(\d+)/);
-        let matchB = b.match(/^(\d+)/);
+        // 2. Lấy con số ID và chữ cái nhỏ ở đầu mỗi mục (Ví dụ: "1-A", "10-C", "2a-Đúng")
+        let matchA = a.match(/^(\d+)([a-zA-Z]?)/);
+        let matchB = b.match(/^(\d+)([a-zA-Z]?)/);
         
         let numA = matchA ? parseInt(matchA[1], 10) : 0;
         let numB = matchB ? parseInt(matchB[1], 10) : 0;
@@ -91,6 +91,11 @@ function sortDataString(str) {
         }
         
         // Nếu cùng số (VD: câu Đúng/Sai 2a, 2b, 2c), tiếp tục sắp xếp theo chữ cái
+        let charA = matchA && matchA[2] ? matchA[2].toLowerCase() : "";
+        let charB = matchB && matchB[2] ? matchB[2].toLowerCase() : "";
+        
+        if (charA !== charB) return charA.localeCompare(charB);
+        
         return a.localeCompare(b);
     });
     
