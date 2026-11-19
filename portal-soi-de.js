@@ -1,5 +1,6 @@
 // =========================================================
 // FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN, ẢNH & THỨ TỰ CÂU HỎI)
+// ĐÃ SỬA: ĐỒNG BỘ CUỘN 2 CHIỀU (TRÁI <-> PHẢI) THÔNG MINH CHỐNG GIẬT LAG
 // ĐÃ SỬA: KHÔI PHỤC ĐÚNG THỨ TỰ CÂU HỎI GỐC KỂ CẢ KHI HỌC SINH ĐANG BỊ TRỘN
 // ĐÃ SỬA: HIỂN THỊ CHUẨN XÁC MÔI TRƯỜNG LATEX (tabular, center)
 // =========================================================
@@ -374,6 +375,13 @@ function injectSoiDeStyles() {
         .soide-editor-qcard:focus-within {
             box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.3) !important;
         }
+        
+        /* STYLE HIGHLIGHT ĐỒNG BỘ CHO CARD BÊN PHẢI KHI ĐƯỢC CUỘN TỚI */
+        .soide-editor-qcard.is-synced-active {
+            box-shadow: 0 0 0 3px #10b981, 0 6px 18px rgba(16, 185, 129, 0.28) !important;
+            transform: scale(1.008);
+            border-color: #10b981 !important;
+        }
 
         .soide-paste-zones-row {
             display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px;
@@ -617,7 +625,7 @@ function ensureSoiDeModalInDOM() {
     `;
     document.body.appendChild(modalDiv);
     setupSoiDeDragAndResize();
-    setupRightToLeftScrollSync();
+    setupDualScrollSync();
 
     document.addEventListener("click", function(e) {
         const drop = document.getElementById("soide-class-dropdown");
@@ -947,7 +955,7 @@ function openSoiDeModal(event) {
 
     setTimeout(() => {
         autoResizeAllTextareas();
-        setupRightToLeftScrollSync();
+        setupDualScrollSync();
     }, 50);
 }
 
@@ -1015,19 +1023,45 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-let lastSyncedQId = null;
+// BỘ ĐỒNG BỘ CUỘN 2 CHIỀU THÔNG MINH (CHỐNG VÒNG LẶP VÔ HẠN)
+let lastSyncedQId_RightToLeft = null;
+let lastSyncedQId_LeftToRight = null;
+let activeScrollPane = null; // 'left' hoặc 'right'
 
-function setupRightToLeftScrollSync() {
+function setupDualScrollSync() {
     const rightPane = document.getElementById("soide-right-pane");
-    if (!rightPane || rightPane.dataset.hasScrollSync === "true") return;
+    const leftPane = document.getElementById("soide-left-pane");
+    
+    if (!rightPane || !leftPane || rightPane.dataset.hasScrollSync === "true") return;
     rightPane.dataset.hasScrollSync = "true";
 
-    let syncTimer = null;
+    // 1. Xác định khung nào đang active dựa trên di chuột hoặc chạm
+    const setLeftActive = () => { activeScrollPane = 'left'; };
+    const setRightActive = () => { activeScrollPane = 'right'; };
+
+    leftPane.addEventListener('mouseenter', setLeftActive);
+    leftPane.addEventListener('touchstart', setLeftActive, {passive: true});
+    
+    rightPane.addEventListener('mouseenter', setRightActive);
+    rightPane.addEventListener('touchstart', setRightActive, {passive: true});
+
+    // 2. Bắt sự kiện cuộn của Right Pane (Phải -> Trái)
+    let syncRightTimer = null;
     rightPane.addEventListener("scroll", () => {
-        if (soiDeState.editorMode !== 'cards') return;
-        if (syncTimer) cancelAnimationFrame(syncTimer);
-        syncTimer = requestAnimationFrame(() => {
+        if (activeScrollPane !== 'right' || soiDeState.editorMode !== 'cards') return;
+        if (syncRightTimer) cancelAnimationFrame(syncRightTimer);
+        syncRightTimer = requestAnimationFrame(() => {
             syncLeftPreviewFromRightScroll();
+        });
+    }, { passive: true });
+
+    // 3. Bắt sự kiện cuộn của Left Pane (Trái -> Phải)
+    let syncLeftTimer = null;
+    leftPane.addEventListener("scroll", () => {
+        if (activeScrollPane !== 'left' || soiDeState.editorMode !== 'cards') return;
+        if (syncLeftTimer) cancelAnimationFrame(syncLeftTimer);
+        syncLeftTimer = requestAnimationFrame(() => {
+            syncRightEditorFromLeftScroll();
         });
     }, { passive: true });
 }
@@ -1060,9 +1094,44 @@ function syncLeftPreviewFromRightScroll() {
 
     if (targetCard) {
         const qId = targetCard.id.replace('soide-qcard-', '');
-        if (qId && qId !== lastSyncedQId) {
-            lastSyncedQId = qId;
+        if (qId && qId !== lastSyncedQId_RightToLeft) {
+            lastSyncedQId_RightToLeft = qId;
             scrollToLeftPreviewQuestion(qId, false);
+        }
+    }
+}
+
+function syncRightEditorFromLeftScroll() {
+    const leftPane = document.getElementById("soide-left-pane");
+    const rightPane = document.getElementById("soide-right-pane");
+    if (!leftPane || !rightPane) return;
+
+    const leftPaneRect = leftPane.getBoundingClientRect();
+    const leftCards = leftPane.querySelectorAll('.soide-preview-card');
+    if (!leftCards || leftCards.length === 0) return;
+
+    let targetCard = null;
+    let minDistance = Infinity;
+    const probeY = leftPaneRect.top + 75;
+
+    for (let card of leftCards) {
+        const rect = card.getBoundingClientRect();
+        if (rect.top <= probeY && rect.bottom >= probeY) {
+            targetCard = card;
+            break;
+        }
+        const dist = Math.abs(rect.top - probeY);
+        if (dist < minDistance) {
+            minDistance = dist;
+            targetCard = card;
+        }
+    }
+
+    if (targetCard) {
+        const qId = targetCard.dataset.qid; 
+        if (qId && qId !== lastSyncedQId_LeftToRight) {
+            lastSyncedQId_LeftToRight = qId;
+            scrollToRightEditorQuestion(qId, false);
         }
     }
 }
@@ -1085,6 +1154,32 @@ function scrollToLeftPreviewQuestion(qId, triggerSmooth = true) {
 
     document.querySelectorAll('.soide-preview-card.is-synced-active').forEach(c => c.classList.remove('is-synced-active'));
     leftCard.classList.add('is-synced-active');
+    
+    // Reset cờ chiều ngược lại để tránh khựng nếu đổi hướng ngay
+    lastSyncedQId_LeftToRight = qId; 
+}
+
+function scrollToRightEditorQuestion(qId, triggerSmooth = true) {
+    const rightPane = document.getElementById("soide-right-pane");
+    const rightCard = document.getElementById(`soide-qcard-${qId}`);
+    if (!rightPane || !rightCard) return;
+
+    const rightPaneRect = rightPane.getBoundingClientRect();
+    const rightCardRect = rightCard.getBoundingClientRect();
+    const currentScrollTop = rightPane.scrollTop;
+    const offsetWithinPane = rightCardRect.top - rightPaneRect.top;
+    const targetScrollTop = currentScrollTop + offsetWithinPane - 12;
+
+    rightPane.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: triggerSmooth ? 'smooth' : 'auto'
+    });
+
+    document.querySelectorAll('.soide-editor-qcard.is-synced-active').forEach(c => c.classList.remove('is-synced-active'));
+    rightCard.classList.add('is-synced-active');
+    
+    // Reset cờ chiều ngược lại
+    lastSyncedQId_RightToLeft = qId;
 }
 
 function showSoiDeToast(msg) {
@@ -1755,7 +1850,7 @@ function renderSoiDeRightEditor() {
 
     updateRawTextFromState();
     setTimeout(autoResizeAllTextareas, 20);
-    setupRightToLeftScrollSync();
+    setupDualScrollSync();
 }
 
 function updateSoiDeQuestionText(idx, val) {
