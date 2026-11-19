@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: exam-engine-core.js 
 // (BẢN FIX TRIỆT ĐỂ: KHÔNG RESET THỜI GIAN KHI RELOAD & GIỮ NGUYÊN BÀI THI)
+// ĐÃ BỔ SUNG: TRỘN PHƯƠNG ÁN A,B,C,D VÀ TRỘN MỆNH ĐỀ ĐÚNG/SAI
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -125,7 +126,6 @@ async function ensureActiveSessionAndDraft() {
     try {
         const cfg = window.CURRENT_RT_CONFIG || {};
         if (cfg.pingIntervalSec !== 0) {
-            // LẤY START_TIME GỐC KHÔNG THAY ĐỔI
             const currentAttempt = window.currentStudentAttemptNumber || 1;
             const originStored = safeLocal.getItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`);
             const trueStartTime = originStored ? parseInt(originStored, 10) : (examStartTime || nowMs);
@@ -282,7 +282,6 @@ function lockExamInteractions() {
     }
 }
 
-// BỘ GIÁM SÁT GIAO DIỆN CHỐNG TRẮNG MÀN HÌNH (WATCHDOG LIÊN TỤC)
 function ensureSomeUIElementsAreVisible() {
     const gl = document.getElementById('global-loading');
     const quizContent = document.getElementById("quiz-content");
@@ -308,7 +307,6 @@ function ensureSomeUIElementsAreVisible() {
     }
 }
 
-// BỘ CHUẨN HÓA 2 CHIỀU ĐẢM BẢO 100% CÂU HỎI MANG THEO LINK ẢNH TRỰC TIẾP
 function synchronizeExamQuestionsAndImages(questionsList, imageMap) {
     if (!Array.isArray(questionsList)) return [];
     if (!imageMap || typeof imageMap !== 'object') imageMap = {};
@@ -329,7 +327,6 @@ function synchronizeExamQuestionsAndImages(questionsList, imageMap) {
     return questionsList;
 }
 
-// HÀM PARSE NGÀY AN TOÀN TRÊN SAFARI IOS
 function parseUniversalDate(str) {
     if (!str) return null;
     let s = String(str).trim();
@@ -468,13 +465,58 @@ function shuffleArray(arr) {
     return array;
 }
 
+// BỘ TRỘN CÂU HỎI & PHƯƠNG ÁN A,B,C,D / MỆNH ĐỀ (FIX CHUẨN XÁC)
 function shuffleExamData(data) {
     if (!data || !data.questions) return;
     const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 || q.type === "essay" || q.type === "essay_answer"));
+    
+    // 1. TRỘN ĐÁP ÁN TRONG TỪNG CÂU HỎI TRƯỚC
+    data.questions.forEach(q => {
+        // Trộn phương án A,B,C,D (Phần 1)
+        if (q.type === "multiple_choice" && !isP4(q) && Array.isArray(q.options) && q.options.length > 0) {
+            let originalCorrectIdx = 0;
+            if (typeof q.correct === 'number') {
+                originalCorrectIdx = q.correct;
+            } else if (typeof q.correct === 'string') {
+                const u = q.correct.trim().toUpperCase();
+                const letters = ["A", "B", "C", "D"];
+                originalCorrectIdx = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
+            }
+            
+            // Gắn cờ đánh dấu phương án đúng ban đầu
+            let mappedOptions = q.options.map((opt, idx) => ({
+                text: opt,
+                isCorrect: (idx === originalCorrectIdx)
+            }));
+            
+            // Đảo vị trí mảng
+            mappedOptions = shuffleArray(mappedOptions);
+            
+            // Ghi nhận lại mảng mới và tìm vị trí mới của đáp án đúng
+            q.options = mappedOptions.map(o => o.text);
+            q.correct = mappedOptions.findIndex(o => o.isCorrect);
+            if (q.correct === -1) q.correct = 0;
+        } 
+        // Trộn mệnh đề Đúng/Sai (Phần 2)
+        else if (q.type === "true_false" && !isP4(q) && Array.isArray(q.statements) && q.statements.length > 0) {
+            let shuffledStatements = shuffleArray(q.statements);
+            // Gắn lại ID a, b, c, d theo thứ tự mới để giao diện luôn hiển thị xuôi mắt
+            const letters = ['a', 'b', 'c', 'd'];
+            q.statements = shuffledStatements.map((st, idx) => {
+                return {
+                    ...st,
+                    id: letters[idx] || st.id 
+                };
+            });
+        }
+    });
+
+    // 2. TRỘN THỨ TỰ CÂU HỎI TRONG TỪNG PHẦN
     let p1 = shuffleArray(data.questions.filter(q => q.type === "multiple_choice" && !isP4(q)));
     let p2 = shuffleArray(data.questions.filter(q => q.type === "true_false" && !isP4(q)));
     let p3 = shuffleArray(data.questions.filter(q => (q.type === "short_answer") && !isP4(q)));
     let p4 = shuffleArray(data.questions.filter(q => isP4(q)));
+    
     data.questions = [...p1, ...p2, ...p3, ...p4];
 }
 
@@ -528,7 +570,6 @@ function resetToFreshLoginScreen() {
     window.location.reload(); 
 }
 
-// BẢN FIX: KHÔNG XÓA NHẦM PHIÊN THI KHI HỌC SINH LÀM 10 PHÚT CHƯA KỊP TÍCH ĐÁP ÁN
 async function checkSessionStatus(isAutostart = false) { 
     syncStudentFromParamsAndStorage();
     const hideLoading = () => {
@@ -580,7 +621,6 @@ async function checkSessionStatus(isAutostart = false) {
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        // CHỈ XÓA PHIÊN KHI ĐÃ THỰC SỰ HẾT GIỜ THI, TUYỆT ĐỐI KHÔNG XÓA KHI HỌC SINH CHƯA TÍCH ĐÁP ÁN (VẪN ĐANG NGHĨ NHÁP)
         if (timeRemaining <= 0 && totalTimeSeconds > 0) {
             safeLocal.removeItem(getStorageKey(attempt));
             if (typeof getStorageKey === 'function') {
@@ -953,7 +993,6 @@ function saveExamStateToStorage() {
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "quiz";
 
-    // BẢO VỆ MỐC THỜI GIAN GỐC
     const originKey = `exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`;
     if (!safeLocal.getItem(originKey)) {
         safeLocal.setItem(originKey, String(examStartTime));
@@ -1008,7 +1047,6 @@ function restoreExamStateFromStorage() {
             const originKey = `exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`;
             const originStored = safeLocal.getItem(originKey);
 
-            // ƯU TIÊN MỐC THỜI GIAN GỐC ĐỂ KHÔNG BỊ NHẢY PHÚT
             const savedStartTime = originStored ? parseInt(originStored, 10) : (parsed.examStartTime || Date.now());
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
