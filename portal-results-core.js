@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-results-core.js 
 // (BẢN FIX ĐỒNG BỘ 100%: REALTIME CHÍNH XÁC, KHÔNG BỊ MẤT ĐANG THI KHI RỜI APP)
+// ĐÃ SỬA: SẮP XẾP LẠI CHUỖI CHI TIẾT ĐÁP ÁN (DATA_STRING) ĐÚNG THEO THỨ TỰ SỐ
 // =========================================================
 
 let currentExamResultData = {
@@ -63,16 +64,36 @@ function isSbdMatchedFlexibly(sbd1, sbd2) {
     return v1.some(x => v2.includes(x));
 }
 
+// FIX: Cập nhật hàm sortDataString để trích xuất số ID và sắp xếp theo Numeric Sort.
 function sortDataString(str) {
     if (!str) return "";
     let parts = str.split(/\s*\|\s*/);
+    
     parts.sort((a, b) => {
-        let isTabA = a.toLowerCase().includes("tab switch");
-        let isTabB = b.toLowerCase().includes("tab switch");
-        if (isTabA && !isTabB) return 1;
-        if (!isTabA && isTabB) return -1;
+        // 1. Nhận diện các câu log hệ thống (Đẩy về cuối cùng)
+        let isLogA = a.startsWith("[") || a.toLowerCase().includes("tab switch");
+        let isLogB = b.startsWith("[") || b.toLowerCase().includes("tab switch");
+        
+        if (isLogA && !isLogB) return 1;
+        if (!isLogA && isLogB) return -1;
+        if (isLogA && isLogB) return a.localeCompare(b);
+
+        // 2. Lấy con số ID ở đầu mỗi mục (Ví dụ: "1-A", "10-C", "2a-Đúng")
+        let matchA = a.match(/^(\d+)/);
+        let matchB = b.match(/^(\d+)/);
+        
+        let numA = matchA ? parseInt(matchA[1], 10) : 0;
+        let numB = matchB ? parseInt(matchB[1], 10) : 0;
+
+        // 3. Sắp xếp theo số
+        if (numA !== numB) {
+            return numA - numB;
+        }
+        
+        // Nếu cùng số (VD: câu Đúng/Sai 2a, 2b, 2c), tiếp tục sắp xếp theo chữ cái
         return a.localeCompare(b);
     });
+    
     return parts.join(" | ");
 }
 
