@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-exam-scoring.js (BẢN FIX TRIỆT ĐỂ LỖI CHẤM 0 ĐIỂM)
 // HỖ TRỢ TRÍCH XUẤT ĐÁP ÁN DỰ PHÒNG TỪ CHÍNH OBJECT CÂU HỎI
+// ĐÃ SỬA: ÉP CHUỖI data_string SẮP XẾP CHÍNH XÁC THEO CÂU 1,2,3 GỐC
 // =========================================================
 
 let currentScoringQuizId = null;
@@ -250,7 +251,6 @@ async function saveGradingScaleConfig() {
     }
 }
 
-// BỘ CHẤM ĐIỂM CHÍNH XÁC: TỰ ĐỘNG FALLBACK ĐÁP ÁN NẾU VAULT RỖNG
 function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scoringConfig) {
     const cfg = scoringConfig || { mode: "option1" };
     const mode = cfg.mode || "option1";
@@ -277,7 +277,6 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
             const uVal = userAnswers[`q${q.id}`] || "Chưa chọn";
             let cVal = answerVault ? answerVault[`q${q.id}`] : undefined;
 
-            // Fallback trực tiếp vào object q nếu answerVault chưa có
             if (cVal === undefined || cVal === null) {
                 if (q.correct !== undefined) {
                     cVal = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
@@ -372,6 +371,17 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
                 dataDetails.push(`${q.id}-${uVal || "Trống"} [SAI: ${cVal || "---"}]`);
             }
         }
+    });
+
+    // SẮP XẾP CHÍNH XÁC LẠI MẢNG DATADETAILS THEO THỨ TỰ SỐ (ID GỐC) TRƯỚC KHI TRẢ VỀ
+    dataDetails.sort((a, b) => {
+        let matchA = a.match(/^(\d+)/);
+        let matchB = b.match(/^(\d+)/);
+        let numA = matchA ? parseInt(matchA[1], 10) : 0;
+        let numB = matchB ? parseInt(matchB[1], 10) : 0;
+        
+        if (numA !== numB) return numA - numB;
+        return a.localeCompare(b);
     });
 
     let finalScore = isOption1 
