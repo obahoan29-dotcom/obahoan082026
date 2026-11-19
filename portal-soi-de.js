@@ -109,12 +109,15 @@ function insertQuestionsOrganizedByPart(newQuestions) {
 function formatQuestionText(text) {
     if (!text) return "";
     
-    // FIX: Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ
+    // FIX 1: Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ
     let formatted = text.replace(/\\begin\{center\}/gi, '<div style="width:100%; overflow-x:auto; text-align:center; margin: 10px 0; padding-bottom: 5px;">');
     formatted = formatted.replace(/\\end\{center\}/gi, '</div>');
     
-    formatted = formatted.replace(/\\begin\{tabular\}/gi, '$$ \\begin{array}');
-    formatted = formatted.replace(/\\end\{tabular\}/gi, '\\end{array} $$');
+    // FIX 2: Xử lý tabular - Loại bỏ $, \(, \) bên trong tabular vì toàn bộ bảng đã nằm trong Block Math ($$ ... $$)
+    formatted = formatted.replace(/\\begin\{tabular\}([\s\S]*?)\\end\{tabular\}/gi, function(match, tabularContent) {
+        let cleanContent = tabularContent.replace(/\$/g, '').replace(/\\\(/g, '').replace(/\\\)/g, '');
+        return '$$ \\begin{array}' + cleanContent + '\\end{array} $$';
+    });
 
     return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
         return prefix + '<span style="color: #78350f; font-weight: 800;">// ' + content.trim() + '</span>';
