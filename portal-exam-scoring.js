@@ -375,12 +375,19 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
 
     // SẮP XẾP CHÍNH XÁC LẠI MẢNG DATADETAILS THEO THỨ TỰ SỐ (ID GỐC) TRƯỚC KHI TRẢ VỀ
     dataDetails.sort((a, b) => {
-        let matchA = a.match(/^(\d+)/);
-        let matchB = b.match(/^(\d+)/);
+        // Cụm Regex tách phần số nguyên và chữ cái con (ví dụ '1' và 'a' từ '1a')
+        let matchA = a.match(/^(\d+)([a-zA-Z]?)/);
+        let matchB = b.match(/^(\d+)([a-zA-Z]?)/);
+        
         let numA = matchA ? parseInt(matchA[1], 10) : 0;
         let numB = matchB ? parseInt(matchB[1], 10) : 0;
         
         if (numA !== numB) return numA - numB;
+        
+        let charA = matchA && matchA[2] ? matchA[2].toLowerCase() : "";
+        let charB = matchB && matchB[2] ? matchB[2].toLowerCase() : "";
+        
+        if (charA !== charB) return charA.localeCompare(charB);
         return a.localeCompare(b);
     });
 
