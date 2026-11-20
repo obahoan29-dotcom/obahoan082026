@@ -1,10 +1,18 @@
 // =========================================================
 // FILE: ngan-hang-de.js
-// HỆ THỐNG BIÊN SOẠN CÂU HỎI, PHÂN LOẠI MA TRẬN & TRÍCH ĐỀ THI
+// NÂNG CẤP V2 (HOÀN CHỈNH 100%): 
+// 1. Mặc định bỏ chọn ở tất cả các câu khi up file.
+// 2. Mặc định lưu dữ liệu lên Google Drive.
+// 3. Có nút đổi tên thư mục.
+// 4. Ma trận kéo thả 16 ô tại thư mục con cùng nhất.
+// 5. Tự động sinh ID theo đường dẫn (VD: 10.c1.b1.num1).
+// 6. Sắp xếp lại bảng thống kê ma trận theo Phần 1, 2, 3, 4.
+// 7. Khung dán ảnh/cắt ảnh y hệt phần Soi đề.
+// 8. & 9. Nút lọc Ngân hàng đề (có Lớp HSG 11).
 // =========================================================
 
 let qbankState = {
-    storageTarget: "drive", // MẶC ĐỊNH LƯU DRIVE (Yêu cầu 2)
+    storageTarget: "drive", // YÊU CẦU 2: MẶC ĐỊNH LƯU GOOGLE DRIVE
     savedExamFilter: "all",
     currentTree: [
         {
@@ -59,15 +67,20 @@ let qbankState = {
     activeFolderId: null,
     activeFolderObj: null,
     rawQuestions: [],
-    selectedQuestionIds: new Set(), // MẶC ĐỊNH BỎ CHỌN TOÀN BỘ (Yêu cầu 1)
+    selectedQuestionIds: new Set(), // YÊU CẦU 1: SET RỖNG (MẶC ĐỊNH BỎ CHỌN)
     savedExams: [],
     draggedQId: null,
-    imagesMap: {}
+    imagesMap: {} // Kho ảnh cục bộ
 };
 
-const QBANK_COLOR_PALETTE = ["#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"];
+const QBANK_COLOR_PALETTE = [
+    "#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"
+];
 
-// ================== CÁC HÀM CƠ BẢN VÀ MODAL ==================
+// ============================================================================
+// HÀM ĐÓNG / MỞ GIAO DIỆN & MODAL
+// ============================================================================
+
 function toggleQbankMenu(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
     const menu = document.getElementById("qbank-dropdown-menu");
@@ -85,6 +98,7 @@ document.addEventListener("click", function(e) {
 function openQbankCreatorModal() {
     const menu = document.getElementById("qbank-dropdown-menu");
     if (menu) menu.classList.remove("show");
+    
     const modal = document.getElementById("modal-qbank-creator");
     if (modal) {
         modal.style.display = "flex";
@@ -95,17 +109,37 @@ function openQbankCreatorModal() {
         updateQbankBuilderStats();
     }
 }
-function closeQbankCreatorModal() { document.getElementById("modal-qbank-creator").style.display = "none"; }
+
+function closeQbankCreatorModal() { 
+    const modal = document.getElementById("modal-qbank-creator");
+    if (modal) modal.style.display = "none"; 
+}
+
 function openSavedExamsModal() {
     const menu = document.getElementById("qbank-dropdown-menu");
     if (menu) menu.classList.remove("show");
+    
     const modal = document.getElementById("modal-qbank-saved");
-    if (modal) { modal.style.display = "flex"; loadSavedExamsList(); }
+    if (modal) { 
+        modal.style.display = "flex"; 
+        loadSavedExamsList(); 
+    }
 }
-function closeSavedExamsModal() { document.getElementById("modal-qbank-saved").style.display = "none"; }
-function toggleStorageLocation(selectEl) { qbankState.storageTarget = selectEl.value; }
 
-// ================== CỘT 1: CÂY THƯ MỤC & MA TRẬN KÉO THẢ ==================
+function closeSavedExamsModal() { 
+    const modal = document.getElementById("modal-qbank-saved");
+    if (modal) modal.style.display = "none"; 
+}
+
+function toggleStorageLocation(selectEl) { 
+    qbankState.storageTarget = selectEl.value; 
+}
+
+
+// ============================================================================
+// CỘT 1: LOGIC CÂY THƯ MỤC & MA TRẬN KÉO THẢ TẠI LÁ
+// ============================================================================
+
 function findNodeInTree(nodes, id) {
     for (let n of nodes) {
         if (n.id === id) return n;
@@ -128,12 +162,12 @@ function findParentNodeInTree(nodes, childId) {
     return null;
 }
 
-// SINH ID THEO YÊU CẦU 5 (VD: 10.c1.b1.num1)
+// YÊU CẦU 5: SINH ID PHÂN CẤP TỰ ĐỘNG DỰA TRÊN ĐƯỜNG DẪN CÂY
 function generatePrefixSlug(name) {
     let s = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
-    if (s.includes("lop")) return s.replace(/[^0-9]/g, ""); // Lớp 10 -> 10
-    if (s.includes("chuong")) return "c" + s.replace(/[^0-9]/g, ""); // Chương 1 -> c1
-    if (s.includes("bai")) return "b" + s.replace(/[^0-9]/g, ""); // Bài 1 -> b1
+    if (s.includes("lop") || s.includes("lớp")) return s.replace(/[^0-9]/g, ""); // "Lớp 10" -> "10"
+    if (s.includes("chuong") || s.includes("chương")) return "c" + s.replace(/[^0-9]/g, ""); // "Chương 1" -> "c1"
+    if (s.includes("bai") || s.includes("bài")) return "b" + s.replace(/[^0-9]/g, ""); // "Bài 1" -> "b1"
     return s.substring(0, 3).replace(/[^a-z0-9]/g, "");
 }
 
@@ -142,7 +176,10 @@ function getHierarchicalPrefix(targetId) {
     function traverse(nodes, currentPath) {
         for (let n of nodes) {
             let newPath = [...currentPath, n];
-            if (n.id === targetId) { path = newPath; return true; }
+            if (n.id === targetId) { 
+                path = newPath; 
+                return true; 
+            }
             if (n.children && traverse(n.children, newPath)) return true;
         }
         return false;
@@ -151,7 +188,7 @@ function getHierarchicalPrefix(targetId) {
     return path.map(p => generatePrefixSlug(p.name)).join(".");
 }
 
-// YÊU CẦU 3 & 4: Render thư mục và khung ma trận lá
+// RENDER CÂY THƯ MỤC VÀ KHUNG MA TRẬN 16 Ô (YÊU CẦU 4)
 function renderQbankTree() {
     const rootEl = document.getElementById("qbank-tree-root");
     if (!rootEl) return;
@@ -173,32 +210,44 @@ function renderQbankTree() {
             subHtml = `<div class="tree-children">${node.children.map(child => buildNodeHtml(child, depth + 1)).join("")}</div>`;
         }
 
-        // MA TRẬN 16 Ô TẠI THƯ MỤC LÁ
+        // TẠO MA TRẬN 16 Ô TẠI NODE LÁ KHI ĐƯỢC CHỌN (ACTIVE)
         let matrixDropHtml = "";
         if (isLeaf && isActive) {
-            const counts = { 1:{nb:0,th:0,vdt:0,vdc:0}, 2:{nb:0,th:0,vdt:0,vdc:0}, 3:{nb:0,th:0,vdt:0,vdc:0}, 4:{nb:0,th:0,vdt:0,vdc:0} };
+            // Đếm số lượng câu hỏi hiện tại đã gán vào folder này theo từng phần/mức độ
+            const counts = { 
+                1: {nb:0, th:0, vdt:0, vdc:0}, 
+                2: {nb:0, th:0, vdt:0, vdc:0}, 
+                3: {nb:0, th:0, vdt:0, vdc:0}, 
+                4: {nb:0, th:0, vdt:0, vdc:0} 
+            };
+
             qbankState.rawQuestions.forEach(q => {
                 if (q.folderId === node.id) {
                     let p = q.part || 1;
                     if (q.type === 'true_false') p = 2;
                     else if (q.type === 'short_answer' && q.part !== 4) p = 3;
+                    
                     let lvl = q.level || 'nb';
-                    if (counts[p] && counts[p][lvl] !== undefined) counts[p][lvl]++;
+                    if (counts[p] && counts[p][lvl] !== undefined) {
+                        counts[p][lvl]++;
+                    }
                 }
             });
 
             matrixDropHtml = `
                 <div class="leaf-matrix-container">
                     <div style="font-size:10px; color:#0369a1; font-weight:800; margin-bottom:4px; text-align:center;">📥 Kéo thả câu hỏi từ Cột Giữa vào từng ô:</div>
-                    ${[1,2,3,4].map(p => `
+                    ${[1, 2, 3, 4].map(p => `
                         <div class="leaf-matrix-row">
                             <div class="leaf-matrix-lbl">P${p}</div>
                             ${['nb', 'th', 'vdt', 'vdc'].map(lvl => {
-                                const lblMap = {nb:'NB', th:'TH', vdt:'VD', vdc:'VDC'};
+                                const lblMap = { nb: 'NB', th: 'TH', vdt: 'VD', vdc: 'VDC' };
                                 return `
                                 <div class="leaf-drop-zone"
-                                     ondragover="handleDropZoneOver(event)" ondragleave="handleDropZoneLeave(event)"
-                                     ondrop="handleDropZoneDrop(event, '${node.id}', ${p}, '${lvl}')" title="Kéo thả vào đây: Phần ${p} - ${lblMap[lvl]}">
+                                     ondragover="handleDropZoneOver(event)" 
+                                     ondragleave="handleDropZoneLeave(event)"
+                                     ondrop="handleDropZoneDrop(event, '${node.id}', ${p}, '${lvl}')" 
+                                     title="Kéo thả vào đây: Phần ${p} - ${lblMap[lvl]}">
                                     ${lblMap[lvl]}
                                     <b style="color:#0284c7;">(${counts[p][lvl]})</b>
                                 </div>`;
@@ -209,6 +258,7 @@ function renderQbankTree() {
             `;
         }
 
+        // YÊU CẦU 3: CÓ NÚT ĐỔI TÊN THƯ MỤC (✏️)
         return `
             <div class="tree-item-wrapper" style="margin-left: ${depth > 0 ? 4 : 0}px;">
                 <div class="tree-item ${isActive ? 'active' : ''}" id="tree-node-${node.id}"
@@ -221,8 +271,8 @@ function renderQbankTree() {
                     </div>
 
                     <div style="display:flex; align-items:center; gap:3px;" onclick="event.stopPropagation()">
-                        <div class="tree-color-picker-dot" style="background:${nodeColor}; width:12px; height:12px; border-radius:50%; cursor:pointer;" onclick="promptChangeFolderColor('${node.id}')" title="Đổi màu"></div>
-                        <button class="btn-rename-tree" onclick="promptRenameFolder('${node.id}')" title="Đổi tên">✏️</button>
+                        <div class="tree-color-picker-dot" style="background:${nodeColor};" onclick="promptChangeFolderColor('${node.id}')" title="Đổi màu"></div>
+                        <button class="btn-rename-tree" onclick="promptRenameFolder('${node.id}')" title="Đổi tên thư mục">✏️</button>
                         ${!isLeaf || depth < 2 ? `<button class="btn-add-tree" onclick="promptAddChildFolder('${node.id}')" title="Thêm mục con">+</button>` : ''}
                         <button class="btn-add-tree" style="color:#ef4444;" onclick="promptDeleteFolder('${node.id}')" title="Xóa">✕</button>
                     </div>
@@ -237,44 +287,75 @@ function renderQbankTree() {
     rootEl.innerHTML = html;
 }
 
-// CÁC HÀM CÂY THƯ MỤC
+// CÁC HÀM TƯƠNG TÁC CÂY THƯ MỤC
 function promptRenameFolder(folderId) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
     if (!node) return;
     const newName = prompt("✏️ Đổi tên thư mục:", node.name);
     if (newName && newName.trim()) {
         node.name = newName.trim();
-        saveQbankTreeData(); renderQbankTree();
+        saveQbankTreeData(); 
+        renderQbankTree();
     }
 }
+
 function promptAddRootFolder() {
-    const name = prompt("📁 Nhập tên thư mục gốc mới (VD: Lớp 11):");
+    const name = prompt("📁 Nhập tên thư mục gốc mới (VD: Lớp 10):");
     if (name && name.trim()) {
-        qbankState.currentTree.push({ id: "node_" + Date.now(), name: name.trim(), color: QBANK_COLOR_PALETTE[0], children: [] });
-        saveQbankTreeData(); renderQbankTree();
+        qbankState.currentTree.push({ 
+            id: "node_" + Date.now(), 
+            name: name.trim(), 
+            color: QBANK_COLOR_PALETTE[0], 
+            children: [] 
+        });
+        saveQbankTreeData(); 
+        renderQbankTree();
     }
 }
+
 function promptAddChildFolder(parentId) {
     const parent = findNodeInTree(qbankState.currentTree, parentId);
     const name = prompt(`📁 Thêm mục con vào [${parent.name}]:`);
     if (name && name.trim()) {
         if (!parent.children) parent.children = [];
-        parent.children.push({ id: "node_" + Date.now(), name: name.trim(), color: parent.color, children: [] });
-        saveQbankTreeData(); renderQbankTree();
+        parent.children.push({ 
+            id: "node_" + Date.now(), 
+            name: name.trim(), 
+            color: parent.color, 
+            children: [] 
+        });
+        saveQbankTreeData(); 
+        renderQbankTree();
     }
 }
+
 function promptChangeFolderColor(folderId) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
     const chosen = prompt("🎨 Chọn mã màu Hex (VD: #0284c7):", node.color);
-    if (chosen && chosen.trim()) { node.color = chosen.trim(); saveQbankTreeData(); renderQbankTree(); }
+    if (chosen && chosen.trim()) { 
+        node.color = chosen.trim(); 
+        saveQbankTreeData(); 
+        renderQbankTree(); 
+    }
 }
+
 function promptDeleteFolder(folderId) {
-    if (!confirm(`⚠️ Xóa thư mục này và tất cả mục con?`)) return;
+    if (!confirm(`⚠️ Bạn có chắc muốn xóa thư mục này và tất cả mục con?`)) return;
     const parent = findParentNodeInTree(qbankState.currentTree, folderId);
-    if (parent) parent.children = parent.children.filter(c => c.id !== folderId);
-    else qbankState.currentTree = qbankState.currentTree.filter(c => c.id !== folderId);
-    if (qbankState.activeFolderId === folderId) qbankState.activeFolderId = null;
-    saveQbankTreeData(); renderQbankTree();
+    
+    if (parent) {
+        parent.children = parent.children.filter(c => c.id !== folderId);
+    } else {
+        qbankState.currentTree = qbankState.currentTree.filter(c => c.id !== folderId);
+    }
+    
+    if (qbankState.activeFolderId === folderId) {
+        qbankState.activeFolderId = null;
+        qbankState.activeFolderObj = null;
+    }
+    
+    saveQbankTreeData(); 
+    renderQbankTree();
 }
 
 function selectQbankFolder(folderId) {
@@ -286,6 +367,7 @@ function selectQbankFolder(folderId) {
 function saveQbankTreeData() {
     try { localStorage.setItem("qbank_tree_structure", JSON.stringify(qbankState.currentTree)); } catch(e) {}
 }
+
 function loadQbankTreeData() {
     try {
         const local = localStorage.getItem("qbank_tree_structure");
@@ -296,36 +378,65 @@ function loadQbankTreeData() {
     } catch(e) {}
 }
 
-// XỬ LÝ KÉO THẢ MA TRẬN 16 Ô
-function handleDropZoneOver(e) { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }
-function handleDropZoneLeave(e) { e.currentTarget.classList.remove("drag-over"); }
+
+// ============================================================================
+// HÀNH ĐỘNG KÉO THẢ VÀO MA TRẬN
+// ============================================================================
+
+function handleDropZoneOver(e) { 
+    e.preventDefault(); 
+    e.currentTarget.classList.add("drag-over"); 
+}
+
+function handleDropZoneLeave(e) { 
+    e.currentTarget.classList.remove("drag-over"); 
+}
+
 function handleDropZoneDrop(e, folderId, part, level) {
-    e.preventDefault(); e.currentTarget.classList.remove("drag-over");
+    e.preventDefault(); 
+    e.currentTarget.classList.remove("drag-over");
+    
     const qId = e.dataTransfer.getData("text/plain") || qbankState.draggedQId;
     if (!qId) return;
 
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (!q) return;
 
-    // Phân loại Type dựa trên ô ma trận
-    if (part === 1) { q.type = "multiple_choice"; delete q.part; if(!q.options) q.options = ["A","B","C","D"]; }
-    else if (part === 2) { q.type = "true_false"; delete q.part; if(!q.statements) q.statements = [{id:'a', statement:'', correct:true}]; }
-    else if (part === 3) { q.type = "short_answer"; delete q.part; }
-    else if (part === 4) { q.type = "short_answer"; q.part = 4; }
+    // Ép kiểu (Type) dựa trên phần được thả vào
+    if (part === 1) { 
+        q.type = "multiple_choice"; 
+        delete q.part; 
+        if(!q.options) q.options = ["A","B","C","D"]; 
+    } else if (part === 2) { 
+        q.type = "true_false"; 
+        delete q.part; 
+        if(!q.statements) q.statements = [{id:'a', statement:'', correct:true}]; 
+    } else if (part === 3) { 
+        q.type = "short_answer"; 
+        delete q.part; 
+    } else if (part === 4) { 
+        q.type = "short_answer"; 
+        q.part = 4; 
+    }
 
+    // Cập nhật mức độ và Folder cha
     q.level = level;
     q.folderId = folderId;
     
-    // YÊU CẦU 5: Đổi ID và đường dẫn. VD: 10.c1.b1.num1
+    // YÊU CẦU 5: Tự sinh ID (Ví dụ: 10.c1.b1.num1)
     const currentFolderTarget = findNodeInTree(qbankState.currentTree, folderId);
     q.folderName = currentFolderTarget ? currentFolderTarget.name : "";
+    
     const countInFolder = qbankState.rawQuestions.filter(x => x.folderId === folderId).length;
     const prefix = getHierarchicalPrefix(folderId);
-    q.id = `${prefix}.num${countInFolder}`;
+    
+    // Gắn ID chuẩn
+    q.id = `${prefix}.num${countInFolder}`; 
 
-    // Tự động gán Checked cho câu vừa kéo thả xong
+    // Tự động gán tích (Checked) cho câu hỏi vừa phân loại xong
     qbankState.selectedQuestionIds.add(String(q.id));
 
+    // Cập nhật toàn bộ UI
     renderQbankTree(); 
     renderQbankQuestions(); 
     updateQbankMatrixStats();
@@ -333,16 +444,26 @@ function handleDropZoneDrop(e, folderId, part, level) {
 }
 
 
-// ================== CỘT 2: ĐỌC FILE, HIỂN THỊ CÂU HỎI ==================
+// ============================================================================
+// CỘT 2: ĐỌC FILE JSON, HIỂN THỊ CÂU HỎI VÀ UPLOAD ẢNH (YÊU CẦU 7)
+// ============================================================================
+
 function triggerQbankUpload() {
     let input = document.getElementById("qbank-file-upload-input");
     if (!input) {
         input = document.createElement("input");
-        input.type = "file"; input.id = "qbank-file-upload-input"; input.accept = ".json,.js,.txt"; input.style.display = "none";
+        input.type = "file"; 
+        input.id = "qbank-file-upload-input"; 
+        input.accept = ".json,.js,.txt"; 
+        input.style.display = "none";
         document.body.appendChild(input);
-        input.onchange = function() { if (this.files && this.files[0]) readQbankJsonFile(this.files[0]); };
+        
+        input.onchange = function() { 
+            if (this.files && this.files[0]) readQbankJsonFile(this.files[0]); 
+        };
     }
-    input.value = ""; input.click();
+    input.value = ""; 
+    input.click();
 }
 
 function readQbankJsonFile(file) {
@@ -351,7 +472,10 @@ function readQbankJsonFile(file) {
         try {
             const text = e.target.result;
             let parsed = null;
-            try { parsed = JSON.parse(text); } catch(err) {
+            
+            try { 
+                parsed = JSON.parse(text); 
+            } catch(err) {
                 let clean = text.replace(/^\s*(?:const|let|var)\s+[a-zA-Z0-9_$]+\s*=\s*/, 'return ');
                 parsed = new Function(clean)();
             }
@@ -362,27 +486,33 @@ function readQbankJsonFile(file) {
             else if (parsed.questions) {
                 rawQ = parsed.questions;
                 if (parsed.images) qbankState.imagesMap = parsed.images;
-                if (parsed.title) document.getElementById("qbank-exam-name").value = parsed.title;
+                if (parsed.title) {
+                    const titleInp = document.getElementById("qbank-exam-name");
+                    if (titleInp) titleInp.value = parsed.title;
+                }
             }
 
             rawQ.forEach((q, idx) => {
-                q.id = q.id || `temp_${idx+1}`;
+                q.id = q.id || `temp_up_${idx+1}`;
                 if (!q.level) q.level = "nb";
             });
 
             qbankState.rawQuestions = rawQ;
-            qbankState.selectedQuestionIds = new Set(); // MẶC ĐỊNH BỎ CHỌN TOÀN BỘ (Yêu cầu 1)
+            qbankState.selectedQuestionIds = new Set(); // YÊU CẦU 1: BỎ CHỌN TẤT CẢ
 
             renderQbankQuestions();
             updateQbankMatrixStats();
             updateQbankBuilderStats();
-            alert(`✅ Đã nạp ${rawQ.length} câu hỏi. Tất cả đang được BỎ CHỌN.\n👉 Hãy kéo thả từng câu vào Lưới Ma Trận ở thư mục tương ứng!`);
-        } catch(err) { alert("❌ Lỗi nạp file: " + err.message); }
+            
+            alert(`✅ Đã nạp ${rawQ.length} câu hỏi.\n(Mặc định đang được bỏ chọn toàn bộ).\n\n👉 Thầy hãy nhấp kéo từng câu vào Lưới Ma Trận bên Cây thư mục để phân loại nhé!`);
+        } catch(err) { 
+            alert("❌ Lỗi nạp file: " + err.message); 
+        }
     };
     reader.readAsText(file);
 }
 
-// YÊU CẦU 6: Hiển thị ma trận Cột Giữa theo 4 Phần
+// YÊU CẦU 6: THỐNG KÊ MA TRẬN NHÓM THEO PHẦN 1, 2, 3, 4
 function updateQbankMatrixStats() {
     const bar = document.getElementById("qbank-matrix-bar");
     if (!bar) return;
@@ -393,12 +523,19 @@ function updateQbankMatrixStats() {
         return;
     }
 
-    const stats = { 1:{nb:0,th:0,vdt:0,vdc:0}, 2:{nb:0,th:0,vdt:0,vdc:0}, 3:{nb:0,th:0,vdt:0,vdc:0}, 4:{nb:0,th:0,vdt:0,vdc:0} };
+    const stats = { 
+        1: {nb:0, th:0, vdt:0, vdc:0}, 
+        2: {nb:0, th:0, vdt:0, vdc:0}, 
+        3: {nb:0, th:0, vdt:0, vdc:0}, 
+        4: {nb:0, th:0, vdt:0, vdc:0} 
+    };
     let total = 0;
 
     questions.forEach(q => {
         let p = q.part || 1;
-        if (q.type === 'true_false') p = 2; else if (q.type === 'short_answer' && q.part !== 4) p = 3;
+        if (q.type === 'true_false') p = 2; 
+        else if (q.type === 'short_answer' && q.part !== 4) p = 3;
+        
         let lvl = q.level || 'nb';
         if (stats[p] && stats[p][lvl] !== undefined) {
             stats[p][lvl]++;
@@ -435,18 +572,21 @@ function renderQbankQuestions() {
     const questions = qbankState.rawQuestions || [];
     let html = "";
 
-    questions.forEach((q, idx) => {
+    questions.forEach((q) => {
         const isChecked = qbankState.selectedQuestionIds.has(String(q.id));
+        
         let p = q.part || 1;
-        if (q.type === 'true_false') p = 2; else if (q.type === 'short_answer' && q.part !== 4) p = 3;
-        const levelText = {nb: 'Nhận biết', th: 'Thông hiểu', vdt: 'Vận dụng', vdc: 'Vận dụng cao'}[q.level || 'nb'];
+        if (q.type === 'true_false') p = 2; 
+        else if (q.type === 'short_answer' && q.part !== 4) p = 3;
+        
+        const levelText = { nb: 'Nhận biết', th: 'Thông hiểu', vdt: 'Vận dụng', vdc: 'Vận dụng cao' }[q.level || 'nb'];
 
-        // YÊU CẦU 7: Dán ảnh giống y như trang Soi đề
+        // YÊU CẦU 7: DÁN ẢNH / CHỌN TỆP CHO TỪNG CÂU HỎI
         const imgKey = q.imageKey || `img_q_${q.id}`;
         let imgUrl = q.imageUrl || qbankState.imagesMap[imgKey] || "";
         
         const uploaderHtml = `
-            <div class="qbank-img-tool-zone" id="zone-qbank-${q.id}" tabindex="0">
+            <div class="qbank-img-tool-zone" id="zone-qbank-${q.id}" tabindex="0" title="Bấm vào vùng này rồi ấn Ctrl+V để dán ảnh">
                 <span style="font-size:11px; font-weight:800; color:#475569;">🖼️ Ảnh:</span>
                 <button type="button" class="btn-qbank-img" onclick="triggerQBankPaste('${q.id}', '${imgKey}')">📋 Dán (Ctrl+V)</button>
                 <input type="file" id="file-qbank-${q.id}" accept="image/*" style="display:none;" onchange="handleQBankImgSelect(this, '${q.id}', '${imgKey}')">
@@ -454,19 +594,21 @@ function renderQbankQuestions() {
                 ${imgUrl ? `<button type="button" class="btn-qbank-img" style="background:#fee2e2; color:#dc2626;" onclick="deleteQBankImg('${q.id}', '${imgKey}')">🗑 Xóa</button>` : ''}
                 <span id="status-qbank-${q.id}" style="font-size:10px; font-weight:800; margin-left:auto;"></span>
             </div>
-            ${imgUrl ? `<div style="text-align:center; margin-bottom:8px;"><img src="${imgUrl}" style="max-height:150px; border-radius:6px; border:1px solid #cbd5e1;"></div>` : ''}
+            ${imgUrl ? `<div style="text-align:center; margin-bottom:8px;"><img src="${imgUrl}" style="max-height:160px; border-radius:6px; border:1px solid #cbd5e1;"></div>` : ''}
         `;
 
-        let bodyHtml = `<div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:6px;">${q.question || ''}</div>`;
-        const folderTag = q.folderName ? `<span style="font-size:10px; color:#16a34a; background:#dcfce7; padding:2px 6px; border-radius:6px;">📁 ${q.folderName}</span>` : '';
+        // Text câu hỏi
+        let bodyHtml = `<div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:6px; line-height:1.45;">${q.question || ''}</div>`;
+        
+        // Thẻ hiển thị Folder gốc
+        const folderTag = q.folderName ? `<span style="font-size:10px; color:#16a34a; background:#dcfce7; padding:2px 6px; border-radius:6px; border:1px solid #bbf7d0;">📁 ${q.folderName}</span>` : '';
 
-        // Tự gán ID dạng 10.c1.b1.num1 nên KHÔNG hiên Thị "Câu 1, Câu 2" nữa
         html += `
             <div class="qbank-q-card ${isChecked ? 'selected' : ''}" id="qbank-card-${q.id}" draggable="true" ondragstart="handleQuestionDragStart(event, '${q.id}')">
                 <div class="qbank-q-header">
                     <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                         <span class="qbank-q-id-badge">${q.id}</span>
-                        <span style="font-size:11px; font-weight:800; color:#059669; border:1px solid #10b981; padding:2px 6px; border-radius:6px;">Phần ${p} • ${levelText}</span>
+                        <span style="font-size:11px; font-weight:800; color:#059669; border:1px solid #10b981; padding:2px 6px; border-radius:6px; background:#ecfdf5;">Phần ${p} • ${levelText}</span>
                         ${folderTag}
                     </div>
                     
@@ -489,17 +631,29 @@ function handleQuestionDragStart(e, qId) {
 }
 
 function toggleSelectQuestion(qId, isChecked) {
-    if (isChecked) qbankState.selectedQuestionIds.add(String(qId));
-    else qbankState.selectedQuestionIds.delete(String(qId));
-    document.getElementById(`qbank-card-${qId}`).classList.toggle("selected", isChecked);
+    if (isChecked) {
+        qbankState.selectedQuestionIds.add(String(qId));
+    } else {
+        qbankState.selectedQuestionIds.delete(String(qId));
+    }
+    
+    const card = document.getElementById(`qbank-card-${qId}`);
+    if (card) {
+        card.classList.toggle("selected", isChecked);
+    }
+    
     updateQbankBuilderStats();
 }
 
-// YÊU CẦU 7: DÁN VÀ UPLOAD ẢNH TẠI CỘT GIỮA
+
+// ============================================================================
+// UPLOAD & DÁN ẢNH TẠI CỘT GIỮA (YÊU CẦU 7)
+// ============================================================================
+
 function triggerQBankPaste(qId, imgKey) {
     const zone = document.getElementById(`zone-qbank-${qId}`);
     if (zone) zone.focus();
-    alert(`📋 Hãy nhấn Ctrl + V (hoặc Cmd + V) để dán ảnh vào thuộc tính của ID này!`);
+    alert(`📋 Thầy hãy nhấn phím Ctrl + V (hoặc Cmd + V) để dán ảnh vào câu này nhé!`);
 }
 
 document.addEventListener('paste', function(e) {
@@ -513,7 +667,8 @@ document.addEventListener('paste', function(e) {
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf('image') !== -1) {
                 e.preventDefault();
-                uploadQBankImage(items[i].getAsFile(), qId, imgKey);
+                const blob = items[i].getAsFile();
+                uploadQBankImage(blob, qId, imgKey);
                 break;
             }
         }
@@ -521,12 +676,17 @@ document.addEventListener('paste', function(e) {
 });
 
 function handleQBankImgSelect(input, qId, imgKey) {
-    if (input.files && input.files[0]) uploadQBankImage(input.files[0], qId, imgKey);
+    if (input.files && input.files[0]) {
+        uploadQBankImage(input.files[0], qId, imgKey);
+    }
 }
 
 async function uploadQBankImage(file, qId, imgKey) {
     const stEl = document.getElementById(`status-qbank-${qId}`);
-    if (stEl) { stEl.style.color = "#0284c7"; stEl.innerText = "⏳ Đang lưu..."; }
+    if (stEl) { 
+        stEl.style.color = "#0284c7"; 
+        stEl.innerText = "⏳ Đang tải lên..."; 
+    }
 
     try {
         const reader = new FileReader();
@@ -537,70 +697,120 @@ async function uploadQBankImage(file, qId, imgKey) {
         });
 
         let directUrl = "";
-        // Nếu Thầy có ImgBB
+        
+        // Cố gắng up ImgBB nếu có cấu hình
         if (typeof IMGBB_API_KEY !== "undefined" && IMGBB_API_KEY && !IMGBB_API_KEY.includes("THAY_")) {
-            let fd = new FormData(); fd.append("image", b64);
+            let fd = new FormData(); 
+            fd.append("image", b64);
             let r = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: fd }).then(x=>x.json());
-            if (r && r.data) directUrl = r.data.url;
+            if (r && r.data) directUrl = r.data.display_url || r.data.url;
         }
 
-        // Nếu có Drive Script
-        if (!directUrl && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL) {
-            let payload = { filename: `qbank_img_${qId}_${Date.now()}.png`, mimeType: file.type || "image/png", base64: b64 };
-            let r = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(payload) }).then(x=>x.json());
-            if (r && r.fileUrl) directUrl = (typeof toDirectGoogleDriveImageUrl === 'function') ? toDirectGoogleDriveImageUrl(r.fileUrl) : r.fileUrl;
+        // Nếu lỗi ImgBB thì up sang Google Drive GAS
+        if (!directUrl && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL && !GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
+            let payload = { 
+                filename: `qbank_img_${qId}_${Date.now()}.png`, 
+                mimeType: file.type || "image/png", 
+                base64: b64 
+            };
+            let r = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, { 
+                method: "POST", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" }, 
+                body: JSON.stringify(payload) 
+            }).then(x=>x.json());
+            
+            if (r && r.fileUrl) {
+                directUrl = (typeof toDirectGoogleDriveImageUrl === 'function') ? toDirectGoogleDriveImageUrl(r.fileUrl) : r.fileUrl;
+            }
         }
 
-        if (!directUrl) directUrl = `data:${file.type};base64,${b64}`;
+        // Bất đắc dĩ lưu Base64 nguyên thủy
+        if (!directUrl) {
+            directUrl = `data:${file.type};base64,${b64}`;
+        }
 
         qbankState.imagesMap[imgKey] = directUrl;
+        
         const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
-        if (q) { q.imageUrl = directUrl; q.imageKey = imgKey; }
+        if (q) { 
+            q.imageUrl = directUrl; 
+            q.imageKey = imgKey; 
+        }
 
         renderQbankQuestions();
     } catch(e) {
-        if (stEl) { stEl.style.color = "#dc2626"; stEl.innerText = "❌ Lỗi"; }
+        if (stEl) { 
+            stEl.style.color = "#dc2626"; 
+            stEl.innerText = "❌ Lỗi"; 
+        }
     }
 }
 
 function deleteQBankImg(qId, imgKey) {
-    if(!confirm("⚠️ Xóa ảnh minh họa này?")) return;
+    if(!confirm("⚠️ Xóa ảnh minh họa của câu này?")) return;
+    
     delete qbankState.imagesMap[imgKey];
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (q) q.imageUrl = "";
+    
     renderQbankQuestions();
 }
 
 
-// ================== CỘT 3: TRÍCH XUẤT ĐỀ THI ==================
+// ============================================================================
+// CỘT 3: TRÍCH XUẤT ĐỀ THI
+// ============================================================================
+
 function updateQbankBuilderStats() {
     const container = document.getElementById("qbank-builder-stats");
+    if (!container) return;
+
     const total = qbankState.selectedQuestionIds.size;
     if (total === 0) {
         container.innerHTML = `<p style="color:#64748b; font-style:italic;">Chưa chọn câu hỏi nào. Tích chọn (☑️) các câu ở cột giữa để đưa vào đề thi.</p>`;
         return;
     }
+    
     container.innerHTML = `<div style="font-weight:900; color:#10b981; font-size:14px;">🎯 Tổng số câu trích xuất: ${total} câu</div>`;
 }
 
 async function saveExtractedExamToBank() {
-    const title = document.getElementById("qbank-exam-name").value.trim();
-    const grade = document.getElementById("qbank-exam-grade").value; // Lớp 10, 11, 12, HSG 11
-    if (!title) return alert("⚠️ Vui lòng nhập Tên đề thi mới!");
-    if (qbankState.selectedQuestionIds.size === 0) return alert("⚠️ Bạn chưa tích chọn câu nào!");
+    const titleInp = document.getElementById("qbank-exam-name");
+    const gradeSel = document.getElementById("qbank-exam-grade");
+    
+    const title = titleInp ? titleInp.value.trim() : "";
+    const grade = gradeSel ? gradeSel.value : "Lop_11";
+    
+    if (!title) {
+        alert("⚠️ Vui lòng nhập Tên đề thi mới!");
+        if (titleInp) titleInp.focus();
+        return;
+    }
+    if (qbankState.selectedQuestionIds.size === 0) {
+        return alert("⚠️ Bạn chưa tích chọn câu hỏi nào ở cột giữa!");
+    }
 
     const btn = document.getElementById("btn-save-extracted-exam");
-    btn.disabled = true; btn.innerText = "⏳ Đang lưu...";
+    if (btn) {
+        btn.disabled = true; 
+        btn.innerText = "⏳ Đang lưu...";
+    }
 
+    // Trích xuất các câu đã chọn và set lại id chạy từ 1 -> N
     const selectedQ = qbankState.rawQuestions
         .filter(q => qbankState.selectedQuestionIds.has(String(q.id)))
-        .map((q, idx) => ({ ...q, id: idx + 1 })); // Khi xuất đề thì reset lại id 1, 2, 3
+        .map((q, idx) => ({ ...q, id: idx + 1 }));
 
     const newExam = {
         id: "exam_bank_" + Date.now(),
-        title: title, grade: grade, questionCount: selectedQ.length,
-        createdAt: new Date().toISOString(), assignedClasses: [],
-        questions: selectedQ, images: qbankState.imagesMap, scoringConfig: { mode: "option1" }
+        title: title, 
+        grade: grade, 
+        questionCount: selectedQ.length,
+        createdAt: new Date().toISOString(), 
+        assignedClasses: [],
+        questions: selectedQ, 
+        images: qbankState.imagesMap, 
+        scoringConfig: { mode: "option1" }
     };
 
     try {
@@ -609,31 +819,56 @@ async function saveExtractedExamToBank() {
         localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams));
 
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-        if (client) await client.from('app_key_values').upsert({ key: 'qbank_saved_exams', value: qbankState.savedExams });
-
-        // YÊU CẦU 2: GỬI LÊN DRIVE NẾU CHỌN STORAGE ĐÓ
-        if (qbankState.storageTarget === "drive" && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") {
-            const drivePath = `KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO/Kho_ngan_hang_cau_hoi/${grade}`;
-            fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
-                method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({ action: "saveQuestionBankData", path: drivePath, filename: `${title.replace(/\s/g,'_')}.json`, data: newExam })
-            }).catch(()=>{});
+        if (client) {
+            await client.from('app_key_values').upsert({ 
+                key: 'qbank_saved_exams', 
+                value: qbankState.savedExams 
+            });
         }
 
-        alert("🎉 ĐÃ LƯU ĐỀ VÀO NGÂN HÀNG THÀNH CÔNG!");
-        closeQbankCreatorModal(); openSavedExamsModal();
-    } catch(err) { alert("Lỗi: " + err.message); }
-    finally { btn.disabled = false; btn.innerText = "💾 Lưu đề vào Ngân hàng"; }
+        // YÊU CẦU 2: LƯU TỰ ĐỘNG LÊN DRIVE QUA GAS NẾU CHỌN STORAGE NÀY
+        if (qbankState.storageTarget === "drive" && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") {
+            const drivePath = `KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO/Kho_ngan_hang_cau_hoi/${grade}`;
+            const payload = { 
+                action: "saveQuestionBankData", 
+                path: drivePath, 
+                filename: `${title.replace(/\s/g,'_')}.json`, 
+                data: newExam 
+            };
+            
+            fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
+                method: "POST", 
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify(payload)
+            }).catch(() => {});
+        }
+
+        alert(`🎉 ĐÃ LƯU ĐỀ "${title}" VÀO NGÂN HÀNG THÀNH CÔNG!`);
+        closeQbankCreatorModal(); 
+        openSavedExamsModal();
+        
+    } catch(err) { 
+        alert("❌ Lỗi lưu đề: " + err.message); 
+    } finally { 
+        if (btn) {
+            btn.disabled = false; 
+            btn.innerText = "💾 Lưu đề vào Ngân hàng"; 
+        }
+    }
 }
 
-// ================== QUẢN LÝ NGÂN HÀNG ĐÃ LƯU & BỘ LỌC ==================
+
+// ============================================================================
+// QUẢN LÝ NGÂN HÀNG ĐÃ LƯU & BỘ LỌC (YÊU CẦU 8 & 9)
+// ============================================================================
+
 async function loadSavedExamsList(doRender = true) {
     try {
         const local = localStorage.getItem("qbank_saved_exams");
         if (local) qbankState.savedExams = JSON.parse(local) || [];
     } catch(e) {}
     
-    // Đọc từ Cloud
+    // Đọc từ Cloud Supabase
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (client) {
         try {
@@ -645,7 +880,10 @@ async function loadSavedExamsList(doRender = true) {
         } catch(e) {}
     }
 
-    if (doRender) filterSavedExamsList(document.getElementById("qbank-filter-grade")?.value || "all");
+    if (doRender) {
+        const filterSel = document.getElementById("qbank-filter-grade");
+        filterSavedExamsList(filterSel ? filterSel.value : "all");
+    }
 }
 
 // YÊU CẦU 8: LỌC THEO KHỐI LỚP (Bao gồm Lớp HSG 11)
@@ -660,7 +898,7 @@ function filterSavedExamsList(gradeVal) {
     }
 
     if (list.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b;">Chưa có đề thi nào trong khối ${gradeVal === 'all' ? '' : gradeVal}.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b;">Chưa có đề thi nào trong phân loại này.</div>`;
         return;
     }
 
@@ -695,14 +933,19 @@ function openTransferExamModal(examId) {
     qbankState.currentExamToTransfer = exam;
     
     createTransferModalInDOM();
-    document.getElementById("transfer-exam-title").innerText = exam.title;
-    document.getElementById("modal-transfer-exam").style.display = "flex";
+    const titleEl = document.getElementById("transfer-exam-title");
+    if (titleEl) titleEl.innerText = exam.title;
+    
+    const modal = document.getElementById("modal-transfer-exam");
+    if (modal) modal.style.display = "flex";
 }
 
 function createTransferModalInDOM() {
     if (document.getElementById("modal-transfer-exam")) return;
+    
     const div = document.createElement("div");
-    div.id = "modal-transfer-exam"; div.className = "qbank-modal-overlay";
+    div.id = "modal-transfer-exam"; 
+    div.className = "qbank-modal-overlay";
     div.innerHTML = `
         <div class="qbank-modal-container" style="width:480px; height:auto; padding:20px;">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:12px;">
@@ -712,14 +955,14 @@ function createTransferModalInDOM() {
             <div style="font-size:12.5px; font-weight:700; color:#1e293b; margin-bottom:10px;" id="transfer-exam-title">...</div>
             
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;" id="transfer-class-list">
-                <label><input type="checkbox" value="lop-11a"> 🏫 Lớp 11A</label>
-                <label><input type="checkbox" value="lop-11c"> 🏫 Lớp 11C</label>
-                <label><input type="checkbox" value="lop-10p"> 🏫 Lớp 10P</label>
-                <label><input type="checkbox" value="lop-11e"> 🏫 Lớp 11E</label>
-                <label><input type="checkbox" value="them-10"> 📐 Thêm 10</label>
-                <label><input type="checkbox" value="them-11" checked> ✍️ Thêm 11</label>
-                <label><input type="checkbox" value="them-12"> 🎓 Thêm 12</label>
-                <label><input type="checkbox" value="hsg-toan-11"> 🏆 HSG Toán 11</label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="lop-11a"> <span>🏫 Lớp 11A</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="lop-11c"> <span>🏫 Lớp 11C</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="lop-10p"> <span>🏫 Lớp 10P</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="lop-11e"> <span>🏫 Lớp 11E</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="them-10"> <span>📐 Thêm 10</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="them-11" checked> <span>✍️ Thêm 11</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="them-12"> <span>🎓 Thêm 12</span></label>
+                <label class="cat-checkbox-item"><input type="checkbox" value="hsg-toan-11"> <span>🏆 HSG Toán 11</span></label>
             </div>
             <div style="display:flex; gap:8px;">
                 <button class="btn-qbank" style="flex:1; background:#f1f5f9; color:#475569;" onclick="document.getElementById('modal-transfer-exam').style.display='none'">Hủy</button>
@@ -731,37 +974,64 @@ function createTransferModalInDOM() {
 
 async function confirmTransferExamToClasses() {
     const exam = qbankState.currentExamToTransfer;
-    const checked = Array.from(document.querySelectorAll('#transfer-class-list input:checked')).map(c => c.value);
-    if (checked.length === 0) return alert("Chọn ít nhất 1 lớp!");
+    const checkedBoxes = Array.from(document.querySelectorAll('#transfer-class-list input:checked'));
+    const checked = checkedBoxes.map(c => c.value);
+    
+    if (checked.length === 0) return alert("⚠️ Vui lòng chọn ít nhất 1 lớp!");
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (!client) return alert("Chưa kết nối Supabase!");
+    if (!client) return alert("❌ Chưa kết nối Supabase!");
 
     try {
         const quizId = "quiz_" + Date.now();
         const dateStr = new Date().toLocaleString("vi-VN");
         
+        // 1. Lưu cấu trúc đề
         await client.from('quizzes').upsert({
-            id: quizId, title: exam.title, made: "101", time_limit_minutes: 90,
-            scoring_config: exam.scoringConfig, questions: exam.questions, images: exam.images
+            id: quizId, 
+            title: exam.title, 
+            made: "101", 
+            time_limit_minutes: 90,
+            scoring_config: exam.scoringConfig || { mode: 'option1' }, 
+            questions: exam.questions, 
+            images: exam.images
         });
 
+        // 2. Tạo link cho từng lớp
         const linkRows = checked.map(cat => ({
-            id: quizId, category_id: cat, title: exam.title, date: dateStr,
+            id: quizId, 
+            category_id: cat, 
+            title: exam.title, 
+            date: dateStr,
             url: `./thi.html?id=${quizId}&cat=${encodeURIComponent(cat)}`,
-            badge_text: "HOT", is_hot: true, timestamp: Date.now()
+            badge_text: "HOT", 
+            is_hot: true, 
+            timestamp: Date.now()
         }));
         await client.from('custom_links').insert(linkRows);
 
+        // 3. Ghi vết đã chuyển
+        const classNamesMap = {
+            "lop-11a": "Lớp 11A", "lop-11c": "Lớp 11C", "lop-10p": "Lớp 10P", "lop-11e": "Lớp 11E",
+            "them-10": "Thêm 10", "them-11": "Thêm 11", "them-12": "Thêm 12", "hsg-toan-11": "HSG Toán 11"
+        };
+        const newClassNames = checked.map(c => classNamesMap[c] || c);
+
         if (!exam.assignedClasses) exam.assignedClasses = [];
-        checked.forEach(c => { if (!exam.assignedClasses.includes(c)) exam.assignedClasses.push(c); });
+        newClassNames.forEach(c => { 
+            if (!exam.assignedClasses.includes(c)) exam.assignedClasses.push(c); 
+        });
+        
         localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams));
         await client.from('app_key_values').upsert({ key: 'qbank_saved_exams', value: qbankState.savedExams });
 
-        alert("🎉 ĐÃ CHUYỂN ĐỀ THÀNH CÔNG!");
+        alert(`🎉 ĐÃ CHUYỂN ĐỀ "${exam.title}" THÀNH CÔNG VÀO ${checked.length} LỚP!`);
         document.getElementById("modal-transfer-exam").style.display = "none";
+        
         filterSavedExamsList(qbankState.savedExamFilter);
-    } catch(err) { alert("Lỗi: " + err.message); }
+    } catch(err) { 
+        alert("❌ Lỗi chuyển đề: " + err.message); 
+    }
 }
 
 function downloadSavedExamJson(examId) {
@@ -775,15 +1045,20 @@ function downloadSavedExamJson(examId) {
 }
 
 function deleteSavedExam(examId) {
-    if (!confirm("⚠️ Xóa đề thi này khỏi Ngân hàng đề?")) return;
+    if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA đề thi này khỏi Ngân hàng đề không?")) return;
+    
     qbankState.savedExams = qbankState.savedExams.filter(e => e.id !== examId);
     localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams));
+    
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (client) client.from('app_key_values').upsert({ key: 'qbank_saved_exams', value: qbankState.savedExams });
+    if (client) {
+        client.from('app_key_values').upsert({ key: 'qbank_saved_exams', value: qbankState.savedExams });
+    }
+    
     filterSavedExamsList(qbankState.savedExamFilter);
 }
 
-// BỘC LỘ HÀM GỌI RA GLOBAL SCOPE
+// BỘC LỘ HÀM GỌI RA GLOBAL SCOPE CHO HTML SỬ DỤNG
 window.toggleQbankMenu = toggleQbankMenu;
 window.openQbankCreatorModal = openQbankCreatorModal;
 window.closeQbankCreatorModal = closeQbankCreatorModal;
@@ -791,20 +1066,30 @@ window.openSavedExamsModal = openSavedExamsModal;
 window.closeSavedExamsModal = closeSavedExamsModal;
 window.toggleStorageLocation = toggleStorageLocation;
 window.triggerQbankUpload = triggerQbankUpload;
+
+// Cây thư mục
 window.promptRenameFolder = promptRenameFolder;
 window.promptAddRootFolder = promptAddRootFolder;
 window.promptAddChildFolder = promptAddChildFolder;
 window.promptChangeFolderColor = promptChangeFolderColor;
 window.promptDeleteFolder = promptDeleteFolder;
 window.selectQbankFolder = selectQbankFolder;
+
+// Kéo thả
 window.handleDropZoneOver = handleDropZoneOver;
 window.handleDropZoneLeave = handleDropZoneLeave;
 window.handleDropZoneDrop = handleDropZoneDrop;
 window.handleQuestionDragStart = handleQuestionDragStart;
+
+// Checkbox
 window.toggleSelectQuestion = toggleSelectQuestion;
+
+// Xử lý ảnh
 window.triggerQBankPaste = triggerQBankPaste;
 window.handleQBankImgSelect = handleQBankImgSelect;
 window.deleteQBankImg = deleteQBankImg;
+
+// Các Modal & Trích xuất
 window.saveExtractedExamToBank = saveExtractedExamToBank;
 window.filterSavedExamsList = filterSavedExamsList;
 window.openTransferExamModal = openTransferExamModal;
