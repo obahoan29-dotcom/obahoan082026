@@ -1260,12 +1260,12 @@
                 <div class="qbank-storage-toggle">
                     <b style="font-size:12px; color:#1e293b;">Nơi Lưu trữ dữ liệu:</b>
                     <select onchange="toggleStorageLocation(this)">
-                        <option value="supabase">1. Máy chủ Supabase (Nhanh, Mặc định)</option>
-                        <option value="drive">2. Đồng bộ Google Drive 5TB (Qua GAS)</option>
+                        <option value="drive" selected>2. Đồng bộ Google Drive 5TB (Qua GAS)</option>
+                        <option value="supabase">1. Máy chủ Supabase (Nhanh)</option>
                     </select>
                 </div>
                 <div class="qbank-tree-container" id="qbank-tree-root">
-                    <!-- JS Render Tree (Lùi cấp) -->
+                    <!-- JS Render Tree -->
                 </div>
             </div>
 
@@ -1274,11 +1274,9 @@
                 <div class="qbank-stats-bar">
                     <div class="qbank-tools-row">
                         <button class="btn-qbank btn-qbank-primary" onclick="triggerQbankUpload()">📥 Upload file JSON đề</button>
-                        <button class="btn-qbank btn-qbank-success" onclick="autoSortQuestionsToSelectedFolder()">➡️ Xếp câu hỏi vào mục tương ứng</button>
                     </div>
                     <div class="qbank-matrix-stats" id="qbank-matrix-bar">
-                        <!-- JS Render Matrix Stats -->
-                        <span style="color:#64748b; font-style:italic;">Upload đề để xem ma trận thống kê 4 mức độ</span>
+                        <span style="color:#64748b; font-style:italic;">Upload file JSON để xem ma trận thống kê 4 mức độ</span>
                     </div>
                 </div>
                 <div class="qbank-questions-list" id="qbank-questions-list">
@@ -1299,11 +1297,12 @@
                         <option value="Lop_10">Khối Lớp 10</option>
                         <option value="Lop_11" selected>Khối Lớp 11</option>
                         <option value="Lop_12">Khối Lớp 12</option>
+                        <option value="Lop_HSG_11">Khối Lớp HSG 11</option>
                     </select>
                 </div>
 
                 <div class="qbank-selected-stats" id="qbank-builder-stats">
-                    <p style="color:#64748b;">Tích chọn câu hỏi (☑️) ở cột giữa để xem thống kê ma trận trích xuất tại đây.</p>
+                    <p style="color:#64748b;">Chưa chọn câu hỏi nào. Tích chọn (☑️) các câu ở cột giữa để đưa vào đề thi.</p>
                 </div>
 
                 <button class="btn-qbank btn-qbank-warning" id="btn-save-extracted-exam" onclick="saveExtractedExamToBank()" style="padding:14px; font-size:14px; width:100%; justify-content:center;">
@@ -1325,6 +1324,18 @@
             </div>
             <button onclick="closeSavedExamsModal()" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer; padding:0 10px;">✕</button>
         </div>
+        
+        <div style="padding: 14px 20px 0 20px; background: #f1f5f9; display: flex; align-items: center; gap: 10px;">
+            <b style="font-size: 13px; color: #334155;">🔍 Lọc theo khối lớp:</b>
+            <select id="qbank-filter-grade" onchange="filterSavedExamsList(this.value)" style="padding: 6px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1; font-weight: 700; outline: none; background: #fff;">
+                <option value="all">Tất cả các khối</option>
+                <option value="Lop_10">Lớp 10</option>
+                <option value="Lop_11">Lớp 11</option>
+                <option value="Lop_12">Lớp 12</option>
+                <option value="Lop_HSG_11">Lớp HSG 11</option>
+            </select>
+        </div>
+
         <div class="saved-exams-list" id="qbank-saved-list">
             <!-- JS Render Saved Exams from Supabase -->
         </div>
