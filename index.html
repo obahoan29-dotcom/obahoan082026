@@ -17,6 +17,9 @@
     <link rel="stylesheet" href="style-base.css">
     <link rel="stylesheet" href="style-modals.css">
 
+    <!-- CSS NGÂN HÀNG ĐỀ MỚI -->
+    <link rel="stylesheet" href="ngan-hang-de.css">
+
     <style>
         .btn-upload-json-backup {
             background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
@@ -178,11 +181,8 @@
             }
         }
 
-        /* ======================================================= */
-        /* FIX LỖI CRASH (TRẮNG MÀN HÌNH) TRÊN IPHONE (IOS WEBKIT) */
-        /* ======================================================= */
+        /* FIX LỖI CRASH TRÊN IPHONE */
         @supports (-webkit-touch-callout: none) {
-            /* 1. Ép font 16px chống Safari tự động Zoom */
             input[type="text"],
             input[type="password"],
             input[type="number"],
@@ -191,12 +191,12 @@
             .tuluan-search-box {
                 font-size: 16px !important;
             }
-            /* 2. Tắt hiệu ứng kính mờ (blur) để chống tràn bộ nhớ GPU khi bàn phím bật */
             .move-modal-overlay,
             .result-fullscreen-modal,
             .visit-stats-modal-overlay,
             .dantri-article-modal,
-            .tuluan-lightbox-overlay {
+            .tuluan-lightbox-overlay,
+            .qbank-modal-overlay {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 background: rgba(15, 23, 42, 0.95) !important;
@@ -204,11 +204,12 @@
             .student-login-box,
             .auth-container,
             .admin-popover-panel,
-            .tuluan-modal-card {
+            .tuluan-modal-card,
+            .qbank-modal-container {
                 backdrop-filter: none !important;
                 -webkit-backdrop-filter: none !important;
                 background: #ffffff !important;
-                transform: translateZ(0); /* Kích hoạt tăng tốc phần cứng */
+                transform: translateZ(0); 
             }
         }
     </style>
@@ -262,6 +263,9 @@
     <script src="portal-ui-article.js"></script>
     <script src="portal-exam-printer.js"></script>
     <script src="portal-soi-de.js"></script>
+
+    <!-- JS NGÂN HÀNG ĐỀ MỚI -->
+    <script src="ngan-hang-de.js"></script>
 </head>
 <body>
 
@@ -309,6 +313,21 @@
                 <button class="auth-btn" onclick="checkAdminPassword()">VÀO</button>
             </div>
             
+            <!-- NÚT MỚI: TẠO CÂU HỎI VÀ TRÍCH ĐỀ -->
+            <div class="qbank-dropdown-wrapper" style="position:relative; z-index:99999;">
+                <button type="button" class="qbank-trigger-btn" id="qbank-btn" onclick="toggleQbankMenu(event)" title="Tạo câu hỏi & Trích đề">
+                    📚
+                </button>
+                <div class="qbank-dropdown" id="qbank-dropdown-menu">
+                    <div class="qbank-dropdown-item" onclick="openQbankCreatorModal()">
+                        <span>📥</span> <div>Tạo câu hỏi từ file JSON<br><small style="color:#64748b;font-size:10px;font-weight:600;">Soạn thảo, phân loại ma trận</small></div>
+                    </div>
+                    <div class="qbank-dropdown-item" onclick="openSavedExamsModal()">
+                        <span>🏦</span> <div>Ngân hàng đề (Đã lưu)<br><small style="color:#64748b;font-size:10px;font-weight:600;">Quản lý và chuyển đề sang lớp</small></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="admin-gear-btn" id="gear-btn" onclick="toggleAdminPanel(event)" title="Quản trị viên">⚙️</div>
 
             <div class="admin-popover-panel" id="admin-popover-panel">
@@ -694,17 +713,14 @@
                 🟢 Auto: BẬT
             </button>
 
-            <!-- ĐÃ FIX CHỮ ĐỂ TRÁNH LỖI CẬP NHẬT KÉP -->
             <button class="btn-refresh-result" onclick="refreshCurrentExamResults()" title="Tải lại dữ liệu mới nhất"></button>
             
-            <!-- ĐÃ ĐỔI TÊN NÚT NGẮN HƠN ĐỂ CHỐNG TRÀN DÒNG -->
             <button type="button" class="btn-auto-collect-drafts" id="btn-auto-collect-drafts" onclick="triggerAutoCollectDrafts(event)" 
                 title="Tự động thu bài và chấm điểm từ bản lưu nháp Realtime cho các em học sinh quên nộp hoặc gặp sự cố mạng">
                 ⚡ Thu tự động
             </button>
 
             <div class="regrade-action-wrapper" style="position: relative; display: inline-block;">
-                <!-- ĐÃ ĐỔI TÊN NÚT NGẮN HƠN ĐỂ CHỐNG TRÀN DÒNG -->
                 <button type="button" class="btn-regrade-exam" id="btn-regrade-exam" onclick="openRegradeModal(event)" title="Tải file đáp án đã sửa để chấm lại toàn bộ bài thi">
                     ⚖️ Chấm lại ▾
                 </button>
@@ -726,13 +742,11 @@
                 </div>
             </div>
 
-            <!-- ĐÃ ĐỔI TÊN NÚT NGẮN HƠN ĐỂ CHỐNG TRÀN DÒNG -->
             <button type="button" class="btn-upload-json-backup" id="btn-upload-json-backup" onclick="triggerUploadBackupJson(event)" title="Nạp bài thi từ file JSON lưu dự phòng khi học sinh bị mất mạng không nộp được">
                 📥 Nạp JSON
             </button>
             <input type="file" id="input-upload-backup-json" accept=".json,application/json" style="display: none;" onchange="handleBackupJsonFileInput(this)">
 
-            <!-- ĐÃ ĐỔI TÊN NÚT NGẮN HƠN ĐỂ CHỐNG TRÀN DÒNG -->
             <button class="btn-export-excel" onclick="exportResultsToExcel()" title="Tải file Excel (.xlsx)">📥 Excel</button>
             
             <div class="table-settings-wrapper" id="table-settings-wrapper">
@@ -1197,6 +1211,95 @@
         </div>
     </div>
 </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL 1: TẠO CÂU HỎI VÀ TRÍCH ĐỀ (3 CỘT) -->
+    <!-- ============================================== -->
+    <div class="qbank-modal-overlay" id="modal-qbank-creator">
+        <div class="qbank-modal-container">
+            <div class="qbank-header">
+                <div style="font-size:16px; font-weight:900; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:24px;">📚</span> <span>HỆ THỐNG BIÊN SOẠN & TẠO MA TRẬN ĐỀ</span>
+                </div>
+                <button onclick="closeQbankCreatorModal()" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer; padding:0 10px;">✕</button>
+            </div>
+
+            <div class="qbank-body-3cols">
+                <!-- CỘT 1: TREE FOLDER -->
+                <div class="qbank-col-left">
+                    <div class="qbank-storage-toggle">
+                        <b style="font-size:12px; color:#1e293b;">Nơi Lưu trữ dữ liệu:</b>
+                        <select onchange="toggleStorageLocation(this)">
+                            <option value="supabase">1. Máy chủ Supabase (Nhanh, Mặc định)</option>
+                            <option value="drive">2. Đồng bộ Google Drive 5TB (Qua GAS)</option>
+                        </select>
+                    </div>
+                    <div class="qbank-tree-container" id="qbank-tree-root">
+                        <!-- JS Render Tree (Lùi cấp) -->
+                    </div>
+                </div>
+
+                <!-- CỘT 2: QUESTIONS & DRAG/DROP -->
+                <div class="qbank-col-mid">
+                    <div class="qbank-stats-bar">
+                        <div class="qbank-tools-row">
+                            <button class="btn-qbank btn-qbank-primary" onclick="triggerQbankUpload()">📥 Upload file JSON đề</button>
+                            <button class="btn-qbank btn-qbank-success" onclick="autoSortQuestionsToSelectedFolder()">➡️ Xếp câu hỏi vào mục tương ứng</button>
+                        </div>
+                        <div class="qbank-matrix-stats" id="qbank-matrix-bar">
+                            <!-- JS Render Matrix Stats -->
+                            <span style="color:#64748b; font-style:italic;">Upload đề để xem ma trận thống kê 4 mức độ</span>
+                        </div>
+                    </div>
+                    <div class="qbank-questions-list" id="qbank-questions-list">
+                        <!-- JS Render Question Cards -->
+                    </div>
+                </div>
+
+                <!-- CỘT 3: EXAM BUILDER -->
+                <div class="qbank-col-right">
+                    <h3 style="color:#0f172a; font-size:15px; font-weight:900; margin-bottom:16px; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">🛠️ TRÍCH XUẤT TỪ NGÂN HÀNG</h3>
+                    
+                    <div class="qbank-exam-builder-form">
+                        <label>Tên đề thi mới:</label>
+                        <input type="text" id="qbank-exam-name" placeholder="VD: Đề thi Giữa kỳ 1 Toán 11...">
+                        
+                        <label>Khối lớp (Folder Google Drive):</label>
+                        <select id="qbank-exam-grade">
+                            <option value="Lop_10">Khối Lớp 10</option>
+                            <option value="Lop_11" selected>Khối Lớp 11</option>
+                            <option value="Lop_12">Khối Lớp 12</option>
+                        </select>
+                    </div>
+
+                    <div class="qbank-selected-stats" id="qbank-builder-stats">
+                        <p style="color:#64748b;">Tích chọn câu hỏi (☑️) ở cột giữa để xem thống kê ma trận trích xuất tại đây.</p>
+                    </div>
+
+                    <button class="btn-qbank btn-qbank-warning" id="btn-save-extracted-exam" onclick="saveExtractedExamToBank()" style="padding:14px; font-size:14px; width:100%; justify-content:center;">
+                        💾 Lưu đề vào Ngân hàng
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL 2: NGÂN HÀNG ĐỀ ĐÃ LƯU -->
+    <!-- ============================================== -->
+    <div class="qbank-modal-overlay" id="modal-qbank-saved">
+        <div class="qbank-modal-container" style="width: 850px; height: 85vh; max-width:95vw;">
+            <div class="qbank-header">
+                <div style="font-size:16px; font-weight:900; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:22px;">🏦</span> <span>NGÂN HÀNG ĐỀ (ĐÃ LƯU)</span>
+                </div>
+                <button onclick="closeSavedExamsModal()" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer; padding:0 10px;">✕</button>
+            </div>
+            <div class="saved-exams-list" id="qbank-saved-list">
+                <!-- JS Render Saved Exams from Supabase -->
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>
