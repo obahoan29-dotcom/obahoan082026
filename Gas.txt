@@ -1,0 +1,681 @@
+// =============================================================================
+// MÁY CHỦ GOOGLE APPS SCRIPT - BẢN ĐIỀU HÀNH CHUẨN 8 LỚP & CHỐNG NGHẼN HÀNG ĐỢI
+// TỐI ƯU TỐC ĐỘ XỬ LÝ (SUB-SECOND), HỖ TRỢ XUẤT SHEET THU TẠM & FILE JSON NHÁP
+// TÍCH HỢP HỆ THỐNG LƯU TRỮ NGÂN HÀNG CÂU HỎI (QUESTION BANK) ĐA CẤP
+// =============================================================================
+// CẤU TRÚC LƯU TRỮ CHUẨN TRÊN GOOGLE DRIVE:
+// FILE_SHEET_AND_JSON_DU_PHONG
+//   └── <ĐÚNG 1 TRONG 8 LỚP: Thêm 10, Thêm 11, Thêm 12, Lớp 11A, Lớp 11C, Lớp 11E, Lớp 10P, HSG Toán 11>
+//         └── <Tên đề thi chính xác 100%>
+//               ├── <SBD>_<Họ và tên>.json (GHI ĐÈ BẢN MỚI NHẤT, KHÔNG SINH ĐUÔI (1))
+//               ├── tam_<SBD>_<Họ và tên>.json (XUẤT KHI THU BÀI TẠM THỜI)
+//               ├── file điểm thi cuối_<Tên đề>_sheet (UPSERT ĐIỂM CHÍNH THỨC)
+//               └── file điểm thi thu tạm_<Tên đề>_sheet (UPSERT ĐIỂM TẠM TÍNH)
+// =============================================================================
+
+const ROOT_BACKUP_FOLDER_NAME = "FILE_SHEET_AND_JSON_DU_PHONG";
+const ROOT_TULUAN_FOLDER_NAME = "BAI_TAP_TU_LUAN";
+const ROOT_DOCS_FOLDER_NAME   = "KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO";
+
+// DANH SÁCH 8 LỚP CHUẨN ĐƯỢC PHÉP LƯU TRỮ
+const ALLOWED_8_CLASSES = [
+  "Thêm 10",
+  "Thêm 11",
+  "Thêm 12",
+  "Lớp 11A",
+  "Lớp 11C",
+  "Lớp 11E",
+  "Lớp 10P",
+  "HSG Toán 11"
+];
+
+// =============================================================================
+// 1. KIỂM TRA TRẠNG THÁI MÁY CHỦ (GET)
+// =============================================================================
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "online",
+    message: "Máy chủ Google Apps Script Drive 5TB đang vận hành chuẩn hóa 8 lớp & hàng đợi LockService an toàn 100%!",
+    rootFolder: ROOT_BACKUP_FOLDER_NAME,
+    allowedClasses: ALLOWED_8_CLASSES,
+    timestamp: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// =============================================================================
+// 2. TIẾP NHẬN YÊU CẦU NỘP BÀI, SAO LƯU VÀ QUẢN LÝ TỆP (POST)
+// =============================================================================
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  var hasLock = false;
+
+  try {
+    // Chờ khóa tối đa 45 giây để đảm bảo không rớt thí sinh nộp sau
+    hasLock = lock.tryLock(45000);
+  } catch (eLock) {
+    hasLock = false;
+  }
+
+  if (!hasLock) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "busy",
+      message: "Máy chủ đang xử lý lượt nộp khác, hệ thống sẽ tự động thử lại ngay..."
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      throw new Error("Không nhận được dữ liệu tải lên.");
+    }
+
+    var rawData = e.postData.contents;
+    var data = JSON.parse(rawData);
+    var action = data.action || "";
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 1: NỘP BÀI CHÍNH THỨC (XUẤT FILE JSON GHI ĐÈ & GHI SHEET ĐIỂM CUỐI)
+    // -------------------------------------------------------------------------
+    if (action === "saveSubmissionJsonFile" || action === "backupSubmissionRecord") {
+      var sub = data.submission || {};
+      var sbd = String(sub.sbd || data.sbd || "").trim();
+      var studentName = String(sub.student_name || data.student_name || sub.name || data.name || "").trim();
+
+      if (!sbd && !studentName) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ignored",
+          message: "Bỏ qua: Không có thông tin thí sinh."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // 1. Chuẩn hóa tên lớp về ĐÚNG 1 TRONG 8 LỚP (Ưu tiên SBD số 1)
+      var rawClass = data.className || data.class || data.lop || sub.class_name || sub.className || sub.studentClass || sub.category_id || "";
+      var className = standardizeClassName(rawClass, sbd);
+
+      // 2. Trích xuất tên đề thi chính xác
+      var rawExamTitle = data.examTitle || data.folderKey || data.title || sub.exam_title || sub.examTitle || sub.title || "";
+      var examTitle = sanitizeExamTitle(rawExamTitle);
+
+      if (!examTitle || examTitle === "De_Thi" || examTitle === "Bai_Tap") {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ignored",
+          message: "Bỏ qua: Thiếu tên đề thi thực tế."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      // 3. Khởi tạo cây thư mục bằng bộ nhớ đệm tăng tốc
+      var rootFolder = getCachedFolderExact(DriveApp.getRootFolder(), ROOT_BACKUP_FOLDER_NAME, "ROOT_BACKUP");
+      var classFolder = getCachedFolderExact(rootFolder, className, "CLASS_" + className);
+      var examFolder = getCachedFolderExact(classFolder, examTitle, "EXAM_" + className + "_" + examTitle);
+
+      // 4. Lưu File JSON chính thức: <SBD>_<Họ và tên>.json (GHI ĐÈ BẢN MỚI NHẤT)
+      var jsonFileName = cleanFilePartName(sbd) + "_" + cleanFilePartName(studentName) + ".json";
+      var jsonContent = "";
+      if (data.base64) {
+        var cleanB64 = String(data.base64).replace(/\s+/g, '');
+        if (cleanB64.indexOf("base64,") !== -1) cleanB64 = cleanB64.split("base64,")[1];
+        var decodedBytes = Utilities.base64Decode(cleanB64, Utilities.Charset.UTF_8);
+        jsonContent = Utilities.newBlob(decodedBytes, "application/json").getDataAsString("UTF-8");
+      } else {
+        jsonContent = JSON.stringify(sub, null, 2);
+      }
+
+      var savedJsonFile = saveOrOverwriteJsonFile(examFolder, jsonFileName, jsonContent);
+
+      // 5. Ghi điểm vào Sheet CHÍNH THỨC: "file điểm thi cuối_<Tên đề>_sheet"
+      try {
+        var finalSheetName = "file điểm thi cuối_" + examTitle + "_sheet";
+        recordSubmissionToTargetSheet(examFolder, finalSheetName, className, sub, false);
+      } catch (sheetErr) {
+        Logger.log("Lỗi ghi Sheet cuối: " + sheetErr);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Đã lưu đè JSON mới nhất và ghi file điểm thi cuối thành công!",
+        className: className,
+        folderUrl: examFolder.getUrl(),
+        fileUrl: savedJsonFile ? savedJsonFile.getUrl() : ""
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 2: KHI BẤM NÚT "THU TẠM" (XUẤT SHEET THU TẠM & LƯU FILE JSON NHÁP)
+    // -------------------------------------------------------------------------
+    if (action === "saveLiveDraftToSheet" || action === "autoSaveDraftRecord") {
+      var draft = data.draft || data.submission || {};
+      var sbdDraft = String(draft.sbd || data.sbd || "").trim();
+      var studentNameDraft = String(draft.student_name || data.student_name || draft.name || data.name || "").trim();
+
+      if (!sbdDraft && !studentNameDraft) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ignored",
+          message: "Bỏ qua: Bản nháp thiếu thông tin thí sinh."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var rawClassDraft = data.className || data.class || draft.class_name || draft.className || draft.category_id || "";
+      var classDraftName = standardizeClassName(rawClassDraft, sbdDraft);
+
+      var rawExamDraft = data.examTitle || data.title || draft.exam_title || draft.examTitle || "";
+      var examDraftTitle = sanitizeExamTitle(rawExamDraft);
+
+      if (!examDraftTitle) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ignored",
+          message: "Bỏ qua: Thiếu tên đề thi cho bản nháp."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var rootF = getCachedFolderExact(DriveApp.getRootFolder(), ROOT_BACKUP_FOLDER_NAME, "ROOT_BACKUP");
+      var classF = getCachedFolderExact(rootF, classDraftName, "CLASS_" + classDraftName);
+      var examF = getCachedFolderExact(classF, examDraftTitle, "EXAM_" + classDraftName + "_" + examDraftTitle);
+
+      // 1. Tự động lưu file JSON nháp: tam_<SBD>_<Họ_Tên>.json (ghi đè theo SBD)
+      var savedDraftFileUrl = "";
+      try {
+        var draftJsonName = "tam_" + cleanFilePartName(sbdDraft) + "_" + cleanFilePartName(studentNameDraft) + ".json";
+        var draftContent = JSON.stringify(draft, null, 2);
+        var draftFile = saveOrOverwriteJsonFile(examF, draftJsonName, draftContent);
+        if (draftFile) savedDraftFileUrl = draftFile.getUrl();
+      } catch(eJson) {}
+
+      // 2. Ghi điểm vào Sheet thu tạm: "file điểm thi thu tạm_<Tên đề>_sheet"
+      var tempSheetName = "file điểm thi thu tạm_" + examDraftTitle + "_sheet";
+      recordSubmissionToTargetSheet(examF, tempSheetName, classDraftName, draft, true);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        className: classDraftName,
+        message: "Đã xuất kết quả thu tạm vào Sheet và lưu file JSON nháp thành công!",
+        fileUrl: savedDraftFileUrl
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 3: TẠO SẴN THƯ MỤC ĐỀ THI
+    // -------------------------------------------------------------------------
+    if (action === "createExamFolders") {
+      var rawClassC = data.className || data.class || data.lop || "";
+      var rawExamC = data.examTitle || data.folderKey || data.title || "";
+      var classFolderC = standardizeClassName(rawClassC, data.sbd || "");
+      var examTitleC = sanitizeExamTitle(rawExamC);
+
+      if (!classFolderC || !examTitleC) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ignored",
+          message: "Bỏ qua: Thiếu tên lớp hoặc tên đề thi hợp lệ."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var rootFolderD = getCachedFolderExact(DriveApp.getRootFolder(), ROOT_BACKUP_FOLDER_NAME, "ROOT_BACKUP");
+      var classFolderD = getCachedFolderExact(rootFolderD, classFolderC, "CLASS_" + classFolderC);
+      var examFolderD = getCachedFolderExact(classFolderD, examTitleC, "EXAM_" + classFolderC + "_" + examTitleC);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        className: classFolderC,
+        folderUrl: examFolderD.getUrl()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 4: TẢI LÊN FILE ĐÁP ÁN CHẤM TỰ LUẬN
+    // -------------------------------------------------------------------------
+    if (action === "uploadDapAnCham") {
+      var rootFolderDoc = getOrCreateFolderExact(DriveApp.getRootFolder(), ROOT_DOCS_FOLDER_NAME);
+      var targetFolder = getOrCreateFolderExact(rootFolderDoc, "Dap_an_cham_tu_luan");
+
+      var fileName = sanitizeExamTitle(data.filename || ("DapAn_" + Date.now()));
+      var mimeType = data.mimeType || "application/octet-stream";
+      var rawB64 = String(data.base64 || "").replace(/\s+/g, '');
+      if (rawB64.indexOf("base64,") !== -1) rawB64 = rawB64.split("base64,")[1];
+      var decodedBytes = Utilities.base64Decode(rawB64);
+
+      deleteFilesMatchingName(targetFolder, fileName);
+
+      var file = targetFolder.createFile(Utilities.newBlob(decodedBytes, mimeType, fileName));
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        fileUrl: file.getUrl(),
+        fileId: file.getId(),
+        directUrl: "https://lh3.googleusercontent.com/d/" + file.getId()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 5: TẢI ẢNH BÀI LÀM TỰ LUẬN CỦA HỌC SINH
+    // -------------------------------------------------------------------------
+    if (data.studentFolder && data.base64) {
+      var rootFolderTL = getOrCreateFolderExact(DriveApp.getRootFolder(), ROOT_TULUAN_FOLDER_NAME);
+      var classTLName = standardizeClassName(data.className || data.class || data.lop || "lop-11a", data.sbd || "");
+      var examTLName = sanitizeExamTitle(data.examTitle || data.folderKey || "Bai_Tap");
+
+      var classFolderTL = getOrCreateFolderExact(rootFolderTL, classTLName);
+      var examFolderTL = getOrCreateFolderExact(classFolderTL, examTLName);
+      var studentFolderTL = getOrCreateFolderExact(examFolderTL, sanitizeExamTitle(data.studentFolder));
+
+      var fileNameTL = sanitizeExamTitle(data.filename || ("Trang_" + Date.now() + ".jpg"));
+      deleteFilesMatchingName(studentFolderTL, fileNameTL);
+
+      var cleanB64TL = String(data.base64).replace(/\s+/g, '');
+      if (cleanB64TL.indexOf("base64,") !== -1) cleanB64TL = cleanB64TL.split("base64,")[1];
+      var decodedBytesTL = Utilities.base64Decode(cleanB64TL);
+      var blobTL = Utilities.newBlob(decodedBytesTL, data.mimeType || "image/jpeg", fileNameTL);
+      var fileTL = studentFolderTL.createFile(blobTL);
+      fileTL.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        className: classTLName,
+        fileUrl: fileTL.getUrl(),
+        fileId: fileTL.getId(),
+        directUrl: "https://lh3.googleusercontent.com/d/" + fileTL.getId()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 6: TẢI TỆP TÀI LIỆU CHUNG (PDF / WORD / EXCEL / ẢNH) VÀO KHO
+    // -------------------------------------------------------------------------
+    if (action === "uploadFile" || action === "uploadDocument" || (data.base64 && data.filename && !data.studentFolder)) {
+      var rootFolderDocs = getOrCreateFolderExact(DriveApp.getRootFolder(), ROOT_DOCS_FOLDER_NAME);
+      var targetFolderDoc = rootFolderDocs;
+      var rawFolderTarget = data.folderName || data.className || data.class || "";
+      if (rawFolderTarget) {
+        targetFolderDoc = getOrCreateFolderExact(rootFolderDocs, sanitizeExamTitle(rawFolderTarget));
+      }
+
+      var docFileName = sanitizeExamTitle(data.filename || ("Tep_" + Date.now()));
+      var docMimeType = data.mimeType || "application/octet-stream";
+      var rawB64Doc = String(data.base64 || "").replace(/\s+/g, '');
+      if (rawB64Doc.indexOf("base64,") !== -1) rawB64Doc = rawB64Doc.split("base64,")[1];
+      var decodedDocBytes = Utilities.base64Decode(rawB64Doc);
+
+      var newDocFile = targetFolderDoc.createFile(Utilities.newBlob(decodedDocBytes, docMimeType, docFileName));
+      newDocFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        fileUrl: newDocFile.getUrl(),
+        fileId: newDocFile.getId(),
+        directUrl: "https://lh3.googleusercontent.com/d/" + newDocFile.getId()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 7: XÓA FILE THEO ID
+    // -------------------------------------------------------------------------
+    if (action === "deleteFile" && data.fileId) {
+      try {
+        DriveApp.getFileById(data.fileId).setTrashed(true);
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          message: "Đã xóa file thành công."
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (delErr) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ignored",
+          message: delErr.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 8 (MỚI TÍNH): LƯU TRỮ VÀO NGÂN HÀNG CÂU HỎI TRÊN DRIVE (QUESTION BANK)
+    // -------------------------------------------------------------------------
+    if (action === "saveQuestionBankData") {
+      try {
+        var pathString = data.path; // VD: KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO/Kho_ngan_hang_cau_hoi/Lop_11/Chuong_1...
+        var filename = data.filename;
+        var pathFolders = pathString.split("/");
+
+        var currentFolder = DriveApp.getRootFolder();
+
+        // Đệ quy trèo theo nhánh cây thư mục, chưa có thì tạo mới
+        for (var i = 0; i < pathFolders.length; i++) {
+            var folderName = String(pathFolders[i]).trim();
+            if (!folderName) continue;
+
+            var folders = currentFolder.getFoldersByName(folderName);
+            if (folders.hasNext()) {
+                currentFolder = folders.next();
+            } else {
+                currentFolder = currentFolder.createFolder(folderName);
+            }
+        }
+
+        // Tạo File JSON trong thư mục đích
+        var jsonContent = JSON.stringify(data.data, null, 2);
+
+        // Xoá file cũ nếu trùng tên (ghi đè bằng hàm hỗ trợ tiện ích có sẵn)
+        deleteFilesMatchingName(currentFolder, filename);
+
+        var file = currentFolder.createFile(filename, jsonContent, MimeType.PLAIN_TEXT);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        return ContentService.createTextOutput(JSON.stringify({
+            status: "success",
+            fileUrl: file.getUrl(),
+            message: "Lưu Ngân hàng câu hỏi vào Google Drive thành công!"
+        })).setMimeType(ContentService.MimeType.JSON);
+
+      } catch (err) {
+        return ContentService.createTextOutput(JSON.stringify({
+            status: "error",
+            message: "Lỗi tạo thư mục/file GAS (Question Bank): " + err.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "ignored",
+      message: "Không có tác vụ phù hợp."
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (eLock) {}
+  }
+}
+
+// =============================================================================
+// CÁC HÀM XỬ LÝ CHUẨN HÓA 8 LỚP & BỘ NHỚ ĐỆM TỐI ƯU TỐC ĐỘ
+// =============================================================================
+
+function standardizeClassName(rawClass, sbd) {
+  var sbdClean = String(sbd || "").toLowerCase().trim();
+  var classStr = String(rawClass || "").toLowerCase().trim();
+
+  // 1. Ưu tiên số 1: Nhận diện theo định dạng SBD 4 chữ số (Lớp dạy thêm)
+  if (/^11\d{2}$/.test(sbdClean)) return "Thêm 11";
+  if (/^10\d{2}$/.test(sbdClean)) return "Thêm 10";
+  if (/^12\d{2}$/.test(sbdClean)) return "Thêm 12";
+
+  // 2. Ưu tiên số 2: SBD bắt đầu bằng tiền tố lớp chính khóa hoặc đội tuyển HSG
+  if (sbdClean.indexOf("hsg") === 0) return "HSG Toán 11";
+  if (sbdClean.indexOf("11a") === 0) return "Lớp 11A";
+  if (sbdClean.indexOf("11c") === 0) return "Lớp 11C";
+  if (sbdClean.indexOf("11e") === 0) return "Lớp 11E";
+  if (sbdClean.indexOf("10p") === 0) return "Lớp 10P";
+
+  // 3. Xét theo tên lớp hoặc mã danh mục nhập vào
+  if (classStr.indexOf("hsg") !== -1) return "HSG Toán 11";
+  if (classStr.indexOf("them-11") !== -1 || classStr.indexOf("thêm 11") !== -1 || classStr.indexOf("them 11") !== -1) return "Thêm 11";
+  if (classStr.indexOf("them-10") !== -1 || classStr.indexOf("thêm 10") !== -1 || classStr.indexOf("them 10") !== -1) return "Thêm 10";
+  if (classStr.indexOf("them-12") !== -1 || classStr.indexOf("thêm 12") !== -1 || classStr.indexOf("them 12") !== -1) return "Thêm 12";
+
+  if (classStr.indexOf("11a") !== -1) return "Lớp 11A";
+  if (classStr.indexOf("11c") !== -1) return "Lớp 11C";
+  if (classStr.indexOf("11e") !== -1) return "Lớp 11E";
+  if (classStr.indexOf("10p") !== -1) return "Lớp 10P";
+
+  return "Thêm 11";
+}
+
+function getCachedFolderExact(parentFolder, folderName, cacheKey) {
+  var cache = CacheService.getScriptCache();
+  var cleanKey = "FLD_" + parentFolder.getId().substring(0, 10) + "_" + cacheKey.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 60);
+  var cachedId = cache.get(cleanKey);
+
+  if (cachedId) {
+    try {
+      var folder = DriveApp.getFolderById(cachedId);
+      if (folder && !folder.isTrashed()) return folder;
+    } catch (eCache) {}
+  }
+
+  var folderExact = getOrCreateFolderExact(parentFolder, folderName);
+  try {
+    cache.put(cleanKey, folderExact.getId(), 21600); // Lưu 6 tiếng
+  } catch (ePut) {}
+
+  return folderExact;
+}
+
+function getOrCreateFolderExact(parentFolder, exactFolderName) {
+  var name = String(exactFolderName || "").trim();
+  var folders = parentFolder.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return parentFolder.createFolder(name);
+}
+
+// LƯU ĐÈ FILE NHANH CHÓNG (KHÔNG QUÉT DUYỆT THỪA - THỜI GIAN < 0.6 GIÂY)
+function saveOrOverwriteJsonFile(folder, fileName, jsonString) {
+  var files = folder.getFilesByName(fileName);
+  var targetFile = null;
+
+  if (files.hasNext()) {
+    targetFile = files.next();
+    targetFile.setContent(jsonString); // Ghi đè trực tiếp
+    
+    // Dọn các file trùng tên (nếu có)
+    while (files.hasNext()) {
+      try { files.next().setTrashed(true); } catch (eT) {}
+    }
+  } else {
+    targetFile = folder.createFile(fileName, jsonString, "application/json");
+  }
+
+  // Dọn nhanh các file bị Drive tạo hậu tố (1), (2) bằng lệnh tìm kiếm đích danh
+  try {
+    var baseName = fileName.replace(/\.json$/i, "");
+    var dup1 = folder.getFilesByName(baseName + " (1).json");
+    while (dup1.hasNext()) { try { dup1.next().setTrashed(true); } catch(e1) {} }
+    var dup2 = folder.getFilesByName(baseName + " (2).json");
+    while (dup2.hasNext()) { try { dup2.next().setTrashed(true); } catch(e2) {} }
+  } catch(eClean) {}
+
+  return targetFile;
+}
+
+function deleteFilesMatchingName(folder, fileName) {
+  var files = folder.getFilesByName(fileName);
+  while (files.hasNext()) {
+    try { files.next().setTrashed(true); } catch (eDel) {}
+  }
+}
+
+// GHI HOẶC CẬP NHẬT DÒNG ĐIỂM VÀO SHEET (UPSERT THEO SBD)
+function recordSubmissionToTargetSheet(folder, sheetTitle, className, sub, isTempDraft) {
+  if (!sub || (!sub.sbd && !sub.student_name)) return;
+
+  var cache = CacheService.getScriptCache();
+  var sheetCacheKey = "SHT_" + folder.getId().substring(0, 10) + "_" + (isTempDraft ? "TEMP" : "FINAL");
+  var cachedSheetId = cache.get(sheetCacheKey);
+  var spreadsheet = null;
+
+  if (cachedSheetId) {
+    try {
+      spreadsheet = SpreadsheetApp.openById(cachedSheetId);
+    } catch (eOpen) {}
+  }
+
+  if (!spreadsheet) {
+    var files = folder.getFilesByName(sheetTitle);
+    if (files.hasNext()) {
+      spreadsheet = SpreadsheetApp.open(files.next());
+    } else {
+      spreadsheet = SpreadsheetApp.create(sheetTitle);
+      var sheetFile = DriveApp.getFileById(spreadsheet.getId());
+      sheetFile.moveTo(folder);
+
+      var sheet = spreadsheet.getActiveSheet();
+      sheet.setName("KetQua");
+
+      var headers = isTempDraft ? [
+        "Thời gian cập nhật nháp",
+        "Lớp",
+        "Số báo danh",
+        "Họ và tên học sinh",
+        "Điểm tạm tính",
+        "Số câu đã chọn",
+        "Thời gian làm",
+        "Số lần chuyển tab",
+        "Chi tiết phương án đã chọn"
+      ] : [
+        "Thời gian nộp chính thức",
+        "Lớp",
+        "Số báo danh",
+        "Họ và tên học sinh",
+        "Điểm thang 10",
+        "Điểm gốc",
+        "Số câu đúng",
+        "Số câu sai",
+        "Thời gian làm",
+        "Số lần chuyển tab",
+        "Chi tiết phương án đã chọn"
+      ];
+
+      sheet.appendRow(headers);
+      var headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange.setBackground(isTempDraft ? "#0d9488" : "#0284c7");
+      headerRange.setFontColor("#ffffff");
+      headerRange.setFontWeight("bold");
+      headerRange.setHorizontalAlignment("center");
+      sheet.setFrozenRows(1);
+    }
+
+    try {
+      cache.put(sheetCacheKey, spreadsheet.getId(), 21600);
+    } catch (eC) {}
+  }
+
+  var activeSheet = spreadsheet.getSheetByName("KetQua") || spreadsheet.getActiveSheet();
+  var nowStr = Utilities.formatDate(new Date(), "GMT+7", "HH:mm:ss dd/MM/yyyy");
+  var sbd = String(sub.sbd || "").trim();
+  var name = String(sub.student_name || sub.name || "").trim();
+  var compTime = sub.completion_time || (sub.spent_mins ? (sub.spent_mins + " phút") : "");
+  var tabSwitch = sub.tab_switch_count || "0 lần";
+
+  var dataStr = sub.data_string || "";
+  if (!dataStr && sub.user_answers && typeof sub.user_answers === "object") {
+    var arrAns = [];
+    for (var k in sub.user_answers) {
+      arrAns.push(k + ":" + sub.user_answers[k]);
+    }
+    dataStr = arrAns.join(" | ");
+  }
+
+  var rowData = [];
+  if (isTempDraft) {
+    var answeredCount = 0;
+    if (sub.user_answers && typeof sub.user_answers === "object") {
+      answeredCount = Object.keys(sub.user_answers).length;
+    }
+    
+    var tempScore = "Đang làm...";
+    if (sub.score10 !== undefined && sub.score10 !== null && sub.score10 !== "") {
+      var correctTxt = (sub.correct_count !== undefined) ? (" (" + sub.correct_count + " đúng)") : "";
+      tempScore = sub.score10 + " đ" + correctTxt;
+    }
+
+    rowData = [
+      nowStr,
+      className,
+      sbd,
+      name,
+      tempScore,
+      answeredCount + " câu",
+      compTime,
+      tabSwitch,
+      dataStr
+    ];
+  } else {
+    var score10 = (sub.score10 !== undefined) ? sub.score10 : "";
+    var rawScore = (sub.raw_score !== undefined) ? sub.raw_score : "";
+    var correct = (sub.correct_count !== undefined) ? sub.correct_count : "";
+    var wrong = (sub.wrong_count !== undefined) ? sub.wrong_count : "";
+    rowData = [
+      nowStr,
+      className,
+      sbd,
+      name,
+      score10,
+      rawScore,
+      correct,
+      wrong,
+      compTime,
+      tabSwitch,
+      dataStr
+    ];
+  }
+
+  var lastRow = activeSheet.getLastRow();
+  var targetRowIndex = -1;
+
+  if (lastRow > 1) {
+    var sbdColumnValues = activeSheet.getRange(2, 3, lastRow - 1, 1).getValues();
+    for (var i = 0; i < sbdColumnValues.length; i++) {
+      var existingSbd = String(sbdColumnValues[i][0]).trim().toLowerCase();
+      if (existingSbd === sbd.toLowerCase()) {
+        targetRowIndex = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (targetRowIndex !== -1) {
+    activeSheet.getRange(targetRowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    activeSheet.appendRow(rowData);
+  }
+
+  SpreadsheetApp.flush();
+}
+
+function sanitizeExamTitle(titleStr) {
+  if (!titleStr) return "Đề thi";
+  return String(titleStr)
+    .trim()
+    .replace(/[\\\/\:\*\?\"<>\|]/g, "-")
+    .replace(/\s+/g, " ");
+}
+
+function cleanFilePartName(str) {
+  if (!str) return "";
+  return String(str)
+    .trim()
+    .replace(/[\\\/\:\*\?\"<>\|]/g, "_")
+    .replace(/\s+/g, "_");
+}
+
+function manualTriggerFullDriveCleanup() {
+  Logger.log("🚀 Bắt đầu quét và gộp thư mục trên Drive...");
+  var rootFolders = DriveApp.getFoldersByName(ROOT_BACKUP_FOLDER_NAME);
+  while (rootFolders.hasNext()) {
+    var rf = rootFolders.next();
+    var subF = rf.getFolders();
+    var list = [];
+    while (subF.hasNext()) list.push(subF.next());
+    for (var i = 0; i < list.length; i++) {
+      var curF = list[i];
+      var stdName = standardizeClassName(curF.getName(), "");
+      if (curF.getName().trim() !== stdName) {
+        var targetF = getOrCreateFolderExact(rf, stdName);
+        var inF = curF.getFolders();
+        while (inF.hasNext()) {
+          var inf = inF.next();
+          try {
+            var destSub = getOrCreateFolderExact(targetF, inf.getName());
+            var infFiles = inf.getFiles();
+            while (infFiles.hasNext()) infFiles.next().moveTo(destSub);
+            inf.setTrashed(true);
+          } catch(e) {}
+        }
+        var inFiles = curF.getFiles();
+        while (inFiles.hasNext()) inFiles.next().moveTo(targetF);
+        curF.setTrashed(true);
+      }
+    }
+  }
+  Logger.log("✅ Hoàn tất!");
+}
