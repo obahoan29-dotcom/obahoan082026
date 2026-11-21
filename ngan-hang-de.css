@@ -1,7 +1,8 @@
 /* =========================================================
    FILE: ngan-hang-de.css
    GIAO DIỆN NÚT TRIGGER, DROPDOWN & MA TRẬN 3 CỘT CO GIÃN (HOÀN CHỈNH 100%)
-   ĐÃ BỔ SUNG: CHỈ ADMIN MỚI HIỆN NÚT, PHÂN TẦNG CÂU ĐÃ XẾP / CHƯA XẾP & NÚT BỎ XẾP
+   ĐÃ BỔ SUNG: CHỈ ADMIN MỚI HIỆN NÚT, PHÂN TẦNG CÂU ĐÃ XẾP / CHƯA XẾP,
+   NÚT BỎ XẾP & CHẾ ĐỘ SỬA ĐỀ CHIA ĐÔI MÀN HÌNH NGAY TRONG CỘT GIỮA
 ========================================================= */
 
 /* =========================================
@@ -520,6 +521,19 @@
     align-items: center; 
 }
 
+/* NÚT SỬA ĐỀ CHIA ĐÔI NGAY TRONG CỘT GIỮA */
+.btn-qbank-edit-mid {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+    color: #ffffff !important;
+    border: 1.2px solid #60a5fa !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3) !important;
+}
+.btn-qbank-edit-mid.is-active {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+    border-color: #fca5a5 !important;
+    box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.28) !important;
+}
+
 /* NÚT MŨI TÊN LÙI (UNDO) Ở GÓC TRÊN BÊN TRÁI CỘT GIỮA */
 .btn-qbank-undo {
     background: linear-gradient(135deg, #f97316, #ea580c) !important;
@@ -566,6 +580,220 @@
 .btn-qbank-export-file.is-open {
     background: linear-gradient(135deg, #0f766e 0%, #115e59 100%) !important;
     box-shadow: 0 0 0 2.5px rgba(20, 184, 166, 0.38) !important;
+}
+
+/* =========================================
+   4.2. CHẾ ĐỘ SỬA ĐỀ CHIA ĐÔI MÀN HÌNH NGAY TRONG CỘT GIỮA
+========================================= */
+.qbank-mid-edit-workspace {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: #ffffff;
+}
+.qbank-mid-edit-workspace.show {
+    display: flex !important;
+}
+
+.qb-edit-topbar {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #ffffff;
+    padding: 5px 10px;
+    border-bottom: 2px solid #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+.qb-edit-topbar-title {
+    font-size: 11.5px;
+    font-weight: 900;
+    color: #34d399;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+.qb-edit-topbar-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+.btn-qb-edit-tool {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.14s ease;
+    user-select: none;
+    white-space: nowrap;
+    font-family: inherit;
+    color: #ffffff;
+}
+.btn-qb-edit-tool:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.btn-qb-edit-tool:active { transform: translateY(1px) scale(0.96); }
+.btn-qb-edit-save {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border: 1px solid #fde68a;
+    font-weight: 900;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+}
+.btn-qb-edit-upload { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.btn-qb-edit-add { background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%); }
+.btn-qb-edit-json { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); }
+.btn-qb-edit-mode {
+    background: #334155;
+    color: #cbd5e1;
+    border: 1px solid #475569;
+}
+.btn-qb-edit-mode.active {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #38bdf8;
+}
+.btn-qb-edit-close {
+    background: #475569;
+    color: #fca5a5;
+    border: 1px solid #64748b;
+}
+.btn-qb-edit-close:hover {
+    background: #ef4444;
+    color: #ffffff;
+    border-color: #ef4444;
+}
+
+.qb-edit-split-body {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
+    position: relative;
+}
+.qb-edit-split-body.is-resizing {
+    user-select: none;
+    cursor: col-resize;
+}
+
+.qb-edit-left-pane {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #f8fafc;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    border-right: 1px solid #cbd5e1;
+    min-width: 180px;
+    scrollbar-width: thin;
+}
+
+.qb-edit-resizer {
+    width: 7px;
+    flex: 0 0 7px;
+    height: 100%;
+    background: #e2e8f0;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    z-index: 15;
+    touch-action: none;
+}
+.qb-edit-resizer::after {
+    content: "⋮";
+    font-weight: 900;
+    color: #64748b;
+    font-size: 15px;
+    line-height: 1;
+    pointer-events: none;
+}
+.qb-edit-resizer:hover,
+.qb-edit-resizer.is-dragging {
+    background: #10b981;
+}
+.qb-edit-resizer:hover::after,
+.qb-edit-resizer.is-dragging::after {
+    color: #ffffff;
+}
+
+.qb-edit-right-pane {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #ffffff;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 180px;
+    scrollbar-width: thin;
+}
+
+.qb-edit-pane-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 7px;
+    border-bottom: 1.5px solid #cbd5e1;
+    padding-bottom: 4px;
+}
+
+.qb-edit-meta-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 5px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 5px 7px;
+    border-radius: 8px;
+}
+
+.qb-edit-cards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+/* Đảm bảo các thẻ bên trong cột giữa co giãn gọn gàng không tràn ngang */
+.qbank-mid-edit-workspace .soide-options-editor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+}
+@media (max-width: 1200px) {
+    .qbank-mid-edit-workspace .soide-options-editor-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.qbank-mid-edit-workspace .soide-latex-input {
+    font-size: 13px !important;
+    min-height: 32px;
+    padding: 5px 7px;
+}
+.qbank-mid-edit-workspace .options-list.opt-grid-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
+.qbank-mid-edit-workspace .soide-preview-card {
+    padding: 8px 10px;
+    margin-bottom: 8px;
+}
+.qbank-mid-edit-workspace .soide-raw-textarea {
+    min-height: 360px;
 }
 
 /* =========================================
@@ -1394,6 +1622,20 @@
         border-left: none;
         border-bottom: 2px solid #e2e8f0; 
         height: auto; 
+    }
+    .qb-edit-split-body {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    .qb-edit-resizer {
+        display: none !important;
+    }
+    .qb-edit-left-pane, .qb-edit-right-pane {
+        width: 100% !important;
+        height: auto;
+        max-height: 46vh;
+        border-right: none;
+        border-bottom: 1.5px solid #cbd5e1;
     }
     .saved-exam-item {
         flex-direction: column;
