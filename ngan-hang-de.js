@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: ngan-hang-de.js (BẢN HOÀN THIỆN 100% - FIX TOÀN DIỆN MỌI CHỨC NĂNG)
+// FILE: ngan-hang-de.js (BẢN HOÀN THIỆN 100% - NÂNG CẤP LƯU NHÁP, MOVE, DELETE VÀ LỌC SÂU)
 // =========================================================
 
 let qbankState = {
@@ -84,6 +84,34 @@ const QBANK_COLOR_PALETTE = [
 ];
 
 // ============================================================================
+// HÀM LƯU/TẢI DỮ LIỆU BẢN NHÁP (FEATURE 1)
+// ============================================================================
+function saveQbankDraftState() {
+    try {
+        localStorage.setItem('qbank_draft_questions', JSON.stringify(qbankState.rawQuestions));
+        localStorage.setItem('qbank_draft_images', JSON.stringify(qbankState.imagesMap));
+        showSoiDeToast("💾 Đã lưu phiên làm việc Ngân hàng câu hỏi vào máy!");
+    } catch(e) {
+        console.error("Lỗi lưu nháp:", e);
+    }
+}
+
+function loadQbankDraftState() {
+    try {
+        let q = localStorage.getItem('qbank_draft_questions');
+        let img = localStorage.getItem('qbank_draft_images');
+        if(q) {
+            let parsedQ = JSON.parse(q);
+            if(Array.isArray(parsedQ)) qbankState.rawQuestions = parsedQ;
+        }
+        if(img) {
+            let parsedImg = JSON.parse(img);
+            if(typeof parsedImg === 'object') qbankState.imagesMap = parsedImg;
+        }
+    } catch(e){}
+}
+
+// ============================================================================
 // HÀM MỞ & ĐỊNH VỊ DROPDOWN MENU CHÍNH XÁC (CHỐNG CHÌM & CHỐNG TRÀN)
 // ============================================================================
 
@@ -143,6 +171,7 @@ function openQbankCreatorModal() {
     if (modal) {
         modal.style.display = "flex";
         loadQbankTreeData();
+        loadQbankDraftState(); // KHÔI PHỤC DỮ LIỆU ĐÃ LƯU KHI MỞ
         renderQbankTree();
         renderQbankQuestions();
         updateQbankMatrixStats();
@@ -599,13 +628,88 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     const prefix = getHierarchicalPrefix(folderId);
     q.id = `${prefix}.num${countInFolder}`; 
 
-    // ĐÃ FIX THEO YÊU CẦU 4: MẶC ĐỊNH KHÔNG TỰ ĐỘNG TÍCH VÀO CHECKBOX CHỌN CÂU NÀY
-    // qbankState.selectedQuestionIds.add(String(q.id));
-
+    saveQbankDraftState();
     renderQbankTree(); 
     renderQbankQuestions(); 
     updateQbankMatrixStats();
     updateQbankBuilderStats();
+}
+
+// ============================================================================
+// CHUYỂN & XÓA CÂU HỎI (FEATURE 3 & 4)
+// ============================================================================
+function deleteQbankQuestion(qId) {
+    if(!confirm("⚠️ Bạn có chắc chắn muốn xóa vĩnh viễn câu hỏi này khỏi hệ thống biên soạn?")) return;
+    qbankState.rawQuestions = qbankState.rawQuestions.filter(q => String(q.id) !== String(qId));
+    qbankState.selectedQuestionIds.delete(String(qId));
+    saveQbankDraftState();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+    updateQbankBuilderStats();
+}
+
+function promptMoveQuestion(qId) {
+    let options = [];
+    function traverse(nodes, path) {
+        nodes.forEach(n => {
+            let currentPath = path ? path + " > " + n.name : n.name;
+            if (!n.children || n.children.length === 0) {
+                options.push({id: n.id, name: currentPath, shortName: n.name});
+            } else {
+                traverse(n.children, currentPath);
+            }
+        });
+    }
+    traverse(qbankState.currentTree, "");
+
+    if (options.length === 0) return alert("Chưa có thư mục lá nào để chuyển!");
+
+    let selectHtml = `<select id="move-qbank-select" style="width:100%; padding:10px; margin:15px 0; border-radius:8px; border:1px solid #cbd5e1; font-weight:700; color:#334155; outline:none;">`;
+    options.forEach(o => {
+        selectHtml += `<option value="${o.id}">${o.name}</option>`;
+    });
+    selectHtml += `</select>`;
+
+    let div = document.createElement("div");
+    div.className = "qbank-modal-overlay";
+    div.id = "move-qbank-modal";
+    div.style.display = "flex";
+    div.innerHTML = `
+        <div class="qbank-modal-container" style="width: 420px; height: auto; padding: 22px; overflow:visible;">
+            <h3 style="margin-top:0; color:#0284c7; font-weight:900; font-size:16px;">🔄 Chuyển câu hỏi sang mục khác</h3>
+            ${selectHtml}
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button onclick="document.getElementById('move-qbank-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:1.5px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:800; color:#475569;">Hủy</button>
+                <button onclick="executeMoveQbankQuestion('${qId}')" style="flex:1; padding:10px; border-radius:8px; border:none; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; cursor:pointer; font-weight:900; box-shadow:0 3px 8px rgba(2,132,199,0.3);">Xác nhận chuyển</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(div);
+}
+
+function executeMoveQbankQuestion(qId) {
+    let sel = document.getElementById("move-qbank-select");
+    if(!sel) return;
+    let targetFolderId = sel.value;
+    let targetFolder = findNodeInTree(qbankState.currentTree, targetFolderId);
+    let q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
+    
+    if(q && targetFolder) {
+        qbankState.selectedQuestionIds.delete(String(qId));
+        q.folderId = targetFolderId;
+        q.folderName = targetFolder.name;
+        
+        const countInFolder = qbankState.rawQuestions.filter(x => x.folderId === targetFolderId).length;
+        const prefix = getHierarchicalPrefix(targetFolderId);
+        q.id = `${prefix}.num${countInFolder}`; 
+        
+        saveQbankDraftState();
+        renderQbankQuestions();
+        updateQbankMatrixStats();
+        updateQbankBuilderStats();
+        document.getElementById('move-qbank-modal').remove();
+        showSoiDeToast("✅ Đã chuyển câu hỏi sang " + targetFolder.name);
+    }
 }
 
 // ============================================================================
@@ -680,6 +784,8 @@ function readQbankJsonFile(file) {
             qbankState.rawQuestions = rawQ;
             qbankState.selectedQuestionIds = new Set();
             clearQbankFilter();
+            
+            saveQbankDraftState(); // Auto save upon load
 
             renderQbankQuestions();
             updateQbankMatrixStats();
@@ -815,7 +921,7 @@ function updateQbankMatrixStats() {
 
         html += `
             <div class="qbank-active-filter-bar" style="width: 100%;">
-                <span>🔍 Đang lọc: <b>${filterLabels.join(" • ")}</b></span>
+                <span>🔍 Đang lọc kết hợp: <b>${filterLabels.join(" • ")}</b></span>
                 <button type="button" class="btn-clear-filter" onclick="clearQbankFilter()">✕ Hủy lọc</button>
             </div>
         `;
@@ -948,9 +1054,13 @@ function renderQbankQuestions() {
                         ${folderTag}
                     </div>
                     
-                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:900; font-size:11.5px; color:#0f172a;">
-                        <input type="checkbox" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" ${isChecked ? 'checked' : ''} onchange="toggleSelectQuestion('${q.id}', this.checked)"> Chọn
-                    </label>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <button type="button" class="btn-soide-mini" style="background:#f1f5f9; color:#0f172a; border:1px solid #cbd5e1;" onclick="promptMoveQuestion('${q.id}')" title="Chuyển sang mục khác">🔄 Chuyển</button>
+                        <button type="button" class="btn-soide-mini" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5;" onclick="deleteQbankQuestion('${q.id}')" title="Xóa câu hỏi này">🗑️ Xóa</button>
+                        <label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:900; font-size:11.5px; color:#0f172a;">
+                            <input type="checkbox" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" ${isChecked ? 'checked' : ''} onchange="toggleSelectQuestion('${q.id}', this.checked)"> Chọn
+                        </label>
+                    </div>
                 </div>
                 <div style="font-size:12.5px; font-weight:600; color:#1e293b; margin-bottom:3px; line-height:1.4;">${q.question || ''}</div>
                 ${uploaderHtml}
@@ -1076,6 +1186,7 @@ async function uploadQBankImage(file, qId, imgKey) {
             q.imageKey = imgKey; 
         }
 
+        saveQbankDraftState();
         renderQbankQuestions();
     } catch(e) {
         if (stEl) { 
@@ -1090,6 +1201,7 @@ function deleteQBankImg(qId, imgKey) {
     delete qbankState.imagesMap[imgKey];
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (q) q.imageUrl = "";
+    saveQbankDraftState();
     renderQbankQuestions();
 }
 
@@ -1504,6 +1616,8 @@ function deleteSavedExam(examId) {
 }
 
 // XUẤT CÁC HÀM RA WINDOW SCOPE
+window.saveQbankDraftState = saveQbankDraftState;
+window.loadQbankDraftState = loadQbankDraftState;
 window.toggleQbankMenu = toggleQbankMenu;
 window.openQbankCreatorModal = openQbankCreatorModal;
 window.closeQbankCreatorModal = closeQbankCreatorModal;
@@ -1533,6 +1647,10 @@ window.handleDropZoneLeave = handleDropZoneLeave;
 window.handleDropZoneDrop = handleDropZoneDrop;
 window.assignSelectedQuestionsToMatrix = assignSelectedQuestionsToMatrix;
 window.handleQuestionDragStart = handleQuestionDragStart;
+
+window.deleteQbankQuestion = deleteQbankQuestion;
+window.promptMoveQuestion = promptMoveQuestion;
+window.executeMoveQbankQuestion = executeMoveQbankQuestion;
 
 window.toggleSelectQuestion = toggleSelectQuestion;
 window.triggerQBankPaste = triggerQBankPaste;
