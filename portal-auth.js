@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: portal-auth.js
 // QUẢN TRỊ VIÊN XÁC THỰC, PHÂN QUYỀN VÀ ĐỔI MẬT KHẨU ADMIN
-// (Toàn bộ đăng nhập học sinh đã được chuyển sang student-exam-flow.js)
+// (ĐÃ BỔ SUNG: KHI KHÓA QUYỀN ADMIN SẼ ĐÓNG TOÀN BỘ MODAL NGÂN HÀNG ĐỀ)
 // =========================================================
 
 function checkAdminSessionValidity() {
@@ -51,7 +51,6 @@ async function checkAdminPassword() {
         const inputHash = await sha256Hash(rawPass);
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         
-        // Gọi hàm kiểm tra ngầm trên Supabase (RPC)
         const { data: isMatched, error } = await client.rpc('verify_admin_password', { input_hash: inputHash });
 
         if (error) throw error;
@@ -102,7 +101,6 @@ async function changeAdminPassword(event) {
         const newHash = await sha256Hash(newPass);
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-        // Gọi hàm đổi mật khẩu ngầm trên Supabase
         const { data: isSuccess, error } = await client.rpc('change_admin_password', { 
             old_hash: oldHash, 
             new_hash: newHash 
@@ -127,6 +125,17 @@ function logoutAdmin(event) {
     safeLocal.removeItem("admin_expires_at");
     safeSession.removeItem("adminLoggedInSession");
     closeAdminPanel();
+
+    // Đóng toàn bộ menu & modal Hệ thống biên soạn / Ngân hàng đề khi khóa quyền Admin
+    const qbankMenu = document.getElementById("qbank-dropdown-menu");
+    if (qbankMenu) qbankMenu.classList.remove("show");
+    if (typeof closeQbankCreatorModal === "function") closeQbankCreatorModal();
+    if (typeof closeSavedExamsModal === "function") closeSavedExamsModal();
+    const previewModal = document.getElementById("modal-qbank-preview");
+    if (previewModal) previewModal.style.display = "none";
+    const transferModal = document.getElementById("modal-transfer-exam");
+    if (transferModal) transferModal.style.display = "none";
+
     const gear = document.getElementById("gear-btn");
     if (gear) gear.classList.remove("active-gear");
     refreshAllViews();
