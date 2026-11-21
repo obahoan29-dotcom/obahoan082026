@@ -2,7 +2,7 @@
    FILE: ngan-hang-de.css
    GIAO DIỆN NÚT TRIGGER, DROPDOWN & MA TRẬN 3 CỘT CO GIÃN (HOÀN CHỈNH 100%)
    ĐÃ BỔ SUNG: CHỈ ADMIN MỚI HIỆN NÚT, PHÂN TẦNG CÂU ĐÃ XẾP / CHƯA XẾP,
-   NÚT BỎ XẾP & CHẾ ĐỘ SỬA ĐỀ CHIA ĐÔI MÀN HÌNH NGAY TRONG CỘT GIỮA
+   NÚT BỎ XẾP, MENU XÓA NHIỀU CÂU 3 TÙY CHỌN & CHẾ ĐỘ SỬA ĐỀ CHIA ĐÔI MÀN HÌNH
 ========================================================= */
 
 /* =========================================
@@ -552,7 +552,12 @@
     opacity: 0.72;
 }
 
-/* NÚT XÓA NHIỀU CÂU Ở CỘT GIỮA */
+/* NÚT XÓA NHIỀU CÂU & MENU XÒE RA 3 TÙY CHỌN Ở CỘT GIỮA */
+.qbank-delete-dropdown-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
 .btn-qbank-delete-multi {
     background: #fef2f2 !important;
     color: #b91c1c !important;
@@ -563,11 +568,120 @@
     background: #fee2e2 !important;
     border-color: #ef4444 !important;
 }
-.btn-qbank-delete-multi.has-selection {
+.btn-qbank-delete-multi.has-selection,
+.btn-qbank-delete-multi.is-open {
     background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
     color: #ffffff !important;
     border: 1.2px solid #dc2626 !important;
     box-shadow: 0 3px 10px rgba(239, 68, 68, 0.35) !important;
+}
+
+.qbank-delete-menu {
+    display: none;
+    position: fixed !important;
+    width: 288px;
+    max-width: 92vw;
+    background: #ffffff;
+    border-radius: 13px;
+    border: 1.6px solid #ef4444;
+    box-shadow: 0 20px 48px rgba(15, 23, 42, 0.38), 0 0 0 1px rgba(239, 68, 68, 0.16);
+    padding: 6px;
+    z-index: 10000088 !important;
+    animation: popInQbank 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+    font-family: 'Be Vietnam Pro', sans-serif;
+}
+.qbank-delete-menu.show {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+}
+.qbank-delete-menu-header {
+    font-size: 10.5px;
+    font-weight: 900;
+    color: #b91c1c;
+    padding: 4px 8px 5px 8px;
+    border-bottom: 1px solid #fee2e2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-transform: uppercase;
+    letter-spacing: 0.25px;
+}
+.qbank-delete-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.14s ease;
+    border: 1px solid transparent;
+    user-select: none;
+    background: #ffffff;
+}
+.qbank-delete-menu-item:hover:not(.is-disabled) {
+    background: #fef2f2;
+    border-color: #fecaca;
+    transform: translateX(2px);
+}
+.qbank-delete-menu-item:active:not(.is-disabled) {
+    transform: scale(0.98);
+}
+.qbank-delete-menu-item.is-disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+    background: #f8fafc;
+}
+.qbank-delete-item-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+.qbank-delete-item-icon {
+    font-size: 17px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.qbank-delete-item-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.qbank-delete-item-text b {
+    font-size: 12px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.25;
+}
+.qbank-delete-menu-item:hover:not(.is-disabled) .qbank-delete-item-text b {
+    color: #b91c1c;
+}
+.qbank-delete-item-text small {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 1px;
+    line-height: 1.2;
+}
+.del-count-badge {
+    font-size: 10.5px;
+    font-weight: 900;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.qbank-delete-menu-item.is-disabled .del-count-badge {
+    background: #e2e8f0;
+    color: #94a3b8;
+    border-color: #cbd5e1;
 }
 
 /* NÚT XUẤT FILE Ở CỘT GIỮA */
