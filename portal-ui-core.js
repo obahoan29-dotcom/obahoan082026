@@ -1,8 +1,9 @@
 // =========================================================
 // FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s)
+// ĐÃ BỔ SUNG: CHỈ HIỆN NÚT HỆ THỐNG BIÊN SOẠN & MA TRẬN ĐỀ KHI ADMIN ĐĂNG NHẬP
 // =========================================================
 
-let activeDayThemCatId = null; /* SỬA TẠI ĐÂY: Chuyển "them-11" thành null để mặc định thu gọn */
+let activeDayThemCatId = null;
 let activeChinhKhoaRow1CatId = null;
 let activeChinhKhoaRow2CatId = null;
 let activeDantriCatId = null;
@@ -113,7 +114,6 @@ function sortLinksNewestFirst(linksArray) {
     });
 }
 
-// HÀM XỬ LÝ PHÂN LOẠI DỮ LIỆU DÙNG CHUNG CHO CACHE VÀ SUPABASE
 function processLinksData(links) {
     if (!Array.isArray(links)) return;
     const grouped = {};
@@ -176,7 +176,6 @@ function loadDataFromCache() {
     } catch (e) {}
 }
 
-// NẠP DỮ LIỆU TỪ SUPABASE
 async function loadDataFromSupabase() {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) {
@@ -195,9 +194,7 @@ async function loadDataFromSupabase() {
         }
 
         if (Array.isArray(links)) {
-            // Lưu dữ liệu vào LocalStorage để lần truy cập sau hiển thị ngay lập tức
             try { safeLocal.setItem("cached_custom_links", JSON.stringify(links)); } catch(e) {}
-            
             processLinksData(links);
         }
 
@@ -208,7 +205,6 @@ async function loadDataFromSupabase() {
             }
         } catch(e) {}
 
-        // Đọc cấu hình chuyển hướng web dự phòng và cập nhật giao diện Admin
         try {
             const { data: redirectData } = await client.from('app_key_values').select('value').eq('key', 'site_redirect_config').single();
             if (redirectData && redirectData.value) {
@@ -237,11 +233,21 @@ function refreshAllViews() {
     renderKhoTaiLieuSection();
     renderNewsSection();
 
+    const isAdminNow = (typeof checkAdminSessionValidity === "function")
+        ? checkAdminSessionValidity()
+        : Boolean(isAdminLoggedIn);
+
     const gear = document.getElementById("gear-btn");
     if (gear) {
-        if (isAdminLoggedIn) gear.classList.add("active-gear");
+        if (isAdminNow) gear.classList.add("active-gear");
         else gear.classList.remove("active-gear");
     }
+
+    // CHỈ HIỆN NÚT TẠO CÂU HỎI & NGÂN HÀNG ĐỀ KHI ĐANG Ở CHẾ ĐỘ ADMIN
+    const qbankWrappers = document.querySelectorAll(".qbank-dropdown-wrapper");
+    qbankWrappers.forEach(wrap => {
+        wrap.style.display = isAdminNow ? "inline-flex" : "none";
+    });
 
     if (typeof updateRedirectUIElements === 'function') {
         updateRedirectUIElements();
