@@ -62,7 +62,21 @@ let qbankState = {
     savedExams: [],
     draggedQId: null,
     imagesMap: {},
-    currentExamToTransfer: null
+    currentExamToTransfer: null,
+
+    // BỘ NHỚ LƯU TRẠNG THÁI MỞ/ĐÓNG MA TRẬN 16 Ô CỦA TỪNG NODE LÁ
+    expandedLeafMatrixIds: new Set(),
+
+    // BỘ LỌC THÔNG MINH HIỆN TẠI
+    activeFilter: {
+        folderId: null,
+        folderName: null,
+        part: null,
+        level: null
+    },
+
+    // TRẠNG THÁI ẨN CÂU HỎI ĐÃ GÁN (NÚT XẾP CÂU)
+    hideAssigned: false
 };
 
 const QBANK_COLOR_PALETTE = [
@@ -187,6 +201,16 @@ function findParentNodeInTree(nodes, childId) {
     return null;
 }
 
+function getAllDescendantFolderIds(node) {
+    let ids = [node.id];
+    if (node.children && node.children.length > 0) {
+        node.children.forEach(child => {
+            ids = ids.concat(getAllDescendantFolderIds(child));
+        });
+    }
+    return ids;
+}
+
 function generatePrefixSlug(name) {
     let s = String(name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
     if (s.includes("lop") || s.includes("lớp")) return s.replace(/[^0-9]/g, "") || "lop";
@@ -212,19 +236,33 @@ function getHierarchicalPrefix(targetId) {
     return path.map(p => generatePrefixSlug(p.name)).join(".");
 }
 
+// TOGGLE MỞ / THU MA TRẬN 16 Ô CỦA TỪNG NODE LÁ (CHỦ ĐỘNG BẬT TẮT, KHÔNG TỰ ĐỘNG THU LẠI)
+function toggleLeafMatrixDisplay(folderId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (qbankState.expandedLeafMatrixIds.has(folderId)) {
+        qbankState.expandedLeafMatrixIds.delete(folderId);
+    } else {
+        qbankState.expandedLeafMatrixIds.add(folderId);
+    }
+    renderQbankTree();
+}
+
 function renderQbankTree() {
     const rootEl = document.getElementById("qbank-tree-root");
     if (!rootEl) return;
 
     let html = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:5px; border-bottom:1.5px solid #e2e8f0;">
-            <b style="font-size:12px; color:#334155;">🌳 CÂY THƯ MỤC KIẾN THỨC:</b>
-            <button class="btn-qbank btn-qbank-primary" style="padding:3px 8px; font-size:11px;" onclick="promptAddRootFolder()">+ Thư mục gốc</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding-bottom:4px; border-bottom:1.5px solid #e2e8f0;">
+            <b style="font-size:11.5px; color:#334155;">🌳 THƯ MỤC KIẾN THỨC:</b>
+            <button class="btn-qbank btn-qbank-primary" style="padding:2px 7px; font-size:10.5px;" onclick="promptAddRootFolder()">+ Thư mục gốc</button>
         </div>
     `;
 
     function buildNodeHtml(node, depth = 0) {
-        const isActive = (qbankState.activeFolderId === node.id);
+        const isActive = (qbankState.activeFolderId === node.id && !qbankState.activeFilter.part);
         const nodeColor = node.color || "#0284c7";
         const isLeaf = (!node.children || node.children.length === 0);
         let subHtml = "";
@@ -234,7 +272,9 @@ function renderQbankTree() {
         }
 
         let matrixDropHtml = "";
-        if (isLeaf && isActive) {
+        const isMatrixOpen = isLeaf && qbankState.expandedLeafMatrixIds.has(node.id);
+
+        if (isLeaf && isMatrixOpen) {
             const counts = { 
                 1: {nb:0, th:0, vdt:0, vdc:0}, 
                 2: {nb:0, th:0, vdt:0, vdc:0}, 
@@ -256,42 +296,57 @@ function renderQbankTree() {
             });
 
             matrixDropHtml = `
-                <div class="leaf-matrix-container">
-                    <div style="font-size:10.5px; color:#0369a1; font-weight:800; margin-bottom:5px; text-align:center;">📥 Kéo thả (hoặc click gán) câu hỏi vào từng ô:</div>
-                    ${[1, 2, 3, 4].map(p => `
+                <div class="leaf-matrix-container" onclick="event.stopPropagation()">
+                    <div class="leaf-matrix-header-bar">
+                        <span>📥 Ma trận 16 ô (${node.name}):</span>
+                        <button type="button" class="btn-clear-filter" onclick="toggleLeafMatrixDisplay('${node.id}', event)" title="Thu gọn ma trận">▲ Thu lại</button>
+                    </div>
+                    ${[1, 2, 3, 4].map(p => {
+                        const isPartFiltered = (qbankState.activeFilter.folderId === node.id && qbankState.activeFilter.part === p && !qbankState.activeFilter.level);
+                        return `
                         <div class="leaf-matrix-row">
-                            <div class="leaf-matrix-lbl">P${p}</div>
+                            <div class="leaf-matrix-lbl ${isPartFiltered ? 'active-filter' : ''}" 
+                                 onclick="setFilterByNodePart('${node.id}', ${p})"
+                                 title="Bấm để xem tất cả câu Phần ${p}">P${p}</div>
                             ${['nb', 'th', 'vdt', 'vdc'].map(lvl => {
                                 const lblMap = { nb: 'NB', th: 'TH', vdt: 'VD', vdc: 'VDC' };
+                                const isCellFiltered = (qbankState.activeFilter.folderId === node.id && qbankState.activeFilter.part === p && qbankState.activeFilter.level === lvl);
                                 return `
-                                <div class="leaf-drop-zone"
+                                <div class="leaf-drop-zone ${isCellFiltered ? 'active-filter' : ''}"
                                      ondragover="handleDropZoneOver(event)" 
                                      ondragleave="handleDropZoneLeave(event)"
                                      ondrop="handleDropZoneDrop(event, '${node.id}', ${p}, '${lvl}')" 
-                                     onclick="assignSelectedQuestionsToMatrix('${node.id}', ${p}, '${lvl}')"
-                                     title="Kéo thả hoặc click để gán các câu đã chọn: Phần ${p} - ${lblMap[lvl]}">
-                                    ${lblMap[lvl]}
-                                    <b style="color:#0284c7;">(${counts[p][lvl]})</b>
+                                     onclick="handleMatrixCellClick('${node.id}', ${p}, '${lvl}')"
+                                     title="Kéo thả vào đây HOẶC Click để lọc Phần ${p} - ${lblMap[lvl]}">
+                                    <span>${lblMap[lvl]}</span>
+                                    <b>(${counts[p][lvl]})</b>
                                 </div>`;
                             }).join('')}
-                        </div>
-                    `).join('')}
+                        </div>`;
+                    }).join('')}
                 </div>
             `;
         }
 
         return `
-            <div class="tree-item-wrapper" style="margin-left: ${depth > 0 ? 4 : 0}px;">
+            <div class="tree-item-wrapper" style="margin-left: ${depth > 0 ? 3 : 0}px;">
                 <div class="tree-item ${isActive ? 'active' : ''}" id="tree-node-${node.id}"
-                     onclick="selectQbankFolder('${node.id}')"
-                     style="border-left: 4px solid ${nodeColor};">
+                     onclick="handleFolderNodeClick('${node.id}')"
+                     style="border-left: 3.5px solid ${nodeColor};">
                     
-                    <div style="display:flex; align-items:center; gap:6px; min-width:0; flex:1;">
-                        <span style="color:${nodeColor}; font-size:14px;">${isLeaf ? '📄' : '📁'}</span>
-                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px;" title="${node.name}">${node.name}</span>
+                    <div style="display:flex; align-items:center; gap:5px; min-width:0; flex:1;">
+                        <span style="color:${nodeColor}; font-size:13px;">${isLeaf ? '📄' : '📁'}</span>
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.8px;" title="${node.name}">${node.name}</span>
                     </div>
 
-                    <div style="display:flex; align-items:center; gap:3px;" onclick="event.stopPropagation()">
+                    <div style="display:flex; align-items:center; gap:2px;" onclick="event.stopPropagation()">
+                        ${isLeaf ? `
+                            <button class="btn-matrix-toggle ${isMatrixOpen ? 'is-open' : ''}" 
+                                    onclick="toggleLeafMatrixDisplay('${node.id}', event)" 
+                                    title="${isMatrixOpen ? 'Thu gọn ma trận 16 ô' : 'Mở rộng ma trận 16 ô để xếp câu'}">
+                                ${isMatrixOpen ? '⊞' : '⊞'}
+                            </button>
+                        ` : ''}
                         <div class="tree-color-picker-dot" style="background:${nodeColor};" onclick="promptChangeFolderColor('${node.id}')" title="Đổi màu"></div>
                         <button class="btn-rename-tree" onclick="promptRenameFolder('${node.id}')" title="Đổi tên thư mục">✏️</button>
                         ${!isLeaf || depth < 2 ? `<button class="btn-add-tree" onclick="promptAddChildFolder('${node.id}')" title="Thêm mục con">+</button>` : ''}
@@ -306,6 +361,96 @@ function renderQbankTree() {
 
     html += qbankState.currentTree.map(rootNode => buildNodeHtml(rootNode, 0)).join("");
     rootEl.innerHTML = html;
+}
+
+// XỬ LÝ CLICK CHỌN THƯ MỤC: LỌC TỰ ĐỘNG CỘT GIỮA
+function handleFolderNodeClick(folderId) {
+    qbankState.activeFolderId = folderId;
+    qbankState.activeFolderObj = findNodeInTree(qbankState.currentTree, folderId);
+
+    // Thiết lập bộ lọc thông minh tương ứng
+    qbankState.activeFilter = {
+        folderId: folderId,
+        folderName: qbankState.activeFolderObj ? qbankState.activeFolderObj.name : "",
+        part: null,
+        level: null
+    };
+
+    // Nếu là node lá, tự động mở xòe ma trận (và giữ nguyên không đóng lại)
+    const node = qbankState.activeFolderObj;
+    if (node && (!node.children || node.children.length === 0)) {
+        qbankState.expandedLeafMatrixIds.add(folderId);
+    }
+
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+}
+
+// LỌC THEO PHẦN (P1, P2, P3, P4) TẠI NODE LÁ
+function setFilterByNodePart(folderId, part) {
+    const node = findNodeInTree(qbankState.currentTree, folderId);
+    qbankState.activeFolderId = folderId;
+    qbankState.activeFolderObj = node;
+    qbankState.activeFilter = {
+        folderId: folderId,
+        folderName: node ? node.name : "",
+        part: part,
+        level: null
+    };
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+}
+
+// CLICK VÀO Ô MA TRẬN: GÁN CÂU ĐÃ CHỌN (NẾU CÓ CHỌN) HOẶC LỌC CÂU THEO Ô ĐÓ
+function handleMatrixCellClick(folderId, part, level) {
+    if (qbankState.selectedQuestionIds.size > 0) {
+        assignSelectedQuestionsToMatrix(folderId, part, level);
+    } else {
+        // Nếu không có câu nào được tích chọn -> kích hoạt lọc theo ô này
+        const node = findNodeInTree(qbankState.currentTree, folderId);
+        qbankState.activeFolderId = folderId;
+        qbankState.activeFolderObj = node;
+        qbankState.activeFilter = {
+            folderId: folderId,
+            folderName: node ? node.name : "",
+            part: part,
+            level: level
+        };
+        renderQbankTree();
+        renderQbankQuestions();
+        updateQbankMatrixStats();
+    }
+}
+
+// NÚT HỦY BỘ LỌC ĐỂ QUAY VỀ XEM TẤT CẢ
+function clearQbankFilter() {
+    qbankState.activeFilter = {
+        folderId: null,
+        folderName: null,
+        part: null,
+        level: null
+    };
+    qbankState.activeFolderId = null;
+    qbankState.activeFolderObj = null;
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+}
+
+// NÚT XẾP CÂU: BẬT/TẮT ẨN TOÀN BỘ CÂU ĐÃ GÁN VÀO MA TRẬN
+function toggleHideAssignedQuestions() {
+    qbankState.hideAssigned = !qbankState.hideAssigned;
+    const btn = document.getElementById("btn-toggle-assigned");
+    if (btn) {
+        btn.classList.toggle("is-active", qbankState.hideAssigned);
+        btn.innerHTML = qbankState.hideAssigned 
+            ? `<span>👁️</span> <b>Hiện lại câu đã xếp</b>` 
+            : `<span>📦</span> <b>Xếp câu (Ẩn đã xếp)</b>`;
+    }
+    renderQbankQuestions();
+    updateQbankMatrixStats();
 }
 
 function promptRenameFolder(folderId) {
@@ -370,15 +515,14 @@ function promptDeleteFolder(folderId) {
     if (qbankState.activeFolderId === folderId) {
         qbankState.activeFolderId = null;
         qbankState.activeFolderObj = null;
+        clearQbankFilter();
     }
     saveQbankTreeData(); 
     renderQbankTree();
 }
 
 function selectQbankFolder(folderId) {
-    qbankState.activeFolderId = folderId;
-    qbankState.activeFolderObj = findNodeInTree(qbankState.currentTree, folderId);
-    renderQbankTree();
+    handleFolderNodeClick(folderId);
 }
 
 function saveQbankTreeData() {
@@ -396,7 +540,7 @@ function loadQbankTreeData() {
 }
 
 // ============================================================================
-// KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô
+// KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô (MẶC ĐỊNH KHÔNG TỰ ĐỘNG CHỌN CHECKBOX)
 // ============================================================================
 
 function handleDropZoneOver(e) { 
@@ -455,7 +599,8 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     const prefix = getHierarchicalPrefix(folderId);
     q.id = `${prefix}.num${countInFolder}`; 
 
-    qbankState.selectedQuestionIds.add(String(q.id));
+    // ĐÃ FIX THEO YÊU CẦU 4: MẶC ĐỊNH KHÔNG TỰ ĐỘNG TÍCH VÀO CHECKBOX CHỌN CÂU NÀY
+    // qbankState.selectedQuestionIds.add(String(q.id));
 
     renderQbankTree(); 
     renderQbankQuestions(); 
@@ -464,7 +609,7 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
 }
 
 // ============================================================================
-// CỘT 2: PARSER ĐỀ THI ĐA TẦNG & RENDER ĐẦY ĐỦ PHƯƠNG ÁN A,B,C,D
+// CỘT 2: PARSER ĐỀ THI ĐA TẦNG, LỌC THÔNG MINH & SẮP XẾP NB -> TH -> VD -> VDC
 // ============================================================================
 
 function triggerQbankUpload() {
@@ -534,6 +679,7 @@ function readQbankJsonFile(file) {
 
             qbankState.rawQuestions = rawQ;
             qbankState.selectedQuestionIds = new Set();
+            clearQbankFilter();
 
             renderQbankQuestions();
             updateQbankMatrixStats();
@@ -545,6 +691,63 @@ function readQbankJsonFile(file) {
         }
     };
     reader.readAsText(file);
+}
+
+// BỘ LỌC VÀ SẮP XẾP CÂU HỎI THEO THỨ TỰ P1->P4 VÀ NB->TH->VD->VDC
+function getFilteredAndSortedQuestions() {
+    let list = [...(qbankState.rawQuestions || [])];
+
+    // 1. Lọc theo trạng thái "Ẩn câu đã xếp" (hideAssigned)
+    if (qbankState.hideAssigned) {
+        list = list.filter(q => !q.folderId);
+    }
+
+    // 2. Lọc theo cây thư mục tương tác (Interactive Filtering)
+    if (qbankState.activeFilter.folderId) {
+        const rootNode = findNodeInTree(qbankState.currentTree, qbankState.activeFilter.folderId);
+        if (rootNode) {
+            const allowedFolderIds = new Set(getAllDescendantFolderIds(rootNode));
+            list = list.filter(q => q.folderId && allowedFolderIds.has(q.folderId));
+        }
+    }
+
+    // 3. Lọc theo Phần (P1, P2, P3, P4)
+    if (qbankState.activeFilter.part) {
+        list = list.filter(q => {
+            let p = q.part || 1;
+            if (q.type === 'true_false') p = 2;
+            else if (q.type === 'short_answer' && q.part !== 4) p = 3;
+            return p === qbankState.activeFilter.part;
+        });
+    }
+
+    // 4. Lọc theo Mức độ (NB, TH, VD, VDC)
+    if (qbankState.activeFilter.level) {
+        list = list.filter(q => (q.level || 'nb') === qbankState.activeFilter.level);
+    }
+
+    // 5. SẮP XẾP CHUẨN MỰC: Từ Phần 1 -> 4 và trong mỗi phần: NB -> TH -> VD -> VDC
+    const levelOrder = { 'nb': 1, 'th': 2, 'vdt': 3, 'vdc': 4 };
+
+    list.sort((a, b) => {
+        let pA = a.part || 1;
+        if (a.type === 'true_false') pA = 2;
+        else if (a.type === 'short_answer' && a.part !== 4) pA = 3;
+
+        let pB = b.part || 1;
+        if (b.type === 'true_false') pB = 2;
+        else if (b.type === 'short_answer' && b.part !== 4) pB = 3;
+
+        if (pA !== pB) return pA - pB;
+
+        let lvlA = levelOrder[a.level || 'nb'] || 1;
+        let lvlB = levelOrder[b.level || 'nb'] || 1;
+        if (lvlA !== lvlB) return lvlA - lvlB;
+
+        return 0;
+    });
+
+    return list;
 }
 
 function updateQbankMatrixStats() {
@@ -582,34 +785,83 @@ function updateQbankMatrixStats() {
         const s = stats[p];
         const sumP = s.nb + s.th + s.vdt + s.vdc;
         if (sumP > 0) {
+            const isPartAct = (qbankState.activeFilter.part === p && !qbankState.activeFilter.level);
             html += `
-            <div class="matrix-group">
-                <span class="matrix-title" style="color:#0284c7;">Phần ${p} (${sumP})</span>
+            <div class="matrix-group ${isPartAct ? 'active-filter' : ''}" onclick="filterByGlobalPart(${p})">
+                <span class="matrix-title">Phần ${p} (${sumP})</span>
                 <div class="matrix-row">
-                    <span class="stat-pill nb">NB: ${s.nb}</span>
-                    <span class="stat-pill th">TH: ${s.th}</span>
-                    <span class="stat-pill vdt">VD: ${s.vdt}</span>
-                    <span class="stat-pill vdc">VDC: ${s.vdc}</span>
+                    <span class="stat-pill nb ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === 'nb' ? 'active-filter' : ''}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'nb')">NB: ${s.nb}</span>
+                    <span class="stat-pill th ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === 'th' ? 'active-filter' : ''}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'th')">TH: ${s.th}</span>
+                    <span class="stat-pill vdt ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === 'vdt' ? 'active-filter' : ''}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'vdt')">VD: ${s.vdt}</span>
+                    <span class="stat-pill vdc ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === 'vdc' ? 'active-filter' : ''}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'vdc')">VDC: ${s.vdc}</span>
                 </div>
             </div>`;
         }
     });
     
-    html += `<div style="margin-left:auto; font-weight:900; color:#0f172a; font-size:12.5px;">Tổng cộng: ${total} câu</div>`;
+    html += `<div style="margin-left:auto; font-weight:900; color:#0f172a; font-size:11.5px; white-space:nowrap;">Tổng cộng: ${total} câu</div>`;
+
+    // Nếu đang lọc, hiển thị thêm thanh chỉ báo lọc
+    const hasFilter = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned;
+    if (hasFilter) {
+        let filterLabels = [];
+        if (qbankState.hideAssigned) filterLabels.push("Đang ẩn câu đã xếp");
+        if (qbankState.activeFilter.folderName) filterLabels.push(`Mục: ${qbankState.activeFilter.folderName}`);
+        if (qbankState.activeFilter.part) filterLabels.push(`Phần ${qbankState.activeFilter.part}`);
+        if (qbankState.activeFilter.level) {
+            const lvlMap = { nb: 'Nhận biết', th: 'Thông hiểu', vdt: 'Vận dụng', vdc: 'Vận dụng cao' };
+            filterLabels.push(`Mức: ${lvlMap[qbankState.activeFilter.level]}`);
+        }
+
+        html += `
+            <div class="qbank-active-filter-bar" style="width: 100%;">
+                <span>🔍 Đang lọc: <b>${filterLabels.join(" • ")}</b></span>
+                <button type="button" class="btn-clear-filter" onclick="clearQbankFilter()">✕ Hủy lọc</button>
+            </div>
+        `;
+    }
+
     bar.innerHTML = html;
+}
+
+function filterByGlobalPart(p) {
+    if (qbankState.activeFilter.part === p && !qbankState.activeFilter.level) {
+        qbankState.activeFilter.part = null;
+    } else {
+        qbankState.activeFilter.part = p;
+        qbankState.activeFilter.level = null;
+    }
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+}
+
+function filterByGlobalCell(p, lvl) {
+    if (qbankState.activeFilter.part === p && qbankState.activeFilter.level === lvl) {
+        qbankState.activeFilter.part = null;
+        qbankState.activeFilter.level = null;
+    } else {
+        qbankState.activeFilter.part = p;
+        qbankState.activeFilter.level = lvl;
+    }
+    renderQbankQuestions();
+    updateQbankMatrixStats();
 }
 
 function renderQbankQuestions() {
     const container = document.getElementById("qbank-questions-list");
     if (!container) return;
 
-    const questions = qbankState.rawQuestions || [];
+    const questions = getFilteredAndSortedQuestions();
+
     if (questions.length === 0) {
+        const isFilterActive = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned;
         container.innerHTML = `
-            <div style="text-align:center; padding:50px 20px; color:#64748b;">
-                <div style="font-size:42px; margin-bottom:10px;">📥</div>
-                <b>Chưa có câu hỏi nào trong danh sách.</b>
-                <p style="font-size:12px; margin-top:4px;">Nhấn nút "Upload file JSON đề" ở trên để nạp ngân hàng câu hỏi nhé!</p>
+            <div style="text-align:center; padding:40px 16px; color:#64748b;">
+                <div style="font-size:36px; margin-bottom:8px;">${isFilterActive ? '🔍' : '📥'}</div>
+                <b>${isFilterActive ? 'Không tìm thấy câu hỏi nào phù hợp với bộ lọc này.' : 'Chưa có câu hỏi nào trong danh sách.'}</b>
+                <p style="font-size:11.5px; margin-top:4px;">
+                    ${isFilterActive ? '<a href="javascript:void(0)" onclick="clearQbankFilter()" style="color:#0284c7; font-weight:800; text-decoration:underline;">Nhấn vào đây để hủy lọc và xem tất cả</a>' : 'Nhấn nút "Upload file JSON đề" ở trên để nạp ngân hàng câu hỏi nhé!'}
+                </p>
             </div>
         `;
         return;
@@ -631,15 +883,15 @@ function renderQbankQuestions() {
         let imgUrl = q.imageUrl || qbankState.imagesMap[imgKey] || "";
         
         const uploaderHtml = `
-            <div class="qbank-img-tool-zone" id="zone-qbank-${q.id}" tabindex="0" title="Bấm vào vùng này rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; gap:6px; background:#f8fafc; padding:4px 8px; border-radius:6px; border:1px dashed #cbd5e1; margin-top:6px;">
-                <span style="font-size:11px; font-weight:800; color:#475569;">🖼️ Ảnh:</span>
+            <div class="qbank-img-tool-zone" id="zone-qbank-${q.id}" tabindex="0" title="Bấm vào vùng này rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:3px 6px; border-radius:5px; border:1px dashed #cbd5e1; margin-top:4px;">
+                <span style="font-size:10.5px; font-weight:800; color:#475569;">🖼️ Ảnh:</span>
                 <button type="button" class="btn-qbank-img" onclick="triggerQBankPaste('${q.id}', '${imgKey}')">📋 Dán (Ctrl+V)</button>
                 <input type="file" id="file-qbank-${q.id}" accept="image/*" style="display:none;" onchange="handleQBankImgSelect(this, '${q.id}', '${imgKey}')">
                 <button type="button" class="btn-qbank-img" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;" onclick="document.getElementById('file-qbank-${q.id}').click()">📁 Tệp</button>
                 ${imgUrl ? `<button type="button" class="btn-qbank-img" style="background:#fee2e2; color:#dc2626;" onclick="deleteQBankImg('${q.id}', '${imgKey}')">🗑 Xóa</button>` : ''}
                 <span id="status-qbank-${q.id}" style="font-size:10px; font-weight:800; margin-left:auto;"></span>
             </div>
-            ${imgUrl ? `<div style="text-align:center; margin:6px 0;"><img src="${imgUrl}" style="max-height:160px; border-radius:6px; border:1px solid #cbd5e1;"></div>` : ''}
+            ${imgUrl ? `<div style="text-align:center; margin:4px 0;"><img src="${imgUrl}" style="max-height:140px; border-radius:6px; border:1px solid #cbd5e1;"></div>` : ''}
         `;
 
         let contentDetailsHtml = "";
@@ -660,11 +912,11 @@ function renderQbankQuestions() {
             `;
         } else if (q.type === "true_false") {
             contentDetailsHtml = `
-                <div style="margin:6px 0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:6px;">
+                <div style="margin:4px 0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:5px; padding:4px 6px;">
                     ${(q.statements || []).map(st => {
                         const isTrue = (st.correct === true || String(st.correct).toLowerCase() === 'đúng');
                         return `
-                        <div style="font-size:12px; margin-bottom:3px; display:flex; justify-content:space-between;">
+                        <div style="font-size:11.5px; margin-bottom:2px; display:flex; justify-content:space-between;">
                             <span><b>${st.id})</b> ${st.statement}</span>
                             <b style="color:${isTrue ? '#16a34a' : '#dc2626'};">${isTrue ? '🟢 Đúng' : '🔴 Sai'}</b>
                         </div>`;
@@ -674,33 +926,33 @@ function renderQbankQuestions() {
         } else {
             const ans = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct || "0");
             contentDetailsHtml = `
-                <div style="margin:6px 0; font-size:12px; font-weight:800; color:#0d9488; background:#f0fdfa; padding:4px 8px; border-radius:6px; border:1px solid #99f6e4;">
+                <div style="margin:4px 0; font-size:11.5px; font-weight:800; color:#0d9488; background:#f0fdfa; padding:3px 6px; border-radius:5px; border:1px solid #99f6e4;">
                     🎯 Đáp số: <span style="color:#0f172a;">${ans}</span>
                 </div>
             `;
         }
 
         const explainHtml = q.explanation ? `
-            <div style="font-size:11.5px; color:#78350f; background:#fffbeb; padding:5px 8px; border-radius:6px; border-left:3px solid #f59e0b; margin-top:6px;">
+            <div style="font-size:11px; color:#78350f; background:#fffbeb; padding:4px 6px; border-radius:5px; border-left:3px solid #f59e0b; margin-top:4px;">
                 💡 <b>Lời giải:</b> ${q.explanation}
             </div>` : '';
 
-        const folderTag = q.folderName ? `<span style="font-size:10px; color:#16a34a; background:#dcfce7; padding:2px 6px; border-radius:6px; border:1px solid #bbf7d0;">📁 ${q.folderName}</span>` : '';
+        const folderTag = q.folderName ? `<span style="font-size:10px; color:#16a34a; background:#dcfce7; padding:1px 5px; border-radius:5px; border:1px solid #bbf7d0;">📁 ${q.folderName}</span>` : '';
 
         html += `
             <div class="qbank-q-card ${isChecked ? 'selected' : ''}" id="qbank-card-${q.id}" draggable="true" ondragstart="handleQuestionDragStart(event, '${q.id}')">
                 <div class="qbank-q-header">
-                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
                         <span class="qbank-q-id-badge">${q.id}</span>
-                        <span style="font-size:11px; font-weight:800; color:#059669; border:1px solid #10b981; padding:2px 6px; border-radius:6px; background:#ecfdf5;">Phần ${p} • ${levelText}</span>
+                        <span style="font-size:10.5px; font-weight:800; color:#059669; border:1px solid #10b981; padding:1px 5px; border-radius:5px; background:#ecfdf5;">Phần ${p} • ${levelText}</span>
                         ${folderTag}
                     </div>
                     
-                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:900; font-size:12px; color:#0f172a;">
-                        <input type="checkbox" style="width:17px; height:17px; accent-color:#10b981; cursor:pointer;" ${isChecked ? 'checked' : ''} onchange="toggleSelectQuestion('${q.id}', this.checked)"> Chọn
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:900; font-size:11.5px; color:#0f172a;">
+                        <input type="checkbox" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" ${isChecked ? 'checked' : ''} onchange="toggleSelectQuestion('${q.id}', this.checked)"> Chọn
                     </label>
                 </div>
-                <div style="font-size:13px; font-weight:600; color:#1e293b; margin-bottom:4px; line-height:1.45;">${q.question || ''}</div>
+                <div style="font-size:12.5px; font-weight:600; color:#1e293b; margin-bottom:3px; line-height:1.4;">${q.question || ''}</div>
                 ${uploaderHtml}
                 ${contentDetailsHtml}
                 ${explainHtml}
@@ -856,8 +1108,8 @@ function updateQbankBuilderStats() {
     }
     
     container.innerHTML = `
-        <div style="font-weight:900; color:#10b981; font-size:13.5px; margin-bottom:4px;">🎯 Đã chọn: ${total} câu hỏi</div>
-        <div style="font-size:11.5px; color:#475569;">Hệ thống sẽ tự động xếp lại câu từ 1 ➔ ${total} và bảo toàn đầy đủ các phương án A,B,C,D & lời giải.</div>
+        <div style="font-weight:900; color:#10b981; font-size:13px; margin-bottom:3px;">🎯 Đã chọn: ${total} câu hỏi</div>
+        <div style="font-size:11px; color:#475569;">Hệ thống sẽ tự động xếp lại câu từ 1 ➔ ${total} và bảo toàn đầy đủ các phương án A,B,C,D & lời giải.</div>
     `;
 }
 
@@ -980,7 +1232,7 @@ function filterSavedExamsList(gradeVal) {
     }
 
     if (list.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#64748b;">Chưa có đề thi nào trong phân loại này.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">Chưa có đề thi nào trong phân loại này.</div>`;
         return;
     }
 
@@ -988,18 +1240,18 @@ function filterSavedExamsList(gradeVal) {
         const dateStr = exam.createdAt ? new Date(exam.createdAt).toLocaleString("vi-VN") : "---";
         const assignedTags = (exam.assignedClasses && exam.assignedClasses.length > 0)
             ? exam.assignedClasses.map(c => `<span class="exam-tag">✅ ${c}</span>`).join("")
-            : `<span style="font-size:11px; color:#94a3b8; font-style:italic;">Chưa chuyển</span>`;
+            : `<span style="font-size:10.5px; color:#94a3b8; font-style:italic;">Chưa chuyển</span>`;
 
         return `
             <div class="saved-exam-item">
                 <div style="flex:1; min-width:0;">
-                    <div style="font-size:15px; font-weight:900; color:#0f172a;">📑 ${exam.title}</div>
-                    <div style="font-size:12px; color:#64748b; font-weight:600; margin-top:4px;">
+                    <div style="font-size:14px; font-weight:900; color:#0f172a;">📑 ${exam.title}</div>
+                    <div style="font-size:11.5px; color:#64748b; font-weight:600; margin-top:3px;">
                         ${exam.questionCount} câu • Khối: <b style="color:#0284c7;">${exam.grade}</b> • Tạo: ${dateStr}
                     </div>
-                    <div class="exam-assigned-tags" style="display:flex; gap:5px; margin-top:6px; flex-wrap:wrap;">${assignedTags}</div>
+                    <div class="exam-assigned-tags" style="display:flex; gap:4px; margin-top:5px; flex-wrap:wrap;">${assignedTags}</div>
                 </div>
-                <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
                     <button class="btn-qbank btn-qbank-primary" onclick="openTransferExamModal('${exam.id}')">🚀 Chuyển lớp</button>
                     <button class="btn-qbank btn-qbank-success" onclick="previewSavedExam('${exam.id}')">👁️ Xem đề</button>
                     <button class="btn-qbank" style="background:#8b5cf6; color:#fff;" onclick="openInSoiDeFromBank('${exam.id}')" title="Mở sang công cụ Soi đề">🔬 Soi đề</button>
@@ -1024,12 +1276,12 @@ function previewSavedExam(examId) {
         modal.innerHTML = `
             <div class="qbank-modal-container" style="width: 820px; height: 85vh; max-width: 95vw;">
                 <div class="qbank-header">
-                    <div style="font-size: 15px; font-weight: 900; display: flex; align-items: center; gap: 8px;">
+                    <div style="font-size: 14.5px; font-weight: 900; display: flex; align-items: center; gap: 8px;">
                         <span>👁️</span> <span id="qbank-preview-title">Xem trước đề</span>
                     </div>
-                    <button onclick="document.getElementById('modal-qbank-preview').style.display='none'" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer;">✕</button>
+                    <button onclick="document.getElementById('modal-qbank-preview').style.display='none'" style="background:none; border:none; color:#fff; font-size:20px; font-weight:900; cursor:pointer;">✕</button>
                 </div>
-                <div id="qbank-preview-body" style="flex:1; overflow-y:auto; padding:16px; background:#ffffff;"></div>
+                <div id="qbank-preview-body" style="flex:1; overflow-y:auto; padding:14px; background:#ffffff;"></div>
             </div>
         `;
         document.body.appendChild(modal);
@@ -1045,9 +1297,9 @@ function previewSavedExam(examId) {
         if (q.type === "multiple_choice" && Array.isArray(q.options)) {
             let cIdx = typeof q.correct === 'number' ? q.correct : letters.indexOf(String(q.correct).toUpperCase());
             optionsHtml = `
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:5px;">
                     ${q.options.map((opt, oIdx) => `
-                        <div style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; background:${oIdx === cIdx ? '#dcfce7' : '#f8fafc'}; font-size:12.5px; font-weight:${oIdx === cIdx ? '800' : '600'}; color:${oIdx === cIdx ? '#15803d' : '#1e293b'};">
+                        <div style="padding:5px 8px; border-radius:5px; border:1px solid #cbd5e1; background:${oIdx === cIdx ? '#dcfce7' : '#f8fafc'}; font-size:12px; font-weight:${oIdx === cIdx ? '800' : '600'}; color:${oIdx === cIdx ? '#15803d' : '#1e293b'};">
                             <b>${letters[oIdx]}.</b> ${opt} ${oIdx === cIdx ? '✓' : ''}
                         </div>
                     `).join('')}
@@ -1055,9 +1307,9 @@ function previewSavedExam(examId) {
             `;
         } else if (q.type === "true_false" && Array.isArray(q.statements)) {
             optionsHtml = `
-                <div style="margin-top:6px; border:1px solid #e2e8f0; border-radius:6px; padding:6px; background:#f8fafc;">
+                <div style="margin-top:5px; border:1px solid #e2e8f0; border-radius:5px; padding:5px; background:#f8fafc;">
                     ${q.statements.map(st => `
-                        <div style="font-size:12px; margin-bottom:4px; display:flex; justify-content:space-between;">
+                        <div style="font-size:11.5px; margin-bottom:3px; display:flex; justify-content:space-between;">
                             <span><b>${st.id})</b> ${st.statement}</span>
                             <b style="color:${st.correct ? '#16a34a' : '#dc2626'};">${st.correct ? '🟢 Đúng' : '🔴 Sai'}</b>
                         </div>
@@ -1066,17 +1318,17 @@ function previewSavedExam(examId) {
             `;
         } else {
             optionsHtml = `
-                <div style="margin-top:6px; font-size:12.5px; font-weight:800; color:#0d9488;">
+                <div style="margin-top:5px; font-size:12px; font-weight:800; color:#0d9488;">
                     🎯 Đáp số: <span style="color:#0f172a;">${q.correctAnswer || q.correct || '---'}</span>
                 </div>
             `;
         }
 
-        const expHtml = q.explanation ? `<div style="font-size:11.5px; color:#78350f; background:#fffbeb; padding:6px; border-radius:6px; margin-top:6px; border-left:3px solid #f59e0b;">💡 <b>Lời giải:</b> ${q.explanation}</div>` : '';
+        const expHtml = q.explanation ? `<div style="font-size:11px; color:#78350f; background:#fffbeb; padding:5px; border-radius:5px; margin-top:5px; border-left:3px solid #f59e0b;">💡 <b>Lời giải:</b> ${q.explanation}</div>` : '';
 
         html += `
-            <div style="margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed #cbd5e1;">
-                <div style="font-size:13.5px; font-weight:700; color:#0f172a;">
+            <div style="margin-bottom:12px; padding-bottom:10px; border-bottom:1px dashed #cbd5e1;">
+                <div style="font-size:13px; font-weight:700; color:#0f172a;">
                     <b style="color:#0284c7;">Câu ${idx + 1}:</b> ${q.question || ''}
                 </div>
                 ${optionsHtml}
@@ -1143,14 +1395,14 @@ function createTransferModalInDOM() {
     div.id = "modal-transfer-exam"; 
     div.className = "qbank-modal-overlay";
     div.innerHTML = `
-        <div class="qbank-modal-container" style="width:480px; height:auto; padding:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:12px;">
-                <h3 style="font-size:15px; font-weight:900; color:#0284c7;">🚀 CHUYỂN ĐỀ SANG LỚP</h3>
+        <div class="qbank-modal-container" style="width:480px; height:auto; padding:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1.5px solid #e2e8f0; padding-bottom:6px; margin-bottom:10px;">
+                <h3 style="font-size:14.5px; font-weight:900; color:#0284c7;">🚀 CHUYỂN ĐỀ SANG LỚP</h3>
                 <button onclick="document.getElementById('modal-transfer-exam').style.display='none'" style="background:none; border:none; font-size:18px; font-weight:900; cursor:pointer;">✕</button>
             </div>
-            <div style="font-size:12.5px; font-weight:700; color:#1e293b; margin-bottom:10px;" id="transfer-exam-title">...</div>
+            <div style="font-size:12px; font-weight:700; color:#1e293b; margin-bottom:10px;" id="transfer-exam-title">...</div>
             
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px;" id="transfer-class-list">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:14px;" id="transfer-class-list">
                 <label class="cat-checkbox-item"><input type="checkbox" value="lop-11a"> <span>🏫 Lớp 11A</span></label>
                 <label class="cat-checkbox-item"><input type="checkbox" value="lop-11c"> <span>🏫 Lớp 11C</span></label>
                 <label class="cat-checkbox-item"><input type="checkbox" value="lop-10p"> <span>🏫 Lớp 10P</span></label>
@@ -1160,7 +1412,7 @@ function createTransferModalInDOM() {
                 <label class="cat-checkbox-item"><input type="checkbox" value="them-12"> <span>🎓 Thêm 12</span></label>
                 <label class="cat-checkbox-item"><input type="checkbox" value="hsg-toan-11"> <span>🏆 HSG Toán 11</span></label>
             </div>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:6px;">
                 <button class="btn-qbank" style="flex:1; background:#f1f5f9; color:#475569;" onclick="document.getElementById('modal-transfer-exam').style.display='none'">Hủy</button>
                 <button class="btn-qbank btn-qbank-success" style="flex:1.5;" onclick="confirmTransferExamToClasses()">🚀 Xác nhận chuyển</button>
             </div>
@@ -1266,6 +1518,15 @@ window.promptAddChildFolder = promptAddChildFolder;
 window.promptChangeFolderColor = promptChangeFolderColor;
 window.promptDeleteFolder = promptDeleteFolder;
 window.selectQbankFolder = selectQbankFolder;
+
+window.handleFolderNodeClick = handleFolderNodeClick;
+window.setFilterByNodePart = setFilterByNodePart;
+window.handleMatrixCellClick = handleMatrixCellClick;
+window.clearQbankFilter = clearQbankFilter;
+window.toggleHideAssignedQuestions = toggleHideAssignedQuestions;
+window.toggleLeafMatrixDisplay = toggleLeafMatrixDisplay;
+window.filterByGlobalPart = filterByGlobalPart;
+window.filterByGlobalCell = filterByGlobalCell;
 
 window.handleDropZoneOver = handleDropZoneOver;
 window.handleDropZoneLeave = handleDropZoneLeave;
