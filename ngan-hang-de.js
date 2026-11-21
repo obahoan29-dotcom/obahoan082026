@@ -79,34 +79,66 @@ let qbankState = {
     hideAssigned: false
 };
 
-const QBANK_COLOR_PALETTE = [    "#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"];
+const QBANK_COLOR_PALETTE = ["#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"];
 
 // ============================================================================
-// HÀM LƯU/TẢI DỮ LIỆU BẢN NHÁP (FEATURE 1)
+// HÀM LƯU/TẢI DỮ LIỆU BẢN NHÁP BẰNG INDEXEDDB (CHỐNG TRÀN BỘ NHỚ 5MB)
 // ============================================================================
-function saveQbankDraftState() {
+async function saveQbankDraftState() {
     try {
-        localStorage.setItem('qbank_draft_questions', JSON.stringify(qbankState.rawQuestions));
-        localStorage.setItem('qbank_draft_images', JSON.stringify(qbankState.imagesMap));
-        showSoiDeToast("💾 Đã lưu phiên làm việc Ngân hàng câu hỏi vào máy!");
+        // Fallback localStorage nhanh (có thể lỗi nếu > 5MB)
+        try {
+            localStorage.setItem('qbank_draft_questions', JSON.stringify(qbankState.rawQuestions));
+            localStorage.setItem('qbank_draft_images', JSON.stringify(qbankState.imagesMap));
+        } catch (e) {
+            console.warn("Ngân hàng đề vượt quá dung lượng LocalStorage, chuyển sang IndexedDB.");
+        }
+
+        // Lưu chuẩn bằng IndexedDB an toàn
+        if (typeof examIndexedDB !== 'undefined') {
+            await examIndexedDB.setItem('exam_states', {
+                key: 'qbank_draft_state_v1',
+                questions: qbankState.rawQuestions,
+                images: qbankState.imagesMap,
+                updatedAt: Date.now()
+            });
+        }
+        if (typeof showSoiDeToast === 'function') {
+            showSoiDeToast("💾 Đã tự động lưu Ngân hàng câu hỏi vào bộ nhớ máy!");
+        }
     } catch(e) {
-        console.error("Lỗi lưu nháp:", e);
+        console.error("Lỗi lưu nháp Ngân hàng đề:", e);
     }
 }
 
-function loadQbankDraftState() {
-    try {
-        let q = localStorage.getItem('qbank_draft_questions');
-        let img = localStorage.getItem('qbank_draft_images');
-        if(q) {
-            let parsedQ = JSON.parse(q);
-            if(Array.isArray(parsedQ)) qbankState.rawQuestions = parsedQ;
-        }
-        if(img) {
-            let parsedImg = JSON.parse(img);
-            if(typeof parsedImg === 'object') qbankState.imagesMap = parsedImg;
-        }
-    } catch(e){}
+async function loadQbankDraftState() {
+    let loadedFromIDB = false;
+    if (typeof examIndexedDB !== 'undefined') {
+        try {
+            const data = await examIndexedDB.getItem('exam_states', 'qbank_draft_state_v1');
+            if (data && data.questions) {
+                qbankState.rawQuestions = data.questions;
+                qbankState.imagesMap = data.images || {};
+                loadedFromIDB = true;
+            }
+        } catch(e) {}
+    }
+    
+    // Nếu chưa load được từ IDB, thử đọc từ LocalStorage
+    if (!loadedFromIDB) {
+        try {
+            let q = localStorage.getItem('qbank_draft_questions');
+            let img = localStorage.getItem('qbank_draft_images');
+            if(q) {
+                let parsedQ = JSON.parse(q);
+                if(Array.isArray(parsedQ)) qbankState.rawQuestions = parsedQ;
+            }
+            if(img) {
+                let parsedImg = JSON.parse(img);
+                if(typeof parsedImg === 'object') qbankState.imagesMap = parsedImg;
+            }
+        } catch(e){}
+    }
 }
 
 // ============================================================================
@@ -161,7 +193,7 @@ document.addEventListener("click", function(e) {
     }
 });
 
-function openQbankCreatorModal() {
+async function openQbankCreatorModal() {
     const menu = document.getElementById("qbank-dropdown-menu");
     if (menu) menu.classList.remove("show");
 
@@ -169,7 +201,10 @@ function openQbankCreatorModal() {
     if (modal) {
         modal.style.display = "flex";
         loadQbankTreeData();
-        loadQbankDraftState(); // KHÔI PHỤC DỮ LIỆU ĐÃ LƯU KHI MỞ
+        
+        // Chờ tải dữ liệu an toàn
+        await loadQbankDraftState(); 
+        
         renderQbankTree();
         renderQbankQuestions();
         updateQbankMatrixStats();
@@ -201,6 +236,33 @@ function closeSavedExamsModal() {
 function toggleStorageLocation(selectEl) { 
     qbankState.storageTarget = selectEl.value; 
 }
+
+// ============================================================================
+// MỞ SOI ĐỀ TỪ NGÂN HÀNG CÂU HỎI
+// ============================================================================
+function openSoiDeFromQBank() {
+    if (qbankState.rawQuestions.length === 0) {
+        alert("⚠️ Ngân hàng đề đang trống. Vui lòng thêm câu hỏi trước khi Soi đề!");
+        return;
+    }
+    if (typeof soiDeState !== 'undefined') {
+        soiDeState.examData = {
+            id: "qbank_preview_" + Date.now(),
+            title: "NGÂN HÀNG CÂU HỎI",
+            maDe: "QBANK",
+            timeLimitMinutes: 120,
+            images: JSON.parse(JSON.stringify(qbankState.imagesMap)),
+            questions: JSON.parse(JSON.stringify(qbankState.rawQuestions)),
+            scoringConfig: { mode: 'option1' }
+        };
+        soiDeState.isFromQBank = true;
+        if (typeof ensureSoiDeModalInDOM === 'function') ensureSoiDeModalInDOM();
+        openSoiDeModal();
+    } else {
+        alert("⚠️ Lỗi: Không tìm thấy công cụ Soi Đề!");
+    }
+}
+
 
 // ============================================================================
 // CỘT 1: CÂY THƯ MỤC & MA TRẬN PHÂN LOẠI
@@ -263,7 +325,7 @@ function getHierarchicalPrefix(targetId) {
     return path.map(p => generatePrefixSlug(p.name)).join(".");
 }
 
-// TOGGLE MỞ / THU MA TRẬN 16 Ô CỦA TỪNG NODE LÁ (CHỦ ĐỘNG BẬT TẮT, KHÔNG TỰ ĐỘNG THU LẠI)
+// TOGGLE MỞ / THU MA TRẬN 16 Ô CỦA TỪNG NODE LÁ
 function toggleLeafMatrixDisplay(folderId, event) {
     if (event) {
         event.stopPropagation();
@@ -395,7 +457,6 @@ function handleFolderNodeClick(folderId) {
     qbankState.activeFolderId = folderId;
     qbankState.activeFolderObj = findNodeInTree(qbankState.currentTree, folderId);
 
-    // Thiết lập bộ lọc thông minh tương ứng
     qbankState.activeFilter = {
         folderId: folderId,
         folderName: qbankState.activeFolderObj ? qbankState.activeFolderObj.name : "",
@@ -403,7 +464,6 @@ function handleFolderNodeClick(folderId) {
         level: null
     };
 
-    // Nếu là node lá, tự động mở xòe ma trận (và giữ nguyên không đóng lại)
     const node = qbankState.activeFolderObj;
     if (node && (!node.children || node.children.length === 0)) {
         qbankState.expandedLeafMatrixIds.add(folderId);
@@ -414,7 +474,7 @@ function handleFolderNodeClick(folderId) {
     updateQbankMatrixStats();
 }
 
-// LỌC THEO PHẦN (P1, P2, P3, P4) TẠI NODE LÁ
+// LỌC THEO PHẦN TẠI NODE LÁ
 function setFilterByNodePart(folderId, part) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
     qbankState.activeFolderId = folderId;
@@ -430,12 +490,11 @@ function setFilterByNodePart(folderId, part) {
     updateQbankMatrixStats();
 }
 
-// CLICK VÀO Ô MA TRẬN: GÁN CÂU ĐÃ CHỌN (NẾU CÓ CHỌN) HOẶC LỌC CÂU THEO Ô ĐÓ
+// CLICK VÀO Ô MA TRẬN
 function handleMatrixCellClick(folderId, part, level) {
     if (qbankState.selectedQuestionIds.size > 0) {
         assignSelectedQuestionsToMatrix(folderId, part, level);
     } else {
-        // Nếu không có câu nào được tích chọn -> kích hoạt lọc theo ô này
         const node = findNodeInTree(qbankState.currentTree, folderId);
         qbankState.activeFolderId = folderId;
         qbankState.activeFolderObj = node;
@@ -524,7 +583,6 @@ function promptAddChildFolder(parentId) {
 function promptChangeFolderColor(folderId) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
     
-    // Tạo bảng 8 màu sắc để bấm chọn
     const colors = QBANK_COLOR_PALETTE;
     let colorHtml = `<div style="display:flex; gap:8px; justify-content:center; margin:10px 0;">`;
     colors.forEach(c => {
@@ -546,7 +604,6 @@ function promptChangeFolderColor(folderId) {
     document.body.appendChild(div);
 }
 
-// Gọi từ bảng đổi màu thư mục
 window.applyFolderColorChange = function(folderId, newColor) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
     if(node) {
@@ -594,7 +651,7 @@ function loadQbankTreeData() {
 }
 
 // ============================================================================
-// KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô (MẶC ĐỊNH KHÔNG TỰ ĐỘNG CHỌN CHECKBOX)
+// KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô 
 // ============================================================================
 
 function handleDropZoneOver(e) { 
@@ -649,10 +706,6 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     const currentFolderTarget = findNodeInTree(qbankState.currentTree, folderId);
     q.folderName = currentFolderTarget ? currentFolderTarget.name : "";
     
-    const countInFolder = qbankState.rawQuestions.filter(x => x.folderId === folderId).length;
-    const prefix = getHierarchicalPrefix(folderId);
-    q.id = `${prefix}.num${countInFolder}`; 
-
     saveQbankDraftState();
     renderQbankTree(); 
     renderQbankQuestions(); 
@@ -661,7 +714,7 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
 }
 
 // ============================================================================
-// CHUYỂN & XÓA CÂU HỎI (FEATURE 3 & 4)
+// CHUYỂN & XÓA CÂU HỎI
 // ============================================================================
 function deleteQbankQuestion(qId) {
     if(!confirm("⚠️ Bạn có chắc chắn muốn xóa vĩnh viễn câu hỏi này khỏi hệ thống biên soạn?")) return;
@@ -753,12 +806,12 @@ function executeMoveQbankQuestion(qId) {
     if(q && targetFolder) {
         applyMatrixToQuestion(qId, targetFolderId, targetPart, targetLevel);
         document.getElementById('move-qbank-modal').remove();
-        showSoiDeToast("✅ Đã chuyển đổi và phân loại câu hỏi thành công!");
+        if(typeof showSoiDeToast === 'function') showSoiDeToast("✅ Đã chuyển đổi và phân loại câu hỏi thành công!");
     }
 }
 
 // ============================================================================
-// CỘT 2: PARSER ĐỀ THI ĐA TẦNG, LỌC THÔNG MINH & SẮP XẾP NB -> TH -> VD -> VDC
+// CỘT 2: PARSER ĐỀ THI ĐA TẦNG, LỌC THÔNG MINH & NHẬP THÊM CÂU HỎI
 // ============================================================================
 
 function triggerQbankUpload() {
@@ -814,29 +867,43 @@ function readQbankJsonFile(file) {
             if (Array.isArray(parsed)) rawQ = parsed;
             else if (parsed.questions) {
                 rawQ = parsed.questions;
-                if (parsed.images) qbankState.imagesMap = parsed.images;
-                if (parsed.title) {
-                    const titleInp = document.getElementById("qbank-exam-name");
-                    if (titleInp) titleInp.value = parsed.title;
-                }
             }
 
-            rawQ.forEach((q, idx) => {
-                q.id = q.id || (idx + 1);
-                if (!q.level) q.level = "nb";
+            // MỚI: TÌM ID MAX HIỆN TẠI VÀ CỘNG DỒN CÂU HỎI
+            let currentMaxId = 0;
+            qbankState.rawQuestions.forEach(q => {
+                let m = String(q.id).match(/\d+/g);
+                if (m) {
+                    let num = parseInt(m.join(''), 10);
+                    if (num > currentMaxId) currentMaxId = num;
+                }
             });
 
-            qbankState.rawQuestions = rawQ;
+            rawQ.forEach(q => {
+                currentMaxId++;
+                // Tạo ID cực kỳ an toàn để không bao giờ ghi đè câu hỏi cũ
+                q.id = "qb_" + Date.now() + "_" + currentMaxId;
+                q.folderId = null; // Trạng thái chưa phân loại
+                q.folderName = "";
+                if (!q.level) q.level = "nb";
+                qbankState.rawQuestions.push(q);
+            });
+
+            // Gộp hình ảnh
+            if (parsed && parsed.images) {
+                Object.assign(qbankState.imagesMap, parsed.images);
+            }
+
             qbankState.selectedQuestionIds = new Set();
             clearQbankFilter();
             
-            saveQbankDraftState(); // Auto save upon load
+            saveQbankDraftState();
 
             renderQbankQuestions();
             updateQbankMatrixStats();
             updateQbankBuilderStats();
             
-            alert(`✅ Đã nạp thành công ${rawQ.length} câu hỏi vào hệ thống soạn thảo!`);
+            alert(`✅ Đã nhập thêm thành công ${rawQ.length} câu hỏi vào Ngân hàng đề chưa phân loại!`);
         } catch(err) { 
             alert("❌ Lỗi nạp file: " + err.message); 
         }
@@ -853,7 +920,7 @@ function getFilteredAndSortedQuestions() {
         list = list.filter(q => !q.folderId);
     }
 
-    // 2. Lọc theo cây thư mục tương tác (Interactive Filtering)
+    // 2. Lọc theo cây thư mục tương tác
     if (qbankState.activeFilter.folderId) {
         const rootNode = findNodeInTree(qbankState.currentTree, qbankState.activeFilter.folderId);
         if (rootNode) {
@@ -872,12 +939,12 @@ function getFilteredAndSortedQuestions() {
         });
     }
 
-    // 4. Lọc theo Mức độ (NB, TH, VD, VDC)
+    // 4. Lọc theo Mức độ
     if (qbankState.activeFilter.level) {
         list = list.filter(q => (q.level || 'nb') === qbankState.activeFilter.level);
     }
 
-    // 5. SẮP XẾP CHUẨN MỰC: Từ Phần 1 -> 4 và trong mỗi phần: NB -> TH -> VD -> VDC
+    // 5. SẮP XẾP CHUẨN MỰC
     const levelOrder = { 'nb': 1, 'th': 2, 'vdt': 3, 'vdc': 4 };
 
     list.sort((a, b) => {
@@ -952,7 +1019,6 @@ function updateQbankMatrixStats() {
     
     html += `<div style="margin-left:auto; font-weight:900; color:#0f172a; font-size:11.5px; white-space:nowrap;">Tổng cộng: ${total} câu</div>`;
 
-    // Nếu đang lọc, hiển thị thêm thanh chỉ báo lọc
     const hasFilter = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned;
     if (hasFilter) {
         let filterLabels = [];
@@ -1710,3 +1776,4 @@ window.openTransferExamModal = openTransferExamModal;
 window.confirmTransferExamToClasses = confirmTransferExamToClasses;
 window.downloadSavedExamJson = downloadSavedExamJson;
 window.deleteSavedExam = deleteSavedExam;
+window.openSoiDeFromQBank = openSoiDeFromQBank; // Đã thêm
