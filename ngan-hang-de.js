@@ -1,14 +1,10 @@
 // =========================================================
 // FILE: ngan-hang-de.js
 // BẢN HOÀN THIỆN 100%:
-// 1. Upload đề mới chỉ thay thế câu chưa xếp, giữ nguyên câu đã vào thư mục
-// 2. Nút Lưu dữ liệu báo hiệu rõ ràng (Nút + Toast trong modal)
-// 3. Nút mũi tên Lùi (Undo + Ctrl+Z) ở góc trên trái cột giữa
-// 4. ID màu đỏ đánh số tự động chuẩn ma trận: id.L10-Ch1-Bai1-P1-Nhận biết-C1
-// 5. Hiển thị tên đề gốc đang xử lý ở trên Header và đầu Cột giữa
-// 6. Kéo co giãn độ rộng mượt mà cho cả 3 cột (tự nhớ độ rộng)
-// 7. Nút Xóa nhiều câu đã tích chọn (có Undo)
-// 8. Nút Xuất file mở cây thư mục ngân hàng đề -> Chọn tùy ý -> Xuất PDF / Word
+// 1. CHỈ MỞ ĐƯỢC TRONG CHẾ ĐỘ ADMIN (PHẢI ĐĂNG NHẬP ADMIN MỚI MỞ ĐƯỢC)
+// 2. KHI KÉO THẢ VÀO THƯ MỤC: TỰ ĐỘNG ĐÁNH SỐ ID (VD: id.L10-Ch1-Bai1-P1-Nhận biết-C1, C2...)
+// 3. TRONG CHẾ ĐỘ XẾP CÂU: CÂU ĐÃ ĐÁNH SỐ ID TỰ ĐỘNG XẾP PHÍA TRÊN CÙNG, CÂU CHƯA XẾP GIỮ ĐÚNG THỨ TỰ NẰM PHÍA DƯỚI
+// 4. ĐẦY ĐỦ: UNDO (CTRL+Z), LƯU NHÁP, XÓA NHIỀU CÂU, XUẤT PDF/WORD THEO CÂY THƯ MỤC, CO GIÃN 3 CỘT
 // =========================================================
 
 let qbankState = {
@@ -85,7 +81,10 @@ let qbankState = {
         level: null
     },
 
-    // TRẠNG THÁI ẨN CÂU HỎI ĐÃ GÁN (NÚT XẾP CÂU)
+    // CHẾ ĐỘ XẾP CÂU (MẶC ĐỊNH BẬT: ĐÃ ĐÁNH ID LÊN TRÊN CÙNG, CHƯA XẾP Ở DƯỚI THEO THỨ TỰ)
+    assignMode: true,
+
+    // TÙY CHỌN ẨN CÁC CÂU ĐÃ GÁN VÀO THƯ MỤC (TẮT MẶC ĐỊNH)
     hideAssigned: false,
 
     // NGĂN XẾP HOÀN TÁC (UNDO)
@@ -102,6 +101,49 @@ const QBANK_MAX_UNDO = 40;
 const QBANK_EXPORT_UNASSIGNED_KEY = "__UNASSIGNED__";
 let _qbankToastTimer = null;
 let _qbankResizersInitialized = false;
+
+// ============================================================================
+// 0. KIỂM TRA QUYỀN ADMIN TUYỆT ĐỐI CHO HỆ THỐNG BIÊN SOẠN & NGÂN HÀNG ĐỀ
+// ============================================================================
+function isQbankAdminAuthorized() {
+    try {
+        if (typeof isAdminLoggedIn !== "undefined" && isAdminLoggedIn === true) return true;
+        if (typeof checkAdminSessionValidity === "function" && checkAdminSessionValidity()) return true;
+
+        const logged = (typeof safeLocal !== "undefined")
+            ? safeLocal.getItem("adminLoggedInSession")
+            : localStorage.getItem("adminLoggedInSession");
+        const expiresAt = (typeof safeLocal !== "undefined")
+            ? safeLocal.getItem("admin_expires_at")
+            : localStorage.getItem("admin_expires_at");
+
+        if (logged === "true" && expiresAt && Date.now() < parseInt(expiresAt, 10)) {
+            return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
+function requireQbankAdminOrPrompt() {
+    if (isQbankAdminAuthorized()) return true;
+
+    const menu = document.getElementById("qbank-dropdown-menu");
+    if (menu) menu.classList.remove("show");
+    const creatorModal = document.getElementById("modal-qbank-creator");
+    if (creatorModal) creatorModal.style.display = "none";
+    const savedModal = document.getElementById("modal-qbank-saved");
+    if (savedModal) savedModal.style.display = "none";
+
+    alert("🔒 Chức năng Hệ thống biên soạn & Ngân hàng đề chỉ dành cho Quản trị viên!\n\nVui lòng bấm ⚙️ và đăng nhập mật khẩu Admin trước.");
+
+    const authContainer = document.getElementById("auth-container");
+    const passInput = document.getElementById("admin-pass-input");
+    if (authContainer) {
+        authContainer.classList.add("show");
+        if (passInput) passInput.focus();
+    }
+    return false;
+}
 
 // ============================================================================
 // 1. THÔNG BÁO TOAST NỔI TRỰC TIẾP TRONG MODAL NGÂN HÀNG ĐỀ
@@ -135,7 +177,7 @@ function escapeQbankHtml(str) {
 
 // ============================================================================
 // 2. NHẬN DIỆN PHẦN & SINH ID MÀU ĐỎ TỰ ĐỘNG THEO CÂY THƯ MỤC + MA TRẬN
-//    Ví dụ: id.L10-Ch1-Bai1-P1-Nhận biết-C1
+//    Ví dụ: id.L10-Ch1-Bai1-P1-Nhận biết-C1, id.L10-Ch1-Bai1-P1-Nhận biết-C2...
 // ============================================================================
 function getQbankQuestionPart(q) {
     if (!q) return 1;
@@ -171,31 +213,24 @@ function formatNodeSlugForId(name) {
         .replace(/[đĐ]/g, "d");
     const lower = norm.toLowerCase();
 
-    // Lớp HSG 11 -> LHSG11
     const mHsg = lower.match(/(?:lop|khoi)?\s*hsg\s*(\d+)?/);
     if (mHsg) return "LHSG" + (mHsg[1] || "");
 
-    // Lớp 10 -> L10, Lớp 11 -> L11, Lớp 12 -> L12
     const mLop = lower.match(/(?:lop|khoi)\s*(\d+[a-z]?)/);
     if (mLop) return "L" + mLop[1].toUpperCase();
 
-    // Chương 1 -> Ch1
     const mChuong = lower.match(/chuong\s*(\d+)/);
     if (mChuong) return "Ch" + mChuong[1];
 
-    // Bài 1 -> Bai1
     const mBai = lower.match(/bai\s*(\d+)/);
     if (mBai) return "Bai" + mBai[1];
 
-    // Chuyên đề 2 -> CD2
     const mCd = lower.match(/chuyen\s*de\s*(\d+)/);
     if (mCd) return "CD" + mCd[1];
 
-    // Dạng 3 -> D3
     const mDang = lower.match(/dang\s*(\d+)/);
     if (mDang) return "D" + mDang[1];
 
-    // Chủ đề / Mục / Phần -> M1
     const mMuc = lower.match(/(?:chu\s*de|muc|phan|tiet)\s*(\d+)/);
     if (mMuc) return "M" + mMuc[1];
 
@@ -229,22 +264,39 @@ function getFolderPathNodes(targetId) {
     return foundPath;
 }
 
-// TỰ ĐỘNG ĐÁNH LẠI TOÀN BỘ ID MÀU ĐỎ CHO CÁC CÂU ĐÃ XẾP VÀO THƯ MỤC
+// TỰ ĐỘNG ĐÁNH LẠI TOÀN BỘ ID MÀU ĐỎ THEO THỨ TỰ KÉO THẢ (assignedAt -> origIndex)
+// ĐẢM BẢO C1, C2, C3... KHÔNG BAO GIỜ BỊ NHẢY SỐ LỘN XỘN KHI THÊM CÂU MỚI
 function recomputeAllMatrixIds() {
     const slotCounters = {};
     const questions = qbankState.rawQuestions || [];
 
+    const assignedQuestions = [];
     questions.forEach(q => {
-        if (!q || !q.folderId) {
-            if (q) q.matrixId = "";
-            return;
+        if (!q) return;
+        if (!q.folderId) {
+            q.matrixId = "";
+            q.matrixSeq = 0;
+            q.matrixPathSlug = "";
+        } else {
+            assignedQuestions.push(q);
         }
+    });
 
+    assignedQuestions.sort((a, b) => {
+        const atA = Number(a.assignedAt) || 0;
+        const atB = Number(b.assignedAt) || 0;
+        if (atA !== atB) return atA - atB;
+        return (Number(a.origIndex) || 0) - (Number(b.origIndex) || 0);
+    });
+
+    assignedQuestions.forEach(q => {
         const pathNodes = getFolderPathNodes(q.folderId);
         if (pathNodes.length === 0) {
             q.folderId = null;
             q.folderName = "";
             q.matrixId = "";
+            q.matrixSeq = 0;
+            q.matrixPathSlug = "";
             return;
         }
 
@@ -260,7 +312,8 @@ function recomputeAllMatrixIds() {
         slotCounters[slotKey] = (slotCounters[slotKey] || 0) + 1;
         const seqNum = slotCounters[slotKey];
 
-        // Định dạng chuẩn: id.L10-Ch1-Bai1-P1-Nhận biết-C1
+        q.matrixSeq = seqNum;
+        q.matrixPathSlug = pathSlug;
         q.matrixId = `id.${pathSlug}-P${part}-${levelLabel}-C${seqNum}`;
     });
 }
@@ -276,6 +329,7 @@ function pushQbankUndoState(actionLabel = "Thao tác") {
             currentTree: JSON.parse(JSON.stringify(qbankState.currentTree || [])),
             currentExamTitle: qbankState.currentExamTitle || "",
             selectedQuestionIds: Array.from(qbankState.selectedQuestionIds || []),
+            assignMode: !!qbankState.assignMode,
             hideAssigned: !!qbankState.hideAssigned,
             activeFilter: JSON.parse(JSON.stringify(qbankState.activeFilter || {}))
         };
@@ -315,6 +369,7 @@ function undoQbankAction() {
     qbankState.currentTree = prev.currentTree || qbankState.currentTree;
     qbankState.currentExamTitle = prev.currentExamTitle || "";
     qbankState.selectedQuestionIds = new Set(prev.selectedQuestionIds || []);
+    qbankState.assignMode = prev.assignMode !== undefined ? !!prev.assignMode : true;
     qbankState.hideAssigned = !!prev.hideAssigned;
     qbankState.activeFilter = prev.activeFilter || { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = qbankState.activeFilter.folderId || null;
@@ -326,7 +381,7 @@ function undoQbankAction() {
     saveQbankTreeData();
     saveQbankDraftState(false);
 
-    syncHideAssignedButtonUI();
+    syncAssignModeButtonsUI();
     updateQbankUndoButtonUI();
     updateQbankDeleteSelectedButtonUI();
     renderQbankHeaderAndMidExamTitle();
@@ -339,7 +394,6 @@ function undoQbankAction() {
     showQbankToast(`↩️ Đã lùi lại: ${prev.label}`, "warning");
 }
 
-// Phím tắt Ctrl + Z để lùi lại ngay khi đang mở Modal biên soạn
 document.addEventListener("keydown", function(e) {
     const modal = document.getElementById("modal-qbank-creator");
     if (!modal || modal.style.display !== "flex") return;
@@ -354,7 +408,7 @@ document.addEventListener("keydown", function(e) {
 });
 
 // ============================================================================
-// 4. LƯU & TẢI BẢN NHÁP (ĐÃ FIX TRIỆT ĐỂ LỖI NÚT LƯU BỊ TRƠ)
+// 4. LƯU & TẢI BẢN NHÁP
 // ============================================================================
 async function saveQbankDraftState(showFeedback = false) {
     recomputeAllMatrixIds();
@@ -631,13 +685,15 @@ function initQbankColumnResizers() {
 }
 
 // ============================================================================
-// 7. MỞ & ĐỊNH VỊ DROPDOWN MENU CHÍNH XÁC (CHỐNG CHÌM & CHỐNG TRÀN)
+// 7. MỞ & ĐỊNH VỊ DROPDOWN MENU CHÍNH XÁC (BẢO VỆ CHỈ ADMIN ĐƯỢC MỞ)
 // ============================================================================
 function toggleQbankMenu(e) {
     if (e) {
         e.preventDefault();
         e.stopPropagation();
     }
+    if (!requireQbankAdminOrPrompt()) return;
+
     const btn = document.getElementById("qbank-btn");
     const menu = document.getElementById("qbank-dropdown-menu");
     if (!btn || !menu) return;
@@ -690,6 +746,8 @@ document.addEventListener("click", function(e) {
 });
 
 async function openQbankCreatorModal() {
+    if (!requireQbankAdminOrPrompt()) return;
+
     const menu = document.getElementById("qbank-dropdown-menu");
     if (menu) menu.classList.remove("show");
 
@@ -700,7 +758,7 @@ async function openQbankCreatorModal() {
         await loadQbankDraftState();
         initQbankColumnResizers();
 
-        syncHideAssignedButtonUI();
+        syncAssignModeButtonsUI();
         updateQbankUndoButtonUI();
         updateQbankDeleteSelectedButtonUI();
         renderQbankHeaderAndMidExamTitle();
@@ -718,6 +776,8 @@ function closeQbankCreatorModal() {
 }
 
 function openSavedExamsModal() {
+    if (!requireQbankAdminOrPrompt()) return;
+
     const menu = document.getElementById("qbank-dropdown-menu");
     if (menu) menu.classList.remove("show");
 
@@ -741,6 +801,7 @@ function toggleStorageLocation(selectEl) {
 // 8. MỞ SOI ĐỀ TỪ NGÂN HÀNG CÂU HỎI
 // ============================================================================
 function openSoiDeFromQBank() {
+    if (!requireQbankAdminOrPrompt()) return;
     if (qbankState.rawQuestions.length === 0) {
         alert("⚠️ Ngân hàng đề đang trống. Vui lòng thêm câu hỏi trước khi Soi đề!");
         return;
@@ -818,6 +879,16 @@ function toggleLeafMatrixDisplay(folderId, event) {
         qbankState.expandedLeafMatrixIds.add(folderId);
     }
     renderQbankTree();
+}
+
+// TỰ ĐỘNG MỞ RỘNG MA TRẬN 16 Ô KHI KÉO CÂU HỎI ĐI QUA THƯ MỤC LÁ ĐANG ĐÓNG
+function handleLeafTreeDragOver(e, folderId, isLeaf) {
+    if (!qbankState.draggedQId) return;
+    e.preventDefault();
+    if (isLeaf && !qbankState.expandedLeafMatrixIds.has(folderId)) {
+        qbankState.expandedLeafMatrixIds.add(folderId);
+        renderQbankTree();
+    }
 }
 
 function renderQbankTree() {
@@ -915,6 +986,7 @@ function renderQbankTree() {
             <div class="tree-item-wrapper" style="margin-left: ${depth > 0 ? 3 : 0}px;">
                 <div class="tree-item ${isActive ? 'active' : ''}" id="tree-node-${node.id}"
                      onclick="handleFolderNodeClick('${node.id}')"
+                     ondragover="handleLeafTreeDragOver(event, '${node.id}', ${isLeaf})"
                      style="border-left: 3.5px solid transparent;">
                     
                     <div style="display:flex; align-items:center; gap:5px; min-width:0; flex:1;">
@@ -964,6 +1036,7 @@ function handleFolderNodeClick(folderId) {
         qbankState.expandedLeafMatrixIds.add(folderId);
     }
 
+    syncAssignModeButtonsUI();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
@@ -979,14 +1052,12 @@ function setFilterByNodePart(folderId, part) {
         part: part,
         level: null
     };
+    syncAssignModeButtonsUI();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
 }
 
-// CLICK Ô MA TRẬN:
-// - Nếu đang tích chọn các câu CHƯA XẾP -> gán hàng loạt vào ô đó (có Undo)
-// - Nếu đang tích chọn câu ĐÃ XẾP (để trích đề sang Cột 3) hoặc chưa chọn -> lọc xem ô đó
 function handleMatrixCellClick(folderId, part, level) {
     const selectedUnassigned = Array.from(qbankState.selectedQuestionIds).filter(qId => {
         const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
@@ -1005,22 +1076,33 @@ function handleMatrixCellClick(folderId, part, level) {
             part: part,
             level: level
         };
+        syncAssignModeButtonsUI();
         renderQbankTree();
         renderQbankQuestions();
         updateQbankMatrixStats();
     }
 }
 
-function syncHideAssignedButtonUI() {
-    const btn = document.getElementById("btn-toggle-assigned");
-    if (!btn) return;
-    btn.classList.toggle("is-active", qbankState.hideAssigned);
-    btn.innerHTML = qbankState.hideAssigned
-        ? `<span>👁️</span> <b>Đang ẩn đã xếp</b>`
-        : `<span>📦</span> <b>Xếp câu (Ẩn đã xếp)</b>`;
+function syncAssignModeButtonsUI() {
+    const assignBtn = document.getElementById("btn-toggle-assigned");
+    if (assignBtn) {
+        const isAssignActive = qbankState.assignMode && !qbankState.activeFilter.folderId && !qbankState.hideAssigned;
+        assignBtn.classList.toggle("is-active", isAssignActive);
+        assignBtn.innerHTML = isAssignActive
+            ? `<span>📦</span> <b>Xếp câu (Đang bật)</b>`
+            : `<span>📦</span> <b>Xếp câu (Trên cùng)</b>`;
+    }
+
+    const hideBtn = document.getElementById("btn-qbank-hide-assigned");
+    if (hideBtn) {
+        hideBtn.classList.toggle("is-active", qbankState.hideAssigned);
+        hideBtn.innerHTML = qbankState.hideAssigned
+            ? `<span>👁️</span> <b>Đang ẩn đã xếp</b>`
+            : `<span>🙈</span> <b>Ẩn đã xếp</b>`;
+    }
 }
 
-// HỦY TOÀN BỘ BỘ LỌC ĐỂ XEM TẤT CẢ CÂU HỎI
+// HỦY TOÀN BỘ BỘ LỌC ĐỂ XEM TOÀN BỘ NGÂN HÀNG (VẪN XẾP CÂU CÓ ID LÊN TRÊN, CHƯA XẾP Ở DƯỚI)
 function clearQbankFilter() {
     qbankState.activeFilter = {
         folderId: null,
@@ -1030,14 +1112,33 @@ function clearQbankFilter() {
     };
     qbankState.activeFolderId = null;
     qbankState.activeFolderObj = null;
+    qbankState.assignMode = false;
     qbankState.hideAssigned = false;
-    syncHideAssignedButtonUI();
+
+    syncAssignModeButtonsUI();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
 }
 
-// NÚT XẾP CÂU: ẨN/HIỆN CÂU ĐÃ XẾP (NẾU ĐANG XEM THƯ MỤC SẼ QUAY NGAY VỀ HỘP CÂU CHƯA XẾP)
+// NÚT CHẾ ĐỘ XẾP CÂU: ĐƯA CÂU ĐÃ ĐÁNH SỐ ID LÊN TRÊN CÙNG, CÂU CHƯA XẾP THEO THỨ TỰ NẰM PHÍA DƯỚI
+function toggleQbankAssignMode() {
+    if (qbankState.activeFilter.folderId || qbankState.hideAssigned || !qbankState.assignMode) {
+        qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
+        qbankState.activeFolderId = null;
+        qbankState.activeFolderObj = null;
+        qbankState.hideAssigned = false;
+        qbankState.assignMode = true;
+    } else {
+        qbankState.assignMode = false;
+    }
+    syncAssignModeButtonsUI();
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+}
+
+// NÚT TÙY CHỌN ẨN CÂU ĐÃ XẾP
 function toggleHideAssignedQuestions() {
     if (qbankState.activeFilter.folderId) {
         qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
@@ -1047,7 +1148,7 @@ function toggleHideAssignedQuestions() {
     } else {
         qbankState.hideAssigned = !qbankState.hideAssigned;
     }
-    syncHideAssignedButtonUI();
+    syncAssignModeButtonsUI();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
@@ -1158,6 +1259,9 @@ function promptDeleteFolder(folderId) {
             q.folderId = null;
             q.folderName = "";
             q.matrixId = "";
+            q.matrixSeq = 0;
+            q.matrixPathSlug = "";
+            delete q.assignedAt;
         }
     });
 
@@ -1178,6 +1282,7 @@ function promptDeleteFolder(folderId) {
     recomputeAllMatrixIds();
     saveQbankTreeData();
     saveQbankDraftState(false);
+    syncAssignModeButtonsUI();
     renderQbankHeaderAndMidExamTitle();
     renderQbankTree();
     renderQbankQuestions();
@@ -1205,7 +1310,7 @@ function loadQbankTreeData() {
 }
 
 // ============================================================================
-// 10. KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô (CÓ UNDO + TỰ ĐỘNG ĐÁNH ID ĐỎ)
+// 10. KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô (CÓ UNDO + TỰ ĐỘNG ĐÁNH ID ĐỎ + XẾP LÊN ĐẦU)
 // ============================================================================
 function handleDropZoneOver(e) {
     e.preventDefault();
@@ -1216,7 +1321,7 @@ function handleDropZoneLeave(e) {
     e.currentTarget.classList.remove("drag-over");
 }
 
-function mutateQuestionMatrix(qId, folderId, part, level) {
+function mutateQuestionMatrix(qId, folderId, part, level, assignedTimestamp = null) {
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (!q) return null;
 
@@ -1241,6 +1346,7 @@ function mutateQuestionMatrix(qId, folderId, part, level) {
 
     q.level = level;
     q.folderId = folderId;
+    q.assignedAt = assignedTimestamp || Date.now();
 
     const currentFolderTarget = findNodeInTree(qbankState.currentTree, folderId);
     q.folderName = currentFolderTarget ? currentFolderTarget.name : "";
@@ -1252,14 +1358,31 @@ function handleDropZoneDrop(e, folderId, part, level) {
     e.currentTarget.classList.remove("drag-over");
 
     const qId = e.dataTransfer.getData("text/plain") || qbankState.draggedQId;
+    qbankState.draggedQId = null;
     if (!qId) return;
 
     const targetFolder = findNodeInTree(qbankState.currentTree, folderId);
     const folderLabel = targetFolder ? targetFolder.name : "Thư mục";
-    pushQbankUndoState(`Xếp câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`);
 
-    const q = mutateQuestionMatrix(qId, folderId, part, level);
-    if (!q) return;
+    // Hỗ trợ kéo thả hàng loạt nếu câu đang kéo nằm trong danh sách đã tích chọn nhiều câu
+    const isMultiDrag = qbankState.selectedQuestionIds.has(String(qId)) && qbankState.selectedQuestionIds.size > 1;
+    const idsToMove = isMultiDrag ? Array.from(qbankState.selectedQuestionIds) : [String(qId)];
+
+    pushQbankUndoState(`Xếp ${idsToMove.length} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`);
+
+    const baseTs = Date.now();
+    let lastMovedQ = null;
+    idsToMove.forEach((id, idx) => {
+        const moved = mutateQuestionMatrix(id, folderId, part, level, baseTs + idx);
+        if (moved) lastMovedQ = moved;
+    });
+
+    if (isMultiDrag) {
+        qbankState.selectedQuestionIds.clear();
+        updateQbankDeleteSelectedButtonUI();
+    }
+
+    if (!lastMovedQ) return;
 
     recomputeAllMatrixIds();
     saveQbankDraftState(false);
@@ -1271,7 +1394,11 @@ function handleDropZoneDrop(e, folderId, part, level) {
     updateQbankBuilderStats();
     refreshQbankExportPopoverIfOpen();
 
-    showQbankToast(`✅ Đã xếp câu: ${q.matrixId}`, "success");
+    if (idsToMove.length > 1) {
+        showQbankToast(`✅ Đã xếp ${idsToMove.length} câu vào ${folderLabel} (mới nhất: ${lastMovedQ.matrixId})`, "success");
+    } else {
+        showQbankToast(`✅ Đã đánh số & xếp lên đầu: ${lastMovedQ.matrixId}`, "success");
+    }
 }
 
 function assignSelectedQuestionsToMatrix(folderId, part, level) {
@@ -1283,8 +1410,11 @@ function assignSelectedQuestionsToMatrix(folderId, part, level) {
 
     pushQbankUndoState(`Xếp ${count} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`);
 
+    const baseTs = Date.now();
+    let idx = 0;
     qbankState.selectedQuestionIds.forEach(qId => {
-        mutateQuestionMatrix(qId, folderId, part, level);
+        mutateQuestionMatrix(qId, folderId, part, level, baseTs + idx);
+        idx++;
     });
     qbankState.selectedQuestionIds.clear();
 
@@ -1299,7 +1429,7 @@ function assignSelectedQuestionsToMatrix(folderId, part, level) {
     updateQbankBuilderStats();
     refreshQbankExportPopoverIfOpen();
 
-    showQbankToast(`✅ Đã xếp ${count} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`, "success");
+    showQbankToast(`✅ Đã đánh số & xếp ${count} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`, "success");
 }
 
 function applyMatrixToQuestion(qId, folderId, part, level) {
@@ -1307,7 +1437,7 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     const folderLabel = targetFolder ? targetFolder.name : "Thư mục";
     pushQbankUndoState(`Chuyển câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`);
 
-    const q = mutateQuestionMatrix(qId, folderId, part, level);
+    const q = mutateQuestionMatrix(qId, folderId, part, level, Date.now());
     if (!q) return;
 
     recomputeAllMatrixIds();
@@ -1321,6 +1451,34 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     refreshQbankExportPopoverIfOpen();
 
     showQbankToast(`✅ Đã chuyển câu: ${q.matrixId}`, "success");
+}
+
+// BỎ XẾP 1 CÂU: TRẢ VỀ TRẠNG THÁI CHƯA XẾP Ở PHÍA DƯỚI THEO THỨ TỰ GỐC
+function unassignQbankQuestion(qId) {
+    const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
+    if (!q || !q.folderId) return;
+
+    const oldMatrixId = q.matrixId || "câu hỏi";
+    pushQbankUndoState(`Bỏ xếp ${oldMatrixId}`);
+
+    q.folderId = null;
+    q.folderName = "";
+    q.matrixId = "";
+    q.matrixSeq = 0;
+    q.matrixPathSlug = "";
+    delete q.assignedAt;
+
+    recomputeAllMatrixIds();
+    saveQbankDraftState(false);
+
+    renderQbankHeaderAndMidExamTitle();
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+    updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
+
+    showQbankToast(`↩️ Đã trả câu về mục Chưa xếp (giữ nguyên thứ tự gốc)!`, "info");
 }
 
 // ============================================================================
@@ -1537,7 +1695,6 @@ function toggleQbankExportPopover(event) {
     popover.classList.add("show");
     triggerBtn.classList.add("is-open");
 
-    // Định vị thông minh theo nút bấm (luôn nằm gọn trong màn hình)
     const rect = triggerBtn.getBoundingClientRect();
     const popWidth = Math.min(450, window.innerWidth * 0.94);
     let left = rect.left;
@@ -1638,7 +1795,6 @@ function toggleQbankExportFolderCheck(folderId, isChecked) {
         allIds.forEach(id => qbankState.exportSelectedFolderIds.add(id));
     } else {
         allIds.forEach(id => qbankState.exportSelectedFolderIds.delete(id));
-        // Cập nhật gỡ trạng thái chọn trực tiếp ở các thư mục cha không chứa câu trực tiếp
         const path = getFolderPathNodes(folderId);
         for (let i = 0; i < path.length - 1; i++) {
             const anc = path[i];
@@ -1768,7 +1924,6 @@ function renderQbankExportTree() {
 
     container.innerHTML = html;
 
-    // Áp dụng trạng thái bán chọn (indeterminate) cho checkbox thư mục cha
     indeterminateIds.forEach(id => {
         const chk = document.getElementById(`exp-chk-${id}`);
         if (chk) chk.indeterminate = true;
@@ -1796,6 +1951,9 @@ function getSelectedQbankExportQuestions() {
         const lvlB = levelOrder[b.level || "nb"] || 1;
         if (lvlA !== lvlB) return lvlA - lvlB;
 
+        if (a.matrixSeq && b.matrixSeq && a.folderId === b.folderId) {
+            return a.matrixSeq - b.matrixSeq;
+        }
         return (a.origIndex || 0) - (b.origIndex || 0);
     });
 }
@@ -1842,7 +2000,6 @@ function updateQbankExportFooterUI() {
     const selectedQuestions = getSelectedQbankExportQuestions();
     const qCount = selectedQuestions.length;
 
-    // Đếm số mục lá (hoặc mục chưa xếp) đã được chọn
     let selectedLeafCount = 0;
     qbankState.exportSelectedFolderIds.forEach(id => {
         if (id === QBANK_EXPORT_UNASSIGNED_KEY) {
@@ -1897,6 +2054,51 @@ function toggleQbankExportFormatMenu(event) {
     menu.classList.add("show");
 }
 
+function normalizeQuestionForExamOutput(rawQ, idx, imagesMap) {
+    const letters = ["A", "B", "C", "D"];
+    const q = JSON.parse(JSON.stringify(rawQ));
+    const p = getQbankQuestionPart(q);
+    q.id = idx + 1;
+
+    const imgKey = q.imageKey || `img_q_${rawQ.id}`;
+    const resolvedImg = q.imageUrl || (imagesMap && imagesMap[imgKey]) || "";
+    if (resolvedImg) {
+        q.imageUrl = resolvedImg;
+    }
+
+    if (p === 1) {
+        q.type = "multiple_choice";
+        delete q.part;
+        delete q.isPart4;
+        q.options = Array.isArray(q.options) ? q.options.map(o => String(o ?? "")) : ["", "", "", ""];
+        if (typeof q.correct === "string") {
+            const cIdx = letters.indexOf(q.correct.trim().toUpperCase());
+            q.correct = cIdx !== -1 ? cIdx : 0;
+        } else if (typeof q.correct !== "number" || q.correct < 0 || q.correct > 3) {
+            q.correct = 0;
+        }
+    } else if (p === 2) {
+        q.type = "true_false";
+        delete q.part;
+        delete q.isPart4;
+        q.statements = Array.isArray(q.statements) ? q.statements.map((st, sIdx) => ({
+            id: st.id || ["a", "b", "c", "d"][sIdx] || String(sIdx + 1),
+            statement: String(st.statement ?? ""),
+            correct: (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true")
+        })) : [];
+    } else if (p === 4) {
+        q.type = "essay";
+        q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
+    } else {
+        q.type = "short_answer";
+        delete q.part;
+        delete q.isPart4;
+        q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
+    }
+
+    return q;
+}
+
 function executeQbankExport(format, event) {
     if (event) {
         event.preventDefault();
@@ -1917,51 +2119,9 @@ function executeQbankExport(format, event) {
     const includeKeyChk = document.getElementById("qbank-export-include-key");
     const includeKey = includeKeyChk ? !!includeKeyChk.checked : true;
 
-    // Chuẩn hóa hoàn toàn bản sao câu hỏi để tương thích 100% với portal-exam-printer.js
-    const letters = ["A", "B", "C", "D"];
-    const normalizedQuestions = exportQuestions.map((rawQ, idx) => {
-        const q = JSON.parse(JSON.stringify(rawQ));
-        const p = getQbankQuestionPart(q);
-        q.id = idx + 1;
-
-        const imgKey = q.imageKey || `img_q_${rawQ.id}`;
-        const resolvedImg = q.imageUrl || (qbankState.imagesMap && qbankState.imagesMap[imgKey]) || "";
-        if (resolvedImg) {
-            q.imageUrl = resolvedImg;
-        }
-
-        if (p === 1) {
-            q.type = "multiple_choice";
-            delete q.part;
-            delete q.isPart4;
-            q.options = Array.isArray(q.options) ? q.options.map(o => String(o ?? "")) : ["", "", "", ""];
-            if (typeof q.correct === "string") {
-                const cIdx = letters.indexOf(q.correct.trim().toUpperCase());
-                q.correct = cIdx !== -1 ? cIdx : 0;
-            } else if (typeof q.correct !== "number" || q.correct < 0 || q.correct > 3) {
-                q.correct = 0;
-            }
-        } else if (p === 2) {
-            q.type = "true_false";
-            delete q.part;
-            delete q.isPart4;
-            q.statements = Array.isArray(q.statements) ? q.statements.map((st, sIdx) => ({
-                id: st.id || ["a", "b", "c", "d"][sIdx] || String(sIdx + 1),
-                statement: String(st.statement ?? ""),
-                correct: (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true")
-            })) : [];
-        } else if (p === 4) {
-            q.type = "essay";
-            q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
-        } else {
-            q.type = "short_answer";
-            delete q.part;
-            delete q.isPart4;
-            q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
-        }
-
-        return q;
-    });
+    const normalizedQuestions = exportQuestions.map((rawQ, idx) =>
+        normalizeQuestionForExamOutput(rawQ, idx, qbankState.imagesMap)
+    );
 
     const exportData = {
         title: exportTitle,
@@ -1992,8 +2152,6 @@ function executeQbankExport(format, event) {
 
 // ============================================================================
 // 12. CỘT 2: UPLOAD FILE JSON ĐỀ MỚI
-//     - THAY THẾ CÁC CÂU CHƯA XẾP CỦA ĐỀ CŨ Ở Ô GIỮA
-//     - GIỮ NGUYÊN 100% CÁC CÂU ĐÃ KÉO THẢ VÀO THƯ MỤC NGÂN HÀNG ĐỀ
 // ============================================================================
 function triggerQbankUpload() {
     let input = document.getElementById("qbank-file-upload-input");
@@ -2064,26 +2222,22 @@ function readQbankJsonFile(file) {
                 throw new Error("File đề thi không có câu hỏi nào!");
             }
 
-            // Lưu snapshot Undo trước khi thay đề cũ ở cột giữa
             pushQbankUndoState(`Upload đề mới "${examTitle}"`);
 
-            // 1. GIỮ NGUYÊN 100% CÁC CÂU ĐÃ XẾP VÀO THƯ MỤC NGÂN HÀNG, XÓA CÂU CHƯA XẾP CỦA ĐỀ CŨ
+            // GIỮ NGUYÊN 100% CÁC CÂU ĐÃ XẾP VÀO THƯ MỤC NGÂN HÀNG
             const keptAssignedQuestions = (qbankState.rawQuestions || []).filter(q => Boolean(q && q.folderId));
             const keptIds = new Set(keptAssignedQuestions.map(q => String(q.id)));
 
-            // Dọn các câu chưa xếp cũ ra khỏi tập chọn
             const cleanedSelected = new Set();
             qbankState.selectedQuestionIds.forEach(id => {
                 if (keptIds.has(String(id))) cleanedSelected.add(String(id));
             });
             qbankState.selectedQuestionIds = cleanedSelected;
 
-            // Gộp kho ảnh mới vào imagesMap (không làm mất ảnh của các câu đã lưu trong thư mục)
             if (Object.keys(parsedImages).length > 0) {
                 Object.assign(qbankState.imagesMap, parsedImages);
             }
 
-            // 2. NẠP CÁC CÂU HỎI CỦA ĐỀ MỚI (TRẠNG THÁI CHƯA XẾP)
             const nowTs = Date.now();
             const importedQuestions = rawQ.map((item, idx) => {
                 const q = JSON.parse(JSON.stringify(item));
@@ -2093,9 +2247,11 @@ function readQbankJsonFile(file) {
                 q.folderId = null;
                 q.folderName = "";
                 q.matrixId = "";
+                q.matrixSeq = 0;
+                q.matrixPathSlug = "";
+                delete q.assignedAt;
                 if (!q.level) q.level = "nb";
 
-                // Gắn sẵn imageUrl nếu có imageKey trùng trong parsedImages
                 if (!q.imageUrl && q.imageKey && parsedImages[q.imageKey]) {
                     q.imageUrl = String(parsedImages[q.imageKey]).trim();
                 }
@@ -2105,14 +2261,15 @@ function readQbankJsonFile(file) {
             qbankState.rawQuestions = [...keptAssignedQuestions, ...importedQuestions];
             qbankState.currentExamTitle = examTitle;
 
-            // Tự động đặt chế độ chỉ hiển thị câu chưa xếp của đề mới ở cột giữa
+            // BẬT CHẾ ĐỘ XẾP CÂU (HIỆN CÂU ĐÃ ĐÁNH ID LÊN TRÊN CÙNG, CÂU CHƯA XẾP Ở DƯỚI THEO THỨ TỰ)
             qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
             qbankState.activeFolderId = null;
             qbankState.activeFolderObj = null;
-            qbankState.hideAssigned = true;
+            qbankState.assignMode = true;
+            qbankState.hideAssigned = false;
 
             recomputeAllMatrixIds();
-            syncHideAssignedButtonUI();
+            syncAssignModeButtonsUI();
             updateQbankDeleteSelectedButtonUI();
             saveQbankDraftState(false);
 
@@ -2124,7 +2281,7 @@ function readQbankJsonFile(file) {
             refreshQbankExportPopoverIfOpen();
 
             showQbankToast(
-                `✅ Đã nạp đề "${examTitle}" (${importedQuestions.length} câu mới). Giữ nguyên ${keptAssignedQuestions.length} câu trong ngân hàng!`,
+                `✅ Đã nạp đề "${examTitle}" (${importedQuestions.length} câu mới). Kéo thả vào thư mục để tự đánh ID và xếp lên đầu!`,
                 "success"
             );
         } catch (err) {
@@ -2137,11 +2294,12 @@ function readQbankJsonFile(file) {
 
 // ============================================================================
 // 13. BỘ LỌC & SẮP XẾP CÂU HỎI THÔNG MINH
+//     - KHI Ở CHẾ ĐỘ XẾP CÂU: CÂU ĐÃ ĐÁNH SỐ ID LÊN TRÊN CÙNG (C1, C2...),
+//       CÂU CHƯA XẾP GIỮ NGUYÊN THỨ TỰ NẰM PHÍA DƯỚI
 // ============================================================================
 function getScopeQuestionsForMatrix() {
     let list = [...(qbankState.rawQuestions || [])];
 
-    // Nếu đang chọn xem một thư mục cụ thể -> chỉ tính trong thư mục đó (bỏ qua hideAssigned)
     if (qbankState.activeFilter.folderId) {
         const rootNode = findNodeInTree(qbankState.currentTree, qbankState.activeFilter.folderId);
         if (rootNode) {
@@ -2149,29 +2307,28 @@ function getScopeQuestionsForMatrix() {
             list = list.filter(q => q && q.folderId && allowedFolderIds.has(q.folderId));
         }
     } else if (qbankState.hideAssigned) {
-        // Khi không đứng trong thư mục mà bật ẩn câu đã xếp -> chỉ xem các câu chưa xếp của đề gốc
         list = list.filter(q => q && !q.folderId);
+    } else if (qbankState.assignMode) {
+        const curTitle = (qbankState.currentExamTitle || "").trim();
+        list = list.filter(q => {
+            if (!q) return false;
+            if (!q.folderId) return true;
+            if (!curTitle || !q.sourceExam) return true;
+            return q.sourceExam === curTitle;
+        });
     }
 
     return list;
 }
 
-function getFilteredAndSortedQuestions() {
-    let list = getScopeQuestionsForMatrix();
-
-    // Lọc theo Phần (P1, P2, P3, P4)
-    if (qbankState.activeFilter.part) {
-        list = list.filter(q => getQbankQuestionPart(q) === qbankState.activeFilter.part);
-    }
-
-    // Lọc theo Mức độ
-    if (qbankState.activeFilter.level) {
-        list = list.filter(q => (q.level || "nb") === qbankState.activeFilter.level);
-    }
-
+function sortAssignedQuestionsArray(arr) {
     const levelOrder = { nb: 1, th: 2, vdt: 3, vdc: 4 };
+    return [...arr].sort((a, b) => {
+        const slugA = String(a.matrixPathSlug || a.folderName || "");
+        const slugB = String(b.matrixPathSlug || b.folderName || "");
+        const slugCmp = slugA.localeCompare(slugB, "vi");
+        if (slugCmp !== 0) return slugCmp;
 
-    list.sort((a, b) => {
         const pA = getQbankQuestionPart(a);
         const pB = getQbankQuestionPart(b);
         if (pA !== pB) return pA - pB;
@@ -2180,10 +2337,33 @@ function getFilteredAndSortedQuestions() {
         const lvlB = levelOrder[b.level || "nb"] || 1;
         if (lvlA !== lvlB) return lvlA - lvlB;
 
-        return (a.origIndex || 0) - (b.origIndex || 0);
-    });
+        const seqA = Number(a.matrixSeq) || 0;
+        const seqB = Number(b.matrixSeq) || 0;
+        if (seqA !== seqB) return seqA - seqB;
 
-    return list;
+        return (Number(a.origIndex) || 0) - (Number(b.origIndex) || 0);
+    });
+}
+
+function getFilteredAndSortedQuestions() {
+    let list = getScopeQuestionsForMatrix();
+
+    if (qbankState.activeFilter.part) {
+        list = list.filter(q => getQbankQuestionPart(q) === qbankState.activeFilter.part);
+    }
+
+    if (qbankState.activeFilter.level) {
+        list = list.filter(q => (q.level || "nb") === qbankState.activeFilter.level);
+    }
+
+    const assigned = list.filter(q => Boolean(q && q.folderId && q.matrixId));
+    const unassigned = list.filter(q => Boolean(q && !(q.folderId && q.matrixId)));
+
+    const sortedAssigned = sortAssignedQuestionsArray(assigned);
+    // Câu chưa kéo thả (chưa có ID) giữ đúng thứ tự đề gốc
+    const sortedUnassigned = [...unassigned].sort((a, b) => (Number(a.origIndex) || 0) - (Number(b.origIndex) || 0));
+
+    return [...sortedAssigned, ...sortedUnassigned];
 }
 
 function updateQbankMatrixStats() {
@@ -2234,13 +2414,15 @@ function updateQbankMatrixStats() {
 
     html += `<div style="margin-left:auto; font-weight:900; color:#0f172a; font-size:11.5px; white-space:nowrap;">Đang xem: ${total} câu</div>`;
 
-    const hasFilter = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned;
+    const hasFilter = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned || qbankState.assignMode;
     if (hasFilter) {
         let filterLabels = [];
         if (qbankState.activeFilter.folderName) {
             filterLabels.push(`Thư mục: ${qbankState.activeFilter.folderName}`);
         } else if (qbankState.hideAssigned) {
-            filterLabels.push("Chỉ hiện câu chưa xếp của đề gốc");
+            filterLabels.push("Đang ẩn câu đã xếp");
+        } else if (qbankState.assignMode) {
+            filterLabels.push("Chế độ Xếp câu (Đã đánh ID ở trên • Chưa xếp ở dưới)");
         }
         if (qbankState.activeFilter.part) filterLabels.push(`Phần ${qbankState.activeFilter.part}`);
         if (qbankState.activeFilter.level) {
@@ -2249,8 +2431,8 @@ function updateQbankMatrixStats() {
 
         html += `
             <div class="qbank-active-filter-bar" style="width: 100%;">
-                <span>🔍 Đang lọc: <b>${escapeQbankHtml(filterLabels.join(" • "))}</b></span>
-                <button type="button" class="btn-clear-filter" onclick="clearQbankFilter()">✕ Hiện tất cả</button>
+                <span>🔍 Đang xem: <b>${escapeQbankHtml(filterLabels.join(" • "))}</b></span>
+                <button type="button" class="btn-clear-filter" onclick="clearQbankFilter()">✕ Hiện tất cả ngân hàng</button>
             </div>
         `;
     }
@@ -2282,8 +2464,115 @@ function filterByGlobalCell(p, lvl) {
 }
 
 // ============================================================================
-// 14. RENDER DANH SÁCH THẺ CÂU HỎI (HIỂN THỊ ID ĐỎ TỰ ĐỘNG RÕ RÀNG)
+// 14. RENDER DANH SÁCH THẺ CÂU HỎI (ĐÃ ĐÁNH ID LÊN TRÊN, CHƯA XẾP Ở DƯỚI)
 // ============================================================================
+function renderQbankCardHtml(q, idx) {
+    const letters = ["A", "B", "C", "D"];
+    const isChecked = qbankState.selectedQuestionIds.has(String(q.id));
+    const p = getQbankQuestionPart(q);
+    const levelText = getQbankLevelLabel(q.level || "nb");
+
+    const isAssigned = Boolean(q.folderId && q.matrixId);
+    const displayIdText = isAssigned
+        ? q.matrixId
+        : `Câu ${q.origIndex || (idx + 1)} • Chưa xếp`;
+
+    const imgKey = String(q.imageKey || `img_q_${q.id}`).replace(/'/g, "");
+    let imgUrl = q.imageUrl || qbankState.imagesMap[imgKey] || "";
+
+    const uploaderHtml = `
+        <div class="qbank-img-tool-zone" id="zone-qbank-${q.id}" tabindex="0" title="Bấm vào vùng này rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:3px 6px; border-radius:5px; border:1px dashed #cbd5e1; margin-top:4px;">
+            <span style="font-size:10.5px; font-weight:800; color:#475569;">🖼️ Ảnh:</span>
+            <button type="button" class="btn-qbank-img" onclick="triggerQBankPaste('${q.id}', '${imgKey}')">📋 Dán (Ctrl+V)</button>
+            <input type="file" id="file-qbank-${q.id}" accept="image/*" style="display:none;" onchange="handleQBankImgSelect(this, '${q.id}', '${imgKey}')">
+            <button type="button" class="btn-qbank-img" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;" onclick="document.getElementById('file-qbank-${q.id}').click()">📁 Tệp</button>
+            ${imgUrl ? `<button type="button" class="btn-qbank-img" style="background:#fee2e2; color:#dc2626;" onclick="deleteQBankImg('${q.id}', '${imgKey}')">🗑 Xóa</button>` : ""}
+            <span id="status-qbank-${q.id}" style="font-size:10px; font-weight:800; margin-left:auto;"></span>
+        </div>
+        ${imgUrl ? `<div style="text-align:center; margin:4px 0;"><img src="${imgUrl}" style="max-height:140px; border-radius:6px; border:1px solid #cbd5e1;"></div>` : ""}
+    `;
+
+    let contentDetailsHtml = "";
+    if (p === 1 && Array.isArray(q.options)) {
+        let correctIdx = 0;
+        if (typeof q.correct === "number") correctIdx = q.correct;
+        else if (typeof q.correct === "string") correctIdx = letters.indexOf(q.correct.trim().toUpperCase());
+
+        contentDetailsHtml = `
+            <div class="qbank-options-preview">
+                ${q.options.map((opt, oIdx) => `
+                    <div class="qbank-opt-item ${oIdx === correctIdx ? "is-correct" : ""}">
+                        <span class="qbank-opt-circle">${letters[oIdx] || ""}</span>
+                        <span>${opt} ${oIdx === correctIdx ? "<b>✓</b>" : ""}</span>
+                    </div>
+                `).join("")}
+            </div>
+        `;
+    } else if (p === 2 && Array.isArray(q.statements)) {
+        contentDetailsHtml = `
+            <div style="margin:4px 0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:5px; padding:4px 6px;">
+                ${q.statements.map(st => {
+                    const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng");
+                    return `
+                    <div style="font-size:11.5px; margin-bottom:2px; display:flex; justify-content:space-between;">
+                        <span><b>${st.id})</b> ${st.statement}</span>
+                        <b style="color:${isTrue ? "#16a34a" : "#dc2626"};">${isTrue ? "🟢 Đúng" : "🔴 Sai"}</b>
+                    </div>`;
+                }).join("")}
+            </div>
+        `;
+    } else {
+        const ans = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct || "0");
+        contentDetailsHtml = `
+            <div style="margin:4px 0; font-size:11.5px; font-weight:800; color:#0d9488; background:#f0fdfa; padding:3px 6px; border-radius:5px; border:1px solid #99f6e4;">
+                🎯 Đáp số: <span style="color:#0f172a;">${ans}</span>
+            </div>
+        `;
+    }
+
+    const explainHtml = q.explanation ? `
+        <div style="font-size:11px; color:#78350f; background:#fffbeb; padding:4px 6px; border-radius:5px; border-left:3px solid #f59e0b; margin-top:4px;">
+            💡 <b>Lời giải:</b> ${q.explanation}
+        </div>` : "";
+
+    const folderTag = q.folderName
+        ? `<span style="font-size:10px; color:#16a34a; background:#dcfce7; padding:1px 5px; border-radius:5px; border:1px solid #bbf7d0;">📁 ${escapeQbankHtml(q.folderName)}</span>`
+        : "";
+
+    const unassignBtnHtml = isAssigned
+        ? `<button type="button" class="btn-soide-mini" style="background:#fff7ed; color:#c2410c; border:1px solid #fdba74;" onclick="unassignQbankQuestion('${q.id}')" title="Trả câu này về mục Chưa xếp">↩️ Bỏ xếp</button>`
+        : "";
+
+    const formattedQText = (typeof formatQuestionText === "function")
+        ? formatQuestionText(q.question || "")
+        : (q.question || "");
+
+    return `
+        <div class="qbank-q-card ${isAssigned ? "is-assigned-card" : ""} ${isChecked ? "selected" : ""}" id="qbank-card-${q.id}" draggable="true" ondragstart="handleQuestionDragStart(event, '${q.id}')" ondragend="handleQuestionDragEnd()">
+            <div class="qbank-q-header">
+                <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                    <span class="qbank-q-id-badge ${isAssigned ? "is-assigned" : "is-unassigned"}" title="${escapeQbankHtml(displayIdText)}">${escapeQbankHtml(displayIdText)}</span>
+                    <span style="font-size:10.5px; font-weight:800; color:#059669; border:1px solid #10b981; padding:1px 5px; border-radius:5px; background:#ecfdf5;">Phần ${p} • ${levelText}</span>
+                    ${folderTag}
+                </div>
+                
+                <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                    ${unassignBtnHtml}
+                    <button type="button" class="btn-soide-mini" style="background:#f1f5f9; color:#0f172a; border:1px solid #cbd5e1;" onclick="promptMoveQuestion('${q.id}')" title="Chuyển sang mục khác">🔄 Chuyển</button>
+                    <button type="button" class="btn-soide-mini" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5;" onclick="deleteQbankQuestion('${q.id}')" title="Xóa câu hỏi này">🗑️ Xóa</button>
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:900; font-size:11.5px; color:#0f172a;">
+                        <input type="checkbox" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" ${isChecked ? "checked" : ""} onchange="toggleSelectQuestion('${q.id}', this.checked)"> Chọn
+                    </label>
+                </div>
+            </div>
+            <div style="font-size:12.5px; font-weight:600; color:#1e293b; margin-bottom:3px; line-height:1.4;">${formattedQText}</div>
+            ${uploaderHtml}
+            ${contentDetailsHtml}
+            ${explainHtml}
+        </div>
+    `;
+}
+
 function renderQbankQuestions() {
     recomputeAllMatrixIds();
     renderQbankHeaderAndMidExamTitle();
@@ -2303,7 +2592,7 @@ function renderQbankQuestions() {
 
         if (qbankState.hideAssigned && !qbankState.activeFilter.folderId && assignedTotal > 0 && unassignedLeft === 0) {
             emptyHeadline = "🎉 Đã xếp xong 100% câu hỏi của đề gốc vào ngân hàng!";
-            emptyHint = `Hiện có <b>${assignedTotal} câu</b> trong các thư mục bên trái. Thầy có thể bấm vào từng thư mục để xem hoặc <a href="javascript:void(0)" onclick="triggerQbankUpload()" style="color:#0284c7; font-weight:800; text-decoration:underline;">Upload đề mới</a>.`;
+            emptyHint = `Hiện có <b>${assignedTotal} câu</b> trong các thư mục bên trái. Bấm <b>📦 Xếp câu</b> hoặc <b>🙈 Ẩn đã xếp</b> để xem lại.`;
         } else if (isFilterActive) {
             emptyHeadline = "Không tìm thấy câu hỏi nào phù hợp với bộ lọc này.";
             emptyHint = '<a href="javascript:void(0)" onclick="clearQbankFilter()" style="color:#0284c7; font-weight:800; text-decoration:underline;">Nhấn vào đây để hủy lọc và xem tất cả</a>';
@@ -2319,108 +2608,36 @@ function renderQbankQuestions() {
         return;
     }
 
+    const assignedQuestions = questions.filter(q => Boolean(q.folderId && q.matrixId));
+    const unassignedQuestions = questions.filter(q => !Boolean(q.folderId && q.matrixId));
+
     let html = "";
-    const letters = ["A", "B", "C", "D"];
+    const showGroupHeaders = !qbankState.activeFilter.folderId && assignedQuestions.length > 0;
 
-    questions.forEach((q, idx) => {
-        const isChecked = qbankState.selectedQuestionIds.has(String(q.id));
-        const p = getQbankQuestionPart(q);
-        const levelText = getQbankLevelLabel(q.level || "nb");
-
-        const isAssigned = Boolean(q.folderId && q.matrixId);
-        const displayIdText = isAssigned
-            ? q.matrixId
-            : `Câu ${q.origIndex || (idx + 1)} • Chưa xếp`;
-
-        const imgKey = String(q.imageKey || `img_q_${q.id}`).replace(/'/g, "");
-        let imgUrl = q.imageUrl || qbankState.imagesMap[imgKey] || "";
-
-        const uploaderHtml = `
-            <div class="qbank-img-tool-zone" id="zone-qbank-${q.id}" tabindex="0" title="Bấm vào vùng này rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:3px 6px; border-radius:5px; border:1px dashed #cbd5e1; margin-top:4px;">
-                <span style="font-size:10.5px; font-weight:800; color:#475569;">🖼️ Ảnh:</span>
-                <button type="button" class="btn-qbank-img" onclick="triggerQBankPaste('${q.id}', '${imgKey}')">📋 Dán (Ctrl+V)</button>
-                <input type="file" id="file-qbank-${q.id}" accept="image/*" style="display:none;" onchange="handleQBankImgSelect(this, '${q.id}', '${imgKey}')">
-                <button type="button" class="btn-qbank-img" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;" onclick="document.getElementById('file-qbank-${q.id}').click()">📁 Tệp</button>
-                ${imgUrl ? `<button type="button" class="btn-qbank-img" style="background:#fee2e2; color:#dc2626;" onclick="deleteQBankImg('${q.id}', '${imgKey}')">🗑 Xóa</button>` : ""}
-                <span id="status-qbank-${q.id}" style="font-size:10px; font-weight:800; margin-left:auto;"></span>
-            </div>
-            ${imgUrl ? `<div style="text-align:center; margin:4px 0;"><img src="${imgUrl}" style="max-height:140px; border-radius:6px; border:1px solid #cbd5e1;"></div>` : ""}
-        `;
-
-        let contentDetailsHtml = "";
-        if (p === 1 && Array.isArray(q.options)) {
-            let correctIdx = 0;
-            if (typeof q.correct === "number") correctIdx = q.correct;
-            else if (typeof q.correct === "string") correctIdx = letters.indexOf(q.correct.trim().toUpperCase());
-
-            contentDetailsHtml = `
-                <div class="qbank-options-preview">
-                    ${q.options.map((opt, oIdx) => `
-                        <div class="qbank-opt-item ${oIdx === correctIdx ? "is-correct" : ""}">
-                            <span class="qbank-opt-circle">${letters[oIdx] || ""}</span>
-                            <span>${opt} ${oIdx === correctIdx ? "<b>✓</b>" : ""}</span>
-                        </div>
-                    `).join("")}
-                </div>
-            `;
-        } else if (p === 2 && Array.isArray(q.statements)) {
-            contentDetailsHtml = `
-                <div style="margin:4px 0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:5px; padding:4px 6px;">
-                    ${q.statements.map(st => {
-                        const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng");
-                        return `
-                        <div style="font-size:11.5px; margin-bottom:2px; display:flex; justify-content:space-between;">
-                            <span><b>${st.id})</b> ${st.statement}</span>
-                            <b style="color:${isTrue ? "#16a34a" : "#dc2626"};">${isTrue ? "🟢 Đúng" : "🔴 Sai"}</b>
-                        </div>`;
-                    }).join("")}
-                </div>
-            `;
-        } else {
-            const ans = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct || "0");
-            contentDetailsHtml = `
-                <div style="margin:4px 0; font-size:11.5px; font-weight:800; color:#0d9488; background:#f0fdfa; padding:3px 6px; border-radius:5px; border:1px solid #99f6e4;">
-                    🎯 Đáp số: <span style="color:#0f172a;">${ans}</span>
-                </div>
-            `;
-        }
-
-        const explainHtml = q.explanation ? `
-            <div style="font-size:11px; color:#78350f; background:#fffbeb; padding:4px 6px; border-radius:5px; border-left:3px solid #f59e0b; margin-top:4px;">
-                💡 <b>Lời giải:</b> ${q.explanation}
-            </div>` : "";
-
-        const folderTag = q.folderName
-            ? `<span style="font-size:10px; color:#16a34a; background:#dcfce7; padding:1px 5px; border-radius:5px; border:1px solid #bbf7d0;">📁 ${escapeQbankHtml(q.folderName)}</span>`
-            : "";
-
-        const formattedQText = (typeof formatQuestionText === "function")
-            ? formatQuestionText(q.question || "")
-            : (q.question || "");
-
+    if (showGroupHeaders) {
         html += `
-            <div class="qbank-q-card ${isChecked ? "selected" : ""}" id="qbank-card-${q.id}" draggable="true" ondragstart="handleQuestionDragStart(event, '${q.id}')">
-                <div class="qbank-q-header">
-                    <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                        <span class="qbank-q-id-badge ${isAssigned ? "is-assigned" : "is-unassigned"}" title="${escapeQbankHtml(displayIdText)}">${escapeQbankHtml(displayIdText)}</span>
-                        <span style="font-size:10.5px; font-weight:800; color:#059669; border:1px solid #10b981; padding:1px 5px; border-radius:5px; background:#ecfdf5;">Phần ${p} • ${levelText}</span>
-                        ${folderTag}
-                    </div>
-                    
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <button type="button" class="btn-soide-mini" style="background:#f1f5f9; color:#0f172a; border:1px solid #cbd5e1;" onclick="promptMoveQuestion('${q.id}')" title="Chuyển sang mục khác">🔄 Chuyển</button>
-                        <button type="button" class="btn-soide-mini" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5;" onclick="deleteQbankQuestion('${q.id}')" title="Xóa câu hỏi này">🗑️ Xóa</button>
-                        <label style="cursor:pointer; display:flex; align-items:center; gap:4px; font-weight:900; font-size:11.5px; color:#0f172a;">
-                            <input type="checkbox" style="width:16px; height:16px; accent-color:#10b981; cursor:pointer;" ${isChecked ? "checked" : ""} onchange="toggleSelectQuestion('${q.id}', this.checked)"> Chọn
-                        </label>
-                    </div>
-                </div>
-                <div style="font-size:12.5px; font-weight:600; color:#1e293b; margin-bottom:3px; line-height:1.4;">${formattedQText}</div>
-                ${uploaderHtml}
-                ${contentDetailsHtml}
-                ${explainHtml}
+            <div class="qbank-section-banner assigned-banner">
+                <span>📌 CÂU ĐÃ XẾP VÀO THƯ MỤC &amp; ĐÁNH SỐ ID TỰ ĐỘNG (${assignedQuestions.length} câu)</span>
+                <span style="font-size:10px; font-weight:700;">Xếp trên cùng</span>
             </div>
         `;
+    }
+
+    assignedQuestions.forEach((q, idx) => {
+        html += renderQbankCardHtml(q, idx);
+    });
+
+    if (showGroupHeaders && unassignedQuestions.length > 0) {
+        html += `
+            <div class="qbank-section-banner unassigned-banner">
+                <span>📥 CÂU CHƯA KÉO THẢ / CHƯA CÓ ID (${unassignedQuestions.length} câu)</span>
+                <span style="font-size:10px; font-weight:700;">Giữ nguyên thứ tự đề gốc</span>
+            </div>
+        `;
+    }
+
+    unassignedQuestions.forEach((q, idx) => {
+        html += renderQbankCardHtml(q, idx);
     });
 
     container.innerHTML = html;
@@ -2433,6 +2650,10 @@ function renderQbankQuestions() {
 function handleQuestionDragStart(e, qId) {
     qbankState.draggedQId = qId;
     e.dataTransfer.setData("text/plain", qId);
+}
+
+function handleQuestionDragEnd() {
+    qbankState.draggedQId = null;
 }
 
 function toggleSelectQuestion(qId, isChecked) {
@@ -2609,6 +2830,8 @@ function updateQbankBuilderStats() {
 }
 
 async function saveExtractedExamToBank() {
+    if (!requireQbankAdminOrPrompt()) return;
+
     const titleInp = document.getElementById("qbank-exam-name");
     const gradeSel = document.getElementById("qbank-exam-grade");
 
@@ -2621,15 +2844,16 @@ async function saveExtractedExamToBank() {
         return;
     }
 
-    const selectedQ = qbankState.rawQuestions
-        .filter(q => qbankState.selectedQuestionIds.has(String(q.id)))
-        .map((q, idx) => ({ ...q, id: idx + 1 }));
-
-    if (selectedQ.length === 0) {
+    const pickedRaw = qbankState.rawQuestions.filter(q => qbankState.selectedQuestionIds.has(String(q.id)));
+    if (pickedRaw.length === 0) {
         updateQbankDeleteSelectedButtonUI();
         updateQbankBuilderStats();
         return alert("⚠️ Thầy chưa tích chọn câu hỏi nào ở cột giữa!");
     }
+
+    // Chuẩn hóa và sắp xếp câu từ Phần I -> II -> III -> IV
+    pickedRaw.sort((a, b) => getQbankQuestionPart(a) - getQbankQuestionPart(b));
+    const selectedQ = pickedRaw.map((q, idx) => normalizeQuestionForExamOutput(q, idx, qbankState.imagesMap));
 
     const btn = document.getElementById("btn-save-extracted-exam");
     if (btn) {
@@ -2760,6 +2984,7 @@ function filterSavedExamsList(gradeVal) {
 }
 
 function previewSavedExam(examId) {
+    if (!requireQbankAdminOrPrompt()) return;
     const exam = qbankState.savedExams.find(e => e.id === examId);
     if (!exam) return;
 
@@ -2842,6 +3067,7 @@ function previewSavedExam(examId) {
 }
 
 function openInSoiDeFromBank(examId) {
+    if (!requireQbankAdminOrPrompt()) return;
     const exam = qbankState.savedExams.find(e => e.id === examId);
     if (!exam) return;
 
@@ -2871,6 +3097,7 @@ function openInSoiDeFromBank(examId) {
 }
 
 function openTransferExamModal(examId) {
+    if (!requireQbankAdminOrPrompt()) return;
     const exam = qbankState.savedExams.find(e => e.id === examId);
     if (!exam) return;
     qbankState.currentExamToTransfer = exam;
@@ -2916,6 +3143,7 @@ function createTransferModalInDOM() {
 }
 
 async function confirmTransferExamToClasses() {
+    if (!requireQbankAdminOrPrompt()) return;
     const exam = qbankState.currentExamToTransfer;
     const checkedBoxes = Array.from(document.querySelectorAll("#transfer-class-list input:checked"));
     const checked = checkedBoxes.map(c => c.value);
@@ -2975,6 +3203,7 @@ async function confirmTransferExamToClasses() {
 }
 
 function downloadSavedExamJson(examId) {
+    if (!requireQbankAdminOrPrompt()) return;
     const exam = qbankState.savedExams.find(e => e.id === examId);
     if (!exam) return;
     const blob = new Blob([JSON.stringify(exam, null, 2)], { type: "application/json" });
@@ -2985,6 +3214,7 @@ function downloadSavedExamJson(examId) {
 }
 
 function deleteSavedExam(examId) {
+    if (!requireQbankAdminOrPrompt()) return;
     if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA đề thi này khỏi Ngân hàng đề không?")) return;
 
     qbankState.savedExams = qbankState.savedExams.filter(e => e.id !== examId);
@@ -3001,6 +3231,8 @@ function deleteSavedExam(examId) {
 // ============================================================================
 // 18. XUẤT TOÀN BỘ HÀM RA WINDOW SCOPE
 // ============================================================================
+window.isQbankAdminAuthorized = isQbankAdminAuthorized;
+window.requireQbankAdminOrPrompt = requireQbankAdminOrPrompt;
 window.showQbankToast = showQbankToast;
 window.recomputeAllMatrixIds = recomputeAllMatrixIds;
 window.undoQbankAction = undoQbankAction;
@@ -3027,8 +3259,10 @@ window.handleFolderNodeClick = handleFolderNodeClick;
 window.setFilterByNodePart = setFilterByNodePart;
 window.handleMatrixCellClick = handleMatrixCellClick;
 window.clearQbankFilter = clearQbankFilter;
+window.toggleQbankAssignMode = toggleQbankAssignMode;
 window.toggleHideAssignedQuestions = toggleHideAssignedQuestions;
 window.toggleLeafMatrixDisplay = toggleLeafMatrixDisplay;
+window.handleLeafTreeDragOver = handleLeafTreeDragOver;
 window.filterByGlobalPart = filterByGlobalPart;
 window.filterByGlobalCell = filterByGlobalCell;
 
@@ -3036,7 +3270,9 @@ window.handleDropZoneOver = handleDropZoneOver;
 window.handleDropZoneLeave = handleDropZoneLeave;
 window.handleDropZoneDrop = handleDropZoneDrop;
 window.assignSelectedQuestionsToMatrix = assignSelectedQuestionsToMatrix;
+window.unassignQbankQuestion = unassignQbankQuestion;
 window.handleQuestionDragStart = handleQuestionDragStart;
+window.handleQuestionDragEnd = handleQuestionDragEnd;
 
 window.deleteSelectedQbankQuestions = deleteSelectedQbankQuestions;
 window.updateQbankDeleteSelectedButtonUI = updateQbankDeleteSelectedButtonUI;
