@@ -4,7 +4,8 @@
 // - CỘT 1: CÂY THƯ MỤC KIẾN THỨC & MA TRẬN 16 Ô KÉO THẢ
 // - CỘT 2: DANH SÁCH THẺ CÂU HỎI (ĐÃ XẾP TRÊN CÙNG / CHƯA XẾP Ở DƯỚI)
 // - CHUYỂN ĐỀ THI TỪ CÁC LỚP SANG NGÂN HÀNG ĐỀ
-// - UPLOAD FILE JSON ĐỀ MỚI, DÁN ẢNH (CTRL + V) & XÓA LẺ / XÓA NHIỀU CÂU
+// - UPLOAD FILE JSON ĐỀ MỚI, DÁN ẢNH (CTRL + V)
+// - MENU XÓA NHIỀU CÂU 3 TÙY CHỌN (1. CHỜ XẾP, 2. ĐANG HIỂN THỊ, 3. TÍCH CHỌN)
 // =========================================================
 
 // ============================================================================
@@ -514,7 +515,7 @@ function unassignQbankQuestion(qId) {
 }
 
 // ============================================================================
-// 4. CHUYỂN, XÓA LẺ & XÓA NHIỀU CÂU
+// 4. CHUYỂN, XÓA LẺ & MENU XÓA NHIỀU CÂU (3 TÙY CHỌN)
 // ============================================================================
 function pruneStaleSelectedQuestionIds() {
     const existingIds = new Set((qbankState.rawQuestions || []).map(q => String(q.id)));
@@ -524,28 +525,270 @@ function pruneStaleSelectedQuestionIds() {
     return cleaned.size;
 }
 
+function cleanupOrphanedImagesInQbank(deletedQuestions) {
+    if (!Array.isArray(deletedQuestions) || deletedQuestions.length === 0) return;
+    if (!qbankState.imagesMap || typeof qbankState.imagesMap !== "object") return;
+
+    const activeImageKeys = new Set();
+    (qbankState.rawQuestions || []).forEach(q => {
+        if (!q) return;
+        if (q.imageKey) activeImageKeys.add(String(q.imageKey));
+        activeImageKeys.add(`img_q_${q.id}`);
+    });
+
+    deletedQuestions.forEach(dq => {
+        if (!dq) return;
+        const k1 = dq.imageKey ? String(dq.imageKey) : "";
+        const k2 = `img_q_${dq.id}`;
+        if (k1 && !activeImageKeys.has(k1)) delete qbankState.imagesMap[k1];
+        if (k2 && !activeImageKeys.has(k2)) delete qbankState.imagesMap[k2];
+    });
+}
+
+function ensureQbankDeleteMultiDropdownInDOM() {
+    const btn = document.getElementById("btn-qbank-delete-selected");
+    if (!btn) return null;
+
+    let wrapper = btn.closest(".qbank-delete-dropdown-wrapper");
+    if (!wrapper && btn.parentNode) {
+        wrapper = document.createElement("div");
+        wrapper.className = "qbank-delete-dropdown-wrapper";
+        wrapper.id = "qbank-delete-dropdown-wrapper";
+        btn.parentNode.insertBefore(wrapper, btn);
+        wrapper.appendChild(btn);
+    }
+
+    let menu = document.getElementById("qbank-delete-multi-menu");
+    if (!menu && wrapper) {
+        menu = document.createElement("div");
+        menu.id = "qbank-delete-multi-menu";
+        menu.className = "qbank-delete-menu";
+        menu.onclick = function(e) { e.stopPropagation(); };
+        menu.innerHTML = `
+            <div class="qbank-delete-menu-header">
+                <span>🗑️ TÙY CHỌN XÓA CÂU HỎI</span>
+                <span style="font-size:10px; color:#64748b; font-weight:700; text-transform:none;">Có thể ↩️ Lùi</span>
+            </div>
+            <div class="qbank-delete-menu-item" id="qbank-del-opt-unassigned" onclick="executeQbankMultiDelete('unassigned', event)">
+                <div class="qbank-delete-item-left">
+                    <span class="qbank-delete-item-icon">📥</span>
+                    <div class="qbank-delete-item-text">
+                        <b>1. Xóa câu Chờ xếp</b>
+                        <small>Xóa các câu chưa kéo vào thư mục</small>
+                    </div>
+                </div>
+                <span class="del-count-badge" id="qbank-del-count-unassigned">0 câu</span>
+            </div>
+            <div class="qbank-delete-menu-item" id="qbank-del-opt-displayed" onclick="executeQbankMultiDelete('displayed', event)">
+                <div class="qbank-delete-item-left">
+                    <span class="qbank-delete-item-icon">👁️</span>
+                    <div class="qbank-delete-item-text">
+                        <b>2. Xóa các câu đang hiển thị</b>
+                        <small>Xóa danh sách đang hiện ở cột giữa</small>
+                    </div>
+                </div>
+                <span class="del-count-badge" id="qbank-del-count-displayed">0 câu</span>
+            </div>
+            <div class="qbank-delete-menu-item" id="qbank-del-opt-selected" onclick="executeQbankMultiDelete('selected', event)">
+                <div class="qbank-delete-item-left">
+                    <span class="qbank-delete-item-icon">☑️</span>
+                    <div class="qbank-delete-item-text">
+                        <b>3. Xóa câu tích chọn</b>
+                        <small>Chỉ xóa các câu đã đánh dấu ☑️ Chọn</small>
+                    </div>
+                </div>
+                <span class="del-count-badge" id="qbank-del-count-selected">0 câu</span>
+            </div>
+        `;
+        wrapper.appendChild(menu);
+    }
+
+    return menu;
+}
+
+function updateQbankDeleteMenuCounts() {
+    const allQ = qbankState.rawQuestions || [];
+    const unassignedCount = allQ.filter(q => Boolean(q && !q.folderId)).length;
+    const displayedList = (typeof getFilteredAndSortedQuestions === "function") ? getFilteredAndSortedQuestions() : allQ;
+    const displayedCount = displayedList.length;
+    const selectedCount = pruneStaleSelectedQuestionIds();
+
+    const elUnassigned = document.getElementById("qbank-del-count-unassigned");
+    const elDisplayed = document.getElementById("qbank-del-count-displayed");
+    const elSelected = document.getElementById("qbank-del-count-selected");
+
+    if (elUnassigned) elUnassigned.textContent = `${unassignedCount} câu`;
+    if (elDisplayed) elDisplayed.textContent = `${displayedCount} câu`;
+    if (elSelected) elSelected.textContent = `${selectedCount} câu`;
+
+    const optUnassigned = document.getElementById("qbank-del-opt-unassigned");
+    const optDisplayed = document.getElementById("qbank-del-opt-displayed");
+    const optSelected = document.getElementById("qbank-del-opt-selected");
+
+    if (optUnassigned) optUnassigned.classList.toggle("is-disabled", unassignedCount === 0);
+    if (optDisplayed) optDisplayed.classList.toggle("is-disabled", displayedCount === 0);
+    if (optSelected) optSelected.classList.toggle("is-disabled", selectedCount === 0);
+}
+
 function updateQbankDeleteSelectedButtonUI() {
+    ensureQbankDeleteMultiDropdownInDOM();
     const btn = document.getElementById("btn-qbank-delete-selected");
     if (!btn) return;
     const count = pruneStaleSelectedQuestionIds();
     btn.classList.toggle("has-selection", count > 0);
-    btn.innerHTML = count > 0 ? `<span>🗑️</span> <span>Xóa nhiều câu (${count})</span>` : `<span>🗑️</span> <span>Xóa nhiều câu</span>`;
+    btn.innerHTML = count > 0
+        ? `<span>🗑️</span> <span>Xóa nhiều câu (${count}) ▾</span>`
+        : `<span>🗑️</span> <span>Xóa nhiều câu ▾</span>`;
+    updateQbankDeleteMenuCounts();
 }
 
-function deleteSelectedQbankQuestions() {
-    const count = pruneStaleSelectedQuestionIds();
-    if (count === 0) return showQbankToast("⚠️ Vui lòng tích chọn (☑️) câu hỏi trước khi xóa!", "warning");
-    if (!confirm(`⚠️ XÓA ${count} câu hỏi đã tích chọn?\n(Có thể bấm ↩️ Lùi nếu lỡ tay).`)) return;
-    pushQbankUndoState(`Xóa ${count} câu đã chọn`);
-    const idsToDelete = new Set(qbankState.selectedQuestionIds);
-    qbankState.rawQuestions = (qbankState.rawQuestions || []).filter(q => !idsToDelete.has(String(q.id)));
-    qbankState.selectedQuestionIds.clear();
-    recomputeAllMatrixIds(); saveQbankDraftState(false);
-    updateQbankDeleteSelectedButtonUI(); renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
+function closeQbankDeleteMultiMenu() {
+    const menu = document.getElementById("qbank-delete-multi-menu");
+    const btn = document.getElementById("btn-qbank-delete-selected");
+    if (menu) menu.classList.remove("show");
+    if (btn) btn.classList.remove("is-open");
+}
+
+function toggleQbankDeleteMultiMenu(event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const menu = ensureQbankDeleteMultiDropdownInDOM();
+    const btn = document.getElementById("btn-qbank-delete-selected");
+    if (!menu || !btn) return;
+
+    if (menu.classList.contains("show")) {
+        closeQbankDeleteMultiMenu();
+        return;
+    }
+
+    if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
+    updateQbankDeleteMenuCounts();
+
+    menu.classList.add("show");
+    btn.classList.add("is-open");
+
+    const rect = btn.getBoundingClientRect();
+    const menuWidth = Math.min(288, window.innerWidth * 0.92);
+    let left = Math.max(10, Math.min(rect.left, window.innerWidth - menuWidth - 10));
+    const approxHeight = menu.offsetHeight || 195;
+    let top = rect.bottom + 6;
+    if (top + approxHeight > window.innerHeight - 10 && rect.top > approxHeight + 10) {
+        top = rect.top - approxHeight - 6;
+    }
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+}
+
+// Giữ tên hàm deleteSelectedQbankQuestions để tương thích 100% với onclick trong index.html
+function deleteSelectedQbankQuestions(event) {
+    toggleQbankDeleteMultiMenu(event);
+}
+
+function executeQbankMultiDelete(mode, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+
+    const allQ = qbankState.rawQuestions || [];
+    let targets = [];
+    let confirmMsg = "";
+    let undoLabel = "";
+    let toastMsg = "";
+
+    if (mode === "unassigned") {
+        targets = allQ.filter(q => Boolean(q && !q.folderId));
+        if (targets.length === 0) {
+            closeQbankDeleteMultiMenu();
+            showQbankToast("ℹ️ Hiện không có câu Chờ xếp nào để xóa!", "info");
+            return;
+        }
+        const assignedKeepCount = allQ.length - targets.length;
+        confirmMsg = `⚠️ XÁC NHẬN XÓA CÂU CHỜ XẾP:\n\nBạn có chắc chắn muốn xóa toàn bộ ${targets.length} câu Chờ xếp (chưa gán vào thư mục)?\n\n(${assignedKeepCount} câu đã xếp trong thư mục vẫn được giữ nguyên 100% • Có thể bấm ↩️ Lùi nếu lỡ tay).`;
+        undoLabel = `Xóa ${targets.length} câu Chờ xếp`;
+        toastMsg = `🗑️ Đã xóa ${targets.length} câu Chờ xếp!`;
+    } else if (mode === "displayed") {
+        targets = (typeof getFilteredAndSortedQuestions === "function") ? getFilteredAndSortedQuestions() : [...allQ];
+        if (targets.length === 0) {
+            closeQbankDeleteMultiMenu();
+            showQbankToast("ℹ️ Hiện không có câu hỏi nào đang hiển thị ở cột giữa để xóa!", "info");
+            return;
+        }
+        let scopeDesc = "danh sách đang hiển thị ở cột giữa";
+        if (qbankState.activeFilter && qbankState.activeFilter.folderName) {
+            scopeDesc = `thư mục "${qbankState.activeFilter.folderName}" đang hiển thị`;
+        }
+        confirmMsg = `⚠️ XÁC NHẬN XÓA CÁC CÂU ĐANG HIỂN THỊ:\n\nBạn có chắc chắn muốn xóa toàn bộ ${targets.length} câu trong ${scopeDesc}?\n\n(Có thể bấm ↩️ Lùi hoặc Ctrl+Z để khôi phục ngay nếu cần).`;
+        undoLabel = `Xóa ${targets.length} câu đang hiển thị`;
+        toastMsg = `🗑️ Đã xóa ${targets.length} câu đang hiển thị!`;
+    } else if (mode === "selected") {
+        pruneStaleSelectedQuestionIds();
+        const selSet = qbankState.selectedQuestionIds;
+        targets = allQ.filter(q => q && selSet.has(String(q.id)));
+        if (targets.length === 0) {
+            closeQbankDeleteMultiMenu();
+            showQbankToast("⚠️ Vui lòng tích chọn (☑️ Chọn) ít nhất 1 câu hỏi bên dưới!", "warning");
+            return;
+        }
+        confirmMsg = `⚠️ XÁC NHẬN XÓA CÂU TÍCH CHỌN:\n\nBạn có chắc chắn muốn xóa ${targets.length} câu hỏi đã đánh dấu ☑️ Chọn?\n\n(Có thể bấm ↩️ Lùi hoặc Ctrl+Z nếu lỡ tay).`;
+        undoLabel = `Xóa ${targets.length} câu tích chọn`;
+        toastMsg = `🗑️ Đã xóa ${targets.length} câu tích chọn!`;
+    } else {
+        return;
+    }
+
+    closeQbankDeleteMultiMenu();
+
+    if (!confirm(confirmMsg)) return;
+
+    // Nếu đang mở chế độ Sửa đề chia đôi ở cột giữa thì đóng lại trước khi xóa để đồng bộ
+    if (typeof qbankMidEditState !== "undefined" && qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") {
+        closeQbankMidEditMode(true);
+    }
+
+    pushQbankUndoState(undoLabel);
+
+    const idsToDelete = new Set(targets.map(q => String(q.id)));
+    const deletedQuestions = allQ.filter(q => q && idsToDelete.has(String(q.id)));
+    qbankState.rawQuestions = allQ.filter(q => q && !idsToDelete.has(String(q.id)));
+
+    idsToDelete.forEach(id => qbankState.selectedQuestionIds.delete(id));
+    cleanupOrphanedImagesInQbank(deletedQuestions);
+
+    // Nếu xóa sạch toàn bộ câu chờ xếp thì làm sạch tiêu đề đề gốc chờ xếp
+    const remainingUnassigned = (qbankState.rawQuestions || []).filter(q => Boolean(q && !q.folderId)).length;
+    if (remainingUnassigned === 0 && mode === "unassigned") {
+        qbankState.currentExamTitle = "";
+    }
+
+    recomputeAllMatrixIds();
+    saveQbankDraftState(false);
+    updateQbankDeleteSelectedButtonUI();
+    renderQbankHeaderAndMidExamTitle();
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
-    showQbankToast(`🗑️ Đã xóa ${count} câu hỏi!`, "warning");
+    showQbankToast(toastMsg, "warning");
 }
+
+// Đóng menu Xóa nhiều câu khi click ra ngoài hoặc nhấn phím Escape
+document.addEventListener("click", function(e) {
+    const menu = document.getElementById("qbank-delete-multi-menu");
+    if (!menu || !menu.classList.contains("show")) return;
+    const wrapper = document.getElementById("qbank-delete-dropdown-wrapper");
+    const btn = document.getElementById("btn-qbank-delete-selected");
+    if ((wrapper && wrapper.contains(e.target)) || (btn && btn.contains(e.target)) || menu.contains(e.target)) {
+        return;
+    }
+    closeQbankDeleteMultiMenu();
+});
+
+document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+        const menu = document.getElementById("qbank-delete-multi-menu");
+        if (menu && menu.classList.contains("show")) {
+            closeQbankDeleteMultiMenu();
+        }
+    }
+});
 
 function deleteQbankQuestion(qId) {
     if (!confirm("⚠️ Bạn có chắc chắn muốn xóa câu hỏi này?")) return;
@@ -553,6 +796,7 @@ function deleteQbankQuestion(qId) {
     pushQbankUndoState(`Xóa ${target && target.matrixId ? target.matrixId : "1 câu hỏi"}`);
     qbankState.rawQuestions = qbankState.rawQuestions.filter(q => String(q.id) !== String(qId));
     qbankState.selectedQuestionIds.delete(String(qId));
+    if (target) cleanupOrphanedImagesInQbank([target]);
     recomputeAllMatrixIds(); saveQbankDraftState(false);
     updateQbankDeleteSelectedButtonUI(); renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
@@ -824,6 +1068,7 @@ function renderQbankCardHtml(q, idx) {
 function renderQbankQuestions() {
     recomputeAllMatrixIds();
     renderQbankHeaderAndMidExamTitle();
+    updateQbankDeleteSelectedButtonUI();
     const container = document.getElementById("qbank-questions-list");
     if (!container) return;
     const questions = getFilteredAndSortedQuestions();
@@ -991,6 +1236,9 @@ window.assignSelectedQuestionsToMatrix = assignSelectedQuestionsToMatrix;
 window.unassignQbankQuestion = unassignQbankQuestion;
 window.pruneStaleSelectedQuestionIds = pruneStaleSelectedQuestionIds;
 window.updateQbankDeleteSelectedButtonUI = updateQbankDeleteSelectedButtonUI;
+window.toggleQbankDeleteMultiMenu = toggleQbankDeleteMultiMenu;
+window.closeQbankDeleteMultiMenu = closeQbankDeleteMultiMenu;
+window.executeQbankMultiDelete = executeQbankMultiDelete;
 window.deleteSelectedQbankQuestions = deleteSelectedQbankQuestions;
 window.deleteQbankQuestion = deleteQbankQuestion;
 window.promptMoveQuestion = promptMoveQuestion;
