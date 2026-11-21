@@ -1,7 +1,7 @@
 /* =========================================================
    FILE: ngan-hang-de.css
    GIAO DIỆN NÚT TRIGGER, DROPDOWN & MA TRẬN 3 CỘT CO GIÃN (HOÀN CHỈNH 100%)
-   ĐÃ BỔ SUNG: NÚT XÓA NHIỀU CÂU & BẢNG XUẤT FILE THEO CÂY THƯ MỤC (PDF / WORD)
+   ĐÃ BỔ SUNG: CHỈ ADMIN MỚI HIỆN NÚT, PHÂN TẦNG CÂU ĐÃ XẾP / CHƯA XẾP & NÚT BỎ XẾP
 ========================================================= */
 
 /* =========================================
@@ -9,7 +9,7 @@
 ========================================= */
 .qbank-dropdown-wrapper {
     position: relative;
-    display: inline-flex;
+    display: none; /* Mặc định ẩn, chỉ hiện khi đã đăng nhập Admin */
     align-items: center;
     z-index: 100002 !important;
 }
@@ -955,7 +955,7 @@
     white-space: nowrap;
 }
 
-/* NÚT XẾP CÂU / ẨN CÂU ĐÃ XẾP */
+/* NÚT CHẾ ĐỘ XẾP CÂU & NÚT ẨN ĐÃ XẾP */
 .btn-toggle-assigned {
     background: #ffffff !important;
     color: #475569 !important;
@@ -972,6 +972,45 @@
     color: #ffffff !important;
     border-color: #d97706 !important;
     box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3) !important;
+}
+
+.btn-toggle-hide-assigned {
+    background: #ffffff !important;
+    color: #475569 !important;
+    border: 1.2px solid #cbd5e1 !important;
+}
+.btn-toggle-hide-assigned:hover {
+    background: #f8fafc !important;
+    color: #0f172a !important;
+}
+.btn-toggle-hide-assigned.is-active {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
+    color: #ffffff !important;
+    border-color: #475569 !important;
+}
+
+/* THANH PHÂN CÁCH NHÓM CÂU ĐÃ XẾP (TRÊN CÙNG) VÀ CHƯA XẾP (DƯỚI) */
+.qbank-section-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+    user-select: none;
+}
+.qbank-section-banner.assigned-banner {
+    background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%);
+    color: #b91c1c;
+    border: 1.2px solid #fca5a5;
+}
+.qbank-section-banner.unassigned-banner {
+    background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+    color: #0369a1;
+    border: 1.2px solid #bae6fd;
+    margin-top: 4px;
 }
 
 /* THANH THỐNG KÊ MA TRẬN CO GỌN DỌC TỐI ĐA */
@@ -1087,6 +1126,10 @@
     cursor: grab; 
     position: relative; 
     transition: all 0.15s ease; 
+}
+.qbank-q-card.is-assigned-card {
+    border-color: #fca5a5;
+    border-left: 4px solid #dc2626;
 }
 .qbank-q-card:active { 
     cursor: grabbing; 
