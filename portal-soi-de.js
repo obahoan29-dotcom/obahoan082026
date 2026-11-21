@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN, ẢNH & THỨ TỰ CÂU HỎI)
 // ĐÃ SỬA: ĐỒNG BỘ CUỘN 2 CHIỀU (TRÁI <-> PHẢI) THÔNG MINH CHỐNG GIẬT LAG
-// ĐÃ SỬA: HỖ TRỢ CHỈNH SỬA VÀ LƯU NGƯỢC LẠI VÀO NGÂN HÀNG CÂU HỎI
+// ĐÃ SỬA: KHI LƯU NGƯỢC VỀ NGÂN HÀNG CÂU HỎI TỰ ĐỘNG TÍNH LẠI ID MA TRẬN & CÂY THƯ MỤC
 // =========================================================
 
 let soiDeState = {
@@ -20,7 +20,7 @@ let soiDeState = {
     validationErrors: [],
     rawEditingCardIds: new Set(),
     isFromExamRoom: false,
-    isFromQBank: false // Cờ đánh dấu mở từ Ngân hàng đề
+    isFromQBank: false
 };
 
 const SOI_DE_AVAILABLE_CLASSES = [
@@ -660,7 +660,6 @@ function checkAndDisplayAdminSoiDeButton() {
     }
 }
 
-// BẢO ĐẢM KHÔI PHỤC ĐÚNG THỨ TỰ TỪ DB BẤT CHẤP VIỆC HỌC SINH ĐANG THI BỊ TRỘN
 async function switchToSoiDeFromExam() {
     if (typeof examData === 'undefined' || !examData) {
         alert("⚠️ Không tìm thấy dữ liệu đề thi hiện tại!");
@@ -688,7 +687,6 @@ async function switchToSoiDeFromExam() {
 
     const sourceImages = { ...(examData.images || {}), ...dbImages };
     
-    // Ưu tiên 1: Đề từ DB, Ưu tiên 2: Đề Gốc lưu tạm, Ưu tiên 3: Ép sắp xếp lại theo ID
     let sourceQuestions = [];
     if (dbQuestions && dbQuestions.length > 0) {
         sourceQuestions = dbQuestions;
@@ -702,8 +700,7 @@ async function switchToSoiDeFromExam() {
         });
     }
 
-    const letters = ["A", "B", "C", "D"];
-    const clonedQuestions = sourceQuestions.map((q, idx) => {
+    const clonedQuestions = sourceQuestions.map((q) => {
         const item = JSON.parse(JSON.stringify(q));
         const dbQ = dbQuestions ? dbQuestions.find(dq => String(dq.id) === String(q.id)) : null;
 
@@ -779,7 +776,6 @@ async function updateExamFromSoiDe() {
         
         const cleanQuestions = reorganizeAllQuestionsByParts(soiDeState.examData.questions).map((q, idx) => {
             const item = JSON.parse(JSON.stringify(q));
-            // KHÔNG đánh lại ID nếu mở từ QBank để giữ nguyên ID độc nhất
             if (!soiDeState.isFromQBank) {
                 item.id = item.id || (idx + 1);
             }
@@ -815,13 +811,19 @@ async function updateExamFromSoiDe() {
             return item;
         });
 
-        // NẾU LÀ TỪ NGÂN HÀNG ĐỀ -> CẬP NHẬT TRỰC TIẾP VÀO qbankState VÀ LƯU NHÁP
+        // NẾU LÀ TỪ NGÂN HÀNG ĐỀ -> CẬP NHẬT TRỰC TIẾP VÀO qbankState VÀ TÍNH LẠI ID MA TRẬN
         if (soiDeState.isFromQBank) {
             if (typeof qbankState !== 'undefined') {
                 qbankState.rawQuestions = cleanQuestions;
                 qbankState.imagesMap = imagesMap;
+                if (typeof recomputeAllMatrixIds === 'function') {
+                    recomputeAllMatrixIds();
+                }
                 if (typeof saveQbankDraftState === 'function') {
                     await saveQbankDraftState();
+                }
+                if (typeof renderQbankTree === 'function') {
+                    renderQbankTree();
                 }
                 if (typeof renderQbankQuestions === 'function') {
                     renderQbankQuestions();
@@ -835,7 +837,6 @@ async function updateExamFromSoiDe() {
             return;
         }
 
-        // CÒN NẾU TỪ PHÒNG THI THÌ ĐẨY LÊN SUPABASE NHƯ BÌNH THƯỜNG
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
         if (!client) {
             alert("❌ Chưa kết nối được máy chủ Supabase! Vui lòng kiểm tra lại app-config.js.");
@@ -855,7 +856,6 @@ async function updateExamFromSoiDe() {
         const finalMade = soiDeState.examData.maDe || "101";
         const finalMinutes = parseInt(soiDeState.examData.timeLimitMinutes, 10) || 90;
 
-        // 1. CẬP NHẬT VÀO TABLE: quizzes
         const { error: qErr } = await client.from('quizzes').upsert({
             id: quizId,
             title: finalTitle,
@@ -868,7 +868,6 @@ async function updateExamFromSoiDe() {
 
         if (qErr) throw qErr;
 
-        // 2. CẬP NHẬT TIÊU ĐỀ & THỜI GIAN VÀO TABLE: custom_links
         try {
             await client.from('custom_links').update({
                 title: finalTitle,
@@ -876,7 +875,6 @@ async function updateExamFromSoiDe() {
             }).eq('id', quizId);
         } catch(cErr) {}
 
-        // 3. ĐỒNG BỘ VÀO SECURE_VAULT VÀ EXAMDATA TRONG PHÒNG THI
         if (typeof window.SECURE_VAULT !== 'undefined') {
             window.SECURE_VAULT.answers = window.SECURE_VAULT.answers || {};
             window.SECURE_VAULT.explanations = window.SECURE_VAULT.explanations || {};
@@ -1043,10 +1041,9 @@ function setupSoiDeDragAndResize() {
     }
 }
 
-// BỘ ĐỒNG BỘ CUỘN 2 CHIỀU THÔNG MINH (CHỐNG VÒNG LẶP VÔ HẠN)
 let lastSyncedQId_RightToLeft = null;
 let lastSyncedQId_LeftToRight = null;
-let activeScrollPane = null; // 'left' hoặc 'right'
+let activeScrollPane = null;
 
 function setupDualScrollSync() {
     const rightPane = document.getElementById("soide-right-pane");
