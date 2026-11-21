@@ -311,7 +311,7 @@
                 <button class="auth-btn" onclick="checkAdminPassword()">VÀO</button>
             </div>
             
-            <!-- NÚT TẠO CÂU HỎI & TRÍCH ĐỀ (ĐÃ SỬA CƠ CHẾ CLICK & ĐỊNH VỊ) -->
+            <!-- NÚT TẠO CÂU HỎI & TRÍCH ĐỀ -->
             <div class="qbank-dropdown-wrapper">
                 <button type="button" class="qbank-trigger-btn" id="qbank-btn" onclick="toggleQbankMenu(event)" title="Tạo câu hỏi & Trích đề">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1275,6 +1275,11 @@
                 <div class="qbank-stats-bar">
                     <div class="qbank-tools-row">
                         <button class="btn-qbank btn-qbank-primary" onclick="triggerQbankUpload()">📥 Upload file JSON đề</button>
+                        
+                        <!-- NÚT LƯU THỦ CÔNG MỚI THÊM VÀO ĐÂY -->
+                        <button type="button" class="btn-qbank btn-qbank-success" onclick="saveQbankDraftState()" title="Lưu nháp các câu hỏi đang biên soạn để không bị mất khi đóng trang">
+                            💾 Lưu dữ liệu
+                        </button>
                         
                         <!-- NÚT XẾP CÂU: BẤM VÀO SẼ ẨN/HIỆN CÁC CÂU ĐÃ GÁN VÀO MA TRẬN -->
                         <button type="button" class="btn-qbank btn-toggle-assigned" id="btn-toggle-assigned" onclick="toggleHideAssignedQuestions()" title="Bấm để ẩn/hiện toàn bộ các câu hỏi đã được xếp vào cây thư mục ma trận">
