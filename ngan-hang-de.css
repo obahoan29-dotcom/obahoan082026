@@ -1,6 +1,6 @@
 /* =========================================================
    FILE: ngan-hang-de.css
-   GIAO DIỆN NÚT TRIGGER, DROPDOWN & MA TRẬN 3 CỘT (HOÀN CHỈNH 100%)
+   GIAO DIỆN NÚT TRIGGER, DROPDOWN & MA TRẬN 3 CỘT CO GIÃN (HOÀN CHỈNH 100%)
 ========================================================= */
 
 /* =========================================
@@ -106,7 +106,7 @@
 }
 
 /* =========================================
-   2. KHUNG MODAL CHÍNH
+   2. KHUNG MODAL CHÍNH & TOAST THÔNG BÁO
 ========================================= */
 .qbank-modal-overlay { 
     position: fixed !important; 
@@ -132,6 +132,7 @@
     box-shadow: 0 25px 65px rgba(0,0,0,0.45); 
     border: 1.5px solid #cbd5e1; 
     font-family: 'Be Vietnam Pro', sans-serif; 
+    position: relative;
 }
 .qbank-header { 
     background: #0f172a; 
@@ -140,14 +141,122 @@
     display: flex; 
     align-items: center; 
     justify-content: space-between; 
+    gap: 12px;
     flex-shrink: 0; 
     border-bottom: 3px solid #10b981; 
 }
+.qbank-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+}
+.qbank-header-exam-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(52, 211, 153, 0.65);
+    color: #a7f3d0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    max-width: 520px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.qbank-header-exam-badge.has-exam {
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.35), rgba(16, 185, 129, 0.35));
+    border-color: #38bdf8;
+    color: #fef08a;
+}
+
+/* THÔNG BÁO TOAST NỔI TRONG MODAL NGÂN HÀNG ĐỀ */
+.qbank-toast {
+    position: absolute;
+    top: 52px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #ffffff;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 800;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.38);
+    border: 1.5px solid rgba(255, 255, 255, 0.55);
+    z-index: 10000050;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 90%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.qbank-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+.qbank-toast.toast-info {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+}
+.qbank-toast.toast-warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+.qbank-toast.toast-error {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+
+/* =========================================
+   2.5. BỐ CỤC 3 CỘT CO GIÃN ĐỘ RỘNG MƯỢT MÀ
+========================================= */
 .qbank-body-3cols { 
-    display: grid; 
-    grid-template-columns: 330px 1fr 320px; 
+    display: flex; 
+    flex-direction: row;
     flex: 1; 
     overflow: hidden; 
+    width: 100%;
+    min-height: 0;
+}
+.qbank-body-3cols.is-resizing {
+    user-select: none;
+    cursor: col-resize;
+}
+
+.qbank-col-resizer {
+    width: 7px;
+    flex: 0 0 7px;
+    background: #e2e8f0;
+    cursor: col-resize;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+    z-index: 20;
+    touch-action: none;
+}
+.qbank-col-resizer::after {
+    content: "⋮";
+    font-size: 16px;
+    font-weight: 900;
+    color: #64748b;
+    line-height: 1;
+    pointer-events: none;
+}
+.qbank-col-resizer:hover,
+.qbank-col-resizer.is-dragging {
+    background: #10b981;
+}
+.qbank-col-resizer:hover::after,
+.qbank-col-resizer.is-dragging::after {
+    color: #ffffff;
 }
 
 /* =========================================
@@ -155,11 +264,14 @@
 ========================================= */
 .qbank-col-left { 
     background: #ffffff; 
-    border-right: 2px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
     height: 100%;
     overflow: hidden;
+    flex: 0 0 330px;
+    width: 330px;
+    min-width: 210px;
+    max-width: 55vw;
 }
 .qbank-storage-toggle { 
     padding: 6px 10px; 
@@ -227,12 +339,22 @@
     border-color: #38bdf8 !important; 
     color: #0369a1 !important; 
 }
-/* LOẠI BỎ ĐƯỜNG GẠCH NỐI, BỎ BORDER TRÁI TRONG MENU THƯ MỤC CHUYÊN SÂU ĐỂ TẠO SỰ GỌN GÀNG */
 .tree-children { 
     margin-left: 14px; 
     padding-left: 0; 
     display: flex; 
     flex-direction: column; 
+}
+.tree-q-count {
+    font-size: 10px;
+    font-weight: 900;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    padding: 0 5px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    line-height: 1.5;
 }
 
 .btn-add-tree, .btn-rename-tree, .btn-matrix-toggle { 
@@ -378,6 +500,8 @@
     background: #f1f5f9; 
     overflow: hidden; 
     height: 100%;
+    flex: 1 1 auto;
+    min-width: 260px;
 }
 .qbank-stats-bar { 
     background: #ffffff; 
@@ -385,7 +509,7 @@
     border-bottom: 1.5px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
-    gap: 4px; 
+    gap: 5px; 
     flex-shrink: 0;
 }
 .qbank-tools-row { 
@@ -393,6 +517,64 @@
     gap: 6px; 
     flex-wrap: wrap; 
     align-items: center; 
+}
+
+/* NÚT MŨI TÊN LÙI (UNDO) Ở GÓC TRÊN BÊN TRÁI CỘT GIỮA */
+.btn-qbank-undo {
+    background: linear-gradient(135deg, #f97316, #ea580c) !important;
+    color: #ffffff !important;
+    border: 1px solid #fdba74 !important;
+    box-shadow: 0 2px 6px rgba(234, 88, 12, 0.28) !important;
+}
+.btn-qbank-undo:disabled {
+    background: #f1f5f9 !important;
+    color: #94a3b8 !important;
+    border: 1.2px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    filter: none !important;
+    opacity: 0.72;
+}
+
+/* THANH HIỂN THỊ TÊN ĐỀ GỐC Ở CỘT GIỮA */
+.qbank-mid-exam-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+    border: 1.2px solid #93c5fd;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 11.5px;
+    color: #1e3a8a;
+}
+.qbank-mid-exam-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    flex: 1;
+    font-weight: 700;
+}
+.qbank-mid-exam-title-wrap b {
+    color: #0369a1;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.qbank-mid-exam-counter {
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #047857;
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
 }
 
 /* NÚT XẾP CÂU / ẨN CÂU ĐÃ XẾP */
@@ -553,16 +735,23 @@
     flex-wrap: wrap; 
     gap: 4px;
 }
-/* ID CÂU HỎI MÀU ĐỎ NỔI BẬT THEO YÊU CẦU */
+/* ID CÂU HỎI MÀU ĐỎ TỰ ĐỘNG NỔI BẬT */
 .qbank-q-id-badge { 
     background: #fef2f2; 
     color: #dc2626; 
-    border: 1px solid #fca5a5;
-    padding: 2px 6px; 
-    border-radius: 5px; 
+    border: 1.5px solid #f87171;
+    padding: 2px 7px; 
+    border-radius: 6px; 
     font-weight: 900; 
-    font-size: 11px; 
-    letter-spacing: -0.2px;
+    font-size: 11.5px; 
+    letter-spacing: -0.1px;
+    box-shadow: 0 1px 3px rgba(220, 38, 38, 0.14);
+}
+.qbank-q-id-badge.is-unassigned {
+    background: #f8fafc;
+    color: #475569;
+    border: 1.2px dashed #94a3b8;
+    box-shadow: none;
 }
 
 .qbank-options-preview {
@@ -640,16 +829,19 @@
 }
 
 /* =========================================
-   5. CỘT PHẢI: TRÍCH ĐỀ & CẤU HÌNH
+   5. CỘT PHẢI: TRÍCH ĐỀ & CẤU HÌNH (CO GIÃN ĐƯỢC ĐỘ RỘNG)
 ========================================= */
 .qbank-col-right { 
     background: #ffffff; 
-    border-left: 2px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
     padding: 12px; 
     height: 100%;
     overflow-y: auto;
+    flex: 0 0 310px;
+    width: 310px;
+    min-width: 210px;
+    max-width: 45vw;
 }
 .qbank-exam-builder-form label { 
     display: block; 
@@ -766,11 +958,19 @@
 ========================================= */
 @media (max-width: 900px) {
     .qbank-body-3cols { 
-        grid-template-columns: 1fr; 
+        flex-direction: column;
         overflow-y: auto; 
     }
+    .qbank-col-resizer {
+        display: none !important;
+    }
     .qbank-col-left, .qbank-col-mid, .qbank-col-right { 
+        flex: none !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
         border-right: none; 
+        border-left: none;
         border-bottom: 2px solid #e2e8f0; 
         height: auto; 
     }
