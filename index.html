@@ -1262,6 +1262,73 @@
         <!-- THÔNG BÁO TOAST NỔI RÕ RÀNG BÊN TRONG MODAL -->
         <div id="qbank-toast" class="qbank-toast" role="status" aria-live="polite"></div>
 
+        <!-- BẢNG NỔI CHỌN CÂY THƯ MỤC NGÂN HÀNG ĐỀ ĐỂ XUẤT FILE (PDF / WORD) -->
+        <div id="qbank-export-popover" class="qbank-export-popover" onclick="handleQbankExportPopoverInnerClick(event)">
+            <div class="qbank-export-pop-header">
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <span>📤</span>
+                    <span>XUẤT FILE TỪ CÂY THƯ MỤC NGÂN HÀNG ĐỀ</span>
+                </div>
+                <button type="button" class="qbank-export-close-btn" onclick="closeQbankExportPopover()" title="Đóng bảng chọn">✕</button>
+            </div>
+
+            <div class="qbank-export-pop-tools">
+                <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                    <button type="button" class="qbank-export-mini-btn" onclick="selectAllQbankExportFolders(true)">☑️ Chọn tất cả</button>
+                    <button type="button" class="qbank-export-mini-btn" onclick="selectAllQbankExportFolders(false)">⬜ Bỏ chọn</button>
+                </div>
+                <label class="qbank-export-key-toggle" title="Tích chọn để xuất kèm đáp án đúng & lời giải chi tiết">
+                    <input type="checkbox" id="qbank-export-include-key" checked>
+                    <span>🔑 Kèm đáp án & lời giải</span>
+                </label>
+            </div>
+
+            <div class="qbank-export-title-row">
+                <label for="qbank-export-title-input">Tên tiêu đề file xuất:</label>
+                <input type="text" id="qbank-export-title-input" placeholder="Tự động theo thư mục đã chọn..." oninput="onQbankExportTitleManualInput()">
+            </div>
+
+            <div class="qbank-export-tree-list" id="qbank-export-tree-list">
+                <!-- JS Render Export Tree -->
+            </div>
+
+            <div class="qbank-export-footer" id="qbank-export-footer">
+                <div class="qbank-export-summary" id="qbank-export-summary">
+                    Đã chọn: <b>0</b> mục • <b>0</b> câu
+                </div>
+
+                <div class="qbank-export-empty-hint" id="qbank-export-empty-hint">
+                    👆 Tích chọn thư mục để hiện nút Xuất
+                </div>
+
+                <!-- NÚT TÙY CHỌN XUẤT: CHỈ XUẤT HIỆN KHI NGƯỜI DÙNG ĐÃ TÍCH CHỌN TÙY Ý -->
+                <div class="qbank-export-action-wrapper" id="qbank-export-action-wrapper" style="display:none;">
+                    <button type="button" class="btn-qbank btn-qbank-export-options" id="btn-qbank-export-options" onclick="toggleQbankExportFormatMenu(event)">
+                        <span>📥</span> <span id="btn-qbank-export-options-text">Tùy chọn xuất</span> <span>▾</span>
+                    </button>
+
+                    <!-- MENU XÒE RA 2 TÙY CHỌN: 1. XUẤT PDF, 2. XUẤT WORD -->
+                    <div class="qbank-export-format-menu" id="qbank-export-format-menu" onclick="event.stopPropagation()">
+                        <div class="qbank-export-format-item" onclick="executeQbankExport('pdf', event)">
+                            <span class="fmt-icon">📄</span>
+                            <div class="fmt-text">
+                                <b>1. Xuất PDF</b>
+                                <span>Xem bản in A4 chuẩn đẹp & Lưu PDF</span>
+                            </div>
+                        </div>
+                        <div class="qbank-export-format-divider"></div>
+                        <div class="qbank-export-format-item" onclick="executeQbankExport('word', event)">
+                            <span class="fmt-icon">📝</span>
+                            <div class="fmt-text">
+                                <b>2. Xuất Word (.doc)</b>
+                                <span>Tải file Word về máy để chỉnh sửa</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="qbank-body-3cols" id="qbank-body-3cols">
             <!-- CỘT 1: CÂY THƯ MỤC (CO GIÃN ĐƯỢC ĐỘ RỘNG) -->
             <div class="qbank-col-left" id="qbank-col-left">
@@ -1308,6 +1375,16 @@
 
                         <button type="button" class="btn-qbank" style="background:#f1f5f9; color:#0284c7; border:1.2px solid #cbd5e1;" onclick="clearQbankFilter()" title="Hủy bỏ lọc để hiển thị toàn bộ câu hỏi">
                             <span>🔄</span> <b>Hiện tất cả</b>
+                        </button>
+
+                        <!-- NÚT XÓA NHIỀU CÂU ĐÃ TÍCH CHỌN -->
+                        <button type="button" class="btn-qbank btn-qbank-delete-multi" id="btn-qbank-delete-selected" onclick="deleteSelectedQbankQuestions()" title="Tích chọn (☑️) một hoặc nhiều câu hỏi bên dưới rồi bấm nút này để xóa hàng loạt">
+                            <span>🗑️</span> <span>Xóa nhiều câu</span>
+                        </button>
+
+                        <!-- NÚT XUẤT FILE THEO CÂY THƯ MỤC NGÂN HÀNG ĐỀ (PDF / WORD) -->
+                        <button type="button" class="btn-qbank btn-qbank-export-file" id="btn-qbank-export-file" onclick="toggleQbankExportPopover(event)" title="Mở cây thư mục ngân hàng đề để chọn và xuất ra file PDF hoặc Word">
+                            <span>📤</span> <span>Xuất file</span>
                         </button>
                     </div>
 
