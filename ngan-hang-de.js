@@ -7,6 +7,8 @@
 // 4. ID màu đỏ đánh số tự động chuẩn ma trận: id.L10-Ch1-Bai1-P1-Nhận biết-C1
 // 5. Hiển thị tên đề gốc đang xử lý ở trên Header và đầu Cột giữa
 // 6. Kéo co giãn độ rộng mượt mà cho cả 3 cột (tự nhớ độ rộng)
+// 7. Nút Xóa nhiều câu đã tích chọn (có Undo)
+// 8. Nút Xuất file mở cây thư mục ngân hàng đề -> Chọn tùy ý -> Xuất PDF / Word
 // =========================================================
 
 let qbankState = {
@@ -87,11 +89,17 @@ let qbankState = {
     hideAssigned: false,
 
     // NGĂN XẾP HOÀN TÁC (UNDO)
-    undoStack: []
+    undoStack: [],
+
+    // TRẠNG THÁI BẢNG XUẤT FILE THEO CÂY THƯ MỤC
+    exportSelectedFolderIds: new Set(),
+    exportCollapsedFolderIds: new Set(),
+    exportCustomTitleTouched: false
 };
 
 const QBANK_COLOR_PALETTE = ["#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"];
 const QBANK_MAX_UNDO = 40;
+const QBANK_EXPORT_UNASSIGNED_KEY = "__UNASSIGNED__";
 let _qbankToastTimer = null;
 let _qbankResizersInitialized = false;
 
@@ -320,11 +328,13 @@ function undoQbankAction() {
 
     syncHideAssignedButtonUI();
     updateQbankUndoButtonUI();
+    updateQbankDeleteSelectedButtonUI();
     renderQbankHeaderAndMidExamTitle();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
     updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
 
     showQbankToast(`↩️ Đã lùi lại: ${prev.label}`, "warning");
 }
@@ -669,6 +679,14 @@ document.addEventListener("click", function(e) {
     if (!wrap && menu && menu.classList.contains("show")) {
         menu.classList.remove("show");
     }
+
+    const exportPop = document.getElementById("qbank-export-popover");
+    const exportTrigger = document.getElementById("btn-qbank-export-file");
+    if (exportPop && exportPop.classList.contains("show")) {
+        if (!exportPop.contains(e.target) && !(exportTrigger && exportTrigger.contains(e.target))) {
+            closeQbankExportPopover();
+        }
+    }
 });
 
 async function openQbankCreatorModal() {
@@ -684,6 +702,7 @@ async function openQbankCreatorModal() {
 
         syncHideAssignedButtonUI();
         updateQbankUndoButtonUI();
+        updateQbankDeleteSelectedButtonUI();
         renderQbankHeaderAndMidExamTitle();
         renderQbankTree();
         renderQbankQuestions();
@@ -693,6 +712,7 @@ async function openQbankCreatorModal() {
 }
 
 function closeQbankCreatorModal() {
+    closeQbankExportPopover();
     const modal = document.getElementById("modal-qbank-creator");
     if (modal) modal.style.display = "none";
 }
@@ -725,6 +745,7 @@ function openSoiDeFromQBank() {
         alert("⚠️ Ngân hàng đề đang trống. Vui lòng thêm câu hỏi trước khi Soi đề!");
         return;
     }
+    closeQbankExportPopover();
     if (typeof soiDeState !== "undefined") {
         soiDeState.examData = {
             id: "qbank_preview_" + Date.now(),
@@ -1039,11 +1060,16 @@ function promptRenameFolder(folderId) {
     if (newName && newName.trim() && newName.trim() !== node.name) {
         pushQbankUndoState(`Đổi tên thư mục "${node.name}"`);
         node.name = newName.trim();
+        if (qbankState.activeFilter.folderId === folderId) {
+            qbankState.activeFilter.folderName = node.name;
+        }
         recomputeAllMatrixIds();
         saveQbankTreeData();
         saveQbankDraftState(false);
         renderQbankTree();
         renderQbankQuestions();
+        updateQbankMatrixStats();
+        refreshQbankExportPopoverIfOpen();
         showQbankToast(`✏️ Đã đổi tên thành "${node.name}" và tự động cập nhật ID!`, "success");
     }
 }
@@ -1061,6 +1087,7 @@ function promptAddRootFolder() {
         saveQbankTreeData();
         saveQbankDraftState(false);
         renderQbankTree();
+        refreshQbankExportPopoverIfOpen();
     }
 }
 
@@ -1080,6 +1107,7 @@ function promptAddChildFolder(parentId) {
         saveQbankTreeData();
         saveQbankDraftState(false);
         renderQbankTree();
+        refreshQbankExportPopoverIfOpen();
     }
 }
 
@@ -1111,6 +1139,7 @@ window.applyFolderColorChange = function(folderId, newColor) {
         node.color = newColor;
         saveQbankTreeData();
         renderQbankTree();
+        refreshQbankExportPopoverIfOpen();
     }
     const modal = document.getElementById("color-picker-modal");
     if (modal) modal.remove();
@@ -1144,6 +1173,8 @@ function promptDeleteFolder(folderId) {
         qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
     }
 
+    deletedIds.forEach(id => qbankState.exportSelectedFolderIds.delete(id));
+
     recomputeAllMatrixIds();
     saveQbankTreeData();
     saveQbankDraftState(false);
@@ -1151,6 +1182,7 @@ function promptDeleteFolder(folderId) {
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
+    refreshQbankExportPopoverIfOpen();
     showQbankToast(`🗑️ Đã xóa thư mục "${targetNode.name}". Bấm Lùi để khôi phục nếu nhầm.`, "warning");
 }
 
@@ -1191,14 +1223,17 @@ function mutateQuestionMatrix(qId, folderId, part, level) {
     if (part === 1) {
         q.type = "multiple_choice";
         delete q.part;
+        delete q.isPart4;
         if (!q.options) q.options = ["A", "B", "C", "D"];
     } else if (part === 2) {
         q.type = "true_false";
         delete q.part;
+        delete q.isPart4;
         if (!q.statements) q.statements = [{ id: "a", statement: "", correct: true }];
     } else if (part === 3) {
         q.type = "short_answer";
         delete q.part;
+        delete q.isPart4;
     } else if (part === 4) {
         q.type = "short_answer";
         q.part = 4;
@@ -1234,6 +1269,7 @@ function handleDropZoneDrop(e, folderId, part, level) {
     renderQbankQuestions();
     updateQbankMatrixStats();
     updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
 
     showQbankToast(`✅ Đã xếp câu: ${q.matrixId}`, "success");
 }
@@ -1255,11 +1291,13 @@ function assignSelectedQuestionsToMatrix(folderId, part, level) {
     recomputeAllMatrixIds();
     saveQbankDraftState(false);
 
+    updateQbankDeleteSelectedButtonUI();
     renderQbankHeaderAndMidExamTitle();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
     updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
 
     showQbankToast(`✅ Đã xếp ${count} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`, "success");
 }
@@ -1280,13 +1318,71 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     renderQbankQuestions();
     updateQbankMatrixStats();
     updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
 
     showQbankToast(`✅ Đã chuyển câu: ${q.matrixId}`, "success");
 }
 
 // ============================================================================
-// 11. CHUYỂN & XÓA CÂU HỎI (ĐỀU CÓ UNDO & TỰ CẬP NHẬT ID)
+// 11. CHUYỂN, XÓA LẺ & XÓA NHIỀU CÂU ĐÃ TÍCH CHỌN (ĐỀU CÓ UNDO & TỰ CẬP NHẬT ID)
 // ============================================================================
+function pruneStaleSelectedQuestionIds() {
+    const existingIds = new Set((qbankState.rawQuestions || []).map(q => String(q.id)));
+    const cleaned = new Set();
+    qbankState.selectedQuestionIds.forEach(id => {
+        if (existingIds.has(String(id))) cleaned.add(String(id));
+    });
+    qbankState.selectedQuestionIds = cleaned;
+    return cleaned.size;
+}
+
+function updateQbankDeleteSelectedButtonUI() {
+    const btn = document.getElementById("btn-qbank-delete-selected");
+    if (!btn) return;
+    const count = pruneStaleSelectedQuestionIds();
+
+    if (count > 0) {
+        btn.classList.add("has-selection");
+        btn.innerHTML = `<span>🗑️</span> <span>Xóa nhiều câu (${count})</span>`;
+        btn.title = `Xóa ${count} câu hỏi đã tích chọn (Có thể bấm ↩️ Lùi nếu xóa nhầm)`;
+    } else {
+        btn.classList.remove("has-selection");
+        btn.innerHTML = `<span>🗑️</span> <span>Xóa nhiều câu</span>`;
+        btn.title = "Tích chọn (☑️) một hoặc nhiều câu hỏi bên dưới rồi bấm nút này để xóa hàng loạt";
+    }
+}
+
+function deleteSelectedQbankQuestions() {
+    const count = pruneStaleSelectedQuestionIds();
+    if (count === 0) {
+        showQbankToast("⚠️ Vui lòng tích chọn (☑️) ít nhất 1 câu hỏi ở danh sách bên dưới trước khi xóa!", "warning");
+        return;
+    }
+
+    if (!confirm(`⚠️ Bạn có chắc chắn muốn XÓA ${count} câu hỏi đã tích chọn khỏi hệ thống biên soạn không?\n\n(Thầy có thể bấm nút ↩️ Lùi nếu lỡ tay xóa nhầm).`)) {
+        return;
+    }
+
+    pushQbankUndoState(`Xóa ${count} câu đã chọn`);
+
+    const idsToDelete = new Set(qbankState.selectedQuestionIds);
+    qbankState.rawQuestions = (qbankState.rawQuestions || []).filter(q => !idsToDelete.has(String(q.id)));
+    qbankState.selectedQuestionIds.clear();
+
+    recomputeAllMatrixIds();
+    saveQbankDraftState(false);
+
+    updateQbankDeleteSelectedButtonUI();
+    renderQbankHeaderAndMidExamTitle();
+    renderQbankTree();
+    renderQbankQuestions();
+    updateQbankMatrixStats();
+    updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
+
+    showQbankToast(`🗑️ Đã xóa ${count} câu hỏi đã chọn! Bấm ↩️ Lùi để khôi phục nếu xóa nhầm.`, "warning");
+}
+
 function deleteQbankQuestion(qId) {
     if (!confirm("⚠️ Bạn có chắc chắn muốn xóa câu hỏi này khỏi hệ thống biên soạn?")) return;
 
@@ -1299,11 +1395,13 @@ function deleteQbankQuestion(qId) {
 
     recomputeAllMatrixIds();
     saveQbankDraftState(false);
+    updateQbankDeleteSelectedButtonUI();
     renderQbankHeaderAndMidExamTitle();
     renderQbankTree();
     renderQbankQuestions();
     updateQbankMatrixStats();
     updateQbankBuilderStats();
+    refreshQbankExportPopoverIfOpen();
 
     showQbankToast(`🗑️ Đã xóa ${label}. Bấm Lùi nếu xóa nhầm.`, "warning");
 }
@@ -1386,6 +1484,509 @@ function executeMoveQbankQuestion(qId) {
         applyMatrixToQuestion(qId, targetFolderId, targetPart, targetLevel);
         const modal = document.getElementById("move-qbank-modal");
         if (modal) modal.remove();
+    }
+}
+
+// ============================================================================
+// 11.5. XUẤT FILE (PDF / WORD) THEO CÂY THƯ MỤC NGÂN HÀNG ĐỀ
+// ============================================================================
+function syncExportSelectedFolderIds() {
+    const validIds = new Set();
+    function collectIds(nodes) {
+        (nodes || []).forEach(n => {
+            validIds.add(n.id);
+            if (n.children && n.children.length > 0) collectIds(n.children);
+        });
+    }
+    collectIds(qbankState.currentTree);
+
+    const hasUnassigned = (qbankState.rawQuestions || []).some(q => q && !q.folderId);
+    const cleaned = new Set();
+    qbankState.exportSelectedFolderIds.forEach(id => {
+        if (id === QBANK_EXPORT_UNASSIGNED_KEY) {
+            if (hasUnassigned) cleaned.add(id);
+        } else if (validIds.has(id)) {
+            cleaned.add(id);
+        }
+    });
+    qbankState.exportSelectedFolderIds = cleaned;
+}
+
+function toggleQbankExportPopover(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const popover = document.getElementById("qbank-export-popover");
+    const triggerBtn = document.getElementById("btn-qbank-export-file");
+    if (!popover || !triggerBtn) return;
+
+    if (popover.classList.contains("show")) {
+        closeQbankExportPopover();
+        return;
+    }
+
+    syncExportSelectedFolderIds();
+    qbankState.exportCustomTitleTouched = false;
+    renderQbankExportTree();
+    updateQbankExportFooterUI();
+
+    const formatMenu = document.getElementById("qbank-export-format-menu");
+    if (formatMenu) formatMenu.classList.remove("show", "open-upward");
+
+    popover.classList.add("show");
+    triggerBtn.classList.add("is-open");
+
+    // Định vị thông minh theo nút bấm (luôn nằm gọn trong màn hình)
+    const rect = triggerBtn.getBoundingClientRect();
+    const popWidth = Math.min(450, window.innerWidth * 0.94);
+    let left = rect.left;
+    if (left + popWidth > window.innerWidth - 12) {
+        left = window.innerWidth - popWidth - 12;
+    }
+    if (left < 12) left = 12;
+
+    let top = rect.bottom + 8;
+    const approxHeight = Math.min(popover.offsetHeight || 420, window.innerHeight * 0.78);
+    if (top + approxHeight > window.innerHeight - 12) {
+        top = Math.max(12, window.innerHeight - approxHeight - 12);
+    }
+
+    popover.style.left = `${Math.round(left)}px`;
+    popover.style.top = `${Math.round(top)}px`;
+}
+
+function closeQbankExportPopover() {
+    const popover = document.getElementById("qbank-export-popover");
+    const triggerBtn = document.getElementById("btn-qbank-export-file");
+    const formatMenu = document.getElementById("qbank-export-format-menu");
+    if (popover) popover.classList.remove("show");
+    if (triggerBtn) triggerBtn.classList.remove("is-open");
+    if (formatMenu) formatMenu.classList.remove("show", "open-upward");
+}
+
+function handleQbankExportPopoverInnerClick(event) {
+    event.stopPropagation();
+    const actionWrap = document.getElementById("qbank-export-action-wrapper");
+    const formatMenu = document.getElementById("qbank-export-format-menu");
+    if (formatMenu && formatMenu.classList.contains("show")) {
+        if (!actionWrap || !actionWrap.contains(event.target)) {
+            formatMenu.classList.remove("show", "open-upward");
+        }
+    }
+}
+
+function refreshQbankExportPopoverIfOpen() {
+    const popover = document.getElementById("qbank-export-popover");
+    if (popover && popover.classList.contains("show")) {
+        syncExportSelectedFolderIds();
+        renderQbankExportTree();
+        updateQbankExportFooterUI();
+    }
+}
+
+function toggleQbankExportNodeExpand(folderId, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    if (qbankState.exportCollapsedFolderIds.has(folderId)) {
+        qbankState.exportCollapsedFolderIds.delete(folderId);
+    } else {
+        qbankState.exportCollapsedFolderIds.add(folderId);
+    }
+    renderQbankExportTree();
+}
+
+function getExportNodeCheckState(node) {
+    const isLeaf = (!node.children || node.children.length === 0);
+    if (isLeaf) {
+        return {
+            checked: qbankState.exportSelectedFolderIds.has(node.id),
+            indeterminate: false
+        };
+    }
+
+    const descendantIds = getAllDescendantFolderIds(node).filter(id => id !== node.id);
+    if (descendantIds.length === 0) {
+        return {
+            checked: qbankState.exportSelectedFolderIds.has(node.id),
+            indeterminate: false
+        };
+    }
+
+    let selectedCount = 0;
+    descendantIds.forEach(id => {
+        if (qbankState.exportSelectedFolderIds.has(id)) selectedCount++;
+    });
+
+    if (selectedCount === descendantIds.length) {
+        return { checked: true, indeterminate: false };
+    }
+    if (selectedCount > 0 || qbankState.exportSelectedFolderIds.has(node.id)) {
+        return { checked: false, indeterminate: true };
+    }
+    return { checked: false, indeterminate: false };
+}
+
+function toggleQbankExportFolderCheck(folderId, isChecked) {
+    const targetNode = findNodeInTree(qbankState.currentTree, folderId);
+    if (!targetNode) return;
+
+    const allIds = getAllDescendantFolderIds(targetNode);
+    if (isChecked) {
+        allIds.forEach(id => qbankState.exportSelectedFolderIds.add(id));
+    } else {
+        allIds.forEach(id => qbankState.exportSelectedFolderIds.delete(id));
+        // Cập nhật gỡ trạng thái chọn trực tiếp ở các thư mục cha không chứa câu trực tiếp
+        const path = getFolderPathNodes(folderId);
+        for (let i = 0; i < path.length - 1; i++) {
+            const anc = path[i];
+            const hasDirectQ = (qbankState.rawQuestions || []).some(q => q && q.folderId === anc.id);
+            if (!hasDirectQ) {
+                qbankState.exportSelectedFolderIds.delete(anc.id);
+            }
+        }
+    }
+
+    renderQbankExportTree();
+    updateQbankExportFooterUI();
+}
+
+function toggleQbankExportUnassignedCheck(isChecked) {
+    if (isChecked) {
+        qbankState.exportSelectedFolderIds.add(QBANK_EXPORT_UNASSIGNED_KEY);
+    } else {
+        qbankState.exportSelectedFolderIds.delete(QBANK_EXPORT_UNASSIGNED_KEY);
+    }
+    updateQbankExportFooterUI();
+}
+
+function selectAllQbankExportFolders(selectAll) {
+    if (!selectAll) {
+        qbankState.exportSelectedFolderIds.clear();
+    } else {
+        function addAll(nodes) {
+            (nodes || []).forEach(n => {
+                qbankState.exportSelectedFolderIds.add(n.id);
+                if (n.children && n.children.length > 0) addAll(n.children);
+            });
+        }
+        addAll(qbankState.currentTree);
+        const hasUnassigned = (qbankState.rawQuestions || []).some(q => q && !q.folderId);
+        if (hasUnassigned) {
+            qbankState.exportSelectedFolderIds.add(QBANK_EXPORT_UNASSIGNED_KEY);
+        }
+    }
+    renderQbankExportTree();
+    updateQbankExportFooterUI();
+}
+
+function renderQbankExportTree() {
+    const container = document.getElementById("qbank-export-tree-list");
+    if (!container) return;
+
+    const directCounts = {};
+    let unassignedCount = 0;
+    (qbankState.rawQuestions || []).forEach(q => {
+        if (!q) return;
+        if (q.folderId) {
+            directCounts[q.folderId] = (directCounts[q.folderId] || 0) + 1;
+        } else {
+            unassignedCount++;
+        }
+    });
+
+    function getSubtreeCount(node) {
+        let sum = directCounts[node.id] || 0;
+        if (node.children && node.children.length > 0) {
+            node.children.forEach(c => { sum += getSubtreeCount(c); });
+        }
+        return sum;
+    }
+
+    const indeterminateIds = [];
+
+    function buildExportNodeHtml(node) {
+        const isLeaf = (!node.children || node.children.length === 0);
+        const isCollapsed = !isLeaf && qbankState.exportCollapsedFolderIds.has(node.id);
+        const count = getSubtreeCount(node);
+        const state = getExportNodeCheckState(node);
+        const nodeColor = node.color || "#0284c7";
+
+        if (state.indeterminate) {
+            indeterminateIds.push(node.id);
+        }
+
+        const toggleBtnHtml = !isLeaf
+            ? `<button type="button" class="export-tree-toggle" onclick="toggleQbankExportNodeExpand('${node.id}', event)" title="${isCollapsed ? 'Mở rộng' : 'Thu gọn'}">${isCollapsed ? '▶' : '▼'}</button>`
+            : `<span class="export-tree-toggle-spacer"></span>`;
+
+        const childrenHtml = (!isLeaf && !isCollapsed)
+            ? `<div class="export-tree-children">${node.children.map(c => buildExportNodeHtml(c)).join("")}</div>`
+            : "";
+
+        return `
+            <div class="export-tree-node">
+                <div class="export-tree-row ${count === 0 ? 'is-empty-folder' : ''}">
+                    ${toggleBtnHtml}
+                    <label class="export-tree-label">
+                        <input type="checkbox" id="exp-chk-${node.id}" ${state.checked ? "checked" : ""} onchange="toggleQbankExportFolderCheck('${node.id}', this.checked)">
+                        <span style="color:${nodeColor}; font-size:13px;">${isLeaf ? '📄' : '📁'}</span>
+                        <span class="export-tree-name" style="color:${nodeColor};" title="${escapeQbankHtml(node.name)}">${escapeQbankHtml(node.name)}</span>
+                        <span class="export-tree-count ${count === 0 ? 'zero' : ''}">${count} câu</span>
+                    </label>
+                </div>
+                ${childrenHtml}
+            </div>
+        `;
+    }
+
+    let html = (qbankState.currentTree || []).map(root => buildExportNodeHtml(root)).join("");
+
+    if (unassignedCount > 0) {
+        const isUnassignedChecked = qbankState.exportSelectedFolderIds.has(QBANK_EXPORT_UNASSIGNED_KEY);
+        const curTitle = qbankState.currentExamTitle ? ` (${escapeQbankHtml(qbankState.currentExamTitle)})` : "";
+        html += `
+            <div class="export-tree-divider">
+                <div class="export-tree-row">
+                    <span class="export-tree-toggle-spacer"></span>
+                    <label class="export-tree-label">
+                        <input type="checkbox" id="exp-chk-unassigned" ${isUnassignedChecked ? "checked" : ""} onchange="toggleQbankExportUnassignedCheck(this.checked)">
+                        <span style="font-size:13px;">📥</span>
+                        <span class="export-tree-name" style="color:#b45309;">Câu chưa xếp của đề gốc${curTitle}</span>
+                        <span class="export-tree-count">${unassignedCount} câu</span>
+                    </label>
+                </div>
+            </div>
+        `;
+    }
+
+    if (!html) {
+        html = `<div style="text-align:center; padding:24px; color:#94a3b8; font-size:12px;">Chưa có thư mục nào trong ngân hàng đề.</div>`;
+    }
+
+    container.innerHTML = html;
+
+    // Áp dụng trạng thái bán chọn (indeterminate) cho checkbox thư mục cha
+    indeterminateIds.forEach(id => {
+        const chk = document.getElementById(`exp-chk-${id}`);
+        if (chk) chk.indeterminate = true;
+    });
+}
+
+function getSelectedQbankExportQuestions() {
+    const selectedSet = qbankState.exportSelectedFolderIds;
+    if (!selectedSet || selectedSet.size === 0) return [];
+
+    const includeUnassigned = selectedSet.has(QBANK_EXPORT_UNASSIGNED_KEY);
+    const list = (qbankState.rawQuestions || []).filter(q => {
+        if (!q) return false;
+        if (q.folderId) return selectedSet.has(q.folderId);
+        return includeUnassigned;
+    });
+
+    const levelOrder = { nb: 1, th: 2, vdt: 3, vdc: 4 };
+    return [...list].sort((a, b) => {
+        const pA = getQbankQuestionPart(a);
+        const pB = getQbankQuestionPart(b);
+        if (pA !== pB) return pA - pB;
+
+        const lvlA = levelOrder[a.level || "nb"] || 1;
+        const lvlB = levelOrder[b.level || "nb"] || 1;
+        if (lvlA !== lvlB) return lvlA - lvlB;
+
+        return (a.origIndex || 0) - (b.origIndex || 0);
+    });
+}
+
+function onQbankExportTitleManualInput() {
+    qbankState.exportCustomTitleTouched = true;
+}
+
+function buildDefaultQbankExportTitle(questionCount) {
+    const selectedNames = [];
+    function collectSelectedLabels(nodes) {
+        (nodes || []).forEach(n => {
+            const st = getExportNodeCheckState(n);
+            if (st.checked) {
+                selectedNames.push(n.name);
+            } else if (st.indeterminate && n.children && n.children.length > 0) {
+                collectSelectedLabels(n.children);
+            }
+        });
+    }
+    collectSelectedLabels(qbankState.currentTree);
+
+    if (qbankState.exportSelectedFolderIds.has(QBANK_EXPORT_UNASSIGNED_KEY)) {
+        selectedNames.push(qbankState.currentExamTitle || "Đề gốc chưa xếp");
+    }
+
+    if (selectedNames.length === 1) {
+        return `NGÂN HÀNG ĐỀ - ${selectedNames[0].toUpperCase()}`;
+    }
+    if (selectedNames.length > 1) {
+        return `ĐỀ TRÍCH XUẤT NGÂN HÀNG (${selectedNames.length} MỤC - ${questionCount} CÂU)`;
+    }
+    return "ĐỀ TRÍCH XUẤT TỪ NGÂN HÀNG CÂU HỎI";
+}
+
+function updateQbankExportFooterUI() {
+    const summaryEl = document.getElementById("qbank-export-summary");
+    const emptyHintEl = document.getElementById("qbank-export-empty-hint");
+    const actionWrap = document.getElementById("qbank-export-action-wrapper");
+    const btnText = document.getElementById("btn-qbank-export-options-text");
+    const formatMenu = document.getElementById("qbank-export-format-menu");
+    const titleInput = document.getElementById("qbank-export-title-input");
+
+    const selectedQuestions = getSelectedQbankExportQuestions();
+    const qCount = selectedQuestions.length;
+
+    // Đếm số mục lá (hoặc mục chưa xếp) đã được chọn
+    let selectedLeafCount = 0;
+    qbankState.exportSelectedFolderIds.forEach(id => {
+        if (id === QBANK_EXPORT_UNASSIGNED_KEY) {
+            selectedLeafCount++;
+        } else {
+            const node = findNodeInTree(qbankState.currentTree, id);
+            if (node && (!node.children || node.children.length === 0)) {
+                selectedLeafCount++;
+            }
+        }
+    });
+    const hasAnySelection = qbankState.exportSelectedFolderIds.size > 0;
+    const displayFolderCount = selectedLeafCount > 0 ? selectedLeafCount : qbankState.exportSelectedFolderIds.size;
+
+    if (summaryEl) {
+        summaryEl.innerHTML = `Đã chọn: <b>${displayFolderCount}</b> mục • <b>${qCount}</b> câu`;
+    }
+
+    if (titleInput && !qbankState.exportCustomTitleTouched) {
+        titleInput.value = hasAnySelection ? buildDefaultQbankExportTitle(qCount) : "";
+    }
+
+    if (hasAnySelection) {
+        if (emptyHintEl) emptyHintEl.style.display = "none";
+        if (actionWrap) actionWrap.style.display = "inline-flex";
+        if (btnText) btnText.textContent = `Tùy chọn xuất (${qCount} câu)`;
+    } else {
+        if (emptyHintEl) emptyHintEl.style.display = "block";
+        if (actionWrap) actionWrap.style.display = "none";
+        if (formatMenu) formatMenu.classList.remove("show", "open-upward");
+    }
+}
+
+function toggleQbankExportFormatMenu(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+    const menu = document.getElementById("qbank-export-format-menu");
+    const btn = document.getElementById("btn-qbank-export-options");
+    if (!menu || !btn) return;
+
+    const willShow = !menu.classList.contains("show");
+    if (!willShow) {
+        menu.classList.remove("show", "open-upward");
+        return;
+    }
+
+    const btnRect = btn.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - btnRect.bottom;
+    menu.classList.toggle("open-upward", spaceBelow < 145);
+    menu.classList.add("show");
+}
+
+function executeQbankExport(format, event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const exportQuestions = getSelectedQbankExportQuestions();
+    if (exportQuestions.length === 0) {
+        showQbankToast("⚠️ Các thư mục đang chọn hiện có 0 câu hỏi! Vui lòng chọn thư mục có câu hỏi để xuất.", "warning");
+        return;
+    }
+
+    const titleInput = document.getElementById("qbank-export-title-input");
+    const exportTitle = (titleInput && titleInput.value.trim())
+        ? titleInput.value.trim()
+        : buildDefaultQbankExportTitle(exportQuestions.length);
+
+    const includeKeyChk = document.getElementById("qbank-export-include-key");
+    const includeKey = includeKeyChk ? !!includeKeyChk.checked : true;
+
+    // Chuẩn hóa hoàn toàn bản sao câu hỏi để tương thích 100% với portal-exam-printer.js
+    const letters = ["A", "B", "C", "D"];
+    const normalizedQuestions = exportQuestions.map((rawQ, idx) => {
+        const q = JSON.parse(JSON.stringify(rawQ));
+        const p = getQbankQuestionPart(q);
+        q.id = idx + 1;
+
+        const imgKey = q.imageKey || `img_q_${rawQ.id}`;
+        const resolvedImg = q.imageUrl || (qbankState.imagesMap && qbankState.imagesMap[imgKey]) || "";
+        if (resolvedImg) {
+            q.imageUrl = resolvedImg;
+        }
+
+        if (p === 1) {
+            q.type = "multiple_choice";
+            delete q.part;
+            delete q.isPart4;
+            q.options = Array.isArray(q.options) ? q.options.map(o => String(o ?? "")) : ["", "", "", ""];
+            if (typeof q.correct === "string") {
+                const cIdx = letters.indexOf(q.correct.trim().toUpperCase());
+                q.correct = cIdx !== -1 ? cIdx : 0;
+            } else if (typeof q.correct !== "number" || q.correct < 0 || q.correct > 3) {
+                q.correct = 0;
+            }
+        } else if (p === 2) {
+            q.type = "true_false";
+            delete q.part;
+            delete q.isPart4;
+            q.statements = Array.isArray(q.statements) ? q.statements.map((st, sIdx) => ({
+                id: st.id || ["a", "b", "c", "d"][sIdx] || String(sIdx + 1),
+                statement: String(st.statement ?? ""),
+                correct: (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true")
+            })) : [];
+        } else if (p === 4) {
+            q.type = "essay";
+            q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
+        } else {
+            q.type = "short_answer";
+            delete q.part;
+            delete q.isPart4;
+            q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
+        }
+
+        return q;
+    });
+
+    const exportData = {
+        title: exportTitle,
+        maDe: "QBANK",
+        timeLimitMinutes: 90,
+        questions: normalizedQuestions,
+        images: { ...(qbankState.imagesMap || {}) }
+    };
+
+    if (format === "pdf") {
+        if (typeof exportExamToPDF !== "function") {
+            alert("❌ Không tìm thấy bộ xuất PDF (portal-exam-printer.js)!");
+            return;
+        }
+        closeQbankExportPopover();
+        exportExamToPDF(exportData, exportTitle, "QBANK", 90, includeKey);
+        showQbankToast(`📄 Đã mở bản xem in / Xuất PDF (${normalizedQuestions.length} câu)!`, "success");
+    } else if (format === "word") {
+        if (typeof exportExamToWord !== "function") {
+            alert("❌ Không tìm thấy bộ xuất Word (portal-exam-printer.js)!");
+            return;
+        }
+        closeQbankExportPopover();
+        exportExamToWord(exportData, exportTitle, "QBANK", 90, includeKey);
+        showQbankToast(`📝 Đã tải xuống file Word (.doc) gồm ${normalizedQuestions.length} câu!`, "success");
     }
 }
 
@@ -1512,6 +2113,7 @@ function readQbankJsonFile(file) {
 
             recomputeAllMatrixIds();
             syncHideAssignedButtonUI();
+            updateQbankDeleteSelectedButtonUI();
             saveQbankDraftState(false);
 
             renderQbankHeaderAndMidExamTitle();
@@ -1519,6 +2121,7 @@ function readQbankJsonFile(file) {
             renderQbankQuestions();
             updateQbankMatrixStats();
             updateQbankBuilderStats();
+            refreshQbankExportPopoverIfOpen();
 
             showQbankToast(
                 `✅ Đã nạp đề "${examTitle}" (${importedQuestions.length} câu mới). Giữ nguyên ${keptAssignedQuestions.length} câu trong ngân hàng!`,
@@ -1729,7 +2332,7 @@ function renderQbankQuestions() {
             ? q.matrixId
             : `Câu ${q.origIndex || (idx + 1)} • Chưa xếp`;
 
-        const imgKey = q.imageKey || `img_q_${q.id}`;
+        const imgKey = String(q.imageKey || `img_q_${q.id}`).replace(/'/g, "");
         let imgUrl = q.imageUrl || qbankState.imagesMap[imgKey] || "";
 
         const uploaderHtml = `
@@ -1844,11 +2447,13 @@ function toggleSelectQuestion(qId, isChecked) {
         card.classList.toggle("selected", isChecked);
     }
 
+    updateQbankDeleteSelectedButtonUI();
     updateQbankBuilderStats();
 }
 
 function clearSelectedQuestions() {
     qbankState.selectedQuestionIds.clear();
+    updateQbankDeleteSelectedButtonUI();
     renderQbankQuestions();
     updateQbankBuilderStats();
 }
@@ -1970,7 +2575,7 @@ function updateQbankBuilderStats() {
     const container = document.getElementById("qbank-builder-stats");
     if (!container) return;
 
-    const total = qbankState.selectedQuestionIds.size;
+    const total = pruneStaleSelectedQuestionIds();
     if (total === 0) {
         container.innerHTML = `<p style="color:#64748b; font-style:italic;">Chưa chọn câu hỏi nào. Tích chọn (☑️) các câu ở cột giữa để đưa vào đề thi.</p>`;
         return;
@@ -2015,7 +2620,14 @@ async function saveExtractedExamToBank() {
         if (titleInp) titleInp.focus();
         return;
     }
-    if (qbankState.selectedQuestionIds.size === 0) {
+
+    const selectedQ = qbankState.rawQuestions
+        .filter(q => qbankState.selectedQuestionIds.has(String(q.id)))
+        .map((q, idx) => ({ ...q, id: idx + 1 }));
+
+    if (selectedQ.length === 0) {
+        updateQbankDeleteSelectedButtonUI();
+        updateQbankBuilderStats();
         return alert("⚠️ Thầy chưa tích chọn câu hỏi nào ở cột giữa!");
     }
 
@@ -2024,10 +2636,6 @@ async function saveExtractedExamToBank() {
         btn.disabled = true;
         btn.innerText = "⏳ Đang lưu đề...";
     }
-
-    const selectedQ = qbankState.rawQuestions
-        .filter(q => qbankState.selectedQuestionIds.has(String(q.id)))
-        .map((q, idx) => ({ ...q, id: idx + 1 }));
 
     const newExam = {
         id: "exam_bank_" + Date.now(),
@@ -2430,9 +3038,22 @@ window.handleDropZoneDrop = handleDropZoneDrop;
 window.assignSelectedQuestionsToMatrix = assignSelectedQuestionsToMatrix;
 window.handleQuestionDragStart = handleQuestionDragStart;
 
+window.deleteSelectedQbankQuestions = deleteSelectedQbankQuestions;
+window.updateQbankDeleteSelectedButtonUI = updateQbankDeleteSelectedButtonUI;
 window.deleteQbankQuestion = deleteQbankQuestion;
 window.promptMoveQuestion = promptMoveQuestion;
 window.executeMoveQbankQuestion = executeMoveQbankQuestion;
+
+window.toggleQbankExportPopover = toggleQbankExportPopover;
+window.closeQbankExportPopover = closeQbankExportPopover;
+window.handleQbankExportPopoverInnerClick = handleQbankExportPopoverInnerClick;
+window.toggleQbankExportNodeExpand = toggleQbankExportNodeExpand;
+window.toggleQbankExportFolderCheck = toggleQbankExportFolderCheck;
+window.toggleQbankExportUnassignedCheck = toggleQbankExportUnassignedCheck;
+window.selectAllQbankExportFolders = selectAllQbankExportFolders;
+window.onQbankExportTitleManualInput = onQbankExportTitleManualInput;
+window.toggleQbankExportFormatMenu = toggleQbankExportFormatMenu;
+window.executeQbankExport = executeQbankExport;
 
 window.toggleSelectQuestion = toggleSelectQuestion;
 window.clearSelectedQuestions = clearSelectedQuestions;
