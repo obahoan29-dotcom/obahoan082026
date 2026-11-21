@@ -1,8 +1,7 @@
 // =========================================================
 // FILE: portal-soi-de.js (BẢN FIX TRIỆT ĐỂ: BẢO LƯU ĐÁP ÁN, ẢNH & THỨ TỰ CÂU HỎI)
 // ĐÃ SỬA: ĐỒNG BỘ CUỘN 2 CHIỀU (TRÁI <-> PHẢI) THÔNG MINH CHỐNG GIẬT LAG
-// ĐÃ SỬA: KHÔI PHỤC ĐÚNG THỨ TỰ CÂU HỎI GỐC KỂ CẢ KHI HỌC SINH ĐANG BỊ TRỘN
-// ĐÃ SỬA: HIỂN THỊ CHUẨN XÁC MÔI TRƯỜNG LATEX (tabular, center)
+// ĐÃ SỬA: HỖ TRỢ CHỈNH SỬA VÀ LƯU NGƯỢC LẠI VÀO NGÂN HÀNG CÂU HỎI
 // =========================================================
 
 let soiDeState = {
@@ -20,7 +19,8 @@ let soiDeState = {
     debounceTimer: null,
     validationErrors: [],
     rawEditingCardIds: new Set(),
-    isFromExamRoom: false
+    isFromExamRoom: false,
+    isFromQBank: false // Cờ đánh dấu mở từ Ngân hàng đề
 };
 
 const SOI_DE_AVAILABLE_CLASSES = [
@@ -110,7 +110,6 @@ function insertQuestionsOrganizedByPart(newQuestions) {
 function formatQuestionText(text) {
     if (!text) return "";
     
-    // Tự động chuyển đổi các môi trường LaTeX không được MathJax hỗ trợ
     let formatted = text.replace(/\\begin\{center\}/gi, '<div style="width:100%; overflow-x:auto; text-align:center; margin: 10px 0; padding-bottom: 5px;">');
     formatted = formatted.replace(/\\end\{center\}/gi, '</div>');
     
@@ -376,7 +375,6 @@ function injectSoiDeStyles() {
             box-shadow: 0 0 0 2.5px rgba(2, 132, 199, 0.3) !important;
         }
         
-        /* STYLE HIGHLIGHT ĐỒNG BỘ CHO CARD BÊN PHẢI KHI ĐƯỢC CUỘN TỚI */
         .soide-editor-qcard.is-synced-active {
             box-shadow: 0 0 0 3px #10b981, 0 6px 18px rgba(16, 185, 129, 0.28) !important;
             transform: scale(1.008);
@@ -525,7 +523,7 @@ function ensureSoiDeModalInDOM() {
                     </div>
                 </div>
                 <div class="soide-header-tools">
-                    <button type="button" class="btn-soide-tool btn-soide-update" id="btn-soide-update-exam" onclick="updateExamFromSoiDe()" title="Cập nhật trực tiếp toàn bộ thay đổi lên máy chủ Supabase và phòng thi">
+                    <button type="button" class="btn-soide-tool btn-soide-update" id="btn-soide-update-exam" onclick="updateExamFromSoiDe()" title="Cập nhật trực tiếp toàn bộ thay đổi">
                         ⚡ Update
                     </button>
 
@@ -750,6 +748,7 @@ async function switchToSoiDeFromExam() {
         scoringConfig: examData.scoringConfig || { mode: 'option1' }
     };
     soiDeState.isFromExamRoom = true;
+    soiDeState.isFromQBank = false;
 
     openSoiDeModal();
     showSoiDeToast(`🔬 Đã nạp ${soiDeState.examData.questions.length} câu (KHÔI PHỤC ĐÚNG THỨ TỰ) kèm Đ.Á & ẢNH vào Soi đề!`);
@@ -774,28 +773,16 @@ async function updateExamFromSoiDe() {
         btn.innerText = "⏳ Đang cập nhật...";
     }
 
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
-    if (!client) {
-        alert("❌ Chưa kết nối được máy chủ Supabase! Vui lòng kiểm tra lại app-config.js.");
-        if (btn) { btn.disabled = false; btn.innerText = "⚡ Update"; }
-        return;
-    }
-
     try {
-        const urlParams = new URLSearchParams(window.location.search);
-        let quizId = soiDeState.examData.id || urlParams.get('id') || (typeof examData !== 'undefined' && examData ? examData.id : null);
-
-        if (!quizId) {
-            quizId = "quiz_" + Date.now();
-            soiDeState.examData.id = quizId;
-        }
-
         const imagesMap = soiDeState.examData.images || {};
         const letters = ["A", "B", "C", "D"];
         
         const cleanQuestions = reorganizeAllQuestionsByParts(soiDeState.examData.questions).map((q, idx) => {
             const item = JSON.parse(JSON.stringify(q));
-            item.id = item.id || (idx + 1);
+            // KHÔNG đánh lại ID nếu mở từ QBank để giữ nguyên ID độc nhất
+            if (!soiDeState.isFromQBank) {
+                item.id = item.id || (idx + 1);
+            }
 
             if (item.type === "multiple_choice" && !isPart4Question(item)) {
                 if (typeof item.correct === 'string') {
@@ -818,7 +805,6 @@ async function updateExamFromSoiDe() {
                 }
             }
 
-            // GẮN CHẶT ĐƯỜNG LINK ẢNH TRỰC TIẾP VÀO CÂU HỎI TRƯỚC KHI LƯU SUPABASE
             const directUrl = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(item, imagesMap) : (item.imageUrl || "");
             if (directUrl) {
                 item.imageUrl = directUrl;
@@ -828,6 +814,42 @@ async function updateExamFromSoiDe() {
 
             return item;
         });
+
+        // NẾU LÀ TỪ NGÂN HÀNG ĐỀ -> CẬP NHẬT TRỰC TIẾP VÀO qbankState VÀ LƯU NHÁP
+        if (soiDeState.isFromQBank) {
+            if (typeof qbankState !== 'undefined') {
+                qbankState.rawQuestions = cleanQuestions;
+                qbankState.imagesMap = imagesMap;
+                if (typeof saveQbankDraftState === 'function') {
+                    await saveQbankDraftState();
+                }
+                if (typeof renderQbankQuestions === 'function') {
+                    renderQbankQuestions();
+                }
+                if (typeof updateQbankMatrixStats === 'function') {
+                    updateQbankMatrixStats();
+                }
+            }
+            alert(`🎉 ĐÃ LƯU TRỞ LẠI NGÂN HÀNG ĐỀ THÀNH CÔNG!\n\nSố lượng câu hỏi hiện tại: ${cleanQuestions.length} câu.`);
+            closeSoiDeModal();
+            return;
+        }
+
+        // CÒN NẾU TỪ PHÒNG THI THÌ ĐẨY LÊN SUPABASE NHƯ BÌNH THƯỜNG
+        const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+        if (!client) {
+            alert("❌ Chưa kết nối được máy chủ Supabase! Vui lòng kiểm tra lại app-config.js.");
+            if (btn) { btn.disabled = false; btn.innerText = "⚡ Update"; }
+            return;
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        let quizId = soiDeState.examData.id || urlParams.get('id') || (typeof examData !== 'undefined' && examData ? examData.id : null);
+
+        if (!quizId) {
+            quizId = "quiz_" + Date.now();
+            soiDeState.examData.id = quizId;
+        }
 
         const finalTitle = soiDeState.examData.title || "ĐỀ THI TRẮC NGHIỆM";
         const finalMade = soiDeState.examData.maDe || "101";
@@ -881,7 +903,6 @@ async function updateExamFromSoiDe() {
             const clonedQuestions = JSON.parse(JSON.stringify(cleanQuestions));
             const clonedImages = JSON.parse(JSON.stringify(imagesMap));
 
-            // ĐỒNG BỘ ĐỀ GỐC
             window.ORIGINAL_EXAM_DATA = JSON.parse(JSON.stringify({
                 ...examData,
                 title: finalTitle,
@@ -906,7 +927,6 @@ async function updateExamFromSoiDe() {
             const navCodeText = document.getElementById("nav-exam-code-text");
             if (navCodeText) navCodeText.innerText = `Đề: ${finalMade}`;
 
-            // CẬP NHẬT CACHE XÁO ĐỀ VỚI ID ĐỘC NHẤT
             try {
                 if (typeof getExamCode === 'function') {
                     safeLocal.setItem(`shuffled_exam_${quizId}_${getExamCode()}`, JSON.stringify(clonedQuestions));
@@ -1035,7 +1055,6 @@ function setupDualScrollSync() {
     if (!rightPane || !leftPane || rightPane.dataset.hasScrollSync === "true") return;
     rightPane.dataset.hasScrollSync = "true";
 
-    // 1. Xác định khung nào đang active dựa trên di chuột hoặc chạm
     const setLeftActive = () => { activeScrollPane = 'left'; };
     const setRightActive = () => { activeScrollPane = 'right'; };
 
@@ -1045,7 +1064,6 @@ function setupDualScrollSync() {
     rightPane.addEventListener('mouseenter', setRightActive);
     rightPane.addEventListener('touchstart', setRightActive, {passive: true});
 
-    // 2. Bắt sự kiện cuộn của Right Pane (Phải -> Trái)
     let syncRightTimer = null;
     rightPane.addEventListener("scroll", () => {
         if (activeScrollPane !== 'right' || soiDeState.editorMode !== 'cards') return;
@@ -1055,7 +1073,6 @@ function setupDualScrollSync() {
         });
     }, { passive: true });
 
-    // 3. Bắt sự kiện cuộn của Left Pane (Trái -> Phải)
     let syncLeftTimer = null;
     leftPane.addEventListener("scroll", () => {
         if (activeScrollPane !== 'left' || soiDeState.editorMode !== 'cards') return;
@@ -1155,7 +1172,6 @@ function scrollToLeftPreviewQuestion(qId, triggerSmooth = true) {
     document.querySelectorAll('.soide-preview-card.is-synced-active').forEach(c => c.classList.remove('is-synced-active'));
     leftCard.classList.add('is-synced-active');
     
-    // Reset cờ chiều ngược lại để tránh khựng nếu đổi hướng ngay
     lastSyncedQId_LeftToRight = qId; 
 }
 
@@ -1178,7 +1194,6 @@ function scrollToRightEditorQuestion(qId, triggerSmooth = true) {
     document.querySelectorAll('.soide-editor-qcard.is-synced-active').forEach(c => c.classList.remove('is-synced-active'));
     rightCard.classList.add('is-synced-active');
     
-    // Reset cờ chiều ngược lại
     lastSyncedQId_RightToLeft = qId;
 }
 
