@@ -118,14 +118,14 @@
     display: none; 
     align-items: center; 
     justify-content: center; 
-    padding: 10px; 
+    padding: 8px; 
     box-sizing: border-box;
 }
 .qbank-modal-container { 
     background: #f8fafc; 
-    border-radius: 18px; 
-    width: 98vw; 
-    height: 96vh; 
+    border-radius: 16px; 
+    width: 99vw; 
+    height: 98vh; 
     display: flex; 
     flex-direction: column; 
     overflow: hidden; 
@@ -135,7 +135,7 @@
 }
 .qbank-header { 
     background: #0f172a; 
-    padding: 10px 18px; 
+    padding: 8px 16px; 
     color: #fff; 
     display: flex; 
     align-items: center; 
@@ -145,291 +145,424 @@
 }
 .qbank-body-3cols { 
     display: grid; 
-    grid-template-columns: 340px 1fr 340px; 
+    grid-template-columns: 330px 1fr 320px; 
     flex: 1; 
     overflow: hidden; 
 }
 
 /* =========================================
-   3. CỘT TRÁI: CÂY THƯ MỤC
+   3. CỘT TRÁI: CÂY THƯ MỤC KIẾN THỨC (COMPACT & CUỘN MƯỢT)
 ========================================= */
 .qbank-col-left { 
     background: #ffffff; 
     border-right: 2px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
+    height: 100%;
+    overflow: hidden;
 }
 .qbank-storage-toggle { 
-    padding: 10px 14px; 
+    padding: 6px 10px; 
     border-bottom: 1.5px solid #e2e8f0; 
     background: #f8fafc; 
+    flex-shrink: 0;
 }
 .qbank-storage-toggle select { 
     width: 100%; 
-    margin-top: 4px; 
-    padding: 7px 10px; 
-    border-radius: 8px; 
+    margin-top: 3px; 
+    padding: 5px 8px; 
+    border-radius: 6px; 
     border: 1.5px solid #cbd5e1; 
     outline: none; 
     font-weight: 800; 
     font-family: inherit; 
-    font-size: 12px; 
+    font-size: 11.5px; 
     background: #ffffff; 
     color: #0f172a; 
     cursor: pointer; 
-}
-.qbank-storage-toggle select:focus { 
-    border-color: #0284c7; 
-    box-shadow: 0 0 0 3px rgba(2,132,199,0.15); 
 }
 
 .qbank-tree-container { 
     flex: 1; 
     overflow-y: auto; 
-    padding: 12px; 
+    overflow-x: hidden;
+    padding: 6px 8px; 
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
 }
+.qbank-tree-container::-webkit-scrollbar {
+    width: 5px;
+}
+.qbank-tree-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
 .tree-item-wrapper { 
     display: flex; 
     flex-direction: column; 
+    margin-bottom: 2px;
 }
 .tree-item { 
     display: flex; 
     align-items: center; 
     justify-content: space-between; 
-    padding: 7px 9px; 
-    border-radius: 8px; 
+    padding: 4px 6px; 
+    border-radius: 6px; 
     cursor: pointer; 
-    transition: 0.15s; 
-    font-size: 12.5px; 
+    transition: all 0.12s ease; 
+    font-size: 12px; 
     font-weight: 700; 
-    border: 1.5px solid transparent; 
-    margin-bottom: 4px; 
+    border: 1.2px solid transparent; 
+    margin-bottom: 2px; 
     background: #ffffff; 
+    line-height: 1.25;
 }
 .tree-item:hover { 
     background: #f1f5f9; 
     border-color: #cbd5e1; 
 }
 .tree-item.active { 
-    background: #e0f2fe; 
-    border-color: #38bdf8; 
-    color: #0369a1; 
+    background: #e0f2fe !important; 
+    border-color: #38bdf8 !important; 
+    color: #0369a1 !important; 
 }
 .tree-children { 
-    margin-left: 16px; 
+    margin-left: 12px; 
     border-left: 2px dashed #cbd5e1; 
-    padding-left: 8px; 
+    padding-left: 6px; 
     display: flex; 
     flex-direction: column; 
 }
 
-.btn-add-tree, .btn-rename-tree { 
+.btn-add-tree, .btn-rename-tree, .btn-matrix-toggle { 
     border: none; 
     background: #f1f5f9; 
     color: #0284c7; 
-    width: 22px; 
-    height: 22px; 
-    border-radius: 6px; 
+    width: 20px; 
+    height: 20px; 
+    border-radius: 5px; 
     cursor: pointer; 
     font-weight: 900; 
-    transition: 0.15s; 
+    transition: 0.12s; 
     display: flex; 
     align-items: center; 
     justify-content: center; 
     margin-left: 2px;
+    font-size: 11px;
+    padding: 0;
 }
-.btn-add-tree:hover, .btn-rename-tree:hover { 
+.btn-add-tree:hover, .btn-rename-tree:hover, .btn-matrix-toggle:hover { 
     background: #0284c7; 
     color: #ffffff; 
 }
-.tree-color-picker-dot {
-    width: 12px; 
-    height: 12px; 
-    border-radius: 50%; 
-    cursor: pointer;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+.btn-matrix-toggle.is-open {
+    background: #0284c7;
+    color: #ffffff;
 }
 
-/* MA TRẬN 16 Ô TẠI NODE LÁ */
+.tree-color-picker-dot {
+    width: 10px; 
+    height: 10px; 
+    border-radius: 50%; 
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    flex-shrink: 0;
+}
+
+/* MA TRẬN 16 Ô TẠI NODE LÁ - CO SÁT CHIỀU DỌC & MỞ/ĐÓNG ĐỘC LẬP */
 .leaf-matrix-container { 
     background: #f8fafc; 
-    border: 1.5px solid #e2e8f0; 
-    border-radius: 8px; 
-    padding: 6px; 
-    margin: 4px 0 10px 0; 
+    border: 1.5px solid #cbd5e1; 
+    border-radius: 7px; 
+    padding: 4px; 
+    margin: 2px 0 6px 0; 
+    animation: fadeInQbankMatrix 0.15s ease-out;
+}
+@keyframes fadeInQbankMatrix {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.leaf-matrix-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    font-weight: 800;
+    color: #0369a1;
+    margin-bottom: 3px;
+    padding: 1px 4px;
 }
 .leaf-matrix-row { 
     display: grid; 
-    grid-template-columns: 32px 1fr 1fr 1fr 1fr; 
-    gap: 4px; 
-    margin-bottom: 4px; 
+    grid-template-columns: 28px 1fr 1fr 1fr 1fr; 
+    gap: 3px; 
+    margin-bottom: 3px; 
     align-items: stretch; 
 }
+.leaf-matrix-row:last-child {
+    margin-bottom: 0;
+}
 .leaf-matrix-lbl { 
-    font-size: 10px; 
+    font-size: 9.5px; 
     font-weight: 900; 
-    color: #475569; 
+    color: #1e293b; 
     display: flex; 
     align-items: center; 
     justify-content: center; 
     background: #e2e8f0; 
-    border-radius: 5px; 
+    border-radius: 4px; 
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
 }
+.leaf-matrix-lbl:hover, .leaf-matrix-lbl.active-filter {
+    background: #0284c7;
+    color: #ffffff;
+}
+
 .leaf-drop-zone { 
     background: #ffffff; 
-    border: 1.5px dashed #cbd5e1; 
-    border-radius: 6px; 
-    padding: 4px 2px; 
+    border: 1.2px dashed #cbd5e1; 
+    border-radius: 5px; 
+    padding: 2px 1px; 
     text-align: center; 
-    font-size: 9.5px; 
+    font-size: 9px; 
     font-weight: 800; 
-    color: #64748b; 
-    transition: all 0.2s; 
+    color: #475569; 
+    transition: all 0.15s; 
     display: flex; 
     flex-direction: column; 
     justify-content: center; 
-    min-height: 38px; 
+    min-height: 28px; 
     cursor: pointer; 
+    user-select: none;
+    line-height: 1.15;
 }
 .leaf-drop-zone b { 
-    font-size: 11px; 
+    font-size: 10px; 
     display: block; 
-    color: #0f172a; 
-    margin-top: 1px; 
+    color: #0284c7; 
 }
 .leaf-drop-zone:hover { 
     border-color: #0284c7; 
     background: #f0f9ff; 
     color: #0369a1; 
 }
+.leaf-drop-zone.active-filter {
+    background: #0284c7 !important;
+    border-color: #0369a1 !important;
+    color: #ffffff !important;
+}
+.leaf-drop-zone.active-filter b {
+    color: #fef08a !important;
+}
 .leaf-drop-zone.drag-over { 
-    border-color: #10b981; 
-    background: #dcfce7; 
-    transform: scale(1.04); 
-    box-shadow: 0 4px 10px rgba(16,185,129,0.25); 
-    color: #047857; 
+    border-color: #10b981 !important; 
+    background: #dcfce7 !important; 
+    transform: scale(1.05); 
+    box-shadow: 0 2px 8px rgba(16,185,129,0.3); 
+    color: #047857 !important; 
 }
 
 /* =========================================
-   4. CỘT GIỮA: CÂU HỎI & MA TRẬN
+   4. CỘT GIỮA: CÂU HỎI & MA TRẬN THỐNG KÊ SIÊU GỌN
 ========================================= */
 .qbank-col-mid { 
     display: flex; 
     flex-direction: column; 
     background: #f1f5f9; 
     overflow: hidden; 
+    height: 100%;
 }
 .qbank-stats-bar { 
     background: #ffffff; 
-    padding: 10px 14px; 
-    border-bottom: 2px solid #e2e8f0; 
+    padding: 6px 12px; 
+    border-bottom: 1.5px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
-    gap: 8px; 
+    gap: 4px; 
+    flex-shrink: 0;
 }
 .qbank-tools-row { 
     display: flex; 
-    gap: 8px; 
+    gap: 6px; 
     flex-wrap: wrap; 
     align-items: center; 
 }
 
-.qbank-matrix-stats { 
-    display: flex; 
-    flex-direction: column; 
-    gap: 6px; 
-    background: #f8fafc; 
-    padding: 8px 10px; 
-    border-radius: 10px; 
-    border: 1px solid #e2e8f0; 
-    font-size: 11.5px; 
+/* NÚT XẾP CÂU / ẨN CÂU ĐÃ XẾP */
+.btn-toggle-assigned {
+    background: #ffffff !important;
+    color: #475569 !important;
+    border: 1.5px solid #cbd5e1 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
 }
-.matrix-group { 
+.btn-toggle-assigned:hover {
+    background: #f8fafc !important;
+    border-color: #94a3b8 !important;
+    color: #0f172a !important;
+}
+.btn-toggle-assigned.is-active {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: #ffffff !important;
+    border-color: #d97706 !important;
+    box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3) !important;
+}
+
+/* THANH THỐNG KÊ MA TRẬN CO GỌN DỌC TỐI ĐA */
+.qbank-matrix-stats { 
     display: flex; 
     align-items: center; 
     gap: 8px; 
-    flex-wrap: wrap; 
+    background: #f8fafc; 
+    padding: 4px 8px; 
+    border-radius: 8px; 
+    border: 1px solid #e2e8f0; 
+    font-size: 11px; 
+    flex-wrap: wrap;
+    line-height: 1.2;
+}
+.matrix-group { 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 5px; 
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 5px;
+    transition: background 0.12s;
+}
+.matrix-group:hover, .matrix-group.active-filter {
+    background: #e0f2fe;
 }
 .matrix-title { 
     font-weight: 900; 
-    color: #0f172a; 
-    min-width: 95px; 
+    color: #0284c7; 
+    font-size: 11px;
+    white-space: nowrap;
 }
 .matrix-row { 
     display: flex; 
-    gap: 5px; 
+    gap: 3px; 
 }
 .stat-pill { 
-    padding: 2px 7px; 
-    border-radius: 6px; 
+    padding: 1px 5px; 
+    border-radius: 4px; 
     font-weight: 800; 
     border: 1px solid #cbd5e1; 
-    font-size: 10.5px; 
+    font-size: 10px; 
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s;
+}
+.stat-pill:hover {
+    transform: scale(1.08);
+}
+.stat-pill.active-filter {
+    outline: 2px solid #0284c7;
+    font-weight: 900;
 }
 .stat-pill.nb { background: #f0fdf4; color: #166534; border-color: #86efac; }
 .stat-pill.th { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
 .stat-pill.vdt { background: #fefce8; color: #854d0e; border-color: #fde047; }
 .stat-pill.vdc { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
 
-/* THẺ CÂU HỎI */
+/* DÒNG HIỂN THỊ TRẠNG THÁI BỘ LỌC ĐANG CHỌN */
+.qbank-active-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #e0f2fe;
+    border: 1px solid #7dd3fc;
+    color: #0369a1;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-top: 2px;
+}
+.btn-clear-filter {
+    background: none;
+    border: none;
+    color: #dc2626;
+    font-weight: 900;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 1px 4px;
+    border-radius: 4px;
+}
+.btn-clear-filter:hover {
+    background: #fee2e2;
+}
+
+/* DANH SÁCH THẺ CÂU HỎI */
 .qbank-questions-list { 
     flex: 1; 
     overflow-y: auto; 
-    padding: 12px; 
+    padding: 8px 10px; 
     display: flex; 
     flex-direction: column; 
-    gap: 12px; 
+    gap: 8px; 
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
 }
+.qbank-questions-list::-webkit-scrollbar {
+    width: 6px;
+}
+.qbank-questions-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
 .qbank-q-card { 
     background: #ffffff; 
-    border-radius: 12px; 
-    padding: 12px 14px; 
-    border: 2px solid #cbd5e1; 
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04); 
+    border-radius: 10px; 
+    padding: 10px 12px; 
+    border: 1.5px solid #cbd5e1; 
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04); 
     cursor: grab; 
     position: relative; 
-    transition: all 0.18s ease; 
+    transition: all 0.15s ease; 
 }
 .qbank-q-card:active { 
     cursor: grabbing; 
-    transform: scale(0.985); 
-    box-shadow: 0 8px 20px rgba(0,0,0,0.12); 
+    transform: scale(0.99); 
+    box-shadow: 0 6px 16px rgba(0,0,0,0.1); 
 }
 .qbank-q-card:hover { 
     border-color: #94a3b8; 
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08); 
+    box-shadow: 0 3px 10px rgba(0,0,0,0.06); 
 }
 .qbank-q-card.selected { 
     border-color: #10b981 !important; 
     background: #f0fdf4 !important; 
-    box-shadow: 0 0 0 2.5px rgba(16,185,129,0.3) !important; 
+    box-shadow: 0 0 0 2px rgba(16,185,129,0.3) !important; 
 }
 
 .qbank-q-header { 
     display: flex; 
     justify-content: space-between; 
-    margin-bottom: 8px; 
+    margin-bottom: 6px; 
     align-items: center; 
     border-bottom: 1px dashed #e2e8f0; 
-    padding-bottom: 6px; 
+    padding-bottom: 4px; 
     flex-wrap: wrap; 
-    gap: 6px;
+    gap: 4px;
 }
 .qbank-q-id-badge { 
     background: #0f172a; 
     color: #ffffff; 
-    padding: 2px 7px; 
-    border-radius: 6px; 
+    padding: 2px 6px; 
+    border-radius: 5px; 
     font-weight: 900; 
-    font-size: 11px; 
+    font-size: 10.5px; 
 }
 
-/* HIỂN THỊ PHƯƠNG ÁN A,B,C,D TRONG THẺ QBANK */
 .qbank-options-preview {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin: 8px 0;
+    gap: 5px;
+    margin: 6px 0;
 }
 @media (max-width: 600px) {
     .qbank-options-preview { grid-template-columns: 1fr; }
@@ -438,12 +571,13 @@
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 6px;
-    padding: 5px 8px;
-    font-size: 12px;
+    padding: 4px 6px;
+    font-size: 11.5px;
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
+    line-height: 1.25;
 }
 .qbank-opt-item.is-correct {
     background: #dcfce7;
@@ -452,12 +586,12 @@
     font-weight: 800;
 }
 .qbank-opt-circle {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     background: #e2e8f0;
     color: #334155;
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 900;
     display: flex;
     align-items: center;
@@ -480,10 +614,10 @@
 }
 
 .btn-qbank-img { 
-    padding: 3px 8px; 
-    font-size: 11px; 
+    padding: 2px 7px; 
+    font-size: 10.5px; 
     font-weight: 800; 
-    border-radius: 6px; 
+    border-radius: 5px; 
     border: none; 
     cursor: pointer; 
     background: #e0f2fe; 
@@ -506,41 +640,44 @@
     border-left: 2px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
-    padding: 16px; 
+    padding: 12px; 
+    height: 100%;
+    overflow-y: auto;
 }
 .qbank-exam-builder-form label { 
     display: block; 
-    font-size: 12px; 
+    font-size: 11.5px; 
     font-weight: 800; 
     color: #334155; 
-    margin-bottom: 4px; 
+    margin-bottom: 3px; 
 }
 .qbank-exam-builder-form input, 
 .qbank-exam-builder-form select { 
     width: 100%; 
-    padding: 8px 10px; 
-    border-radius: 8px; 
+    padding: 7px 9px; 
+    border-radius: 7px; 
     border: 1.5px solid #cbd5e1; 
-    margin-bottom: 12px; 
-    font-size: 13px; 
+    margin-bottom: 10px; 
+    font-size: 12.5px; 
     font-weight: 700; 
     outline: none; 
     font-family: inherit; 
+    box-sizing: border-box;
 }
 .qbank-exam-builder-form input:focus, 
 .qbank-exam-builder-form select:focus { 
     border-color: #0284c7; 
-    box-shadow: 0 0 0 2.5px rgba(2,132,199,0.15); 
+    box-shadow: 0 0 0 2px rgba(2,132,199,0.15); 
 }
 .qbank-selected-stats { 
     background: #f8fafc; 
     border: 1.5px dashed #94a3b8; 
-    padding: 12px; 
-    border-radius: 10px; 
-    margin-bottom: 16px; 
-    font-size: 12.5px; 
+    padding: 10px; 
+    border-radius: 9px; 
+    margin-bottom: 12px; 
+    font-size: 11.5px; 
     font-weight: 600; 
-    line-height: 1.5; 
+    line-height: 1.4; 
     color: #1e293b; 
 }
 
@@ -550,8 +687,8 @@
 .saved-exams-list { 
     display: flex; 
     flex-direction: column; 
-    gap: 10px; 
-    padding: 12px 18px 18px 18px; 
+    gap: 8px; 
+    padding: 10px 14px 14px 14px; 
     overflow-y: auto; 
     flex: 1; 
     background: #f1f5f9; 
@@ -559,26 +696,26 @@
 .saved-exam-item { 
     background: #ffffff; 
     border: 1.5px solid #cbd5e1; 
-    border-radius: 12px; 
-    padding: 12px 14px; 
+    border-radius: 10px; 
+    padding: 10px 12px; 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.04); 
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04); 
     transition: 0.15s; 
-    gap: 10px;
+    gap: 8px;
 }
 .saved-exam-item:hover { 
     transform: translateY(-1px); 
-    box-shadow: 0 6px 16px rgba(0,0,0,0.08); 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
     border-color: #94a3b8; 
 }
 .exam-tag { 
     background: #e0f2fe; 
     color: #0369a1; 
-    padding: 2px 7px; 
-    border-radius: 6px; 
-    font-size: 11px; 
+    padding: 2px 6px; 
+    border-radius: 5px; 
+    font-size: 10.5px; 
     font-weight: 800; 
     border: 1px solid #7dd3fc; 
     display: inline-block;
@@ -588,28 +725,29 @@
    7. NÚT BẤM CHUNG
 ========================================= */
 .btn-qbank { 
-    padding: 7px 12px; 
-    border-radius: 8px; 
+    padding: 6px 11px; 
+    border-radius: 7px; 
     font-weight: 800; 
-    font-size: 12px; 
+    font-size: 11.5px; 
     cursor: pointer; 
     border: none; 
-    transition: 0.15s; 
+    transition: all 0.12s ease; 
     color: #ffffff; 
     font-family: inherit; 
     display: inline-flex; 
     align-items: center; 
     gap: 4px; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1); 
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1); 
     user-select: none;
-    white-space: nowrap;
+    white-space: nowrap; 
+    line-height: 1.2;
 }
 .btn-qbank:hover { 
     filter: brightness(1.1); 
     transform: translateY(-1px); 
 }
 .btn-qbank:active { 
-    transform: translateY(1.5px) scale(0.96); 
+    transform: translateY(1px) scale(0.96); 
 }
 .btn-qbank-primary { background: linear-gradient(135deg, #0284c7, #0369a1); }
 .btn-qbank-success { background: linear-gradient(135deg, #10b981, #059669); }
@@ -617,7 +755,7 @@
 .btn-qbank-danger { background: linear-gradient(135deg, #ef4444, #b91c1c); }
 
 /* =========================================
-   8. RESPONSIVE (MÀN HÌNH NHỎ)
+   8. RESPONSIVE
 ========================================= */
 @media (max-width: 900px) {
     .qbank-body-3cols { 
