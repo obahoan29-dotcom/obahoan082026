@@ -1243,20 +1243,28 @@
 </div>
 
 <!-- ============================================== -->
-<!-- 9. MODAL 1: TẠO CÂU HỎI VÀ TRÍCH ĐỀ (3 CỘT) -->
+<!-- 9. MODAL 1: TẠO CÂU HỎI VÀ TRÍCH ĐỀ (3 CỘT CO GIÃN) -->
 <!-- ============================================== -->
 <div class="qbank-modal-overlay" id="modal-qbank-creator" onclick="if(event.target===this) closeQbankCreatorModal();">
     <div class="qbank-modal-container" onclick="event.stopPropagation()">
         <div class="qbank-header">
-            <div style="font-size:15px; font-weight:900; display:flex; align-items:center; gap:8px;">
-                <span style="font-size:22px;">📚</span> <span>HỆ THỐNG BIÊN SOẠN & TẠO MA TRẬN ĐỀ</span>
+            <div class="qbank-header-left">
+                <div style="font-size:15px; font-weight:900; display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                    <span style="font-size:22px;">📚</span> <span>HỆ THỐNG BIÊN SOẠN & TẠO MA TRẬN ĐỀ</span>
+                </div>
+                <div class="qbank-header-exam-badge" id="qbank-header-exam-title" title="Tên đề gốc đang xử lý">
+                    <span>📄</span> <span>Chưa nạp đề gốc</span>
+                </div>
             </div>
-            <button onclick="closeQbankCreatorModal()" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer; padding:0 8px;">✕</button>
+            <button onclick="closeQbankCreatorModal()" style="background:none; border:none; color:#fff; font-size:22px; font-weight:900; cursor:pointer; padding:0 8px; flex-shrink:0;">✕</button>
         </div>
 
-        <div class="qbank-body-3cols">
-            <!-- CỘT 1: CÂY THƯ MỤC (CUỘN ĐỘC LẬP & CO SÁT THEO CHIỀU CAO) -->
-            <div class="qbank-col-left">
+        <!-- THÔNG BÁO TOAST NỔI RÕ RÀNG BÊN TRONG MODAL -->
+        <div id="qbank-toast" class="qbank-toast" role="status" aria-live="polite"></div>
+
+        <div class="qbank-body-3cols" id="qbank-body-3cols">
+            <!-- CỘT 1: CÂY THƯ MỤC (CO GIÃN ĐƯỢC ĐỘ RỘNG) -->
+            <div class="qbank-col-left" id="qbank-col-left">
                 <div class="qbank-storage-toggle">
                     <b style="font-size:11.5px; color:#1e293b;">Nơi Lưu trữ dữ liệu:</b>
                     <select onchange="toggleStorageLocation(this)">
@@ -1269,30 +1277,48 @@
                 </div>
             </div>
 
-            <!-- CỘT 2: QUESTIONS & MA TRẬN (CO SÁT CHIỀU DỌC & CÓ NÚT XẾP CÂU) -->
-            <div class="qbank-col-mid">
+            <!-- THANH KÉO CO GIÃN CỘT 1 <-> CỘT 2 -->
+            <div class="qbank-col-resizer" id="qbank-resizer-left" title="Giữ chuột và kéo sang trái/phải để co giãn cột 1 (Nhấp đúp để đặt lại mặc định)"></div>
+
+            <!-- CỘT 2: QUESTIONS & MA TRẬN -->
+            <div class="qbank-col-mid" id="qbank-col-mid">
                 <div class="qbank-stats-bar">
                     <div class="qbank-tools-row">
-                        <button class="btn-qbank btn-qbank-primary" onclick="triggerQbankUpload()">📥 Upload file JSON đề</button>
+                        <!-- NÚT MŨI TÊN LÙI (UNDO) Ở CỘT GIỮA TRÊN, BÊN TRÁI -->
+                        <button type="button" class="btn-qbank btn-qbank-undo" id="btn-qbank-undo" onclick="undoQbankAction()" disabled title="Lùi lại thao tác vừa làm khi kéo nhầm (Phím tắt: Ctrl + Z)">
+                            <span>↩️</span> <span>Lùi</span>
+                        </button>
+
+                        <button type="button" class="btn-qbank btn-qbank-primary" onclick="triggerQbankUpload()">📥 Upload file JSON đề</button>
                         
-                        <!-- NÚT SO ĐỀ TRONG NGÂN HÀNG CÂU HỎI -->
+                        <!-- NÚT SOI ĐỀ TRONG NGÂN HÀNG CÂU HỎI -->
                         <button type="button" class="btn-qbank" style="background:#8b5cf6; color:#fff; border:1px solid #7c3aed;" onclick="openSoiDeFromQBank()" title="Mở công cụ Soi đề để chỉnh sửa hàng loạt toàn bộ ngân hàng">
                             🔍 Soi đề
                         </button>
                         
-                        <!-- NÚT LƯU THỦ CÔNG MỚI THÊM VÀO ĐÂY -->
-                        <button type="button" class="btn-qbank btn-qbank-success" onclick="saveQbankDraftState()" title="Lưu nháp các câu hỏi đang biên soạn để không bị mất khi đóng trang">
+                        <!-- NÚT LƯU DỮ LIỆU CÓ PHẢN HỒI RÕ RÀNG -->
+                        <button type="button" class="btn-qbank btn-qbank-success" id="btn-qbank-save-draft" onclick="manualSaveQbankDraftState(event)" title="Lưu toàn bộ câu hỏi, cây thư mục và ảnh đang biên soạn vào bộ nhớ máy">
                             💾 Lưu dữ liệu
                         </button>
                         
                         <!-- NÚT XẾP CÂU: BẤM VÀO SẼ ẨN/HIỆN CÁC CÂU ĐÃ GÁN VÀO MA TRẬN -->
-                        <button type="button" class="btn-qbank btn-toggle-assigned" id="btn-toggle-assigned" onclick="toggleHideAssignedQuestions()" title="Bấm để ẩn/hiện toàn bộ các câu hỏi đã được xếp vào cây thư mục ma trận">
+                        <button type="button" class="btn-qbank btn-toggle-assigned" id="btn-toggle-assigned" onclick="toggleHideAssignedQuestions()" title="Bấm để chỉ xem các câu chưa xếp của đề gốc hoặc hiện lại câu đã xếp">
                             <span>📦</span> <b>Xếp câu (Ẩn đã xếp)</b>
                         </button>
 
                         <button type="button" class="btn-qbank" style="background:#f1f5f9; color:#0284c7; border:1.2px solid #cbd5e1;" onclick="clearQbankFilter()" title="Hủy bỏ lọc để hiển thị toàn bộ câu hỏi">
                             <span>🔄</span> <b>Hiện tất cả</b>
                         </button>
+                    </div>
+
+                    <!-- HIỂN THỊ TÊN ĐỀ GỐC ĐANG XỬ LÝ Ở CỘT GIỮA -->
+                    <div class="qbank-mid-exam-bar" id="qbank-mid-exam-bar">
+                        <div class="qbank-mid-exam-title-wrap">
+                            <span>📑</span>
+                            <span>Đề gốc đang xử lý:</span>
+                            <b id="qbank-mid-exam-name">Chưa nạp đề gốc</b>
+                        </div>
+                        <span class="qbank-mid-exam-counter" id="qbank-mid-exam-counter">Chờ xếp: 0 • Ngân hàng: 0</span>
                     </div>
 
                     <!-- THANH THỐNG KÊ MA TRẬN CO SÁT DỌC -->
@@ -1307,8 +1333,11 @@
                 </div>
             </div>
 
-            <!-- CỘT 3: EXAM BUILDER -->
-            <div class="qbank-col-right">
+            <!-- THANH KÉO CO GIÃN CỘT 2 <-> CỘT 3 -->
+            <div class="qbank-col-resizer" id="qbank-resizer-right" title="Giữ chuột và kéo sang trái/phải để co giãn cột 3 (Nhấp đúp để đặt lại mặc định)"></div>
+
+            <!-- CỘT 3: EXAM BUILDER (CO GIÃN ĐƯỢC ĐỘ RỘNG) -->
+            <div class="qbank-col-right" id="qbank-col-right">
                 <h3 style="color:#0f172a; font-size:14px; font-weight:900; margin-bottom:12px; border-bottom:2px solid #e2e8f0; padding-bottom:8px;">🛠️ TRÍCH XUẤT TỪ NGÂN HÀNG</h3>
                 
                 <div class="qbank-exam-builder-form">
