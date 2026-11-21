@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: ngan-hang-de.js (BẢN HOÀN THIỆN 100% - NÂNG CẤP LƯU NHÁP, MOVE, DELETE VÀ LỌC SÂU)
+// FILE: ngan-hang-de.js (BẢN HOÀN THIỆN 100% - NÂNG CẤP LƯU NHÁP, ĐỔI MÀU GỌN GÀNG, DI CHUYỂN DEEP & LỌC SÂU)
 // =========================================================
 
 let qbankState = {
@@ -79,9 +79,7 @@ let qbankState = {
     hideAssigned: false
 };
 
-const QBANK_COLOR_PALETTE = [
-    "#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"
-];
+const QBANK_COLOR_PALETTE = [    "#0284c7", "#059669", "#7c3aed", "#ea580c", "#dc2626", "#0891b2", "#ca8a04", "#475569"];
 
 // ============================================================================
 // HÀM LƯU/TẢI DỮ LIỆU BẢN NHÁP (FEATURE 1)
@@ -361,11 +359,11 @@ function renderQbankTree() {
             <div class="tree-item-wrapper" style="margin-left: ${depth > 0 ? 3 : 0}px;">
                 <div class="tree-item ${isActive ? 'active' : ''}" id="tree-node-${node.id}"
                      onclick="handleFolderNodeClick('${node.id}')"
-                     style="border-left: 3.5px solid ${nodeColor};">
+                     style="border-left: 3.5px solid transparent;">
                     
                     <div style="display:flex; align-items:center; gap:5px; min-width:0; flex:1;">
                         <span style="color:${nodeColor}; font-size:13px;">${isLeaf ? '📄' : '📁'}</span>
-                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.8px;" title="${node.name}">${node.name}</span>
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:${nodeColor}; font-weight:800;" title="${node.name}">${node.name}</span>
                     </div>
 
                     <div style="display:flex; align-items:center; gap:2px;" onclick="event.stopPropagation()">
@@ -525,12 +523,39 @@ function promptAddChildFolder(parentId) {
 
 function promptChangeFolderColor(folderId) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
-    const chosen = prompt("🎨 Chọn mã màu Hex (VD: #0284c7):", node.color);
-    if (chosen && chosen.trim()) { 
-        node.color = chosen.trim(); 
+    
+    // Tạo bảng 8 màu sắc để bấm chọn
+    const colors = QBANK_COLOR_PALETTE;
+    let colorHtml = `<div style="display:flex; gap:8px; justify-content:center; margin:10px 0;">`;
+    colors.forEach(c => {
+        colorHtml += `<div onclick="applyFolderColorChange('${folderId}', '${c}')" style="width:24px; height:24px; border-radius:50%; background:${c}; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`;
+    });
+    colorHtml += `</div>`;
+    
+    let div = document.createElement("div");
+    div.className = "qbank-modal-overlay";
+    div.id = "color-picker-modal";
+    div.style.display = "flex";
+    div.innerHTML = `
+        <div class="qbank-modal-container" style="width: 320px; height: auto; padding: 22px; background:#fff; box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+            <h3 style="margin-top:0; color:#0f172a; font-weight:900; font-size:15px; text-align:center;">🎨 Chọn màu thư mục</h3>
+            ${colorHtml}
+            <button onclick="document.getElementById('color-picker-modal').remove()" style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:800; color:#475569; margin-top:10px;">Đóng</button>
+        </div>
+    `;
+    document.body.appendChild(div);
+}
+
+// Gọi từ bảng đổi màu thư mục
+window.applyFolderColorChange = function(folderId, newColor) {
+    const node = findNodeInTree(qbankState.currentTree, folderId);
+    if(node) {
+        node.color = newColor;
         saveQbankTreeData(); 
-        renderQbankTree(); 
+        renderQbankTree();
     }
+    const modal = document.getElementById('color-picker-modal');
+    if(modal) modal.remove();
 }
 
 function promptDeleteFolder(folderId) {
@@ -649,12 +674,15 @@ function deleteQbankQuestion(qId) {
 }
 
 function promptMoveQuestion(qId) {
+    const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
+    if (!q) return;
+
     let options = [];
     function traverse(nodes, path) {
         nodes.forEach(n => {
             let currentPath = path ? path + " > " + n.name : n.name;
             if (!n.children || n.children.length === 0) {
-                options.push({id: n.id, name: currentPath, shortName: n.name});
+                options.push({id: n.id, name: currentPath});
             } else {
                 traverse(n.children, currentPath);
             }
@@ -664,23 +692,44 @@ function promptMoveQuestion(qId) {
 
     if (options.length === 0) return alert("Chưa có thư mục lá nào để chuyển!");
 
-    let selectHtml = `<select id="move-qbank-select" style="width:100%; padding:10px; margin:15px 0; border-radius:8px; border:1px solid #cbd5e1; font-weight:700; color:#334155; outline:none;">`;
+    let currentPart = q.part || 1;
+    if (q.type === 'true_false') currentPart = 2;
+    else if (q.type === 'short_answer' && q.part !== 4) currentPart = 3;
+
+    let currentLevel = q.level || 'nb';
+
+    let selectHtml = `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">1. Chọn thư mục lưu trữ:</label><select id="move-qbank-folder" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; color:#0f172a; outline:none;">`;
     options.forEach(o => {
-        selectHtml += `<option value="${o.id}">${o.name}</option>`;
+        const isSel = o.id === q.folderId ? 'selected' : '';
+        selectHtml += `<option value="${o.id}" ${isSel}>${o.name}</option>`;
     });
-    selectHtml += `</select>`;
+    selectHtml += `</select></div>`;
+
+    selectHtml += `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">2. Chọn Phần thi:</label><select id="move-qbank-part" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; color:#0f172a; outline:none;">
+        <option value="1" ${currentPart === 1 ? 'selected' : ''}>Phần I: Trắc nghiệm 4 lựa chọn</option>
+        <option value="2" ${currentPart === 2 ? 'selected' : ''}>Phần II: Trắc nghiệm Đúng/Sai</option>
+        <option value="3" ${currentPart === 3 ? 'selected' : ''}>Phần III: Trả lời ngắn</option>
+        <option value="4" ${currentPart === 4 ? 'selected' : ''}>Phần IV: Tự luận ngắn</option>
+    </select></div>`;
+
+    selectHtml += `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">3. Chọn Mức độ nhận thức:</label><select id="move-qbank-level" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700; color:#0f172a; outline:none;">
+        <option value="nb" ${currentLevel === 'nb' ? 'selected' : ''}>Nhận biết (NB)</option>
+        <option value="th" ${currentLevel === 'th' ? 'selected' : ''}>Thông hiểu (TH)</option>
+        <option value="vdt" ${currentLevel === 'vdt' ? 'selected' : ''}>Vận dụng (VD)</option>
+        <option value="vdc" ${currentLevel === 'vdc' ? 'selected' : ''}>Vận dụng cao (VDC)</option>
+    </select></div>`;
 
     let div = document.createElement("div");
     div.className = "qbank-modal-overlay";
     div.id = "move-qbank-modal";
     div.style.display = "flex";
     div.innerHTML = `
-        <div class="qbank-modal-container" style="width: 420px; height: auto; padding: 22px; overflow:visible;">
-            <h3 style="margin-top:0; color:#0284c7; font-weight:900; font-size:16px;">🔄 Chuyển câu hỏi sang mục khác</h3>
+        <div class="qbank-modal-container" style="width: 50vw; min-width: 320px; height: auto; padding: 22px; overflow:visible; background:#ffffff; box-shadow:0 25px 60px rgba(0,0,0,0.5);">
+            <h3 style="margin-top:0; color:#0284c7; font-weight:900; font-size:17px; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:14px;">🔄 CHUYỂN CÂU HỎI SANG MỤC KHÁC</h3>
             ${selectHtml}
-            <div style="display:flex; gap:10px; margin-top:10px;">
-                <button onclick="document.getElementById('move-qbank-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:1.5px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:800; color:#475569;">Hủy</button>
-                <button onclick="executeMoveQbankQuestion('${qId}')" style="flex:1; padding:10px; border-radius:8px; border:none; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; cursor:pointer; font-weight:900; box-shadow:0 3px 8px rgba(2,132,199,0.3);">Xác nhận chuyển</button>
+            <div style="display:flex; gap:10px; margin-top:16px;">
+                <button onclick="document.getElementById('move-qbank-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:1.5px solid #cbd5e1; background:#f8fafc; cursor:pointer; font-weight:800; color:#475569; transition:0.15s;">✕ Hủy bỏ</button>
+                <button onclick="executeMoveQbankQuestion('${qId}')" style="flex:1.5; padding:10px; border-radius:8px; border:none; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; cursor:pointer; font-weight:900; box-shadow:0 4px 10px rgba(2,132,199,0.3); transition:0.15s;">🚀 Xác nhận chuyển</button>
             </div>
         </div>
     `;
@@ -688,27 +737,23 @@ function promptMoveQuestion(qId) {
 }
 
 function executeMoveQbankQuestion(qId) {
-    let sel = document.getElementById("move-qbank-select");
-    if(!sel) return;
-    let targetFolderId = sel.value;
+    let folderSel = document.getElementById("move-qbank-folder");
+    let partSel = document.getElementById("move-qbank-part");
+    let levelSel = document.getElementById("move-qbank-level");
+    
+    if(!folderSel || !partSel || !levelSel) return;
+    
+    let targetFolderId = folderSel.value;
+    let targetPart = parseInt(partSel.value, 10);
+    let targetLevel = levelSel.value;
+    
     let targetFolder = findNodeInTree(qbankState.currentTree, targetFolderId);
     let q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     
     if(q && targetFolder) {
-        qbankState.selectedQuestionIds.delete(String(qId));
-        q.folderId = targetFolderId;
-        q.folderName = targetFolder.name;
-        
-        const countInFolder = qbankState.rawQuestions.filter(x => x.folderId === targetFolderId).length;
-        const prefix = getHierarchicalPrefix(targetFolderId);
-        q.id = `${prefix}.num${countInFolder}`; 
-        
-        saveQbankDraftState();
-        renderQbankQuestions();
-        updateQbankMatrixStats();
-        updateQbankBuilderStats();
+        applyMatrixToQuestion(qId, targetFolderId, targetPart, targetLevel);
         document.getElementById('move-qbank-modal').remove();
-        showSoiDeToast("✅ Đã chuyển câu hỏi sang " + targetFolder.name);
+        showSoiDeToast("✅ Đã chuyển đổi và phân loại câu hỏi thành công!");
     }
 }
 
