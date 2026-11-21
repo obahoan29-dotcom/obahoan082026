@@ -311,8 +311,8 @@
                 <button class="auth-btn" onclick="checkAdminPassword()">VÀO</button>
             </div>
             
-            <!-- NÚT TẠO CÂU HỎI & TRÍCH ĐỀ (THIẾT KẾ ĐÚNG ICON XẾP LỚP TRÊN ẢNH CHỤP) -->
-            <div class="qbank-dropdown-wrapper" style="position:relative; z-index:99999;">
+            <!-- NÚT TẠO CÂU HỎI & TRÍCH ĐỀ (ĐÃ SỬA CƠ CHẾ CLICK & ĐỊNH VỊ) -->
+            <div class="qbank-dropdown-wrapper">
                 <button type="button" class="qbank-trigger-btn" id="qbank-btn" onclick="toggleQbankMenu(event)" title="Tạo câu hỏi & Trích đề">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <rect x="2.5" y="7.5" width="13" height="13" rx="2" fill="#38BDF8" stroke="#ffffff" stroke-width="1.2"/>
@@ -320,7 +320,8 @@
                         <rect x="8.5" y="3.5" width="13" height="13" rx="2" fill="#FACC15" stroke="#ffffff" stroke-width="1.2"/>
                     </svg>
                 </button>
-                <div class="qbank-dropdown" id="qbank-dropdown-menu">
+                <div class="qbank-dropdown" id="qbank-dropdown-menu" onclick="event.stopPropagation()">
+                    <div class="qbank-dropdown-header">📚 NGÂN HÀNG CÂU HỎI & ĐỀ THI</div>
                     <div class="qbank-dropdown-item" onclick="openQbankCreatorModal()">
                         <span>📥</span> 
                         <div>
@@ -332,7 +333,7 @@
                         <span>🏦</span> 
                         <div>
                             Ngân hàng đề (Đã lưu)
-                            <br><small style="color:#64748b;font-size:10.5px;font-weight:600;">Quản lý và chuyển đề sang lớp</small>
+                            <br><small style="color:#64748b;font-size:10.5px;font-weight:600;">Xem, chỉnh sửa & chuyển đề sang các lớp</small>
                         </div>
                     </div>
                 </div>
@@ -1245,8 +1246,8 @@
 <!-- ============================================== -->
 <!-- 9. MODAL 1: TẠO CÂU HỎI VÀ TRÍCH ĐỀ (3 CỘT) -->
 <!-- ============================================== -->
-<div class="qbank-modal-overlay" id="modal-qbank-creator">
-    <div class="qbank-modal-container">
+<div class="qbank-modal-overlay" id="modal-qbank-creator" onclick="if(event.target===this) closeQbankCreatorModal();">
+    <div class="qbank-modal-container" onclick="event.stopPropagation()">
         <div class="qbank-header">
             <div style="font-size:16px; font-weight:900; display:flex; align-items:center; gap:8px;">
                 <span style="font-size:24px;">📚</span> <span>HỆ THỐNG BIÊN SOẠN & TẠO MA TRẬN ĐỀ</span>
@@ -1316,8 +1317,8 @@
 <!-- ============================================== -->
 <!-- 10. MODAL 2: NGÂN HÀNG ĐỀ ĐÃ LƯU -->
 <!-- ============================================== -->
-<div class="qbank-modal-overlay" id="modal-qbank-saved">
-    <div class="qbank-modal-container" style="width: 850px; height: 85vh; max-width:95vw;">
+<div class="qbank-modal-overlay" id="modal-qbank-saved" onclick="if(event.target===this) closeSavedExamsModal();">
+    <div class="qbank-modal-container" style="width: 850px; height: 85vh; max-width:95vw;" onclick="event.stopPropagation()">
         <div class="qbank-header">
             <div style="font-size:16px; font-weight:900; display:flex; align-items:center; gap:8px;">
                 <span style="font-size:22px;">🏦</span> <span>NGÂN HÀNG ĐỀ (ĐÃ LƯU)</span>
