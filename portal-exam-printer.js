@@ -97,10 +97,22 @@ function buildExamDocumentHtml(data, examTitle, maDe, timeLimit, includeKey, isF
     const questions = data.questions || [];
     const images = data.images || {};
 
-    const p1List = questions.filter(q => q.type === "multiple_choice");
-    const p2List = questions.filter(q => q.type === "true_false");
-    const p3List = questions.filter(q => q.type === "short_answer");
-    const p4List = questions.filter(q => q.type === "essay" || q.type === "essay_answer");
+    const checkIsP4 = (q) => {
+        if (!q) return false;
+        const ep = parseInt(q.part, 10);
+        if (ep >= 1 && ep <= 4) return ep === 4;
+        if (q.isPart4 === true) return true;
+        if (q.isPart4 === false) return false;
+        if (q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return true;
+        if (q.type === "multiple_choice" || q.type === "true_false") return false;
+        const txt = String(q.question || "").toUpperCase();
+        return txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4");
+    };
+
+    const p1List = questions.filter(q => q.type === "multiple_choice" && !checkIsP4(q));
+    const p2List = questions.filter(q => q.type === "true_false" && !checkIsP4(q));
+    const p3List = questions.filter(q => q.type === "short_answer" && !checkIsP4(q));
+    const p4List = questions.filter(q => checkIsP4(q));
 
     let questionGlobalIdx = 1;
     let htmlContent = "";
