@@ -92,13 +92,9 @@ function ensureScoringModalInDOM() {
 
 function isPart4QuestionScoring(q) {
     if (!q) return false;
-    const explicitPart = parseInt(q.part, 10);
-    if (explicitPart >= 1 && explicitPart <= 4) return explicitPart === 4;
-    if (q.isPart4 === true) return true;
-    if (q.isPart4 === false) return false;
     if (typeof isPart4Question === 'function') return isPart4Question(q);
+    if (q.part === 4 || q.isPart4 === true) return true;
     if (q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return true;
-    if (q.type === "multiple_choice" || q.type === "true_false") return false;
     const txt = String(q.question || "").toUpperCase();
     if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) {
         return true;
@@ -379,6 +375,7 @@ function calculateExamScoreWithConfig(questions, userAnswers, answerVault, scori
 
     // SẮP XẾP CHÍNH XÁC LẠI MẢNG DATADETAILS THEO THỨ TỰ SỐ (ID GỐC) TRƯỚC KHI TRẢ VỀ
     dataDetails.sort((a, b) => {
+        // Cụm Regex tách phần số nguyên và chữ cái con (ví dụ '1' và 'a' từ '1a')
         let matchA = a.match(/^(\d+)([a-zA-Z]?)/);
         let matchB = b.match(/^(\d+)([a-zA-Z]?)/);
         

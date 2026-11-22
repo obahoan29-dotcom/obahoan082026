@@ -71,12 +71,8 @@ function checkIsAdminModeSafe() {
 
 function isPart4Question(q) {
     if (!q) return false;
-    const explicitPart = parseInt(q.part, 10);
-    if (explicitPart >= 1 && explicitPart <= 4) return explicitPart === 4;
-    if (q.isPart4 === true) return true;
-    if (q.isPart4 === false) return false;
+    if (q.part === 4 || q.isPart4 === true) return true;
     if (q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return true;
-    if (q.type === "multiple_choice" || q.type === "true_false") return false;
     const txt = String(q.question || "").toUpperCase();
     if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) {
         return true;
@@ -86,8 +82,6 @@ function isPart4Question(q) {
 
 function getQuestionPartType(q) {
     if (!q) return 1;
-    const explicitPart = parseInt(q.part, 10);
-    if (explicitPart >= 1 && explicitPart <= 4) return explicitPart;
     if (isPart4Question(q)) return 4;
     if (q.type === "true_false") return 2;
     if (q.type === "short_answer") return 3;
@@ -270,7 +264,6 @@ function parseSmartSingleQuestion(text) {
                 correctAnswer: parsed.correctAnswer || parsed.correct_answer || "",
                 explanation: parsed.explanation || "",
                 part: parsed.part,
-                isPart4: parsed.isPart4,
                 imageUrl: parsed.imageUrl || "",
                 imageKey: parsed.imageKey || ""
             };
@@ -305,7 +298,7 @@ function parseSmartSingleQuestion(text) {
             if (idx !== -1) options[idx] = m[2].trim();
         });
         const correctIdx = (correctLetter && letters.indexOf(correctLetter) !== -1) ? letters.indexOf(correctLetter) : 0;
-        return { type: "multiple_choice", part: 1, isPart4: false, question: qText || cleanText, options, correct: correctIdx, explanation };
+        return { type: "multiple_choice", question: qText || cleanText, options, correct: correctIdx, explanation };
     }
 
     const stRegex = /(?:^|\n|\r)\s*([a-d])[\)\.]\s*([\s\S]*?)(?=(?:(?:^|\n|\r)\s*[a-d][\)\.])|$)/gi;
@@ -324,7 +317,7 @@ function parseSmartSingleQuestion(text) {
             }
             statements.push({ id, statement: stText, correct: isCorrect });
         });
-        return { type: "true_false", part: 2, isPart4: false, question: qText || cleanText, statements, explanation };
+        return { type: "true_false", question: qText || cleanText, statements, explanation };
     }
 
     const isP4 = cleanText.toUpperCase().includes("PHẦN IV") || cleanText.toUpperCase().includes("PHẦN 4");
@@ -336,10 +329,10 @@ function parseSmartSingleQuestion(text) {
             if (!finalAns) finalAns = ansMatch[1].trim();
             qText = cleanText.replace(ansMatch[0], "").trim();
         }
-        return { type: "short_answer", part: isP4 ? 4 : 3, isPart4: isP4, question: qText, correctAnswer: finalAns || "0", explanation };
+        return { type: "short_answer", part: isP4 ? 4 : undefined, question: qText, correctAnswer: finalAns || "0", explanation };
     }
 
-    return { type: "multiple_choice", part: 1, isPart4: false, question: cleanText, options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], correct: 0, explanation };
+    return { type: "multiple_choice", question: cleanText, options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], correct: 0, explanation };
 }
 
 function parseSmartQuestionOrQuestions(text) {

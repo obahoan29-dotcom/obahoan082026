@@ -43,8 +43,6 @@ function initDefaultSoiDeExam() {
             {
                 id: 1,
                 type: "multiple_choice",
-                part: 1,
-                isPart4: false,
                 question: "Cho hàm số $y = f(x)$ liên tục trên $\\mathbb{R}$. Tìm nghiệm của phương trình $f'(x) = 0$?",
                 options: ["$x = 1$", "$x = 2$", "$x = -1$", "$x = 0$"],
                 correct: 0,
@@ -53,8 +51,6 @@ function initDefaultSoiDeExam() {
             {
                 id: 2,
                 type: "true_false",
-                part: 2,
-                isPart4: false,
                 question: "Xét tính đúng sai của các mệnh đề sau đây:",
                 statements: [
                     { id: "a", statement: "Hàm số đồng biến trên khoảng $(0; +\\infty)$.", correct: true },
@@ -67,8 +63,6 @@ function initDefaultSoiDeExam() {
             {
                 id: 3,
                 type: "short_answer",
-                part: 3,
-                isPart4: false,
                 question: "Tính đạo hàm của hàm số $y = x^2 - 3x + 2$ tại điểm $x = 2$.",
                 correctAnswer: "1",
                 explanation: "$y' = 2x - 3 \\Rightarrow y'(2) = 1$."
@@ -335,18 +329,17 @@ function updateSoiDeExplanation(qIdx, val) {
 function changeSoiDeQuestionType(qIdx, newType) {
     const q = soiDeState.examData.questions[qIdx];
     if (!q) return;
-    const targetId = q.id;
 
     if (newType === "multiple_choice") {
         q.type = "multiple_choice";
-        q.part = 1;
-        q.isPart4 = false;
+        delete q.part;
+        delete q.isPart4;
         if (!q.options || q.options.length < 4) q.options = ["Phương án A", "Phương án B", "Phương án C", "Phương án D"];
-        if (q.correct === undefined || q.correct === null) q.correct = 0;
+        if (q.correct === undefined) q.correct = 0;
     } else if (newType === "true_false") {
         q.type = "true_false";
-        q.part = 2;
-        q.isPart4 = false;
+        delete q.part;
+        delete q.isPart4;
         if (!q.statements || q.statements.length < 4) {
             q.statements = [
                 { id: "a", statement: "Mệnh đề a", correct: true },
@@ -357,24 +350,18 @@ function changeSoiDeQuestionType(qIdx, newType) {
         }
     } else if (newType === "short_answer") {
         q.type = "short_answer";
-        q.part = 3;
-        q.isPart4 = false;
-        if (q.correctAnswer === undefined || q.correctAnswer === null || q.correctAnswer === "") q.correctAnswer = "0";
+        delete q.part;
+        delete q.isPart4;
+        if (!q.correctAnswer) q.correctAnswer = "0";
     } else if (newType === "part4") {
         q.type = "short_answer";
         q.part = 4;
-        q.isPart4 = true;
-        if (q.correctAnswer === undefined || q.correctAnswer === null || q.correctAnswer === "") q.correctAnswer = "0";
+        if (!q.correctAnswer) q.correctAnswer = "0";
     }
 
     soiDeState.examData.questions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
     renderSoiDeBothSides();
-    setTimeout(() => {
-        autoResizeAllTextareas();
-        if (typeof scrollToLeftPreviewQuestion === "function") scrollToLeftPreviewQuestion(targetId, true);
-        if (typeof scrollToRightEditorQuestion === "function") scrollToRightEditorQuestion(targetId, true);
-    }, 40);
-    showSoiDeToast("✅ Đã chuyển câu sang phần mới! Bấm ⚡ Update để lưu.");
+    showSoiDeToast("✅ Đã chuyển câu sang phần mới và tự động xếp đúng vị trí!");
 }
 
 function insertQuestionAfter(qIdx) {
@@ -386,8 +373,6 @@ function insertQuestionAfter(qIdx) {
     let newQuestion = {
         id: newId,
         type: "multiple_choice",
-        part: 1,
-        isPart4: false,
         question: "Câu hỏi mới: Cho hàm số $y = f(x)$...",
         options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
         correct: 0,
@@ -398,8 +383,6 @@ function insertQuestionAfter(qIdx) {
         newQuestion = {
             id: newId,
             type: "true_false",
-            part: 2,
-            isPart4: false,
             question: "Xét tính đúng sai của các mệnh đề sau:",
             statements: [
                 { id: "a", statement: "Mệnh đề a", correct: true },
@@ -410,9 +393,9 @@ function insertQuestionAfter(qIdx) {
             explanation: ""
         };
     } else if (currentPart === 3) {
-        newQuestion = { id: newId, type: "short_answer", part: 3, isPart4: false, question: "Tìm giá trị của biểu thức sau:", correctAnswer: "0", explanation: "" };
+        newQuestion = { id: newId, type: "short_answer", question: "Tìm giá trị của biểu thức sau:", correctAnswer: "0", explanation: "" };
     } else if (currentPart === 4) {
-        newQuestion = { id: newId, type: "short_answer", part: 4, isPart4: true, question: "PHẦN IV. Tự luận ngắn:", correctAnswer: "0", explanation: "" };
+        newQuestion = { id: newId, type: "short_answer", part: 4, question: "PHẦN IV. Tự luận ngắn:", correctAnswer: "0", explanation: "" };
     }
 
     insertQuestionsOrganizedByPart([newQuestion]);
@@ -433,8 +416,6 @@ function addNewQuestionToSoiDe() {
     const newQ = {
         id: newId,
         type: "multiple_choice",
-        part: 1,
-        isPart4: false,
         question: "Câu hỏi trắc nghiệm mới...",
         options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
         correct: 0,
@@ -514,8 +495,6 @@ async function handlePasteZoneClick(qIdx, mode) {
             parsedQuestions = [{
                 id: generateSoiDeNewId(questions),
                 type: "multiple_choice",
-                part: 1,
-                isPart4: false,
                 question: "Câu hỏi mới: ...",
                 options: ["Phương án A", "Phương án B", "Phương án C", "Phương án D"],
                 correct: 0,
@@ -568,8 +547,6 @@ function handlePasteOnQuestion(event, qIdx, mode) {
             parsedQuestions = [{
                 id: generateSoiDeNewId(questions),
                 type: "multiple_choice",
-                part: 1,
-                isPart4: false,
                 question: text || "Câu hỏi mới...",
                 options: ["A", "B", "C", "D"],
                 correct: 0,
@@ -606,7 +583,7 @@ function applyCardRawInput(qIdx, qId) {
     const qObj = parseSmartSingleQuestion(rawVal);
     if (!qObj) { alert("⚠️ Không nhận diện được cấu trúc câu hỏi!"); return; }
 
-    const targetQ = (soiDeState.examData.questions || []).find(x => String(x.id) === String(qId)) || soiDeState.examData.questions[qIdx];
+    const targetQ = soiDeState.examData.questions[qIdx];
     if (targetQ) {
         targetQ.type = qObj.type;
         targetQ.question = qObj.question;
@@ -615,31 +592,9 @@ function applyCardRawInput(qIdx, qId) {
         if (qObj.correct !== undefined) targetQ.correct = qObj.correct;
         if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
         if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
-
-        const explicitPart = parseInt(qObj.part, 10);
-        if (explicitPart >= 1 && explicitPart <= 4) {
-            targetQ.part = explicitPart;
-            targetQ.isPart4 = (explicitPart === 4);
-        } else if (qObj.isPart4 !== undefined) {
-            targetQ.isPart4 = !!qObj.isPart4;
-            targetQ.part = targetQ.isPart4 ? 4 : (qObj.type === "multiple_choice" ? 1 : (qObj.type === "true_false" ? 2 : 3));
-        } else if (qObj.type === "essay" || qObj.type === "essay_answer" || qObj.type === "part4") {
-            targetQ.part = 4;
-            targetQ.isPart4 = true;
-        } else if (qObj.type === "multiple_choice") {
-            targetQ.part = 1;
-            targetQ.isPart4 = false;
-        } else if (qObj.type === "true_false") {
-            targetQ.part = 2;
-            targetQ.isPart4 = false;
-        } else {
-            const isTextP4 = /PH[ẦA]N\s*(IV|4)/i.test(String(qObj.question || ""));
-            targetQ.part = isTextP4 ? 4 : 3;
-            targetQ.isPart4 = isTextP4;
-        }
-
-        if (qObj.imageUrl !== undefined && qObj.imageUrl !== "") targetQ.imageUrl = qObj.imageUrl;
-        if (qObj.imageKey !== undefined && qObj.imageKey !== "") targetQ.imageKey = qObj.imageKey;
+        if (qObj.part) targetQ.part = qObj.part; else if (targetQ.type !== "short_answer" || !qObj.part) delete targetQ.part;
+        if (qObj.imageUrl) targetQ.imageUrl = qObj.imageUrl;
+        if (qObj.imageKey) targetQ.imageKey = qObj.imageKey;
     }
 
     soiDeState.examData.questions = reorganizeAllQuestionsByParts(soiDeState.examData.questions);
