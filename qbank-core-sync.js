@@ -741,7 +741,15 @@ async function writeQbankDraftLocalStorages(ts) {
         localStorage.setItem("qbank_draft_exam_title", qbankState.currentExamTitle || "");
         localStorage.setItem("qbank_draft_updated_at", String(ts));
         savedLocal = true;
-    } catch (e) {}
+    } catch (e) {
+        // Nếu vượt quá giới hạn 5MB của localStorage, xóa key cũ để tránh nạp nhầm dữ liệu lỗi thời
+        try {
+            localStorage.removeItem("qbank_draft_questions");
+            localStorage.removeItem("qbank_draft_images");
+            localStorage.removeItem("qbank_draft_pending_exams");
+            localStorage.setItem("qbank_draft_updated_at", String(ts));
+        } catch (e2) {}
+    }
     if (typeof examIndexedDB !== "undefined") {
         try {
             savedIDB = await examIndexedDB.setItem("exam_states", {
@@ -857,17 +865,24 @@ async function loadQbankDraftState() {
     let localPendingExams = [];
     let localImages = {};
     let localTitle = "";
-    let localDraftTs = parseInt(localStorage.getItem("qbank_draft_updated_at") || "0", 10) || 0;
+    const lsRawQ = localStorage.getItem("qbank_draft_questions");
+    const lsDraftTs = parseInt(localStorage.getItem("qbank_draft_updated_at") || "0", 10) || 0;
+    let localDraftTs = lsDraftTs;
+    let hasLoadedDraftFromIDB = false;
 
     if (typeof examIndexedDB !== "undefined") {
         try {
             const data = await examIndexedDB.getItem("exam_states", "qbank_draft_state_v1");
             if (data && Array.isArray(data.questions)) {
-                localQuestions = data.questions;
-                if (Array.isArray(data.pendingExams)) localPendingExams = data.pendingExams;
-                localImages = data.images || {};
-                if (data.currentExamTitle) localTitle = data.currentExamTitle;
-                if (data.updatedAt && data.updatedAt > localDraftTs) localDraftTs = data.updatedAt;
+                const idbTs = Number(data.updatedAt) || 0;
+                if (!lsRawQ || idbTs >= lsDraftTs) {
+                    hasLoadedDraftFromIDB = true;
+                    localQuestions = data.questions;
+                    if (Array.isArray(data.pendingExams)) localPendingExams = data.pendingExams;
+                    localImages = data.images || {};
+                    if (data.currentExamTitle) localTitle = data.currentExamTitle;
+                    if (idbTs > localDraftTs) localDraftTs = idbTs;
+                }
                 if (!hasLocalTree && Array.isArray(data.currentTree) && data.currentTree.length > 0) {
                     qbankState.currentTree = data.currentTree;
                     hasLocalTree = true;
@@ -876,13 +891,12 @@ async function loadQbankDraftState() {
         } catch (e) {}
     }
 
-    if (localQuestions.length === 0) {
+    if (!hasLoadedDraftFromIDB) {
         try {
-            const q = localStorage.getItem("qbank_draft_questions");
             const pe = localStorage.getItem("qbank_draft_pending_exams");
             const img = localStorage.getItem("qbank_draft_images");
             const title = localStorage.getItem("qbank_draft_exam_title");
-            if (q) { const pq = JSON.parse(q); if (Array.isArray(pq)) localQuestions = pq; }
+            if (lsRawQ) { const pq = JSON.parse(lsRawQ); if (Array.isArray(pq)) localQuestions = pq; }
             if (pe) { const ppe = JSON.parse(pe); if (Array.isArray(ppe)) localPendingExams = ppe; }
             if (img) { const pi = JSON.parse(img); if (pi && typeof pi === "object") localImages = pi; }
             if (title) localTitle = title;
