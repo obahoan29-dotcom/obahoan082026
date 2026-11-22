@@ -1,4 +1,4 @@
-// =========================================================
+/ =========================================================
 // FILE: exam-engine-core.js 
 // (BẢN FIX TRIỆT ĐỂ: XÁO TRỘN ĐÁP ÁN A,B,C,D VÀ DỊCH NGƯỢC VỀ ĐỀ GỐC KHI NỘP BÀI)
 // =========================================================
@@ -554,7 +554,7 @@ function shuffleArray(arr) {
 // BỘ TRỘN CÂU HỎI & PHƯƠNG ÁN A,B,C,D (ĐÃ FIX TẠO MAP ÁNH XẠ originalLettersMap)
 function shuffleExamData(data) {
     if (!data || !data.questions) return;
-    const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 || q.type === "essay" || q.type === "essay_answer"));
+    const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 === true || q.type === "essay" || q.type === "essay_answer"));
     const letters = ["A", "B", "C", "D"];
     const tfLetters = ['a', 'b', 'c', 'd'];
     
@@ -570,20 +570,17 @@ function shuffleExamData(data) {
                 originalCorrectIdx = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
             }
             
-            // Gắn cờ và lưu Original Letter
             let mappedOptions = q.options.map((opt, idx) => ({
                 text: opt,
                 originalLetter: letters[idx],
                 isCorrect: (idx === originalCorrectIdx)
             }));
             
-            // Đảo vị trí mảng
             mappedOptions = shuffleArray(mappedOptions);
             
-            // Ghi nhận lại mảng mới
             q.options = mappedOptions.map(o => o.text);
-            q.originalLettersMap = mappedOptions.map(o => o.originalLetter); // Mảng dịch ngược
-            q.correct = mappedOptions.findIndex(o => o.isCorrect); // Vị trí đúng ở UI
+            q.originalLettersMap = mappedOptions.map(o => o.originalLetter);
+            q.correct = mappedOptions.findIndex(o => o.isCorrect);
             if (q.correct === -1) q.correct = 0;
         } 
         // Trộn mệnh đề Đúng/Sai (Phần 2)
@@ -597,8 +594,8 @@ function shuffleExamData(data) {
             
             q.statements = mappedStatements.map((st, idx) => ({
                 ...st,
-                id: tfLetters[idx], // Hiển thị chuẩn a,b,c,d
-                originalId: st.originalId // Giữ nguyên ID gốc để chấm
+                id: tfLetters[idx],
+                originalId: st.originalId
             }));
         }
     });
@@ -850,6 +847,7 @@ function fetchExamQuestions(isAutostart = false) {
                 try {
                     let parsedQ = JSON.parse(cachedShuffle);
                     if (Array.isArray(parsedQ) && parsedQ.length === examData.questions.length) {
+                        let needsReorganize = false;
                         parsedQ.forEach(qCached => {
                             const originalQ = examData.questions.find(orig => String(orig.id) === String(qCached.id));
                             if (originalQ) {
@@ -857,10 +855,29 @@ function fetchExamQuestions(isAutostart = false) {
                                 qCached.imageKey = originalQ.imageKey;
                                 qCached.question = originalQ.question;
                                 qCached.explanation = originalQ.explanation;
-                                // KHÔNG ĐƯỢC OVERWRITE OPTIONS VÀ STATEMENTS BẰNG BẢN GỐC Ở ĐÂY NỮA
-                                // Nếu làm thế sẽ ghi đè và làm mất trật tự xáo trộn đã lưu trong Cache
+                                if (qCached.type !== originalQ.type || qCached.part !== originalQ.part || qCached.isPart4 !== originalQ.isPart4) {
+                                    qCached.type = originalQ.type;
+                                    qCached.part = originalQ.part;
+                                    qCached.isPart4 = originalQ.isPart4;
+                                    if (originalQ.options) qCached.options = [...originalQ.options];
+                                    if (originalQ.statements) qCached.statements = JSON.parse(JSON.stringify(originalQ.statements));
+                                    if (originalQ.correct !== undefined) qCached.correct = originalQ.correct;
+                                    if (originalQ.correctAnswer !== undefined) qCached.correctAnswer = originalQ.correctAnswer;
+                                    delete qCached.originalLettersMap;
+                                    needsReorganize = true;
+                                } else {
+                                    if (originalQ.correctAnswer !== undefined) qCached.correctAnswer = originalQ.correctAnswer;
+                                }
                             }
                         });
+                        if (needsReorganize) {
+                            const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 === true || q.type === "essay" || q.type === "essay_answer"));
+                            const p1 = parsedQ.filter(q => q.type === "multiple_choice" && !isP4(q));
+                            const p2 = parsedQ.filter(q => q.type === "true_false" && !isP4(q));
+                            const p3 = parsedQ.filter(q => q.type === "short_answer" && !isP4(q));
+                            const p4 = parsedQ.filter(q => isP4(q));
+                            parsedQ = [...p1, ...p2, ...p3, ...p4];
+                        }
                         examData.questions = parsedQ;
                         safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
                     } else {

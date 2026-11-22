@@ -5,8 +5,12 @@
 
 function isPart4Question(q) {
     if (!q) return false;
-    if (q.part === 4 || q.isPart4 === true) return true;
+    const explicitPart = parseInt(q.part, 10);
+    if (explicitPart >= 1 && explicitPart <= 4) return explicitPart === 4;
+    if (q.isPart4 === true) return true;
+    if (q.isPart4 === false) return false;
     if (q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return true;
+    if (q.type === "multiple_choice" || q.type === "true_false") return false;
     const txt = String(q.question || "").toUpperCase();
     if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) {
         return true;

@@ -204,6 +204,50 @@ function downloadSoiDeJson() {
     }
 }
 
+function flushOpenRawCardEditorsInSoiDe() {
+    if (soiDeState.editorMode !== "cards" || !soiDeState.rawEditingCardIds || soiDeState.rawEditingCardIds.size === 0) return;
+    const questions = soiDeState.examData.questions || [];
+    Array.from(soiDeState.rawEditingCardIds).forEach(qId => {
+        const ta = document.getElementById(`soide-card-raw-text-${qId}`);
+        if (!ta) return;
+        const rawVal = (ta.value || "").trim();
+        if (!rawVal) return;
+        const idx = questions.findIndex(item => String(item.id) === String(qId));
+        if (idx === -1) return;
+
+        const targetQ = questions[idx];
+        const parsedJson = robustParseExamScriptOrJson(rawVal);
+        if (parsedJson && typeof parsedJson === "object" && !Array.isArray(parsedJson) && parsedJson.question) {
+            const merged = { ...targetQ, ...parsedJson };
+            const explicitPart = parseInt(parsedJson.part, 10);
+            if (explicitPart >= 1 && explicitPart <= 4) {
+                merged.part = explicitPart;
+                merged.isPart4 = (explicitPart === 4);
+            } else if (parsedJson.isPart4 !== undefined) {
+                merged.isPart4 = !!parsedJson.isPart4;
+                merged.part = merged.isPart4 ? 4 : (merged.type === "multiple_choice" ? 1 : (merged.type === "true_false" ? 2 : 3));
+            }
+            questions[idx] = merged;
+        } else {
+            const parsedSmart = parseSmartSingleQuestion(rawVal);
+            if (parsedSmart) {
+                targetQ.type = parsedSmart.type;
+                targetQ.question = parsedSmart.question;
+                if (parsedSmart.options) targetQ.options = parsedSmart.options;
+                if (parsedSmart.statements) targetQ.statements = parsedSmart.statements;
+                if (parsedSmart.correct !== undefined) targetQ.correct = parsedSmart.correct;
+                if (parsedSmart.correctAnswer !== undefined) targetQ.correctAnswer = parsedSmart.correctAnswer;
+                if (parsedSmart.explanation !== undefined) targetQ.explanation = parsedSmart.explanation;
+                const explicitPart = parseInt(parsedSmart.part, 10);
+                if (explicitPart >= 1 && explicitPart <= 4) {
+                    targetQ.part = explicitPart;
+                    targetQ.isPart4 = (explicitPart === 4);
+                }
+            }
+        }
+    });
+}
+
 async function updateExamFromSoiDe() {
     if (soiDeState.editorMode === "raw") {
         const rawEditor = document.getElementById("soide-raw-editor");
@@ -211,6 +255,8 @@ async function updateExamFromSoiDe() {
             alert("❌ Mã nguồn thô đang bị lỗi cú pháp! Vui lòng kiểm tra lại trước khi Update.");
             return;
         }
+    } else {
+        flushOpenRawCardEditorsInSoiDe();
     }
 
     const btn = document.getElementById("btn-soide-update-exam");
@@ -236,20 +282,32 @@ async function updateExamFromSoiDe() {
             const item = JSON.parse(JSON.stringify(q));
             if (!soiDeState.isFromQBank) item.id = item.id || (idx + 1);
 
-            if (item.type === "multiple_choice" && !isPart4Question(item)) {
+            const pType = (typeof getQuestionPartType === "function")
+                ? getQuestionPartType(item)
+                : (isPart4Question(item) ? 4 : (item.type === "true_false" ? 2 : (item.type === "short_answer" ? 3 : 1)));
+
+            item.part = pType;
+            item.isPart4 = (pType === 4);
+
+            if (pType === 1) {
+                item.type = "multiple_choice";
                 if (typeof item.correct === "string") {
                     const u = item.correct.trim().toUpperCase();
                     item.correct = letters.indexOf(u) !== -1 ? letters.indexOf(u) : 0;
                 } else if (item.correct === undefined || item.correct === null) {
                     item.correct = 0;
                 }
-            } else if (item.type === "true_false" && !isPart4Question(item)) {
+            } else if (pType === 2) {
+                item.type = "true_false";
                 if (Array.isArray(item.statements)) {
                     item.statements.forEach(st => {
                         st.correct = (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true");
                     });
                 }
             } else {
+                if (pType === 3) item.type = "short_answer";
+                else if (item.type !== "essay" && item.type !== "essay_answer" && item.type !== "part4") item.type = "short_answer";
+
                 if (item.correctAnswer === undefined || item.correctAnswer === null) {
                     item.correctAnswer = String(item.correct || item.answer || "0").trim();
                 } else {
@@ -394,15 +452,20 @@ async function updateExamFromSoiDe() {
                 }
             } catch (e) {}
 
-            if (typeof renderQuizLayout === "function") renderQuizLayout(clonedQuestions, clonedImages);
+            if (typeof renderQuizLayout === "function") {
+                renderQuizLayout(clonedQuestions, clonedImages);
+                if (typeof reapplySavedAnswers === "function") reapplySavedAnswers();
+                if (typeof updateProgress === "function") updateProgress();
+            }
             if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise().catch(() => {});
         }
 
         soiDeState.examData.questions = cleanQuestions;
         soiDeState.examData.images = imagesMap;
+        soiDeState.rawEditingCardIds.clear();
         renderSoiDeBothSides();
 
-        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI VÀ ĐÁP ÁN THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ hình ảnh và đáp án đã được đồng bộ chuẩn xác!`);
+        alert(`🎉 ĐÃ CẬP NHẬT (UPDATE) ĐỀ THI VÀ ĐÁP ÁN THÀNH CÔNG!\n\n📑 Tên đề: "${finalTitle}"\n🔢 Tổng số: ${cleanQuestions.length} câu hỏi\n⏱ Thời gian: ${finalMinutes} phút\n\nToàn bộ hình ảnh, phần câu hỏi và đáp án đã được đồng bộ chuẩn xác!`);
     } catch (err) {
         alert("❌ Lỗi khi cập nhật đề thi: " + err.message);
     } finally {
@@ -436,6 +499,8 @@ async function submitExamToSelectedClasses() {
             alert("❌ Mã nguồn thô đang bị lỗi cú pháp! Vui lòng kiểm tra lại trước khi đăng đề.");
             return;
         }
+    } else {
+        flushOpenRawCardEditorsInSoiDe();
     }
 
     const checkedBoxes = Array.from(document.querySelectorAll('input[name="soide-target-class"]:checked'));
@@ -473,7 +538,13 @@ async function submitExamToSelectedClasses() {
         const examTitle = currentData.title || `ĐỀ THI ${dateStr}`;
         const maDe = currentData.maDe || "101";
 
-        let cleanQuestions = reorganizeAllQuestionsByParts(currentData.questions);
+        let cleanQuestions = reorganizeAllQuestionsByParts(currentData.questions).map(q => {
+            const item = JSON.parse(JSON.stringify(q));
+            const pType = (typeof getQuestionPartType === "function") ? getQuestionPartType(item) : (isPart4Question(item) ? 4 : 1);
+            item.part = pType;
+            item.isPart4 = (pType === 4);
+            return item;
+        });
         const imagesMap = { ...(currentData.images || {}) };
 
         if (typeof synchronizeExamQuestionsAndImages === "function") {
