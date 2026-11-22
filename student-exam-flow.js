@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: BẢO LƯU THỜI GIAN GỐC & PHIÊN DỊCH ĐÁP ÁN GỐC KHI NỘP BÀI)
+// (BẢN FIX TRIỆT ĐỂ: VÀO ĐỀ NGAY CHO ADMIN & HỌC SINH, GỠ BỎ BẢNG ĐĂNG NHẬP CŨ, BẢO LƯU THỜI GIAN GỐC & PHIÊN DỊCH ĐÁP ÁN GỐC)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -185,7 +185,7 @@ function closeStudentLoginModal() {
     const modal = document.getElementById("student-login-modal");
     if (modal) modal.style.display = "none";
     const errBox = document.getElementById("st-login-error");
-    if (errBox) { errBox.style.display = "none"; errBox.innerText = ""; }
+    if (errBox) errBox.style.display = "none";
 }
 
 function switchStudentLoginMode(mode) {
@@ -324,54 +324,44 @@ function submitStudentLogin() {
 }
 
 function checkPassword() { 
-    const val = document.getElementById("exam-pass-input").value.trim(); 
-    if (!val) {
-        alert("⚠️ Vui lòng nhập mật khẩu hoặc mã học sinh!");
-        return;
-    }
-
-    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
-    
-    const pLow = val.toLowerCase();
-    const matchedStudent = classAccounts.find(acc => 
-        (acc.sbd && String(acc.sbd).trim().toLowerCase() === pLow) ||
-        (acc.pass && String(acc.pass).trim().toLowerCase() === pLow) ||
-        (acc.username && String(acc.username).trim().toLowerCase() === pLow)
-    );
-    
-    if (matchedStudent) {
-        if (typeof applyStudentToUI === 'function') applyStudentToUI(matchedStudent);
-        document.getElementById("login-box").style.display = "none";
-        startExamAction();
-        return;
-    }
-
-    if (typeof EXAM_PASSWORD !== 'undefined' && EXAM_PASSWORD !== "" && val === EXAM_PASSWORD) { 
-        document.getElementById("login-box").style.display = "none"; 
-        document.getElementById("student-card").style.display = "block"; 
-        if (typeof syncStudentFromParamsAndStorage === 'function') syncStudentFromParamsAndStorage();
-    } else { 
-        alert(`❌ Mật khẩu hoặc mã học sinh không đúng trong danh sách ${typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat}!`); 
-    } 
+    // Bảng đăng nhập cũ đã được gỡ bỏ -> Chuyển hướng về trang chủ dùng modal đăng nhập mới
+    const urlParams = new URLSearchParams(window.location.search);
+    const quizId = urlParams.get('id') || "";
+    const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    window.location.href = `./index.html?login_exam=${encodeURIComponent(quizId)}&cat=${encodeURIComponent(cat)}`;
 }
 
 async function startExamAction(isAutostart = false) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+
     let sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
     let sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "";
     let sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "";
 
-    const urlParams = new URLSearchParams(window.location.search);
     if (!sId) sId = safeDecodeParam(urlParams.get('sbd'));
     if (!sName) sName = safeDecodeParam(urlParams.get('name'));
     if (!sClass) sClass = safeDecodeParam(urlParams.get('class'));
 
-    if (!sId || !sName || !sClass) {
-        if (!isAutostart) alert("⚠️ Vui lòng nhập đầy đủ Số báo danh, Họ và tên, Lớp!");
-        return false;
+    if (isAdminMode) {
+        if (!sId) sId = "Trying";
+        if (!sName) sName = "Obahoan29";
+        if (!sClass) sClass = "42";
+        if (document.getElementById("student-id")) document.getElementById("student-id").value = sId;
+        if (document.getElementById("student-name")) document.getElementById("student-name").value = sName;
+        if (document.getElementById("student-class")) document.getElementById("student-class").value = sClass;
     }
 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
+
+    if (!sId || !sName || !sClass) {
+        if (!isAutostart) {
+            window.location.href = `./index.html?login_exam=${encodeURIComponent(quizId)}&cat=${encodeURIComponent(currentCat)}`;
+        }
+        return false;
+    }
+
     const currentCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat;
 
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
@@ -381,7 +371,7 @@ async function startExamAction(isAutostart = false) {
 
     const isFree = !checkInClass;
 
-    if (isFree) {
+    if (isFree && !isAdminMode) {
         const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
         if (otherCat && otherCat !== currentCat) {
             const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
@@ -398,7 +388,7 @@ async function startExamAction(isAutostart = false) {
         }
     }
 
-    return await executeStartExamAPI(sId, sName, sClass, isFree, isAutostart);
+    return await executeStartExamAPI(sId, sName, sClass, isFree, isAutostart, isAdminMode);
 }
 
 function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, attempt) {
@@ -429,18 +419,13 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
     } catch(e) {}
 }
 
-async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false) { 
+async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false, isAdminMode = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
     const urlParams = new URLSearchParams(window.location.search);
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
-    const startBtn = document.getElementById("btn-start-exam");
-
-    if (startBtn) { 
-        startBtn.disabled = true; 
-        startBtn.innerText = "⏳ Đang kết nối phòng thi..."; 
-    }
+    const effectiveAdmin = isAdminMode || (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
 
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
@@ -448,10 +433,12 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
         : ((typeof examData !== 'undefined' && examData && examData.title) ? examData.title : "Đề thi");
 
     let currentAttempt = 1;
-    try {
-        currentAttempt = await fetchStudentAttemptNumberFromCloud(currentQuizId, sId);
-    } catch(e) {
-        currentAttempt = getRealStudentExamAttemptNumber(currentQuizId, sId);
+    if (!effectiveAdmin) {
+        try {
+            currentAttempt = await fetchStudentAttemptNumberFromCloud(currentQuizId, sId);
+        } catch(e) {
+            currentAttempt = getRealStudentExamAttemptNumber(currentQuizId, sId);
+        }
     }
     window.currentStudentAttemptNumber = currentAttempt;
 
@@ -461,7 +448,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     const existingOrigin = safeLocal.getItem(originKey);
     const maxLimitSec = ((typeof TIME_LIMIT_MINUTES !== 'undefined' ? TIME_LIMIT_MINUTES : 90) * 60) + 1800;
-    if (existingOrigin) {
+    if (existingOrigin && !effectiveAdmin) {
         const parsedOrigin = parseInt(existingOrigin, 10);
         if (!isNaN(parsedOrigin) && (nowMs - parsedOrigin) < (maxLimitSec * 1000)) {
             effectiveStartTime = parsedOrigin;
@@ -478,7 +465,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
-    if (client) {
+    if (client && !effectiveAdmin) {
         try {
             const handshakeTask = async () => {
                 const sessionPayload = {
@@ -531,12 +518,14 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
         }
     }
 
-    sendStartExamBackupLogToDrive(cleanSbd, sName, strictClassName, currentQuizId, exactExamTitle, currentAttempt);
+    if (!effectiveAdmin) {
+        sendStartExamBackupLogToDrive(cleanSbd, sName, strictClassName, currentQuizId, exactExamTitle, currentAttempt);
+    }
 
     safeLocal.removeItem("pending_exam_submission");
     safeLocal.removeItem("last_submission_cleared");
 
-    if (typeof examIndexedDB !== 'undefined') {
+    if (typeof examIndexedDB !== 'undefined' && !effectiveAdmin) {
         examIndexedDB.setItem('live_drafts', {
             key: `${currentQuizId}_${cleanSbd}`,
             quiz_id: currentQuizId,
@@ -569,17 +558,22 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     lockedDurationSec = 0;
     isSubmitted = false;
 
-    document.getElementById("nav-student-name").innerText = sName; 
-    document.getElementById("nav-student-id").innerText = (currentAttempt > 1) ? `${sId} (Lần ${currentAttempt})` : sId; 
-    document.getElementById("nav-student-class").innerText = strictClassName; 
-    document.getElementById("nav-exam-code-text").innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
+    const navName = document.getElementById("nav-student-name");
+    const navId = document.getElementById("nav-student-id");
+    const navClass = document.getElementById("nav-student-class");
+    const navCode = document.getElementById("nav-exam-code-text");
+    if (navName) navName.innerText = sName; 
+    if (navId) navId.innerText = (currentAttempt > 1) ? `${sId} (Lần ${currentAttempt})` : sId; 
+    if (navClass) navClass.innerText = strictClassName; 
+    if (navCode) navCode.innerText = `Đề: ${typeof getMaDe === 'function' ? getMaDe() : '101'}`; 
     
-    document.getElementById("student-card").style.display = "none"; 
     const waitingCard = document.getElementById("waiting-room-card"); 
     if (waitingCard) waitingCard.style.display = "none"; 
     
-    document.getElementById("top-navbar").style.display = "block"; 
-    document.getElementById("quiz-content").style.display = "block"; 
+    const topNav = document.getElementById("top-navbar");
+    if (topNav) topNav.style.display = "block"; 
+    const quizContent = document.getElementById("quiz-content");
+    if (quizContent) quizContent.style.display = "block"; 
     
     if (typeof TIME_LIMIT_MINUTES !== 'undefined') {
         totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
@@ -587,26 +581,24 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
         remainingSeconds = Math.max(0, totalTimeSeconds - elapsedSoFar);
     }
     
-    if (typeof window.__saveExamState === 'function') window.__saveExamState();
+    if (!effectiveAdmin && typeof window.__saveExamState === 'function') window.__saveExamState();
     if (typeof window.__updateProgress === 'function') window.__updateProgress(); 
     
     if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
     if (typeof startCountdownTimer === 'function') startCountdownTimer(); 
-    if (typeof startPresenceSystem === 'function') startPresenceSystem(sId);
+    if (!effectiveAdmin && typeof startPresenceSystem === 'function') startPresenceSystem(sId);
     if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(false);
+    if (typeof checkAndDisplayAdminSoiDeButton === 'function') checkAndDisplayAdminSoiDeButton();
 
-    renderStudentSubmissionHistoryButtons();
+    if (!effectiveAdmin) {
+        renderStudentSubmissionHistoryButtons();
+    }
 
     try {
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete('autostart');
         window.history.replaceState({ page: 'quiz' }, "", cleanUrl.toString());
     } catch(e) {}
-
-    if (startBtn) { 
-        startBtn.disabled = false; 
-        startBtn.innerText = "Vào Làm Bài 🚀"; 
-    }
 
     return true;
 }
@@ -1026,7 +1018,7 @@ function renderStudentSubmissionHistoryButtons() {
             z-index: 100;
         `;
 
-        const targetAnchor = document.getElementById("student-card") || document.getElementById("quiz-content");
+        const targetAnchor = document.getElementById("quiz-content") || document.getElementById("error-card");
         if (targetAnchor && targetAnchor.parentNode) {
             targetAnchor.parentNode.insertBefore(container, targetAnchor);
         }
