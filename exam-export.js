@@ -1,5 +1,3 @@
---- START OF FILE exam-export.js ---
-
 // =========================================================
 // FILE: exam-export.js
 // QUẢN LÝ DỰ PHÒNG BÀI LÀM: TẢI FILE JSON TRỰC TIẾP & BẢO LƯU 100%

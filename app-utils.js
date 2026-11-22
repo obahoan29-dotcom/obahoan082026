@@ -1,5 +1,5 @@
 // =========================================================
-// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER & FALLBACK ẢNH ĐA TẦNG)
+// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER, FALLBACK ẢNH ĐA TẦNG & ĐO BĂNG THÔNG)
 // =========================================================
 
 const safeLocal = {
@@ -407,8 +407,156 @@ async function sha256Hash(message) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ============================================================================
+// BỘ ĐO LƯỜNG BĂNG THÔNG SUPABASE TỰ ĐỘNG (KHÔNG LÀM CHẬM REQUEST)
+// ============================================================================
+function getVNDateKeyShared(d = new Date()) {
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(d);
+    } catch (e) {
+        const vnMs = d.getTime() + (d.getTimezoneOffset() * 60000) + (7 * 3600 * 1000);
+        const vn = new Date(vnMs);
+        const pad = n => String(n).padStart(2, '0');
+        return `${vn.getFullYear()}-${pad(vn.getMonth() + 1)}-${pad(vn.getDate())}`;
+    }
+}
+
+(function initSupabaseBandwidthTracker() {
+    if (typeof window === "undefined" || !window.fetch || window.__supaBwPatched) return;
+    window.__supaBwPatched = true;
+
+    const BW_PENDING_STORAGE_KEY = "supa_bw_pending_v1";
+    const BW_LOCAL_DAILY_KEY = "supa_bw_local_daily_v1";
+    let bwBuffer = { egress: 0, ingress: 0, reqs: 0 };
+    let rpcMissingFlag = false;
+
+    try {
+        const savedPending = safeLocal.getItem(BW_PENDING_STORAGE_KEY);
+        if (savedPending) {
+            const p = JSON.parse(savedPending);
+            if (p && typeof p === "object") {
+                bwBuffer.egress = Number(p.egress) || 0;
+                bwBuffer.ingress = Number(p.ingress) || 0;
+                bwBuffer.reqs = Number(p.reqs) || 0;
+            }
+        }
+    } catch (e) {}
+
+    function recordToLocalDaily(dayKey, eg, ing, reqs) {
+        try {
+            const raw = safeLocal.getItem(BW_LOCAL_DAILY_KEY);
+            const map = raw ? JSON.parse(raw) : {};
+            if (!map[dayKey]) map[dayKey] = { egress_bytes: 0, ingress_bytes: 0, requests_count: 0 };
+            map[dayKey].egress_bytes += eg;
+            map[dayKey].ingress_bytes += ing;
+            map[dayKey].requests_count += reqs;
+            safeLocal.setItem(BW_LOCAL_DAILY_KEY, JSON.stringify(map));
+        } catch (e) {}
+    }
+
+    function addBandwidthSample(egressBytes, ingressBytes) {
+        const eg = Math.max(0, Math.round(egressBytes || 0));
+        const ing = Math.max(0, Math.round(ingressBytes || 0));
+        bwBuffer.egress += eg;
+        bwBuffer.ingress += ing;
+        bwBuffer.reqs += 1;
+
+        recordToLocalDaily(getVNDateKeyShared(), eg, ing, 1);
+        try { safeLocal.setItem(BW_PENDING_STORAGE_KEY, JSON.stringify(bwBuffer)); } catch (e) {}
+    }
+
+    async function flushBandwidthBuffer() {
+        if (rpcMissingFlag) return;
+        if (bwBuffer.reqs === 0 && bwBuffer.egress === 0 && bwBuffer.ingress === 0) return;
+
+        const client = (typeof getSupabaseClient === 'function')
+            ? getSupabaseClient()
+            : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
+        if (!client) return;
+
+        const snap = { ...bwBuffer };
+        bwBuffer = { egress: 0, ingress: 0, reqs: 0 };
+        safeLocal.removeItem(BW_PENDING_STORAGE_KEY);
+
+        try {
+            const { error } = await client.rpc('increment_daily_bandwidth', {
+                p_day_key: getVNDateKeyShared(),
+                p_egress: snap.egress,
+                p_ingress: snap.ingress,
+                p_reqs: snap.reqs
+            });
+            if (error) {
+                const msg = String(error.message || "");
+                if (error.code === "42883" || error.code === "PGRST202" || msg.includes("increment_daily_bandwidth")) {
+                    rpcMissingFlag = true;
+                } else {
+                    bwBuffer.egress += snap.egress;
+                    bwBuffer.ingress += snap.ingress;
+                    bwBuffer.reqs += snap.reqs;
+                    safeLocal.setItem(BW_PENDING_STORAGE_KEY, JSON.stringify(bwBuffer));
+                }
+            }
+        } catch (e) {
+            bwBuffer.egress += snap.egress;
+            bwBuffer.ingress += snap.ingress;
+            bwBuffer.reqs += snap.reqs;
+            safeLocal.setItem(BW_PENDING_STORAGE_KEY, JSON.stringify(bwBuffer));
+        }
+    }
+
+    const origFetch = window.fetch.bind(window);
+    window.fetch = function(input, init) {
+        const urlStr = typeof input === "string" ? input : (input && input.url ? input.url : "");
+        const supaBase = (typeof SUPABASE_URL !== "undefined" && SUPABASE_URL) ? SUPABASE_URL : "";
+        const isSupabaseApi = supaBase && urlStr.startsWith(supaBase);
+        const isTrackerItself = urlStr.includes("increment_daily_bandwidth") || urlStr.includes("site_bandwidth_daily");
+
+        const promise = origFetch(input, init);
+
+        if (isSupabaseApi && !isTrackerItself) {
+            let ingressEstimate = 380;
+            try {
+                if (init && init.body) {
+                    ingressEstimate += (typeof init.body === "string") ? init.body.length : (init.body.size || 512);
+                }
+            } catch (e) {}
+
+            promise.then(res => {
+                try {
+                    const cl = res.headers && res.headers.get("content-length");
+                    if (cl && !isNaN(parseInt(cl, 10))) {
+                        addBandwidthSample(parseInt(cl, 10) + 450, ingressEstimate);
+                    } else {
+                        res.clone().text().then(txt => {
+                            const byteLen = txt ? txt.length : 0;
+                            addBandwidthSample(byteLen + 450, ingressEstimate);
+                        }).catch(() => {
+                            addBandwidthSample(512, ingressEstimate);
+                        });
+                    }
+                } catch (e) {}
+            }).catch(() => {});
+        }
+
+        return promise;
+    };
+
+    setInterval(flushBandwidthBuffer, 45000);
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) flushBandwidthBuffer();
+    });
+    window.addEventListener("pagehide", () => { flushBandwidthBuffer(); });
+    window.flushSupabaseBandwidthNow = flushBandwidthBuffer;
+})();
+
 window.safeLocal = safeLocal;
 window.safeSession = safeSession;
 window.extractGoogleDriveFileId = extractGoogleDriveFileId;
 window.getGoogleDriveFallbackUrls = getGoogleDriveFallbackUrls;
 window.toDirectGoogleDriveImageUrl = toDirectGoogleDriveImageUrl;
+window.getVNDateKeyShared = getVNDateKeyShared;

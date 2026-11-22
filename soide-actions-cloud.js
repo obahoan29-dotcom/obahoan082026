@@ -2,7 +2,7 @@
 // FILE: soide-actions-cloud.js
 // MODULE 3/3 CỦA HỆ THỐNG SOI ĐỀ THỜI GIAN THỰC:
 // - UPLOAD / ĐỌC FILE ĐỀ (.JSON / .JS / .TXT)
-// - DÁN ẢNH CTRL + V LÊN IMGBB / GOOGLE DRIVE 5TB & XÓA ẢNH
+// - DÁN ẢNH CTRL + V LÊN IMGBB / GOOGLE DRIVE 5TB & XÓA ẢNH (CHẶN BASE64)
 // - NÚT ⚡ UPDATE LƯU NGƯỢC VỀ SUPABASE / NGÂN HÀNG CÂU HỎI / PHÒNG THI
 // - TẢI FILE .JSON & ĐĂNG ĐỀ TRỰC TIẾP LÊN CÁC LỚP
 // =========================================================
@@ -93,16 +93,25 @@ async function uploadSoiDeImage(file, qId, imgKey) {
 
     try {
         let directUrl = "";
-        const b64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
+        let b64 = "";
+        let mimeType = file.type || "image/png";
+
+        if (typeof compressQbankImageToBase64 === "function") {
+            const comp = await compressQbankImageToBase64(file, 1600, 0.86);
+            b64 = comp.base64;
+            mimeType = comp.mimeType;
+        } else {
+            b64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
 
         if (typeof IMGBB_API_KEY !== "undefined" && IMGBB_API_KEY && !IMGBB_API_KEY.includes("THAY_API_KEY")) {
             const controller = new AbortController();
-            const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 5000);
+            const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 6500);
             try {
                 const formData = new FormData();
                 formData.append("image", b64);
@@ -124,23 +133,36 @@ async function uploadSoiDeImage(file, qId, imgKey) {
         }
 
         if (!directUrl && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL && !GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
-            const driveRes = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
-                method: "POST",
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                    filename: `soide_cau_${qId}_${Date.now()}.png`,
-                    mimeType: file.type || "image/png",
-                    base64: b64
-                })
-            }).then(r => r.json());
-            if (driveRes && driveRes.fileUrl) {
-                directUrl = (typeof toDirectGoogleDriveImageUrl === "function")
-                    ? toDirectGoogleDriveImageUrl(driveRes.fileUrl)
-                    : driveRes.fileUrl;
+            const controller = new AbortController();
+            const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 45000);
+            try {
+                const driveRes = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({
+                        action: "uploadFile",
+                        folderName: "Anh_Soi_De_Thi",
+                        filename: `soide_cau_${qId}_${Date.now()}.png`,
+                        mimeType: mimeType,
+                        base64: b64
+                    }),
+                    signal: controller.signal
+                }).then(r => r.json());
+                clearTimeout(timer);
+                if (driveRes && driveRes.fileUrl) {
+                    directUrl = (typeof toDirectGoogleDriveImageUrl === "function")
+                        ? toDirectGoogleDriveImageUrl(driveRes.fileUrl)
+                        : driveRes.fileUrl;
+                }
+            } catch (driveErr) {
+                clearTimeout(timer);
             }
         }
 
-        if (!directUrl) directUrl = `data:${file.type || "image/png"};base64,${b64}`;
+        // CHẶN TUYỆT ĐỐI FALLBACK BASE64 VÀO JSON / SUPABASE
+        if (!directUrl || /^\s*data:/i.test(directUrl)) {
+            throw new Error("Không thể tải ảnh lên ImgBB và Google Drive (lỗi mạng hoặc quá giờ). Đã chặn lưu Base64 để tránh làm đầy Database!");
+        }
 
         if (!soiDeState.examData.images) soiDeState.examData.images = {};
         soiDeState.examData.images[imgKey] = directUrl;
@@ -316,7 +338,7 @@ async function updateExamFromSoiDe() {
             }
 
             const directUrl = soideResolveImgUrl(item, imagesMap);
-            if (directUrl) {
+            if (directUrl && !/^\s*data:/i.test(directUrl)) {
                 item.imageUrl = directUrl;
                 item.imageKey = item.imageKey || `img_q_${item.id}`;
                 imagesMap[item.imageKey] = directUrl;
@@ -324,12 +346,21 @@ async function updateExamFromSoiDe() {
             return item;
         });
 
-        // 1. NẾU ĐANG SỬA TỪ NGÂN HÀNG CÂU HỎI -> CẬP NHẬT TRỰC TIẾP VÀO qbankState & TÍNH LẠI ID MA TRẬN
+        // 1. NẾU ĐANG SỬA TỪ NGÂN HÀNG CÂU HỎI -> CHỈ CẬP NHẬT CÁC CÂU ĐÃ MỞ, KHÔNG XÓA MẤT CÁC CÂU KHÁC TRONG KHO
         if (soiDeState.isFromQBank) {
             if (typeof qbankState !== "undefined") {
                 if (typeof pushQbankUndoState === "function") pushQbankUndoState("Cập nhật từ công cụ Soi đề");
-                qbankState.rawQuestions = cleanQuestions;
-                qbankState.imagesMap = imagesMap;
+                const updatedMap = new Map(cleanQuestions.map(q => [String(q.id), q]));
+                const existingIds = new Set((qbankState.rawQuestions || []).map(q => String(q.id)));
+
+                qbankState.rawQuestions = (qbankState.rawQuestions || []).map(origQ => {
+                    return updatedMap.has(String(origQ.id)) ? updatedMap.get(String(origQ.id)) : origQ;
+                });
+                cleanQuestions.forEach(cq => {
+                    if (!existingIds.has(String(cq.id))) qbankState.rawQuestions.push(cq);
+                });
+
+                qbankState.imagesMap = { ...(qbankState.imagesMap || {}), ...imagesMap };
                 if (typeof recomputeAllMatrixIds === "function") recomputeAllMatrixIds();
                 if (typeof saveQbankDraftState === "function") await saveQbankDraftState(false);
                 if (typeof renderQbankHeaderAndMidExamTitle === "function") renderQbankHeaderAndMidExamTitle();
@@ -338,7 +369,7 @@ async function updateExamFromSoiDe() {
                 if (typeof updateQbankMatrixStats === "function") updateQbankMatrixStats();
                 if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
             }
-            alert(`🎉 ĐÃ LƯU TRỞ LẠI NGÂN HÀNG ĐỀ THÀNH CÔNG!\n\nSố lượng câu hỏi hiện tại: ${cleanQuestions.length} câu.`);
+            alert(`🎉 ĐÃ LƯU TRỞ LẠI NGÂN HÀNG ĐỀ THÀNH CÔNG!\n\nĐã cập nhật chuẩn xác ${cleanQuestions.length} câu hỏi.`);
             closeSoiDeModal();
             return;
         }
@@ -362,7 +393,6 @@ async function updateExamFromSoiDe() {
         const finalMade = soiDeState.examData.maDe || "101";
         const finalMinutes = parseInt(soiDeState.examData.timeLimitMinutes, 10) || 90;
 
-        // 2. NẾU ĐỀ ĐƯỢC MỞ TỪ NGÂN HÀNG ĐỀ ĐÃ LƯU (exam_bank_*) -> ĐỒNG BỘ LẠI qbank_saved_exams
         if (String(quizId).startsWith("exam_bank_") && typeof qbankState !== "undefined" && Array.isArray(qbankState.savedExams)) {
             const bankIdx = qbankState.savedExams.findIndex(e => e.id === quizId);
             if (bankIdx !== -1) {
@@ -379,7 +409,6 @@ async function updateExamFromSoiDe() {
             }
         }
 
-        // 3. LƯU LÊN BẢNG QUIZZES VÀ CUSTOM_LINKS TRÊN SUPABASE
         const { error: qErr } = await client.from("quizzes").upsert({
             id: quizId,
             title: finalTitle,
@@ -399,7 +428,6 @@ async function updateExamFromSoiDe() {
             }).eq("id", quizId);
         } catch (cErr) {}
 
-        // 4. ĐỒNG BỘ TRỰC TIẾP PHÒNG THI NẾU ĐANG MỞ TRÊN thi.html
         if (typeof window.SECURE_VAULT !== "undefined") {
             window.SECURE_VAULT.answers = window.SECURE_VAULT.answers || {};
             window.SECURE_VAULT.explanations = window.SECURE_VAULT.explanations || {};

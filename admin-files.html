@@ -13,6 +13,8 @@
     
     <!-- SheetJS để xuất Excel từ Windows Explorer -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js để vẽ biểu đồ băng thông chu kỳ 23 -> 23 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Supabase JS & App Config -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -55,7 +57,11 @@
             padding: 0 12px;
             flex-shrink: 0;
             z-index: 50;
+            gap: 8px;
+            overflow-x: auto;
+            scrollbar-width: none;
         }
+        .title-bar::-webkit-scrollbar { display: none; }
         .title-bar-left {
             display: flex;
             align-items: center;
@@ -63,11 +69,13 @@
             font-weight: 700;
             color: #0f172a;
             font-size: 13.5px;
+            white-space: nowrap;
         }
         .title-bar-tools {
             display: flex;
             align-items: center;
             gap: 6px;
+            flex-shrink: 0;
         }
         .btn-win-tool {
             padding: 4px 10px;
@@ -82,6 +90,7 @@
             gap: 4px;
             transition: all 0.12s;
             font-family: inherit;
+            white-space: nowrap;
         }
         .btn-win-tool:hover { background: #e2e8f0; }
         .btn-win-tool:active { transform: translateY(1px); }
@@ -173,6 +182,83 @@
             font-family: inherit;
         }
 
+        /* 2.5 THANH THÔNG SỐ DUNG LƯỢNG DATABASE & BĂNG THÔNG CHU KỲ 23 -> 23 */
+        .system-metrics-bar {
+            background: linear-gradient(90deg, #f8fafc 0%, #eff6ff 50%, #f0fdf4 100%);
+            border-bottom: 1px solid var(--win-border);
+            padding: 5px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+            z-index: 35;
+        }
+        .metric-pill-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            border: 1.2px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+        .metric-pill-card:hover {
+            border-color: var(--win-blue);
+            background: #f0f9ff;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0, 103, 184, 0.14);
+        }
+        .metric-pill-card.bw-card {
+            border-color: #86efac;
+            background: #f0fdf4;
+            color: #14532d;
+        }
+        .metric-pill-card.bw-card:hover {
+            border-color: #16a34a;
+            background: #dcfce7;
+            box-shadow: 0 3px 8px rgba(22, 163, 74, 0.16);
+        }
+        .db-progress-track {
+            width: 86px;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+            border: 1px solid #cbd5e1;
+        }
+        .db-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #10b981, #0284c7);
+            border-radius: 999px;
+            transition: width 0.35s ease;
+        }
+        .db-progress-fill.warn { background: linear-gradient(90deg, #f59e0b, #ea580c); }
+        .db-progress-fill.danger { background: linear-gradient(90deg, #ef4444, #b91c1c); }
+
+        .metric-hint-tag {
+            font-size: 10.5px;
+            font-weight: 800;
+            padding: 1px 7px;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+        .bw-card .metric-hint-tag {
+            background: #dcfce7;
+            color: #15803d;
+            border-color: #86efac;
+        }
+
         /* MENU CHỌN VIEW MODE */
         .view-mode-selector {
             position: relative;
@@ -218,7 +304,7 @@
 
         /* 3.1 CỘT TRÁI: CÂY THƯ MỤC */
         .tree-pane {
-            width: 250px;
+            width: 255px;
             border-right: 1px solid var(--win-border);
             background: #f9fafb;
             overflow-y: auto;
@@ -445,15 +531,15 @@
         .context-menu-divider { height: 1px; background: #e5e7eb; margin: 3px 0; }
         .context-menu-item.danger:hover { background: #fee2e2; color: #dc2626; }
 
-        /* 6. MODAL CHỈNH SỬA & JSON */
+        /* 6. MODAL CHỈNH SỬA, DUNG LƯỢNG DB & BIỂU ĐỒ BĂNG THÔNG */
         .editor-modal {
             position: fixed; inset: 0; background: rgba(0,0,0,0.55);
             display: none; align-items: center; justify-content: center;
             z-index: 100000; padding: 20px; backdrop-filter: blur(4px);
         }
         .editor-card {
-            background: #fff; border-radius: 12px; width: 750px; max-width: 95vw;
-            height: 85vh; display: flex; flex-direction: column;
+            background: #fff; border-radius: 12px; width: 780px; max-width: 96vw;
+            height: 86vh; display: flex; flex-direction: column;
             box-shadow: 0 25px 60px rgba(0,0,0,0.35); overflow: hidden;
             animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         }
@@ -492,6 +578,64 @@
             font-size: 13px; font-weight: 600; font-family: inherit; outline: none;
         }
 
+        /* BIỂU ĐỒ BĂNG THÔNG & CHI TIẾT DB */
+        .metrics-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .metrics-kpi-box {
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+        }
+        .metrics-kpi-box .k-lbl { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; }
+        .metrics-kpi-box .k-val { font-size: 19px; font-weight: 900; color: #0f172a; margin-top: 2px; }
+        .metrics-kpi-box .k-sub { font-size: 11px; color: #475569; margin-top: 2px; }
+        .bw-cycle-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 12px;
+        }
+        .bw-chart-container {
+            position: relative;
+            height: 290px;
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 14px;
+        }
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            user-select: text;
+        }
+        .metrics-table th {
+            background: #0f172a;
+            color: #ffffff;
+            padding: 7px 10px;
+            text-align: left;
+            font-weight: 800;
+            position: sticky;
+            top: 0;
+        }
+        .metrics-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .metrics-table tr:nth-child(even) td { background: #f8fafc; }
+
         /* 0. AUTH GATE MODAL */
         .auth-gate-modal {
             position: fixed; inset: 0; background: #0f172a;
@@ -501,6 +645,11 @@
         .auth-gate-card {
             background: #ffffff; border-radius: 14px; padding: 28px; width: 360px;
             text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+        }
+
+        @media (max-width: 768px) {
+            .tree-pane, .preview-pane { display: none; }
+            .metrics-kpi-grid { grid-template-columns: repeat(2, 1fr); }
         }
     </style>
 </head>
@@ -559,6 +708,24 @@
         </div>
     </div>
 
+    <!-- 2.5 THANH THÔNG SỐ DUNG LƯỢNG DATABASE & BĂNG THÔNG CHU KỲ 23 -> 23 -->
+    <div class="system-metrics-bar" id="system-metrics-bar">
+        <div class="metric-pill-card" id="db-size-metric-pill" onclick="openDbSizeDetailsModal()" title="Nhấp để xem dung lượng chi tiết từng bảng trên Supabase">
+            <span>🗄️</span>
+            <span id="db-size-summary-text">Đã sử dụng ? MB / 500 MB dung lượng Database</span>
+            <div class="db-progress-track">
+                <div class="db-progress-fill" id="db-size-progress-fill"></div>
+            </div>
+            <span class="metric-hint-tag" id="db-size-pct-tag">--%</span>
+        </div>
+
+        <div class="metric-pill-card bw-card" id="bandwidth-metric-pill" onclick="openBandwidthChartModal()" title="Nhấp để xem biểu đồ cột băng thông từng ngày từ ngày 23 tháng này đến 23 tháng sau">
+            <span>📡</span>
+            <span id="bw-summary-text">Băng thông chu kỳ 23 → 23: Đang đo...</span>
+            <span class="metric-hint-tag">📈 Xem biểu đồ</span>
+        </div>
+    </div>
+
     <!-- 3. MAIN WORKSPACE -->
     <div class="main-workspace" id="main-workspace" oncontextmenu="handleWorkspaceContextMenu(event)">
         <!-- CỘT TRÁI: CÂY THƯ MỤC -->
@@ -569,7 +736,6 @@
                 <span>Supabase Database</span>
             </div>
             <div class="tree-sub open" id="tree-sub-root">
-                <!-- THƯ MỤC MỚI: DANH SÁCH ĐANG TRONG PHÒNG THI -->
                 <div class="tree-node" id="tree-node-active_sessions" onclick="selectFolder('active_sessions')" style="color: #059669; font-weight: 800;">
                     <span class="tree-toggle">▶</span>
                     <span>🟢</span>
@@ -580,6 +746,12 @@
                     <span class="tree-toggle">▶</span>
                     <span>📑</span>
                     <span>Đề thi (quizzes)</span>
+                </div>
+
+                <div class="tree-node" id="tree-node-qbank_questions" onclick="selectFolder('qbank_questions')" style="color: #7c3aed; font-weight: 800;">
+                    <span class="tree-toggle">▶</span>
+                    <span>🏦</span>
+                    <span>Ngân hàng câu hỏi (qbank)</span>
                 </div>
                 
                 <!-- BÀI NỘP THEO PHÂN CẤP LỚP -->
@@ -709,6 +881,125 @@
         </div>
     </div>
 
+    <!-- 7. MODAL CHI TIẾT DUNG LƯỢNG DATABASE -->
+    <div class="editor-modal" id="db-size-modal" onclick="if(event.target===this) closeDbSizeModal()">
+        <div class="editor-card" style="height:auto; max-height:85vh;" onclick="event.stopPropagation()">
+            <div class="editor-header">
+                <span>🗄️ Chi Tiết Dung Lượng Database Supabase (Giới hạn 500 MB)</span>
+                <button onclick="closeDbSizeModal()" style="background:none; border:none; color:#fff; font-size:18px; cursor:pointer; font-weight:900;">✕</button>
+            </div>
+            <div class="editor-body">
+                <div class="metrics-kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metrics-kpi-box" style="background:#f0f9ff; border-color:#bae6fd;">
+                        <div class="k-lbl">Đã sử dụng</div>
+                        <div class="k-val" id="modal-db-used-mb" style="color:#0284c7;">-- MB</div>
+                        <div class="k-sub" id="modal-db-source-note">Đang kiểm tra...</div>
+                    </div>
+                    <div class="metrics-kpi-box" style="background:#f0fdf4; border-color:#bbf7d0;">
+                        <div class="k-lbl">Còn trống</div>
+                        <div class="k-val" id="modal-db-free-mb" style="color:#16a34a;">-- MB</div>
+                        <div class="k-sub">Trên gói Free 500 MB</div>
+                    </div>
+                    <div class="metrics-kpi-box" style="background:#faf5ff; border-color:#e9d5ff;">
+                        <div class="k-lbl">Tỷ lệ sử dụng</div>
+                        <div class="k-val" id="modal-db-pct" style="color:#7c3aed;">--%</div>
+                        <div class="k-sub">Mức an toàn (&lt; 80%)</div>
+                    </div>
+                </div>
+
+                <div style="border:1px solid #cbd5e1; border-radius:8px; overflow:auto; max-height:360px;">
+                    <table class="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Tên bảng (Table)</th>
+                                <th style="text-align:right;">Số dòng ước tính</th>
+                                <th style="text-align:right;">Dung lượng</th>
+                                <th style="text-align:right;">Tỷ trọng</th>
+                            </tr>
+                        </thead>
+                        <tbody id="db-tables-breakdown-tbody">
+                            <tr><td colspan="4" style="text-align:center; padding:18px; color:#64748b;">⏳ Đang tải thông số...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="editor-footer">
+                <button class="btn-win-tool" onclick="refreshSystemMetrics(true)">🔄 Đo lại ngay</button>
+                <button class="btn-win-tool btn-win-primary" onclick="closeDbSizeModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. MODAL BIỂU ĐỒ BĂNG THÔNG CHU KỲ 23 -> 23 -->
+    <div class="editor-modal" id="bandwidth-chart-modal" onclick="if(event.target===this) closeBandwidthChartModal()">
+        <div class="editor-card" style="width:920px; height:88vh;" onclick="event.stopPropagation()">
+            <div class="editor-header" style="background: linear-gradient(135deg, #065f46 0%, #0f172a 100%);">
+                <span>📡 Biểu Đồ Băng Thông Theo Chu Kỳ Thanh Toán (Ngày 23 → Ngày 23)</span>
+                <button onclick="closeBandwidthChartModal()" style="background:none; border:none; color:#fff; font-size:18px; cursor:pointer; font-weight:900;">✕</button>
+            </div>
+            <div class="editor-body">
+                <div class="bw-cycle-nav">
+                    <button class="btn-win-tool" onclick="shiftBandwidthCycle(-1)">◀ Chu kỳ trước</button>
+                    <div style="text-align:center;">
+                        <b id="bw-cycle-title" style="font-size:14px; color:#0f172a;">Chu kỳ: 23/-- → 23/--</b>
+                        <div style="font-size:11px; color:#64748b;" id="bw-cycle-subtitle">Múi giờ Việt Nam (UTC+7) • Tính cộng dồn từ ngày 23</div>
+                    </div>
+                    <button class="btn-win-tool" id="btn-bw-next-cycle" onclick="shiftBandwidthCycle(1)">Chu kỳ sau ▶</button>
+                </div>
+
+                <div class="metrics-kpi-grid">
+                    <div class="metrics-kpi-box" style="background:#f0fdf4; border-color:#86efac;">
+                        <div class="k-lbl">Tổng chu kỳ (23→23)</div>
+                        <div class="k-val" id="bw-kpi-total" style="color:#15803d;">0 MB</div>
+                        <div class="k-sub" id="bw-kpi-quota">Hạn mức Free: 5.00 GB</div>
+                    </div>
+                    <div class="metrics-kpi-box" style="background:#f0f9ff; border-color:#7dd3fc;">
+                        <div class="k-lbl">Tải ra (Egress)</div>
+                        <div class="k-val" id="bw-kpi-egress" style="color:#0284c7;">0 MB</div>
+                        <div class="k-sub">Đề thi, kết quả trả về</div>
+                    </div>
+                    <div class="metrics-kpi-box" style="background:#fff7ed; border-color:#fdba74;">
+                        <div class="k-lbl">Gửi lên (Ingress)</div>
+                        <div class="k-val" id="bw-kpi-ingress" style="color:#ea580c;">0 MB</div>
+                        <div class="k-sub">Nộp bài, đồng bộ, ping</div>
+                    </div>
+                    <div class="metrics-kpi-box" style="background:#faf5ff; border-color:#d8b4fe;">
+                        <div class="k-lbl">Tổng lượt truy vấn</div>
+                        <div class="k-val" id="bw-kpi-reqs" style="color:#7c3aed;">0</div>
+                        <div class="k-sub">Requests ghi nhận</div>
+                    </div>
+                </div>
+
+                <div class="bw-chart-container" id="bw-chart-container">
+                    <canvas id="bandwidthDailyCanvas"></canvas>
+                </div>
+
+                <div style="border:1px solid #cbd5e1; border-radius:8px; overflow:auto; flex:1; min-height:130px;">
+                    <table class="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Ngày</th>
+                                <th style="text-align:right;">Tải ra (Egress)</th>
+                                <th style="text-align:right;">Gửi lên (Ingress)</th>
+                                <th style="text-align:right;">Tổng trong ngày</th>
+                                <th style="text-align:right;">Lũy kế từ 23</th>
+                                <th style="text-align:right;">Số Request</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bw-daily-table-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="editor-footer" style="justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:#64748b;">💡 Ghi chú: Số liệu tự động gom mỗi 45s từ các thiết bị học sinh &amp; admin vào bảng <code>site_bandwidth_daily</code>.</span>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn-win-tool" onclick="refreshBandwidthCycleData(true)">🔄 Cập nhật ngay</button>
+                    <button class="btn-win-tool btn-win-primary" onclick="closeBandwidthChartModal()">Đóng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // =========================================================================
         // TRÌNH QUẢN LÝ TỆP & DỮ LIỆU WINDOWS EXPLORER (SUPABASE ENGINE)
@@ -717,13 +1008,20 @@
         let currentFolder = 'root';
         let currentSubFolderParam = null;
         let viewMode = 'details';
-        let currentItems = [];
+        let allCurrentItems = [];   // Danh sách gốc của thư mục (SỬA LỖI TÌM KIẾM MẤT DỮ LIỆU)
+        let currentItems = [];      // Danh sách đang hiển thị sau khi lọc
+        let currentSearchQuery = '';
         let selectedItem = null;
         let navHistory = [{ folder: 'root', param: null }];
         let navHistoryIndex = 0;
         let sortColumn = 'name';
         let sortAsc = true;
         let activeEditorMode = 'quick';
+
+        // Biến quản lý thông số dung lượng DB & Băng thông chu kỳ 23 -> 23
+        let dbSizeState = { usedMB: null, limitMB: 500, isEstimated: false, tables: [] };
+        let bwCycleOffset = 0; // 0 = chu kỳ hiện tại, -1 = chu kỳ trước...
+        let bwChartInstance = null;
 
         // 1. KIỂM TRA QUYỀN ADMIN
         function checkAdminAccess() {
@@ -751,6 +1049,7 @@
                     safeLocal.setItem("admin_expires_at", String(Date.now() + 24 * 3600 * 1000));
                     document.getElementById("auth-gate-modal").style.display = "none";
                     loadFolderContents('root');
+                    refreshSystemMetrics(false);
                 } else {
                     alert("❌ Sai mật khẩu Admin!");
                 }
@@ -767,6 +1066,7 @@
                 document.getElementById("gate-pass-input").focus();
             } else {
                 loadFolderContents('root');
+                refreshSystemMetrics(false);
             }
             setupGlobalEventListeners();
         });
@@ -808,6 +1108,10 @@
             currentFolder = folderKey;
             currentSubFolderParam = subParam;
             selectedItem = null;
+            currentSearchQuery = '';
+            const searchEl = document.getElementById("search-input");
+            if (searchEl) searchEl.value = '';
+
             clearPreviewPane();
             updateBreadcrumb();
             updateActiveTreeNode();
@@ -825,6 +1129,7 @@
                     items = [
                         { type: 'folder', name: 'Đang trong phòng thi (active_sessions)', target: 'active_sessions', icon: '🟢', count: 'Thí sinh đã đăng nhập vào thi' },
                         { type: 'folder', name: 'Đề thi (quizzes)', target: 'quizzes', icon: '📁', count: 'Toàn bộ đề thi trắc nghiệm' },
+                        { type: 'folder', name: 'Ngân hàng câu hỏi (qbank_questions)', target: 'qbank_questions', icon: '🏦', count: 'Kho câu hỏi tách bảng riêng (3.000–10.000+ câu)' },
                         { type: 'folder', name: 'Bài nộp (submissions)', target: 'submissions', icon: '📁', count: 'Điểm & các lần thi học sinh' },
                         { type: 'folder', name: 'Tự luận (tu_luan_submissions)', target: 'tu_luan', icon: '📁', count: 'Ảnh bài làm & chấm chéo' },
                         { type: 'folder', name: 'Nháp trực tiếp (live_drafts)', target: 'live_drafts', icon: '📁', count: 'Dữ liệu làm bài thời gian thực' },
@@ -865,6 +1170,51 @@
                             meta: `${q.time_limit_minutes || 90} phút • ${(q.questions || []).length} câu`,
                             raw: q
                         }));
+                    }
+                }
+                // CẤP 2: THƯ MỤC NGÂN HÀNG CÂU HỎI (qbank_questions)
+                else if (folderKey === 'qbank_questions') {
+                    const allRows = [];
+                    let from = 0;
+                    const pageSize = 1000;
+                    while (true) {
+                        const { data, error } = await client
+                            .from('qbank_questions')
+                            .select('*')
+                            .order('orig_index', { ascending: true })
+                            .range(from, from + pageSize - 1);
+                        if (error) {
+                            if (String(error.message || '').includes('does not exist') || error.code === '42P01') {
+                                items = [{
+                                    type: 'file',
+                                    category: 'info',
+                                    id: 'info_no_qbank',
+                                    name: 'Chưa tạo bảng qbank_questions trên Supabase (Hãy chạy file SQL nâng cấp)',
+                                    icon: 'ℹ️',
+                                    meta: 'Chạy file supabase_upgrade_qbank_and_metrics.sql trong SQL Editor',
+                                    raw: { message: error.message }
+                                }];
+                            }
+                            break;
+                        }
+                        if (!data || data.length === 0) break;
+                        allRows.push(...data);
+                        if (data.length < pageSize) break;
+                        from += pageSize;
+                    }
+                    if (allRows.length > 0) {
+                        items = allRows.map(r => {
+                            const statusTxt = r.folder_id ? `📁 ${r.folder_name || r.folder_id}` : '📥 Chờ xếp';
+                            return {
+                                type: 'file',
+                                category: 'qbank_question',
+                                id: r.id,
+                                name: r.matrix_id || `Câu ${r.orig_index || ''} (${r.source_exam || 'Ngân hàng'})`,
+                                icon: r.folder_id ? '📌' : '📥',
+                                meta: `P${r.part || 1} • ${String(r.level || 'nb').toUpperCase()} • ${statusTxt}`,
+                                raw: r
+                            };
+                        });
                     }
                 }
                 // CẤP 2: THƯ MỤC BÀI NỘP CHA
@@ -991,9 +1341,8 @@
                     }
                 }
 
-                currentItems = items;
-                sortCurrentItems();
-                renderCurrentItems();
+                allCurrentItems = items;
+                applySearchFilterAndRender();
                 document.getElementById("status-server-status").innerText = "🟢 Supabase Connected";
             } catch(e) {
                 console.error("Lỗi nạp folder:", e);
@@ -1008,17 +1357,20 @@
 
                 let valA, valB;
                 if (sortColumn === 'score') {
-                    valA = Number(a.raw?.score10) || -1;
-                    valB = Number(b.raw?.score10) || -1;
+                    valA = Number(a.raw?.score10) ?? -1;
+                    valB = Number(b.raw?.score10) ?? -1;
                 } else if (sortColumn === 'sbd') {
-                    valA = String(a.raw?.sbd || '').toLowerCase();
-                    valB = String(b.raw?.sbd || '').toLowerCase();
+                    valA = String(a.raw?.sbd || a.raw?.matrix_id || '').toLowerCase();
+                    valB = String(b.raw?.sbd || b.raw?.matrix_id || '').toLowerCase();
+                } else if (sortColumn === 'class') {
+                    valA = String(a.raw?.class_name || a.raw?.category_id || a.raw?.folder_name || '').toLowerCase();
+                    valB = String(b.raw?.class_name || b.raw?.category_id || b.raw?.folder_name || '').toLowerCase();
                 } else if (sortColumn === 'correct') {
                     valA = Number(a.raw?.correct_count) || 0;
                     valB = Number(b.raw?.correct_count) || 0;
                 } else if (sortColumn === 'date') {
-                    valA = a.raw?.created_at ? new Date(a.raw.created_at).getTime() : (a.raw?.start_time || 0);
-                    valB = b.raw?.created_at ? new Date(b.raw.created_at).getTime() : (b.raw?.start_time || 0);
+                    valA = a.raw?.created_at ? new Date(a.raw.created_at).getTime() : (a.raw?.updated_at ? new Date(a.raw.updated_at).getTime() : (a.raw?.start_time || 0));
+                    valB = b.raw?.created_at ? new Date(b.raw.created_at).getTime() : (b.raw?.updated_at ? new Date(b.raw.updated_at).getTime() : (b.raw?.start_time || 0));
                 } else {
                     valA = String(a.name || '').toLowerCase();
                     valB = String(b.name || '').toLowerCase();
@@ -1053,11 +1405,14 @@
             gridWrap.innerHTML = "";
             tbody.innerHTML = "";
 
-            document.getElementById("status-items-count").innerText = `${currentItems.length} mục`;
+            const countLabel = currentSearchQuery
+                ? `${currentItems.length} / ${allCurrentItems.length} mục`
+                : `${currentItems.length} mục`;
+            document.getElementById("status-items-count").innerText = countLabel;
 
             if (currentItems.length === 0) {
-                gridWrap.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color:#9ca3af; font-size:13px;">Thư mục này hiện tại trống</div>`;
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#9ca3af;">Thư mục này trống</td></tr>`;
+                gridWrap.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color:#9ca3af; font-size:13px;">${currentSearchQuery ? 'Không tìm thấy kết quả phù hợp' : 'Thư mục này hiện tại trống'}</div>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:#9ca3af;">${currentSearchQuery ? 'Không tìm thấy kết quả phù hợp' : 'Thư mục này trống'}</td></tr>`;
                 return;
             }
 
@@ -1069,8 +1424,8 @@
                 card.className = "file-item-card" + (isSelected ? " selected" : "");
                 card.innerHTML = `
                     <div class="file-icon">${item.icon}</div>
-                    <div class="file-title" title="${item.name}">${item.name}</div>
-                    <div class="file-meta-sub">${item.meta || item.count || ''}</div>
+                    <div class="file-title" title="${escapeAttr(item.name)}">${escapeHtmlSafe(item.name)}</div>
+                    <div class="file-meta-sub">${escapeHtmlSafe(item.meta || item.count || '')}</div>
                 `;
                 card.onclick = (e) => { e.stopPropagation(); selectItem(item, card); };
                 card.ondblclick = (e) => { e.stopPropagation(); openItem(item); };
@@ -1085,12 +1440,22 @@
                 let scoreText = '---';
                 let correctText = '---';
                 let dateText = '---';
+                let colSbd = raw.sbd || item.id || '---';
+                let colClass = raw.category_id || raw.class_name || '---';
+                let colTime = raw.completion_time || (raw.start_time ? formatElapsedDuration(raw.start_time) : '---');
 
                 if (item.category === 'active_session') {
                     const isOnline = (Date.now() - Number(raw.last_ping || raw.start_time || 0)) < 90000;
                     scoreText = isOnline ? `<b style="color:#16a34a;">🟢 Online</b>` : `<span style="color:#94a3b8;">⚪ Mất kết nối</span>`;
-                    correctText = `<span style="color:#0284c7; font-weight:700;">${raw.exam_title || 'Đang thi'}</span>`;
+                    correctText = `<span style="color:#0284c7; font-weight:700;">${escapeHtmlSafe(raw.exam_title || 'Đang thi')}</span>`;
                     dateText = raw.start_time ? new Date(raw.start_time).toLocaleString("vi-VN") : '---';
+                } else if (item.category === 'qbank_question') {
+                    colSbd = raw.matrix_id || raw.id;
+                    colClass = raw.folder_name || 'Chờ xếp';
+                    scoreText = `<span style="color:#7c3aed; font-weight:800;">P${raw.part || 1} • ${String(raw.level || 'nb').toUpperCase()}</span>`;
+                    correctText = escapeHtmlSafe(raw.source_exam || '---');
+                    colTime = `Câu #${raw.orig_index || '-'}`;
+                    dateText = raw.updated_at ? new Date(raw.updated_at).toLocaleString("vi-VN") : '---';
                 } else {
                     scoreText = (raw.score10 !== undefined) ? `<b style="color:#0284c7; font-size:13px;">${raw.score10}đ</b>` : '---';
                     correctText = (raw.correct_count !== undefined) ? `<span style="color:#15803d; font-weight:700;">${raw.correct_count} câu</span>` : '---';
@@ -1099,16 +1464,16 @@
 
                 tr.innerHTML = `
                     <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis;">
-                        <b>${item.icon} ${item.name}</b>
+                        <b>${item.icon} ${escapeHtmlSafe(item.name)}</b>
                     </td>
-                    <td style="font-family:monospace; color:#0284c7; font-weight:700;">${raw.sbd || item.id || '---'}</td>
-                    <td>${raw.category_id || raw.class_name || '---'}</td>
+                    <td style="font-family:monospace; color:#0284c7; font-weight:700; max-width:160px; overflow:hidden; text-overflow:ellipsis;">${escapeHtmlSafe(colSbd)}</td>
+                    <td style="max-width:140px; overflow:hidden; text-overflow:ellipsis;">${escapeHtmlSafe(colClass)}</td>
                     <td style="text-align:center;">${scoreText}</td>
-                    <td style="text-align:center;">${correctText}</td>
-                    <td>${raw.completion_time || (raw.start_time ? formatElapsedDuration(raw.start_time) : '---')}</td>
-                    <td>${dateText}</td>
+                    <td style="text-align:center; max-width:160px; overflow:hidden; text-overflow:ellipsis;">${correctText}</td>
+                    <td>${escapeHtmlSafe(colTime)}</td>
+                    <td>${escapeHtmlSafe(dateText)}</td>
                     <td style="text-align:center;">
-                        <button onclick="handleActionEditInline('${item.id}', event)" style="padding:2px 6px; font-size:11px; cursor:pointer; border-radius:4px; border:1px solid #cbd5e1; background:#fff;">✏️ Sửa</button>
+                        ${item.type === 'file' ? `<button onclick="handleActionEditInline('${escapeAttr(item.id)}', event)" style="padding:2px 6px; font-size:11px; cursor:pointer; border-radius:4px; border:1px solid #cbd5e1; background:#fff;">✏️ Sửa</button>` : '---'}
                     </td>
                 `;
                 tr.onclick = (e) => { e.stopPropagation(); selectItem(item, tr); };
@@ -1116,6 +1481,13 @@
                 tr.oncontextmenu = (e) => handleItemContextMenu(e, item, tr);
                 tbody.appendChild(tr);
             });
+        }
+
+        function escapeHtmlSafe(str) {
+            return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function escapeAttr(str) {
+            return String(str ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         // 6. CHỌN & MỞ TỆP
@@ -1149,8 +1521,8 @@
                 box.innerHTML = `
                     <div style="text-align:center; padding:20px 0;">
                         <div style="font-size:54px;">${item.icon}</div>
-                        <h3 style="margin-top:8px; font-size:14px; font-weight:800;">${item.name}</h3>
-                        <p style="color:#64748b; margin-top:4px;">${item.count || 'Thư mục dữ liệu Supabase'}</p>
+                        <h3 style="margin-top:8px; font-size:14px; font-weight:800;">${escapeHtmlSafe(item.name)}</h3>
+                        <p style="color:#64748b; margin-top:4px;">${escapeHtmlSafe(item.count || 'Thư mục dữ liệu Supabase')}</p>
                     </div>
                 `;
                 return;
@@ -1167,11 +1539,11 @@
                         <div style="color:#166534; font-size:12px; margin-top:3px; font-weight:700;">Đã làm được: ${raw.start_time ? formatElapsedDuration(raw.start_time) : '---'}</div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:4px;">
-                        <p><b>👤 Thí sinh:</b> ${raw.name}</p>
-                        <p><b>🔢 SBD:</b> <code style="color:#0284c7; font-weight:800;">${raw.sbd}</code></p>
-                        <p><b>🏫 Lớp:</b> ${raw.class_name}</p>
-                        <p><b>📑 Đề thi:</b> ${raw.exam_title || 'Đề thi'}</p>
-                        <p><b>Mã đề:</b> ${raw.ma_de || '101'}</p>
+                        <p><b>👤 Thí sinh:</b> ${escapeHtmlSafe(raw.name)}</p>
+                        <p><b>🔢 SBD:</b> <code style="color:#0284c7; font-weight:800;">${escapeHtmlSafe(raw.sbd)}</code></p>
+                        <p><b>🏫 Lớp:</b> ${escapeHtmlSafe(raw.class_name)}</p>
+                        <p><b>📑 Đề thi:</b> ${escapeHtmlSafe(raw.exam_title || 'Đề thi')}</p>
+                        <p><b>Mã đề:</b> ${escapeHtmlSafe(raw.ma_de || '101')}</p>
                         <p><b>🕐 Vào thi lúc:</b> ${raw.start_time ? new Date(raw.start_time).toLocaleString("vi-VN") : '---'}</p>
                         <p><b>📡 Ping gần nhất:</b> ${raw.last_ping ? new Date(raw.last_ping).toLocaleTimeString("vi-VN") : '---'}</p>
                     </div>
@@ -1183,43 +1555,57 @@
                         <div style="color:#166534; font-size:12px; margin-top:3px; font-weight:700;">Đúng: ${raw.correct_count} câu • Sai: ${raw.wrong_count} câu</div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:4px;">
-                        <p><b>👤 Thí sinh:</b> ${raw.student_name}</p>
-                        <p><b>🔢 SBD:</b> <code style="color:#0284c7; font-weight:800;">${raw.sbd}</code></p>
-                        <p><b>🏫 Lớp:</b> ${raw.class_name}</p>
-                        <p><b>📑 Đề thi:</b> ${raw.exam_title}</p>
-                        <p><b>⏱ Thời gian làm:</b> ${raw.completion_time || '---'}</p>
-                        <p><b>⚠️ Chuyển tab:</b> ${raw.tab_switch_count || '0 lần'}</p>
+                        <p><b>👤 Thí sinh:</b> ${escapeHtmlSafe(raw.student_name)}</p>
+                        <p><b>🔢 SBD:</b> <code style="color:#0284c7; font-weight:800;">${escapeHtmlSafe(raw.sbd)}</code></p>
+                        <p><b>🏫 Lớp:</b> ${escapeHtmlSafe(raw.class_name)}</p>
+                        <p><b>📑 Đề thi:</b> ${escapeHtmlSafe(raw.exam_title)}</p>
+                        <p><b>⏱ Thời gian làm:</b> ${escapeHtmlSafe(raw.completion_time || '---')}</p>
+                        <p><b>⚠️ Chuyển tab:</b> ${escapeHtmlSafe(raw.tab_switch_count || '0 lần')}</p>
                         <p><b>📅 Lúc nộp:</b> ${raw.created_at ? new Date(raw.created_at).toLocaleString("vi-VN") : '---'}</p>
                     </div>
                     <div style="margin-top:12px;">
                         <b>📋 Chi tiết từng câu:</b>
                         <div style="font-family:monospace; font-size:11px; background:#fff; padding:8px; border:1px solid #cbd5e1; border-radius:6px; max-height:160px; overflow-y:auto; margin-top:4px; line-height:1.4;">
-                            ${(raw.data_string || '').replace(/ \| /g, '<br>')}
+                            ${escapeHtmlSafe(raw.data_string || '').replace(/ \| /g, '<br>')}
                         </div>
                     </div>
                 `;
             } else if (item.category === 'quiz') {
                 detailsHtml = `
-                    <p><b>📑 Tên đề:</b> ${raw.title}</p>
-                    <p><b>Mã đề:</b> ${raw.made}</p>
+                    <p><b>📑 Tên đề:</b> ${escapeHtmlSafe(raw.title)}</p>
+                    <p><b>Mã đề:</b> ${escapeHtmlSafe(raw.made)}</p>
                     <p><b>⏱ Thời lượng:</b> ${raw.time_limit_minutes} phút</p>
                     <p><b>Số câu hỏi:</b> ${(raw.questions || []).length} câu</p>
                     <p><b>Hình vẽ:</b> ${Object.keys(raw.images || {}).length} ảnh</p>
                 `;
+            } else if (item.category === 'qbank_question') {
+                const qObj = raw.question_data || {};
+                detailsHtml = `
+                    <div style="background:#faf5ff; border:1.5px solid #d8b4fe; padding:8px 10px; border-radius:8px; margin-bottom:10px;">
+                        <div style="font-weight:900; color:#6b21a8;">${escapeHtmlSafe(raw.matrix_id || 'Chưa gắn ID')}</div>
+                        <div style="font-size:11.5px; color:#475569; margin-top:2px;">Phần ${raw.part || 1} • Mức: ${String(raw.level || 'nb').toUpperCase()}</div>
+                    </div>
+                    <p><b>📁 Thư mục:</b> ${escapeHtmlSafe(raw.folder_name || 'Chờ xếp')}</p>
+                    <p><b>📄 Nguồn đề:</b> ${escapeHtmlSafe(raw.source_exam || '---')}</p>
+                    <div style="margin-top:8px; padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:6px; max-height:180px; overflow:auto;">
+                        <b>Nội dung câu hỏi:</b><br>
+                        <span style="white-space:pre-wrap;">${escapeHtmlSafe(qObj.question || '')}</span>
+                    </div>
+                `;
             } else if (item.category === 'tu_luan') {
                 detailsHtml = `
-                    <p><b>👤 Học sinh:</b> ${raw.student_name} (SBD: ${raw.sbd})</p>
-                    <p><b>Lớp:</b> ${raw.class_name}</p>
-                    <p><b>🎯 Điểm chấm chéo:</b> <b style="color:#dc2626; font-size:14px;">${raw.cross_score || 'Chưa chấm'}</b></p>
-                    <p><b>💬 Nhận xét:</b> ${raw.feedback || '(Chưa có nhận xét)'}</p>
+                    <p><b>👤 Học sinh:</b> ${escapeHtmlSafe(raw.student_name)} (SBD: ${escapeHtmlSafe(raw.sbd)})</p>
+                    <p><b>Lớp:</b> ${escapeHtmlSafe(raw.class_name)}</p>
+                    <p><b>🎯 Điểm chấm chéo:</b> <b style="color:#dc2626; font-size:14px;">${escapeHtmlSafe(raw.cross_score || 'Chưa chấm')}</b></p>
+                    <p><b>💬 Nhận xét:</b> ${escapeHtmlSafe(raw.feedback || '(Chưa có nhận xét)')}</p>
                     <p><b>Số ảnh nộp:</b> ${(raw.images || []).length} ảnh</p>
                 `;
             }
 
             box.innerHTML = `
                 <div style="margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
-                    <h4 style="font-size:13.5px; font-weight:800; color:#0f172a; line-height:1.3;">${item.name}</h4>
-                    <span style="font-size:11px; color:#64748b; font-family:monospace;">ID: ${item.id}</span>
+                    <h4 style="font-size:13.5px; font-weight:800; color:#0f172a; line-height:1.3;">${escapeHtmlSafe(item.name)}</h4>
+                    <span style="font-size:11px; color:#64748b; font-family:monospace;">ID: ${escapeHtmlSafe(item.id)}</span>
                 </div>
                 ${detailsHtml}
                 <div style="margin-top:16px; display:flex; gap:6px;">
@@ -1247,6 +1633,7 @@
 
             if (currentFolder === 'active_sessions') parts.push({ name: "🟢 Vào thi (active_sessions)", folder: "active_sessions", param: null });
             else if (currentFolder === 'quizzes') parts.push({ name: "Đề thi", folder: "quizzes", param: null });
+            else if (currentFolder === 'qbank_questions') parts.push({ name: "🏦 Ngân hàng câu hỏi (qbank_questions)", folder: "qbank_questions", param: null });
             else if (currentFolder === 'submissions') parts.push({ name: "Bài nộp", folder: "submissions", param: null });
             else if (currentFolder.startsWith('sub_')) {
                 parts.push({ name: "Bài nộp", folder: "submissions", param: null });
@@ -1260,7 +1647,7 @@
             else if (currentFolder === 'custom_links') parts.push({ name: "Danh mục", folder: "custom_links", param: null });
 
             bar.innerHTML = parts.map((p, idx) => `
-                <span class="breadcrumb-item" onclick="navigateBreadcrumb('${p.folder}', ${p.param ? `'${p.param}'` : 'null'})">${p.name}</span>
+                <span class="breadcrumb-item" onclick="navigateBreadcrumb('${p.folder}', ${p.param ? `'${p.param}'` : 'null'})">${escapeHtmlSafe(p.name)}</span>
                 ${idx < parts.length - 1 ? '<span class="breadcrumb-sep">›</span>' : ''}
             `).join('');
         }
@@ -1332,23 +1719,33 @@
 
         function refreshCurrentFolder() {
             loadFolderContents(currentFolder, currentSubFolderParam);
+            refreshSystemMetrics(false);
         }
 
-        // 9. TÌM KIẾM
-        function onFilterSearch(query) {
-            const q = query.trim().toLowerCase();
-            if (!q) { renderCurrentItems(); return; }
-
-            const filtered = currentItems.filter(item => 
-                (item.name && item.name.toLowerCase().includes(q)) || 
-                (item.id && String(item.id).toLowerCase().includes(q)) ||
-                (item.raw?.student_name && item.raw.student_name.toLowerCase().includes(q)) ||
-                (item.raw?.name && item.raw.name.toLowerCase().includes(q)) ||
-                (item.raw?.sbd && String(item.raw.sbd).toLowerCase().includes(q))
-            );
-            
-            currentItems = filtered;
+        // 9. TÌM KIẾM (ĐÃ SỬA TRIỆT ĐỂ LỖI MẤT DANH SÁCH GỐC KHI XÓA TỪ KHÓA)
+        function applySearchFilterAndRender() {
+            const q = (currentSearchQuery || '').trim().toLowerCase();
+            if (!q) {
+                currentItems = [...allCurrentItems];
+            } else {
+                currentItems = allCurrentItems.filter(item =>
+                    (item.name && item.name.toLowerCase().includes(q)) ||
+                    (item.id && String(item.id).toLowerCase().includes(q)) ||
+                    (item.meta && String(item.meta).toLowerCase().includes(q)) ||
+                    (item.raw?.student_name && item.raw.student_name.toLowerCase().includes(q)) ||
+                    (item.raw?.name && item.raw.name.toLowerCase().includes(q)) ||
+                    (item.raw?.sbd && String(item.raw.sbd).toLowerCase().includes(q)) ||
+                    (item.raw?.matrix_id && String(item.raw.matrix_id).toLowerCase().includes(q)) ||
+                    (item.raw?.folder_name && String(item.raw.folder_name).toLowerCase().includes(q))
+                );
+            }
+            sortCurrentItems();
             renderCurrentItems();
+        }
+
+        function onFilterSearch(query) {
+            currentSearchQuery = query || '';
+            applySearchFilterAndRender();
         }
 
         // 10. FORM & JSON MODAL
@@ -1372,37 +1769,39 @@
             formContainer.innerHTML = "";
 
             if (item.category === 'active_session') {
+                switchEditorTab('quick');
                 formContainer.innerHTML = `
                     <div class="form-group">
                         <label>Họ và tên thí sinh:</label>
-                        <input type="text" id="edit-act-name" value="${raw.name || ''}">
+                        <input type="text" id="edit-act-name" value="${escapeAttr(raw.name || '')}">
                     </div>
                     <div class="form-group">
                         <label>Số báo danh (SBD):</label>
-                        <input type="text" id="edit-act-sbd" value="${raw.sbd || ''}">
+                        <input type="text" id="edit-act-sbd" value="${escapeAttr(raw.sbd || '')}">
                     </div>
                     <div class="form-group">
                         <label>Lớp học:</label>
-                        <input type="text" id="edit-act-class" value="${raw.class_name || ''}">
+                        <input type="text" id="edit-act-class" value="${escapeAttr(raw.class_name || '')}">
                     </div>
                     <div class="form-group">
                         <label>Đề thi đang làm:</label>
-                        <input type="text" id="edit-act-title" value="${raw.exam_title || ''}">
+                        <input type="text" id="edit-act-title" value="${escapeAttr(raw.exam_title || '')}">
                     </div>
                 `;
             } else if (item.category === 'submission') {
+                switchEditorTab('quick');
                 formContainer.innerHTML = `
                     <div class="form-group">
                         <label>Họ và tên thí sinh:</label>
-                        <input type="text" id="edit-st-name" value="${raw.student_name || ''}">
+                        <input type="text" id="edit-st-name" value="${escapeAttr(raw.student_name || '')}">
                     </div>
                     <div class="form-group">
                         <label>Số báo danh (SBD):</label>
-                        <input type="text" id="edit-st-sbd" value="${raw.sbd || ''}">
+                        <input type="text" id="edit-st-sbd" value="${escapeAttr(raw.sbd || '')}">
                     </div>
                     <div class="form-group">
                         <label>Lớp học:</label>
-                        <input type="text" id="edit-st-class" value="${raw.class_name || ''}">
+                        <input type="text" id="edit-st-class" value="${escapeAttr(raw.class_name || '')}">
                     </div>
                     <div class="form-group">
                         <label>Điểm số (Thang 10):</label>
@@ -1418,26 +1817,27 @@
                     </div>
                     <div class="form-group">
                         <label>Thời gian làm bài:</label>
-                        <input type="text" id="edit-st-time" value="${raw.completion_time || ''}">
+                        <input type="text" id="edit-st-time" value="${escapeAttr(raw.completion_time || '')}">
                     </div>
                     <div class="form-group">
                         <label>Số lần chuyển tab:</label>
-                        <input type="text" id="edit-st-tabs" value="${raw.tab_switch_count || '0 lần'}">
+                        <input type="text" id="edit-st-tabs" value="${escapeAttr(raw.tab_switch_count || '0 lần')}">
                     </div>
                     <div class="form-group" style="grid-column: 1/-1;">
                         <label>Chuỗi đáp án chi tiết (data_string):</label>
-                        <textarea rows="4" id="edit-st-data">${raw.data_string || ''}</textarea>
+                        <textarea rows="4" id="edit-st-data">${escapeHtmlSafe(raw.data_string || '')}</textarea>
                     </div>
                 `;
             } else if (item.category === 'quiz') {
+                switchEditorTab('quick');
                 formContainer.innerHTML = `
                     <div class="form-group" style="grid-column: 1/-1;">
                         <label>Tên đề thi:</label>
-                        <input type="text" id="edit-quiz-title" value="${raw.title || ''}">
+                        <input type="text" id="edit-quiz-title" value="${escapeAttr(raw.title || '')}">
                     </div>
                     <div class="form-group">
                         <label>Mã đề:</label>
-                        <input type="text" id="edit-quiz-made" value="${raw.made || '101'}">
+                        <input type="text" id="edit-quiz-made" value="${escapeAttr(raw.made || '101')}">
                     </div>
                     <div class="form-group">
                         <label>Thời lượng làm bài (phút):</label>
@@ -1445,26 +1845,27 @@
                     </div>
                 `;
             } else if (item.category === 'tu_luan') {
+                switchEditorTab('quick');
                 formContainer.innerHTML = `
                     <div class="form-group">
                         <label>Họ và tên học sinh:</label>
-                        <input type="text" id="edit-tl-name" value="${raw.student_name || ''}">
+                        <input type="text" id="edit-tl-name" value="${escapeAttr(raw.student_name || '')}">
                     </div>
                     <div class="form-group">
                         <label>SBD:</label>
-                        <input type="text" id="edit-tl-sbd" value="${raw.sbd || ''}">
+                        <input type="text" id="edit-tl-sbd" value="${escapeAttr(raw.sbd || '')}">
                     </div>
                     <div class="form-group">
                         <label>Điểm chấm chéo:</label>
-                        <input type="text" id="edit-tl-cross" value="${raw.cross_score || ''}">
+                        <input type="text" id="edit-tl-cross" value="${escapeAttr(raw.cross_score || '')}">
                     </div>
                     <div class="form-group">
                         <label>Người chấm:</label>
-                        <input type="text" id="edit-tl-grader" value="${raw.cross_score_by || ''}">
+                        <input type="text" id="edit-tl-grader" value="${escapeAttr(raw.cross_score_by || '')}">
                     </div>
                     <div class="form-group" style="grid-column: 1/-1;">
                         <label>Nhận xét bài làm:</label>
-                        <textarea rows="3" id="edit-tl-feedback">${raw.feedback || ''}</textarea>
+                        <textarea rows="3" id="edit-tl-feedback">${escapeHtmlSafe(raw.feedback || '')}</textarea>
                     </div>
                 `;
             } else {
@@ -1546,6 +1947,10 @@
                     const { error } = await client.from('quizzes').upsert(payload);
                     if (error) throw error;
                     await client.from('custom_links').update({ title: payload.title, time_limit_minutes: payload.time_limit_minutes }).eq('id', payload.id);
+                } else if (selectedItem.category === 'qbank_question') {
+                    payload.updated_at = new Date().toISOString();
+                    const { error } = await client.from('qbank_questions').upsert(payload, { onConflict: 'id' });
+                    if (error) throw error;
                 } else if (selectedItem.category === 'tu_luan') {
                     const { error } = await client.from('tu_luan_submissions').upsert(payload);
                     if (error) throw error;
@@ -1567,9 +1972,7 @@
             }
         }
 
-        // =========================================================================
-        // 11. XÓA BẢN GHI ĐÃ SỬA CHUẨN XÁC THEO MATCH (quiz_id, sbd) CHO active_sessions
-        // =========================================================================
+        // 11. XÓA BẢN GHI
         async function deleteSelectedItem() {
             if (!selectedItem || selectedItem.type === 'folder') {
                 return alert("⚠️ Vui lòng chọn một tệp cụ thể để xóa!");
@@ -1594,7 +1997,6 @@
                         const resFallback = await client.from('active_sessions').delete().eq('sbd', raw.sbd);
                         delErr = resFallback.error;
                     }
-
                     if (delErr) throw delErr;
                 } else if (item.category === 'submission') {
                     const { error } = await client.from('submissions').delete().eq('id', item.id);
@@ -1604,6 +2006,9 @@
                     if (errQ) throw errQ;
                     await client.from('custom_links').delete().eq('id', item.id);
                     await client.from('submissions').delete().eq('quiz_id', item.id);
+                } else if (item.category === 'qbank_question') {
+                    const { error } = await client.from('qbank_questions').delete().eq('id', item.id);
+                    if (error) throw error;
                 } else if (item.category === 'tu_luan') {
                     const raw = item.raw || {};
                     const { error } = await client.from('tu_luan_submissions').delete().eq('quiz_id', raw.quiz_id).eq('sbd', raw.sbd);
@@ -1623,9 +2028,7 @@
             }
         }
 
-        // =========================================================================
-        // HÀM MỚI: DỌN SẠCH TẤT CẢ CÁC PHIÊN BỊ TREO QUÁ 60 PHÚT
-        // =========================================================================
+        // DỌN SẠCH PHIÊN TREO QUÁ 60 PHÚT
         async function cleanOfflineActiveSessions() {
             if (!confirm("🧹 XÁC NHẬN DỌN PHIÊN TREO:\n\nBạn có muốn XÓA TẤT CẢ các phiên thi đã mất kết nối (treo trên 60 phút) không?\n\n(Các em đang thi trực tuyến màu xanh '🟢 Online' sẽ được giữ nguyên 100%)")) {
                 return;
@@ -1636,10 +2039,8 @@
 
             try {
                 const now = Date.now();
-                const timeoutMs = 60 * 60 * 1000; // 60 phút
-                const threshold = now - timeoutMs;
+                const threshold = now - (60 * 60 * 1000);
 
-                // Đọc danh sách hiện tại để lọc các phiên đã mất kết nối
                 const { data, error: fetchErr } = await client.from('active_sessions').select('*');
                 if (fetchErr) throw fetchErr;
 
@@ -1650,7 +2051,6 @@
                 let deleteCount = 0;
                 for (const row of data) {
                     const lastPing = Number(row.last_ping || row.start_time || 0);
-                    // Nếu quá 60 phút không ping thì xóa
                     if (lastPing < threshold) {
                         await client.from('active_sessions').delete().match({
                             quiz_id: row.quiz_id,
@@ -1667,7 +2067,422 @@
             }
         }
 
-        // 12. CONTEXT MENU & SHORTCUTS
+        // =========================================================================
+        // 12. ĐO DUNG LƯỢNG DATABASE (MB / 500 MB) & BĂNG THÔNG CHU KỲ 23 -> 23
+        // =========================================================================
+        function formatBytesSmart(bytes) {
+            const b = Math.max(0, Number(bytes) || 0);
+            if (b < 1024) return `${b} B`;
+            if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+            if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+            return `${(b / (1024 * 1024 * 1024)).toFixed(3)} GB`;
+        }
+
+        function getVNNowParts() {
+            const now = new Date();
+            try {
+                const parts = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).format(now).split('-');
+                return { year: parseInt(parts[0], 10), month: parseInt(parts[1], 10), day: parseInt(parts[2], 10) };
+            } catch (e) {
+                const vn = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 7 * 3600000);
+                return { year: vn.getFullYear(), month: vn.getMonth() + 1, day: vn.getDate() };
+            }
+        }
+
+        function formatYMD(y, m, d) {
+            return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        }
+
+        function computeBillingCycleRange(offsetMonths = 0) {
+            const vn = getVNNowParts();
+            // Nếu hôm nay >= 23, chu kỳ hiện tại bắt đầu từ 23 tháng này đến 23 tháng sau
+            // Nếu hôm nay < 23, chu kỳ hiện tại bắt đầu từ 23 tháng trước đến 23 tháng này
+            let baseMonth = vn.month;
+            let baseYear = vn.year;
+            if (vn.day < 23) {
+                baseMonth -= 1;
+                if (baseMonth < 1) { baseMonth = 12; baseYear -= 1; }
+            }
+
+            const startDt = new Date(Date.UTC(baseYear, baseMonth - 1 + offsetMonths, 23));
+            const endDt = new Date(Date.UTC(startDt.getUTCFullYear(), startDt.getUTCMonth() + 1, 23));
+
+            const days = [];
+            const cursor = new Date(startDt.getTime());
+            while (cursor <= endDt) {
+                const y = cursor.getUTCFullYear();
+                const m = cursor.getUTCMonth() + 1;
+                const d = cursor.getUTCDate();
+                days.push({
+                    dayKey: formatYMD(y, m, d),
+                    shortLabel: `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`,
+                    fullLabel: `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`
+                });
+                cursor.setUTCDate(cursor.getUTCDate() + 1);
+            }
+
+            return {
+                startKey: days[0].dayKey,
+                endKey: days[days.length - 1].dayKey,
+                startLabel: days[0].fullLabel,
+                endLabel: days[days.length - 1].fullLabel,
+                todayKey: formatYMD(vn.year, vn.month, vn.day),
+                days
+            };
+        }
+
+        async function refreshSystemMetrics(showAlert = false) {
+            await Promise.all([
+                loadDatabaseSizeInfo(showAlert),
+                loadBandwidthCycleSummary(0)
+            ]);
+        }
+
+        async function loadDatabaseSizeInfo(forceRefresh = false) {
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            const summaryEl = document.getElementById("db-size-summary-text");
+            const fillEl = document.getElementById("db-size-progress-fill");
+            const pctTagEl = document.getElementById("db-size-pct-tag");
+            if (!client) return;
+
+            let usedMB = null;
+            let limitMB = 500;
+            let isEstimated = false;
+            let tables = [];
+
+            try {
+                const { data, error } = await client.rpc('get_supabase_db_size_info');
+                if (!error && data) {
+                    const obj = Array.isArray(data) ? data[0] : data;
+                    if (obj && typeof obj === 'object') {
+                        const rawBytes = Number(obj.total_bytes || obj.db_size_bytes || obj.size_bytes || 0);
+                        const rawMB = Number(obj.total_mb ?? obj.db_size_mb ?? obj.used_mb ?? (rawBytes > 0 ? rawBytes / (1024 * 1024) : NaN));
+                        if (!isNaN(rawMB)) {
+                            usedMB = Math.round(rawMB * 100) / 100;
+                            limitMB = Number(obj.limit_mb) || 500;
+                            const rawTables = obj.tables || obj.table_sizes || obj.details || [];
+                            if (Array.isArray(rawTables)) {
+                                tables = rawTables.map(t => {
+                                    const tbBytes = Number(t.total_bytes || t.bytes || t.size_bytes || 0);
+                                    const tbMb = Number(t.size_mb ?? t.total_mb ?? (tbBytes / (1024 * 1024)));
+                                    return {
+                                        name: t.table_name || t.name || t.relname || 'unknown',
+                                        rows: Number(t.row_count ?? t.rows ?? t.n_live_tup ?? 0),
+                                        bytes: tbBytes > 0 ? tbBytes : Math.round(tbMb * 1024 * 1024),
+                                        mb: Math.round(tbMb * 1000) / 1000
+                                    };
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+
+            // Fallback ước lượng qua API nếu chưa chạy SQL tạo RPC get_supabase_db_size_info
+            if (usedMB === null) {
+                isEstimated = true;
+                const tableNames = ['quizzes', 'qbank_questions', 'submissions', 'tu_luan_submissions', 'custom_links', 'app_key_values', 'active_sessions', 'live_drafts', 'cheating_logs', 'site_visits', 'site_bandwidth_daily'];
+                let sumBytes = 0;
+                const results = await Promise.all(tableNames.map(async (tbl) => {
+                    try {
+                        const { data, count, error } = await client.from(tbl).select('*', { count: 'exact' }).limit(500);
+                        if (error) return null;
+                        const rowCount = Number(count || (data ? data.length : 0));
+                        const sampleStr = data ? JSON.stringify(data) : '[]';
+                        const avgPerRow = (data && data.length > 0) ? (sampleStr.length / data.length) : 0;
+                        // Cộng thêm hệ số overhead index Postgres ~ 1.35x
+                        const estBytes = Math.round(rowCount * avgPerRow * 1.35);
+                        return {
+                            name: tbl,
+                            rows: rowCount,
+                            bytes: estBytes,
+                            mb: Math.round((estBytes / (1024 * 1024)) * 1000) / 1000
+                        };
+                    } catch (e) { return null; }
+                }));
+
+                tables = results.filter(Boolean);
+                sumBytes = tables.reduce((s, t) => s + t.bytes, 0);
+                usedMB = Math.round((sumBytes / (1024 * 1024)) * 100) / 100;
+            }
+
+            tables.sort((a, b) => b.bytes - a.bytes);
+            dbSizeState = { usedMB, limitMB, isEstimated, tables };
+
+            const pct = Math.min(100, Math.round((usedMB / limitMB) * 1000) / 10);
+            if (summaryEl) {
+                summaryEl.innerHTML = `Đã sử dụng <b style="color:${pct > 85 ? '#dc2626' : '#0284c7'};">${usedMB.toFixed(2)} MB / ${limitMB} MB</b> dung lượng Database${isEstimated ? ' <span style="color:#64748b;font-weight:600;">(Ước lượng)</span>' : ''}`;
+            }
+            if (fillEl) {
+                fillEl.style.width = `${Math.max(2, pct)}%`;
+                fillEl.className = 'db-progress-fill' + (pct >= 85 ? ' danger' : (pct >= 65 ? ' warn' : ''));
+            }
+            if (pctTagEl) {
+                pctTagEl.textContent = `${pct}%`;
+            }
+
+            renderDbSizeModalContent();
+            if (forceRefresh) {
+                alert(`✅ Đã đo lại dung lượng Database: ${usedMB.toFixed(2)} MB / ${limitMB} MB (${pct}%)`);
+            }
+        }
+
+        function renderDbSizeModalContent() {
+            const { usedMB, limitMB, isEstimated, tables } = dbSizeState;
+            if (usedMB === null) return;
+            const freeMB = Math.max(0, Math.round((limitMB - usedMB) * 100) / 100);
+            const pct = Math.min(100, Math.round((usedMB / limitMB) * 1000) / 10);
+
+            const elUsed = document.getElementById("modal-db-used-mb");
+            const elNote = document.getElementById("modal-db-source-note");
+            const elFree = document.getElementById("modal-db-free-mb");
+            const elPct = document.getElementById("modal-db-pct");
+            const tbody = document.getElementById("db-tables-breakdown-tbody");
+
+            if (elUsed) elUsed.textContent = `${usedMB.toFixed(2)} MB`;
+            if (elNote) elNote.textContent = isEstimated ? "Ước lượng JSON (Chạy SQL để đo Postgres chuẩn 100%)" : "Đo chính xác trực tiếp từ PostgreSQL";
+            if (elFree) elFree.textContent = `${freeMB.toFixed(2)} MB`;
+            if (elPct) elPct.textContent = `${pct}%`;
+
+            if (tbody) {
+                const totalBytes = Math.max(1, tables.reduce((s, t) => s + t.bytes, 0));
+                tbody.innerHTML = tables.length > 0 ? tables.map(t => {
+                    const share = Math.round((t.bytes / totalBytes) * 1000) / 10;
+                    return `
+                        <tr>
+                            <td><b style="font-family:monospace; color:#0f172a;">${escapeHtmlSafe(t.name)}</b></td>
+                            <td style="text-align:right; font-weight:700;">${t.rows.toLocaleString('vi-VN')}</td>
+                            <td style="text-align:right; font-weight:800; color:#0284c7;">${formatBytesSmart(t.bytes)}</td>
+                            <td style="text-align:right; color:#475569;">${share}%</td>
+                        </tr>
+                    `;
+                }).join('') : `<tr><td colspan="4" style="text-align:center; padding:16px; color:#64748b;">Chưa có số liệu chi tiết từng bảng.</td></tr>`;
+            }
+        }
+
+        function openDbSizeDetailsModal() {
+            document.getElementById("db-size-modal").style.display = "flex";
+            renderDbSizeModalContent();
+            loadDatabaseSizeInfo(false);
+        }
+        function closeDbSizeModal() {
+            document.getElementById("db-size-modal").style.display = "none";
+        }
+
+        function readLocalBandwidthMap() {
+            const map = {};
+            try {
+                const raw = localStorage.getItem("supa_bw_local_daily_v1");
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        for (const k in parsed) {
+                            map[k] = {
+                                egress_bytes: Number(parsed[k].egress_bytes) || 0,
+                                ingress_bytes: Number(parsed[k].ingress_bytes) || 0,
+                                requests_count: Number(parsed[k].requests_count) || 0
+                            };
+                        }
+                    }
+                }
+            } catch (e) {}
+            return map;
+        }
+
+        async function fetchBandwidthCycleData(offsetMonths = 0) {
+            if (typeof window.flushSupabaseBandwidthNow === 'function') {
+                try { await window.flushSupabaseBandwidthNow(); } catch (e) {}
+            }
+
+            const range = computeBillingCycleRange(offsetMonths);
+            const cloudMap = {};
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+
+            if (client) {
+                try {
+                    const { data, error } = await client
+                        .from('site_bandwidth_daily')
+                        .select('*')
+                        .gte('day_key', range.startKey)
+                        .lte('day_key', range.endKey);
+                    if (!error && Array.isArray(data)) {
+                        data.forEach(row => {
+                            if (row && row.day_key) {
+                                cloudMap[row.day_key] = {
+                                    egress_bytes: Number(row.egress_bytes) || 0,
+                                    ingress_bytes: Number(row.ingress_bytes) || 0,
+                                    requests_count: Number(row.requests_count) || 0
+                                };
+                            }
+                        });
+                    }
+                } catch (e) {}
+            }
+
+            const localMap = readLocalBandwidthMap();
+            const dailyRecords = range.days.map(d => {
+                const c = cloudMap[d.dayKey];
+                const l = localMap[d.dayKey];
+                const egress = Math.max(c ? c.egress_bytes : 0, l ? l.egress_bytes : 0);
+                const ingress = Math.max(c ? c.ingress_bytes : 0, l ? l.ingress_bytes : 0);
+                const reqs = Math.max(c ? c.requests_count : 0, l ? l.requests_count : 0);
+                return {
+                    ...d,
+                    isToday: d.dayKey === range.todayKey,
+                    egress_bytes: egress,
+                    ingress_bytes: ingress,
+                    total_bytes: egress + ingress,
+                    requests_count: reqs
+                };
+            });
+
+            const totalEgress = dailyRecords.reduce((s, r) => s + r.egress_bytes, 0);
+            const totalIngress = dailyRecords.reduce((s, r) => s + r.ingress_bytes, 0);
+            const totalBytes = totalEgress + totalIngress;
+            const totalReqs = dailyRecords.reduce((s, r) => s + r.requests_count, 0);
+
+            return { range, dailyRecords, totalEgress, totalIngress, totalBytes, totalReqs };
+        }
+
+        async function loadBandwidthCycleSummary(offsetMonths = 0) {
+            const res = await fetchBandwidthCycleData(offsetMonths);
+            const textEl = document.getElementById("bw-summary-text");
+            if (textEl) {
+                const quotaPct = Math.min(100, Math.round((res.totalBytes / (5 * 1024 * 1024 * 1024)) * 1000) / 10);
+                textEl.innerHTML = `Băng thông (${res.range.startLabel.slice(0, 5)} → ${res.range.endLabel.slice(0, 5)}): <b>${formatBytesSmart(res.totalBytes)}</b> / 5 GB (${quotaPct}%)`;
+            }
+            return res;
+        }
+
+        async function openBandwidthChartModal() {
+            bwCycleOffset = 0;
+            document.getElementById("bandwidth-chart-modal").style.display = "flex";
+            await refreshBandwidthCycleData(false);
+        }
+
+        function closeBandwidthChartModal() {
+            document.getElementById("bandwidth-chart-modal").style.display = "none";
+        }
+
+        async function shiftBandwidthCycle(delta) {
+            if (bwCycleOffset + delta > 0) return;
+            bwCycleOffset += delta;
+            await refreshBandwidthCycleData(false);
+        }
+
+        async function refreshBandwidthCycleData(isManual = false) {
+            const nextBtn = document.getElementById("btn-bw-next-cycle");
+            if (nextBtn) nextBtn.disabled = (bwCycleOffset >= 0);
+
+            const res = await fetchBandwidthCycleData(bwCycleOffset);
+            if (bwCycleOffset === 0) {
+                const textEl = document.getElementById("bw-summary-text");
+                if (textEl) {
+                    const quotaPct = Math.min(100, Math.round((res.totalBytes / (5 * 1024 * 1024 * 1024)) * 1000) / 10);
+                    textEl.innerHTML = `Băng thông (${res.range.startLabel.slice(0, 5)} → ${res.range.endLabel.slice(0, 5)}): <b>${formatBytesSmart(res.totalBytes)}</b> / 5 GB (${quotaPct}%)`;
+                }
+            }
+
+            document.getElementById("bw-cycle-title").textContent = `Chu kỳ: ${res.range.startLabel} ➔ ${res.range.endLabel}`;
+            document.getElementById("bw-kpi-total").textContent = formatBytesSmart(res.totalBytes);
+            document.getElementById("bw-kpi-egress").textContent = formatBytesSmart(res.totalEgress);
+            document.getElementById("bw-kpi-ingress").textContent = formatBytesSmart(res.totalIngress);
+            document.getElementById("bw-kpi-reqs").textContent = res.totalReqs.toLocaleString('vi-VN');
+
+            // Render biểu đồ cột từng ngày từ ngày 23 tháng này đến 23 tháng sau
+            const chartWrap = document.getElementById("bw-chart-container");
+            const canvas = document.getElementById("bandwidthDailyCanvas");
+
+            if (typeof Chart !== "undefined" && canvas) {
+                if (bwChartInstance) { bwChartInstance.destroy(); bwChartInstance = null; }
+                const labels = res.dailyRecords.map(r => r.shortLabel);
+                const egressMB = res.dailyRecords.map(r => Math.round((r.egress_bytes / (1024 * 1024)) * 1000) / 1000);
+                const ingressMB = res.dailyRecords.map(r => Math.round((r.ingress_bytes / (1024 * 1024)) * 1000) / 1000);
+
+                bwChartInstance = new Chart(canvas.getContext("2d"), {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Tải ra (Egress - MB)',
+                                data: egressMB,
+                                backgroundColor: res.dailyRecords.map(r => r.isToday ? '#0284c7' : '#38bdf8'),
+                                borderRadius: 4,
+                                stack: 'bw'
+                            },
+                            {
+                                label: 'Gửi lên (Ingress - MB)',
+                                data: ingressMB,
+                                backgroundColor: res.dailyRecords.map(r => r.isToday ? '#ea580c' : '#fb923c'),
+                                borderRadius: 4,
+                                stack: 'bw'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top', labels: { font: { weight: 'bold', size: 11 } } },
+                            tooltip: {
+                                callbacks: {
+                                    footer: (items) => {
+                                        const idx = items[0] ? items[0].dataIndex : 0;
+                                        const rec = res.dailyRecords[idx];
+                                        return rec ? `Tổng ngày: ${formatBytesSmart(rec.total_bytes)} (${rec.requests_count} reqs)` : '';
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { stacked: true, ticks: { font: { size: 10, weight: 'bold' } }, grid: { display: false } },
+                            y: { stacked: true, beginAtZero: true, title: { display: true, text: 'MB', font: { weight: 'bold' } } }
+                        }
+                    }
+                });
+            } else if (chartWrap) {
+                const maxB = Math.max(...res.dailyRecords.map(r => r.total_bytes), 1);
+                chartWrap.innerHTML = `<div style="display:flex; align-items:flex-end; gap:4px; height:100%; overflow-x:auto; padding-bottom:6px;">` +
+                    res.dailyRecords.map(r => {
+                        const pct = Math.max(3, Math.round((r.total_bytes / maxB) * 100));
+                        return `<div style="flex:1; min-width:20px; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;" title="${r.fullLabel}: ${formatBytesSmart(r.total_bytes)}">
+                            <div style="width:100%; max-width:18px; height:${pct}%; background:${r.isToday ? '#0284c7' : '#38bdf8'}; border-radius:4px 4px 0 0;"></div>
+                            <span style="font-size:9px; font-weight:700; color:#475569; margin-top:3px;">${r.shortLabel.slice(0, 2)}</span>
+                        </div>`;
+                    }).join('') + `</div>`;
+            }
+
+            // Render bảng chi tiết từng ngày + lũy kế từ ngày 23
+            const tbody = document.getElementById("bw-daily-table-tbody");
+            if (tbody) {
+                let runningTotal = 0;
+                tbody.innerHTML = res.dailyRecords.map(r => {
+                    runningTotal += r.total_bytes;
+                    return `
+                        <tr style="${r.isToday ? 'background:#e0f2fe; font-weight:800;' : ''}">
+                            <td>${r.fullLabel} ${r.isToday ? '<span style="color:#0284c7;">(Hôm nay)</span>' : ''}</td>
+                            <td style="text-align:right; color:#0284c7; font-weight:700;">${formatBytesSmart(r.egress_bytes)}</td>
+                            <td style="text-align:right; color:#ea580c; font-weight:700;">${formatBytesSmart(r.ingress_bytes)}</td>
+                            <td style="text-align:right; font-weight:800;">${formatBytesSmart(r.total_bytes)}</td>
+                            <td style="text-align:right; color:#15803d; font-weight:800;">${formatBytesSmart(runningTotal)}</td>
+                            <td style="text-align:right; color:#64748b;">${r.requests_count.toLocaleString('vi-VN')}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            if (isManual) {
+                alert(`✅ Đã cập nhật số liệu băng thông chu kỳ (${res.range.startLabel} ➔ ${res.range.endLabel}): ${formatBytesSmart(res.totalBytes)}`);
+            }
+        }
+
+        // 13. CONTEXT MENU & SHORTCUTS
         function handleItemContextMenu(e, item, el) {
             e.preventDefault(); e.stopPropagation();
             selectItem(item, el);
@@ -1734,7 +2549,7 @@
             });
         }
 
-        // 13. XUẤT EXCEL TỪ WINDOWS EXPLORER
+        // 14. XUẤT EXCEL TỪ WINDOWS EXPLORER
         function exportCurrentViewToExcel() {
             if (!currentItems || currentItems.length === 0) return alert("Thư mục hiện tại không có dữ liệu để xuất Excel!");
 
@@ -1745,8 +2560,8 @@
                     "STT": idx + 1,
                     "Tên mục": item.name,
                     "ID": item.id || '',
-                    "Lớp": r.class_name || r.category_id || '',
-                    "SBD": r.sbd || '',
+                    "Lớp / Thư mục": r.class_name || r.category_id || r.folder_name || '',
+                    "SBD / Matrix ID": r.sbd || r.matrix_id || '',
                     "Điểm thang 10": r.score10 ?? '',
                     "Số câu đúng": r.correct_count ?? '',
                     "Thời gian làm": r.completion_time || (r.start_time ? formatElapsedDuration(r.start_time) : ''),
@@ -1773,7 +2588,7 @@
             }
         }
 
-        // 14. BẮT SỰ KIỆN PHÍM TẮT & CLICK NGOÀI
+        // 15. BẮT SỰ KIỆN PHÍM TẮT & CLICK NGOÀI
         function setupGlobalEventListeners() {
             document.addEventListener("click", () => {
                 document.getElementById("windows-context-menu").style.display = 'none';

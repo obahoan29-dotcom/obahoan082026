@@ -744,7 +744,7 @@
                 🟢 Auto: BẬT
             </button>
 
-            <button class="btn-refresh-result" onclick="refreshCurrentExamResults()" title="Tải lại dữ liệu mới nhất"></button>
+            <button class="btn-refresh-result" onclick="refreshCurrentExamResults()" title="Tải lại dữ liệu mới nhất">🔄 Cập nhật</button>
             
             <button type="button" class="btn-auto-collect-drafts" id="btn-auto-collect-drafts" onclick="triggerAutoCollectDrafts(event)" 
                 title="Tự động thu bài và chấm điểm từ bản lưu nháp Realtime cho các em học sinh quên nộp hoặc gặp sự cố mạng">
@@ -1346,6 +1346,14 @@
                         <option value="supabase">1. Máy chủ Supabase (Nhanh)</option>
                     </select>
                 </div>
+                <div style="display:flex; gap:5px; padding:5px 8px; border-bottom:1.5px solid #e2e8f0; background:#f0fdf4;">
+                    <button type="button" class="btn-qbank btn-qbank-primary" style="flex:1; justify-content:center; padding:5px 6px; font-size:11px;" onclick="openQbankRestoreModal(event)" title="Khôi phục toàn bộ Ngân hàng câu hỏi từ file Backup trên Google Drive hoặc từ máy">
+                        ♻️ Khôi phục Backup
+                    </button>
+                    <button type="button" class="btn-qbank btn-qbank-success" style="flex:0.85; justify-content:center; padding:5px 6px; font-size:11px;" onclick="downloadQbankFullBackupJson(event)" title="Tải xuống bản sao lưu đầy đủ toàn bộ cây thư mục & câu hỏi (.json)">
+                        💾 Tải Backup
+                    </button>
+                </div>
                 <div class="qbank-tree-container" id="qbank-tree-root">
                     <!-- JS Render Tree -->
                 </div>
@@ -1479,6 +1487,50 @@
 
         <div class="saved-exams-list" id="qbank-saved-list">
             <!-- JS Render Saved Exams from Supabase -->
+        </div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- 11. MODAL KHÔI PHỤC TỪ BACKUP DRIVE / JSON -->
+<!-- ============================================== -->
+<div class="qbank-modal-overlay" id="modal-qbank-restore" onclick="if(event.target===this) closeQbankRestoreModal();">
+    <div class="qbank-modal-container" style="width: 500px; height: auto; max-width: 95vw; padding: 18px; background: #ffffff;" onclick="event.stopPropagation()">
+        <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:12px;">
+            <h3 style="margin:0; font-size:15px; font-weight:900; color:#0284c7;">♻️ KHÔI PHỤC NGÂN HÀNG CÂU HỎI TỪ BACKUP</h3>
+            <button type="button" onclick="closeQbankRestoreModal()" style="background:none; border:none; font-size:18px; font-weight:900; color:#94a3b8; cursor:pointer;">✕</button>
+        </div>
+
+        <div style="font-size:12px; color:#475569; line-height:1.45; background:#f8fafc; padding:9px 11px; border-radius:8px; border:1px solid #cbd5e1; margin-bottom:12px;">
+            💡 Chọn nạp lại file <b>NganHangCauHoi_Workspace.json</b> từ Google Drive 5TB hoặc từ file Backup đã tải về máy để khôi phục toàn bộ cây thư mục, 4 kho chờ xếp và câu hỏi lên Supabase.
+        </div>
+
+        <div style="margin-bottom:12px; background:#f0f9ff; padding:9px 11px; border-radius:8px; border:1px solid #bae6fd;">
+            <b style="display:block; font-size:12px; color:#0369a1; margin-bottom:6px;">Chế độ khôi phục:</b>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#0f172a; margin-bottom:5px; cursor:pointer;">
+                <input type="radio" name="qbank-restore-mode" value="overwrite" checked>
+                <span>Ghi đè toàn bộ (Khôi phục nguyên trạng theo bản Backup)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#0f172a; cursor:pointer;">
+                <input type="radio" name="qbank-restore-mode" value="merge">
+                <span>Gộp thêm (Chỉ thêm câu chưa có, giữ lại câu hiện tại)</span>
+            </label>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <button type="button" class="btn-qbank btn-qbank-primary" id="btn-qbank-restore-drive" onclick="restoreQbankFromDriveGAS()" style="width:100%; justify-content:center; padding:10px; font-size:13px;">
+                ☁️ Tải thẳng từ Google Drive 5TB
+            </button>
+
+            <div style="text-align:center; font-size:11px; color:#94a3b8; font-weight:700;">— HOẶC CHỌN FILE BACKUP TỪ MÁY —</div>
+
+            <input type="file" id="qbank-restore-file-input" accept=".json,application/json" style="width:100%; padding:8px; border:1.5px dashed #0284c7; border-radius:8px; font-size:12px; background:#f8fafc; cursor:pointer;" onchange="handleRestoreQbankFileSelected(this)">
+        </div>
+
+        <div id="qbank-restore-status" style="display:none; margin-top:10px; font-size:12px; font-weight:700; padding:8px 10px; border-radius:8px; background:#f0f9ff; border:1px solid #bae6fd;"></div>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+            <button type="button" class="btn-qbank" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;" onclick="closeQbankRestoreModal()">Đóng</button>
         </div>
     </div>
 </div>

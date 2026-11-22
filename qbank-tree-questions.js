@@ -7,7 +7,7 @@
 //   + DUYỆT THƯ MỤC 3 CẤP (THƯ MỤC GỐC 4 KHO -> KHO LỚP -> CHI TIẾT ĐỀ) + NÚT BACK
 //   + ĐỀ MỚI LÊN TRÊN, ĐỀ CŨ XUỐNG DƯỚI, ĐỦ NÚT (CHUYỂN LỚP, LÊN, XUỐNG, ĐỔI TÊN, XÓA)
 //   + GIỮ NGUYÊN THANH NÚT BẤM & MA TRẬN THỐNG KÊ SỐ CÂU Ở MỌI CỬA SỔ
-//   + MENU XÓA NHIỀU CÂU 3 TÙY CHỌN & DÁN ẢNH CTRL+V
+//   + MENU XÓA NHIỀU CÂU 3 TÙY CHỌN & DÁN ẢNH CTRL+V (CHẶN TUYỆT ĐỐI BASE64 LỌT VÀO DB)
 // - TRANG CHỦ 8 LỚP: NÚT "🏦 Chuyển ngân hàng đề" MỞ POPUP CHỌN 4 KHO CHỜ XẾP
 // =========================================================
 
@@ -240,7 +240,7 @@ async function executeTransferClassExamToKho(quizId, categoryId, itemId, targetK
             delete q.assignedAt;
             q.level = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
             normalizeQuestionAnswerOnTransfer(q);
-            if (resolvedImgUrl) {
+            if (resolvedImgUrl && !isBase64DataUrl(resolvedImgUrl)) {
                 const uniqueImgKey = `img_q_${q.id}`;
                 q.imageUrl = resolvedImgUrl; q.imageKey = uniqueImgKey;
                 qbankState.imagesMap[uniqueImgKey] = resolvedImgUrl;
@@ -589,7 +589,7 @@ async function importFilesIntoPendingKho(fileList, khoId) {
             delete q.assignedAt;
             q.level = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
             normalizeQuestionAnswerOnTransfer(q);
-            if (resolvedImgUrl) {
+            if (resolvedImgUrl && !isBase64DataUrl(resolvedImgUrl)) {
                 const uniqueImgKey = `img_q_${q.id}`;
                 q.imageUrl = resolvedImgUrl; q.imageKey = uniqueImgKey;
                 qbankState.imagesMap[uniqueImgKey] = resolvedImgUrl;
@@ -2065,7 +2065,7 @@ function clearSelectedQuestions() {
 }
 
 // ============================================================================
-// 7. UPLOAD & DÁN ẢNH CHO CÂU HỎI (CTRL + V)
+// 7. UPLOAD & DÁN ẢNH CHO CÂU HỎI (CTRL + V) - NÉN THÔNG MINH & CHẶN TUYỆT ĐỐI BASE64
 // ============================================================================
 function triggerQBankPaste(qId, imgKey) {
     const zone = document.getElementById(`zone-qbank-${qId}`);
@@ -2073,31 +2073,129 @@ function triggerQBankPaste(qId, imgKey) {
     showQbankToast("📋 Hãy bấm phím Ctrl + V để dán ảnh chụp vào câu này!", "info");
 }
 
-async function uploadImageToHostOrDrive(file, filenamePrefix = "qbank_img") {
-    const reader = new FileReader();
-    const b64 = await new Promise((res, rej) => {
-        reader.onload = () => res(String(reader.result || "").split(",")[1] || "");
-        reader.onerror = rej;
-        reader.readAsDataURL(file);
+function compressQbankImageToBase64(file, maxDimension = 1600, quality = 0.86) {
+    return new Promise((resolve, reject) => {
+        if (!file) return reject(new Error("Không có file ảnh!"));
+        // Ảnh nhỏ dưới 750KB giữ nguyên định dạng gốc (PNG/JPG) cho sắc nét nhất
+        if (file.size && file.size <= 750 * 1024) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const raw = String(reader.result || "");
+                const b64 = raw.includes("base64,") ? raw.split("base64,")[1] : raw;
+                resolve({ base64: b64, mimeType: file.type || "image/png", ext: "png" });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+            return;
+        }
+
+        const objUrl = (window.URL && window.URL.createObjectURL) ? window.URL.createObjectURL(file) : null;
+        const img = new Image();
+        img.onload = () => {
+            try {
+                let w = img.naturalWidth || img.width || 1200;
+                let h = img.naturalHeight || img.height || 900;
+                if (w > maxDimension || h > maxDimension) {
+                    if (w > h) { h = Math.round((h * maxDimension) / w); w = maxDimension; }
+                    else { w = Math.round((w * maxDimension) / h); h = maxDimension; }
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, w, h);
+                ctx.drawImage(img, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL("image/jpeg", quality);
+                const b64 = dataUrl.split(",")[1];
+                if (objUrl) try { window.URL.revokeObjectURL(objUrl); } catch (e) {}
+                resolve({ base64: b64, mimeType: "image/jpeg", ext: "jpg" });
+            } catch (err) {
+                if (objUrl) try { window.URL.revokeObjectURL(objUrl); } catch (e) {}
+                reject(err);
+            }
+        };
+        img.onerror = () => {
+            if (objUrl) try { window.URL.revokeObjectURL(objUrl); } catch (e) {}
+            const reader = new FileReader();
+            reader.onload = () => {
+                const raw = String(reader.result || "");
+                const b64 = raw.includes("base64,") ? raw.split("base64,")[1] : raw;
+                resolve({ base64: b64, mimeType: file.type || "image/png", ext: "png" });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        };
+        if (objUrl) img.src = objUrl;
+        else {
+            const reader = new FileReader();
+            reader.onload = () => { img.src = String(reader.result || ""); };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        }
     });
+}
+
+async function uploadImageToHostOrDrive(file, filenamePrefix = "qbank_img") {
+    const compressed = await compressQbankImageToBase64(file, 1600, 0.86);
+    const b64 = compressed.base64;
+    if (!b64) throw new Error("Không đọc được dữ liệu hình ảnh!");
+
     let directUrl = "";
+
+    // 1. Ưu tiên gửi ImgBB (tối đa 6.5 giây)
     if (typeof IMGBB_API_KEY !== "undefined" && IMGBB_API_KEY && !IMGBB_API_KEY.includes("THAY_")) {
-        const fd = new FormData(); fd.append("image", b64);
-        const controller = new AbortController(), timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 5000);
+        const fd = new FormData();
+        fd.append("image", b64);
+        const controller = new AbortController();
+        const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 6500);
         try {
-            const r = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: fd, signal: controller.signal }).then(x => x.json()).catch(() => null);
+            const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: "POST", body: fd, signal: controller.signal });
             clearTimeout(timer);
-            if (r && r.data) directUrl = r.data.display_url || r.data.url || "";
-        } catch (e) { clearTimeout(timer); }
+            if (res && res.ok) {
+                const r = await res.json().catch(() => null);
+                if (r && r.data) directUrl = r.data.display_url || r.data.url || "";
+            }
+        } catch (e) {
+            clearTimeout(timer);
+        }
     }
+
+    // 2. Dự phòng Google Drive 5TB qua GAS (thử tối đa 2 lần, timeout 45s)
     if (!directUrl && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL && !GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
-        const r = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
-            method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ filename: `${filenamePrefix}_${Date.now()}.png`, mimeType: file.type || "image/png", base64: b64 })
-        }).then(x => x.json()).catch(() => null);
-        if (r && r.fileUrl) directUrl = (typeof toDirectGoogleDriveImageUrl === "function") ? toDirectGoogleDriveImageUrl(r.fileUrl) : r.fileUrl;
+        for (let attempt = 1; attempt <= 2 && !directUrl; attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, 45000);
+            try {
+                const res = await fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    body: JSON.stringify({
+                        action: "uploadFile",
+                        folderName: "Anh_Ngan_Hang_Cau_Hoi",
+                        filename: `${filenamePrefix}_${Date.now()}.${compressed.ext}`,
+                        mimeType: compressed.mimeType,
+                        base64: b64
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timer);
+                const r = await res.json().catch(() => null);
+                if (r && r.fileUrl) {
+                    directUrl = (typeof toDirectGoogleDriveImageUrl === "function") ? toDirectGoogleDriveImageUrl(r.fileUrl) : r.fileUrl;
+                }
+            } catch (e) {
+                clearTimeout(timer);
+                if (attempt < 2) await new Promise(res => setTimeout(res, 1000));
+            }
+        }
     }
-    if (!directUrl) directUrl = `data:${file.type || "image/png"};base64,${b64}`;
+
+    // 3. CHẶN TUYỆT ĐỐI LỌT CHUỖI BASE64 VÀO SUPABASE / WORKSPACE JSON
+    if (!directUrl || isBase64DataUrl(directUrl)) {
+        throw new Error("Không thể tải ảnh lên ImgBB và Google Drive (mạng bận hoặc quá giờ). Đã chặn lưu Base64 để bảo vệ dung lượng Database! Vui lòng thử dán lại.");
+    }
+
     return normalizeDriveImageLinkIfNeeded(directUrl);
 }
 
@@ -2140,10 +2238,11 @@ async function uploadQBankImage(file, qId, imgKey) {
         const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
         if (q) { q.imageUrl = directUrl; q.imageKey = imgKey; }
         saveQbankDraftState(false); renderQbankQuestions();
-        showQbankToast("🖼️ Đã chèn ảnh cho câu hỏi thành công!", "success");
+        showQbankToast("🖼️ Đã chèn ảnh (link URL) cho câu hỏi thành công!", "success");
     } catch (e) {
         if (stEl) { stEl.style.color = "#dc2626"; stEl.innerText = "❌ Lỗi"; }
         showQbankToast("❌ Lỗi tải ảnh: " + e.message, "error");
+        alert("❌ Lỗi tải ảnh:\n" + e.message);
     }
 }
 
