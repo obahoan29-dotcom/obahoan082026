@@ -1,13 +1,20 @@
 // =========================================================
 // FILE: qbank-core-sync.js
 // MODULE 1/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
-// - QUẢN LÝ STATE TOÀN CỤC (qbankState, qbankMidEditState)
+// - QUẢN LÝ STATE TOÀN CỤC (qbankState, qbankMidEditState, 4 KHO CHỜ XẾP)
 // - KIỂM TRA QUYỀN ADMIN & TOAST THÔNG BÁO
 // - ĐÁNH SỐ ID TỰ ĐỘNG LIÊN TỤC TRONG CÙNG 1 LỚP (ID.L10-Ch1-Bai1-P1-Nhận biết-C1...)
 // - BỘ MÁY UNDO (CTRL + Z)
 // - ĐỒNG BỘ 2 CHIỀU PC <-> ĐIỆN THOẠI QUA SUPABASE & BACKUP DRIVE 5TB
 // - KÉO CO GIÃN ĐỘ RỘNG 3 CỘT
 // =========================================================
+
+const QBANK_PENDING_KHOS = [
+    { id: "pending_10",    name: "Kho lớp 10 chờ xếp",     shortName: "Lớp 10", icon: "📐", color: "#0284c7", bg: "#f0f9ff", border: "#7dd3fc" },
+    { id: "pending_11",    name: "Kho lớp 11 chờ xếp",     shortName: "Lớp 11", icon: "✍️", color: "#ea580c", bg: "#fff7ed", border: "#fdba74" },
+    { id: "pending_12",    name: "Kho lớp 12 chờ xếp",     shortName: "Lớp 12", icon: "🎓", color: "#9333ea", bg: "#faf5ff", border: "#d8b4fe" },
+    { id: "pending_hsg11", name: "Kho lớp HSG 11 chờ xếp", shortName: "HSG 11", icon: "🏆", color: "#b45309", bg: "#fffbeb", border: "#fcd34d" }
+];
 
 let qbankState = {
     storageTarget: "drive",
@@ -66,6 +73,8 @@ let qbankState = {
     activeFolderId: null,
     activeFolderObj: null,
     rawQuestions: [],
+    pendingExams: [],
+    pendingNav: { mode: "none", khoId: null, examId: null },
     selectedQuestionIds: new Set(),
     savedExams: [],
     draggedQId: null,
@@ -91,6 +100,8 @@ let qbankMidEditState = {
     questions: [],
     images: {},
     editingSourceIds: new Set(),
+    pendingExamId: null,
+    pendingKhoId: null,
     editorMode: "cards",
     splitRatio: 50,
     rawEditingCardIds: new Set(),
@@ -116,6 +127,101 @@ let _qbankToastTimer = null;
 let _qbankResizersInitialized = false;
 let _qbankCloudTreeSyncTimer = null;
 let _qbankCloudDraftSyncTimer = null;
+
+// ============================================================================
+// 0. TIỆN ÍCH 4 KHO CHỜ XẾP & BẢO TOÀN DỮ LIỆU CŨ
+// ============================================================================
+function getPendingKhoMeta(khoId) {
+    return QBANK_PENDING_KHOS.find(k => k.id === khoId) || QBANK_PENDING_KHOS[1];
+}
+
+function guessPendingKhoId(categoryId = "", title = "") {
+    const cat = String(categoryId || "").toLowerCase().trim();
+    const txt = String(title || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+    if (cat.includes("hsg") || txt.includes("hsg")) return "pending_hsg11";
+    if (cat.includes("10") || /\b(toan\s*10|lop\s*10|them\s*10|10p)\b/.test(txt)) return "pending_10";
+    if (cat.includes("12") || /\b(toan\s*12|lop\s*12|them\s*12)\b/.test(txt)) return "pending_12";
+    return "pending_11";
+}
+
+function ensureQbankPendingExamsIntegrity() {
+    if (!Array.isArray(qbankState.pendingExams)) qbankState.pendingExams = [];
+    const validKhoIds = new Set(QBANK_PENDING_KHOS.map(k => k.id));
+
+    const examMap = new Map();
+    const cleanedExams = [];
+    qbankState.pendingExams.forEach((ex, idx) => {
+        if (!ex || typeof ex !== "object") return;
+        const id = String(ex.id || `pexam_legacy_${idx}_${Date.now()}`);
+        if (examMap.has(id)) return;
+        const khoId = validKhoIds.has(ex.khoId) ? ex.khoId : guessPendingKhoId(ex.sourceCategoryId, ex.title);
+        const normalized = {
+            id,
+            title: String(ex.title || "Đề chưa đặt tên").trim() || "Đề chưa đặt tên",
+            khoId,
+            createdAt: Number(ex.createdAt) || (Date.now() - idx * 1000),
+            sourceQuizId: ex.sourceQuizId || "",
+            sourceCategoryId: ex.sourceCategoryId || ""
+        };
+        examMap.set(id, normalized);
+        cleanedExams.push(normalized);
+    });
+    qbankState.pendingExams = cleanedExams;
+
+    const legacyGroups = new Map();
+    (qbankState.rawQuestions || []).forEach(q => {
+        if (!q) return;
+        if (q.pendingExamId && examMap.has(String(q.pendingExamId))) {
+            const ex = examMap.get(String(q.pendingExamId));
+            q.pendingExamId = ex.id;
+            q.pendingKhoId = ex.khoId;
+            return;
+        }
+        if (!q.folderId) {
+            const title = String(q.sourceExam || qbankState.currentExamTitle || "Đề chờ xếp (Dữ liệu cũ)").trim() || "Đề chờ xếp (Dữ liệu cũ)";
+            const khoId = validKhoIds.has(q.pendingKhoId) ? q.pendingKhoId : guessPendingKhoId(q.sourceCategoryId, title);
+            const gKey = `${khoId}::${title.toLowerCase()}`;
+            let targetExam = legacyGroups.get(gKey);
+            if (!targetExam) {
+                targetExam = qbankState.pendingExams.find(ex => ex.khoId === khoId && ex.title.toLowerCase() === title.toLowerCase());
+                if (!targetExam) {
+                    targetExam = {
+                        id: `pexam_mig_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+                        title,
+                        khoId,
+                        createdAt: Date.now(),
+                        sourceQuizId: q.sourceQuizId || "",
+                        sourceCategoryId: q.sourceCategoryId || ""
+                    };
+                    qbankState.pendingExams.unshift(targetExam);
+                    examMap.set(targetExam.id, targetExam);
+                }
+                legacyGroups.set(gKey, targetExam);
+            }
+            q.pendingExamId = targetExam.id;
+            q.pendingKhoId = targetExam.khoId;
+            q.sourceExam = targetExam.title;
+        }
+    });
+
+    if (!qbankState.pendingNav || typeof qbankState.pendingNav !== "object") {
+        qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
+    }
+    if (qbankState.pendingNav.mode === "kho" && !validKhoIds.has(qbankState.pendingNav.khoId)) {
+        qbankState.pendingNav = { mode: "root", khoId: null, examId: null };
+    } else if (qbankState.pendingNav.mode === "exam") {
+        const foundEx = examMap.get(String(qbankState.pendingNav.examId || ""));
+        if (!foundEx) {
+            if (validKhoIds.has(qbankState.pendingNav.khoId)) {
+                qbankState.pendingNav = { mode: "kho", khoId: qbankState.pendingNav.khoId, examId: null };
+            } else {
+                qbankState.pendingNav = { mode: "root", khoId: null, examId: null };
+            }
+        } else {
+            qbankState.pendingNav.khoId = foundEx.khoId;
+        }
+    }
+}
 
 // ============================================================================
 // 1. KIỂM TRA QUYỀN ADMIN
@@ -273,7 +379,6 @@ function parseUniversalExamText(text) {
 
 // ============================================================================
 // 3. ĐÁNH SỐ ID TỰ ĐỘNG LIÊN TỤC TRONG CÙNG 1 LỚP
-//    VD: ID.L10-Ch1-Bai1-P1-Nhận biết-C1, C2... -> hết NB -> TH -> VD -> VDC -> P2...
 // ============================================================================
 function normalizeQbankLevel(level) {
     const raw = String(level || "nb").trim().toLowerCase()
@@ -284,7 +389,6 @@ function normalizeQbankLevel(level) {
     return "nb";
 }
 
-// ƯU TIÊN TUYỆT ĐỐI q.part (1..4) VÀ q.isPart4 === false TRƯỚC KHI ĐOÁN THEO VĂN BẢN
 function getQbankQuestionPart(q) {
     if (!q) return 1;
     const explicitPart = parseInt(q.part, 10);
@@ -300,7 +404,6 @@ function getQbankQuestionPart(q) {
     return 1;
 }
 
-// Đồng bộ quy tắc nhận diện Phần IV cho cả công cụ Soi đề khi mở từ Ngân hàng đề
 if (typeof window !== "undefined") {
     window.isPart4Question = function(q) {
         if (!q) return false;
@@ -490,6 +593,8 @@ function pushQbankUndoState(actionLabel = "Thao tác") {
         const snapshot = {
             label: actionLabel,
             rawQuestions: JSON.parse(JSON.stringify(qbankState.rawQuestions || [])),
+            pendingExams: JSON.parse(JSON.stringify(qbankState.pendingExams || [])),
+            pendingNav: JSON.parse(JSON.stringify(qbankState.pendingNav || { mode: "none", khoId: null, examId: null })),
             imagesMap: JSON.parse(JSON.stringify(qbankState.imagesMap || {})),
             currentTree: JSON.parse(JSON.stringify(qbankState.currentTree || [])),
             currentExamTitle: qbankState.currentExamTitle || "",
@@ -526,6 +631,8 @@ function undoQbankAction() {
     }
     const prev = qbankState.undoStack.pop();
     qbankState.rawQuestions = prev.rawQuestions || [];
+    qbankState.pendingExams = Array.isArray(prev.pendingExams) ? prev.pendingExams : [];
+    qbankState.pendingNav = prev.pendingNav || { mode: "none", khoId: null, examId: null };
     if (prev.imagesMap) qbankState.imagesMap = prev.imagesMap;
     qbankState.currentTree = prev.currentTree || qbankState.currentTree;
     qbankState.currentExamTitle = prev.currentExamTitle || "";
@@ -536,6 +643,7 @@ function undoQbankAction() {
     qbankState.activeFolderId = qbankState.activeFilter.folderId || null;
     qbankState.activeFolderObj = qbankState.activeFolderId ? findNodeInTree(qbankState.currentTree, qbankState.activeFolderId) : null;
 
+    ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
     saveQbankTreeData();
     saveQbankDraftState(false);
@@ -543,6 +651,7 @@ function undoQbankAction() {
     if (typeof syncAssignModeButtonsUI === "function") syncAssignModeButtonsUI();
     updateQbankUndoButtonUI();
     if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
+    if (typeof updateQbankUploadMenuCounts === "function") updateQbankUploadMenuCounts();
     renderQbankHeaderAndMidExamTitle();
     if (typeof renderQbankTree === "function") renderQbankTree();
     if (typeof renderQbankQuestions === "function") renderQbankQuestions();
@@ -595,6 +704,7 @@ async function syncQbankDraftToCloud() {
             key: QBANK_CLOUD_DRAFT_KEY,
             value: {
                 questions: qbankState.rawQuestions || [],
+                pendingExams: qbankState.pendingExams || [],
                 images: qbankState.imagesMap || {},
                 currentExamTitle: qbankState.currentExamTitle || "",
                 updatedAt: ts
@@ -626,6 +736,7 @@ async function writeQbankDraftLocalStorages(ts) {
     let savedIDB = false;
     try {
         localStorage.setItem("qbank_draft_questions", JSON.stringify(qbankState.rawQuestions || []));
+        localStorage.setItem("qbank_draft_pending_exams", JSON.stringify(qbankState.pendingExams || []));
         localStorage.setItem("qbank_draft_images", JSON.stringify(qbankState.imagesMap || {}));
         localStorage.setItem("qbank_draft_exam_title", qbankState.currentExamTitle || "");
         localStorage.setItem("qbank_draft_updated_at", String(ts));
@@ -636,6 +747,7 @@ async function writeQbankDraftLocalStorages(ts) {
             savedIDB = await examIndexedDB.setItem("exam_states", {
                 key: "qbank_draft_state_v1",
                 questions: qbankState.rawQuestions || [],
+                pendingExams: qbankState.pendingExams || [],
                 images: qbankState.imagesMap || {},
                 currentExamTitle: qbankState.currentExamTitle || "",
                 currentTree: qbankState.currentTree,
@@ -671,6 +783,7 @@ function loadQbankTreeData() {
 }
 
 async function saveQbankDraftState(showFeedback = false) {
+    ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
     const ts = Date.now();
     qbankState.draftUpdatedAt = ts;
@@ -723,6 +836,7 @@ async function manualSaveQbankDraftState(event) {
                         updatedAt: qbankState.draftUpdatedAt,
                         currentExamTitle: qbankState.currentExamTitle,
                         currentTree: qbankState.currentTree,
+                        pendingExams: qbankState.pendingExams,
                         questions: qbankState.rawQuestions,
                         images: qbankState.imagesMap
                     }
@@ -740,6 +854,7 @@ async function manualSaveQbankDraftState(event) {
 async function loadQbankDraftState() {
     let hasLocalTree = loadQbankTreeData();
     let localQuestions = [];
+    let localPendingExams = [];
     let localImages = {};
     let localTitle = "";
     let localDraftTs = parseInt(localStorage.getItem("qbank_draft_updated_at") || "0", 10) || 0;
@@ -749,6 +864,7 @@ async function loadQbankDraftState() {
             const data = await examIndexedDB.getItem("exam_states", "qbank_draft_state_v1");
             if (data && Array.isArray(data.questions)) {
                 localQuestions = data.questions;
+                if (Array.isArray(data.pendingExams)) localPendingExams = data.pendingExams;
                 localImages = data.images || {};
                 if (data.currentExamTitle) localTitle = data.currentExamTitle;
                 if (data.updatedAt && data.updatedAt > localDraftTs) localDraftTs = data.updatedAt;
@@ -763,17 +879,25 @@ async function loadQbankDraftState() {
     if (localQuestions.length === 0) {
         try {
             const q = localStorage.getItem("qbank_draft_questions");
+            const pe = localStorage.getItem("qbank_draft_pending_exams");
             const img = localStorage.getItem("qbank_draft_images");
             const title = localStorage.getItem("qbank_draft_exam_title");
             if (q) { const pq = JSON.parse(q); if (Array.isArray(pq)) localQuestions = pq; }
+            if (pe) { const ppe = JSON.parse(pe); if (Array.isArray(ppe)) localPendingExams = ppe; }
             if (img) { const pi = JSON.parse(img); if (pi && typeof pi === "object") localImages = pi; }
             if (title) localTitle = title;
         } catch (e) {}
+    } else if (localPendingExams.length === 0) {
+        try {
+            const pe = localStorage.getItem("qbank_draft_pending_exams");
+            if (pe) { const ppe = JSON.parse(pe); if (Array.isArray(ppe)) localPendingExams = ppe; }
+        } catch (e) {}
     }
 
-    if (localQuestions.length > 0 && localDraftTs === 0) localDraftTs = 1;
+    if ((localQuestions.length > 0 || localPendingExams.length > 0) && localDraftTs === 0) localDraftTs = 1;
 
     qbankState.rawQuestions = localQuestions;
+    qbankState.pendingExams = localPendingExams;
     qbankState.imagesMap = localImages;
     qbankState.currentExamTitle = localTitle;
     qbankState.draftUpdatedAt = localDraftTs;
@@ -812,13 +936,15 @@ async function loadQbankDraftState() {
 
             const cloudDraft = draftRow ? draftRow.value : null;
             const cloudQuestions = (cloudDraft && Array.isArray(cloudDraft.questions)) ? cloudDraft.questions : null;
+            const cloudPendingExams = (cloudDraft && Array.isArray(cloudDraft.pendingExams)) ? cloudDraft.pendingExams : null;
             const cloudDraftTs = (cloudDraft && cloudDraft.updatedAt) ? Number(cloudDraft.updatedAt) || 0 : 0;
 
             if (cloudQuestions) {
                 const localTsNow = qbankState.draftUpdatedAt || 0;
-                const shouldTakeCloud = (localTsNow === 0 && cloudQuestions.length > 0) || (cloudDraftTs > localTsNow);
+                const shouldTakeCloud = (localTsNow === 0 && (cloudQuestions.length > 0 || (cloudPendingExams && cloudPendingExams.length > 0))) || (cloudDraftTs > localTsNow);
                 if (shouldTakeCloud) {
                     qbankState.rawQuestions = cloudQuestions;
+                    qbankState.pendingExams = Array.isArray(cloudPendingExams) ? cloudPendingExams : [];
                     qbankState.imagesMap = (cloudDraft.images && typeof cloudDraft.images === "object") ? cloudDraft.images : {};
                     qbankState.currentExamTitle = cloudDraft.currentExamTitle || "";
                     qbankState.draftUpdatedAt = cloudDraftTs || Date.now();
@@ -826,7 +952,7 @@ async function loadQbankDraftState() {
                 } else if (localTsNow > cloudDraftTs) {
                     await syncQbankDraftToCloud();
                 }
-            } else if (localQuestions.length > 0) {
+            } else if (localQuestions.length > 0 || localPendingExams.length > 0) {
                 qbankState.draftUpdatedAt = Date.now();
                 await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
                 await syncQbankDraftToCloud();
@@ -836,6 +962,7 @@ async function loadQbankDraftState() {
         }
     }
 
+    ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
 }
 
@@ -847,16 +974,28 @@ function renderQbankHeaderAndMidExamTitle() {
     const midNameEl = document.getElementById("qbank-mid-exam-name");
     const midCounterEl = document.getElementById("qbank-mid-exam-counter");
 
-    const title = (qbankState.currentExamTitle || "").trim();
+    const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
     const allQ = qbankState.rawQuestions || [];
-    const assignedCount = allQ.filter(q => Boolean(q.folderId)).length;
+    const assignedCount = allQ.filter(q => Boolean(q && q.folderId)).length;
     const unassignedCount = allQ.length - assignedCount;
 
+    let displayTitle = (qbankState.currentExamTitle || "").trim();
+    if (nav.mode === "exam" && nav.examId) {
+        const ex = (qbankState.pendingExams || []).find(e => e.id === nav.examId);
+        if (ex) displayTitle = ex.title;
+    } else if (nav.mode === "kho" && nav.khoId) {
+        const kho = getPendingKhoMeta(nav.khoId);
+        const khoExamsCount = (qbankState.pendingExams || []).filter(e => e.khoId === nav.khoId).length;
+        displayTitle = `${kho.name} (${khoExamsCount} đề)`;
+    } else if (nav.mode === "root") {
+        displayTitle = `Kho đề chờ xếp (${(qbankState.pendingExams || []).length} đề trong 4 kho)`;
+    }
+
     if (headerBadge) {
-        if (title) {
+        if (displayTitle) {
             headerBadge.classList.add("has-exam");
-            headerBadge.title = `Đề gốc đang xử lý: ${title}`;
-            headerBadge.innerHTML = `<span>📄</span> <span>Đề đang xử lý: ${escapeQbankHtml(title)}</span>`;
+            headerBadge.title = `Đang xử lý: ${displayTitle}`;
+            headerBadge.innerHTML = `<span>📄</span> <span>Đề đang xử lý: ${escapeQbankHtml(displayTitle)}</span>`;
         } else {
             headerBadge.classList.remove("has-exam");
             headerBadge.title = "Chưa nạp đề gốc";
@@ -864,8 +1003,8 @@ function renderQbankHeaderAndMidExamTitle() {
         }
     }
     if (midNameEl) {
-        midNameEl.textContent = title || "Chưa nạp đề gốc (Bấm Upload file JSON đề)";
-        midNameEl.title = title || "";
+        midNameEl.textContent = displayTitle || "Chưa nạp đề gốc (Bấm Upload file JSON đề)";
+        midNameEl.title = displayTitle || "";
     }
     if (midCounterEl) {
         midCounterEl.textContent = `Chờ xếp: ${unassignedCount} • Ngân hàng: ${assignedCount}`;
@@ -990,12 +1129,14 @@ async function openQbankCreatorModal(options = {}) {
     if (modal) {
         modal.style.display = "flex";
         if (typeof ensureQbankMidEditControlsInDOM === "function") ensureQbankMidEditControlsInDOM();
+        if (typeof ensureQbankUploadDropdownInDOM === "function") ensureQbankUploadDropdownInDOM();
         if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(true);
         if (!options || !options.skipDraftReload) await loadQbankDraftState();
         initQbankColumnResizers();
         if (typeof syncAssignModeButtonsUI === "function") syncAssignModeButtonsUI();
         updateQbankUndoButtonUI();
         if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
+        if (typeof updateQbankUploadMenuCounts === "function") updateQbankUploadMenuCounts();
         renderQbankHeaderAndMidExamTitle();
         if (typeof renderQbankTree === "function") renderQbankTree();
         if (typeof renderQbankQuestions === "function") renderQbankQuestions();
@@ -1007,6 +1148,8 @@ async function openQbankCreatorModal(options = {}) {
 function closeQbankCreatorModal() {
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
     if (typeof closeQbankDeleteMultiMenu === "function") closeQbankDeleteMultiMenu();
+    if (typeof closeQbankUploadMenu === "function") closeQbankUploadMenu();
+    if (typeof closeClassTransferKhoPopover === "function") closeClassTransferKhoPopover();
     if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(false);
     const modal = document.getElementById("modal-qbank-creator");
     if (modal) modal.style.display = "none";
@@ -1034,6 +1177,7 @@ function openSoiDeFromQBank() {
     if (!requireQbankAdminOrPrompt()) return;
     if (qbankState.rawQuestions.length === 0) return alert("⚠️ Ngân hàng đề đang trống. Vui lòng thêm câu hỏi trước khi Soi đề!");
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
+    if (typeof closeQbankUploadMenu === "function") closeQbankUploadMenu();
     if (typeof soiDeState !== "undefined") {
         soiDeState.examData = {
             id: "qbank_preview_" + Date.now(),
@@ -1052,7 +1196,10 @@ function openSoiDeFromQBank() {
     }
 }
 
-// Xuất ra window scope
+window.QBANK_PENDING_KHOS = QBANK_PENDING_KHOS;
+window.getPendingKhoMeta = getPendingKhoMeta;
+window.guessPendingKhoId = guessPendingKhoId;
+window.ensureQbankPendingExamsIntegrity = ensureQbankPendingExamsIntegrity;
 window.isQbankAdminAuthorized = isQbankAdminAuthorized;
 window.requireQbankAdminOrPrompt = requireQbankAdminOrPrompt;
 window.getQbankSupabaseClient = getQbankSupabaseClient;
