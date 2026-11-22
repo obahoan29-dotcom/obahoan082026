@@ -59,19 +59,17 @@
             }
             setInterval(purgeMobileHackTools, 3500);
 
-            // 4. BỘ WATCHDOG AN TOÀN TUYỆT ĐỐI: KHÔNG BAO GIỜ ĐỂ TRẮNG MÀN HÌNH
+            // 4. BỘ WATCHDOG AN TOÀN TUYỆT ĐỐI: KHÔNG BAO GIỜ ĐỂ TRẮNG MÀN HÌNH (ĐÃ GỠ BỎ BẢNG ĐĂNG NHẬP CŨ)
             window.__rescueWatchdogTimer = setInterval(function() {
                 var gl = document.getElementById('global-loading');
                 var qc = document.getElementById('quiz-content');
-                var sc = document.getElementById('student-card');
-                var lb = document.getElementById('login-box');
+                var wc = document.getElementById('waiting-room-card');
                 var ec = document.getElementById('error-card');
                 var rv = document.getElementById('result-view-container');
 
                 var isAnyContentVisible = (
                     (qc && qc.style.display === 'block') ||
-                    (sc && sc.style.display === 'block') ||
-                    (lb && lb.style.display === 'block') ||
+                    (wc && wc.style.display === 'block') ||
                     (ec && ec.style.display === 'block') ||
                     (rv && rv.style.display === 'block')
                 );
@@ -82,17 +80,26 @@
                 }
             }, 300);
 
-            // Cứu cánh khẩn cấp nếu sau 4.5s mạng quá chậm, tự động bật thẻ học sinh lên
+            // Cứu cánh khẩn cấp nếu sau 8.5s mạng quá chậm, hiển thị thông báo kết nối thay vì bảng đăng nhập cũ
             setTimeout(function() {
                 var gl = document.getElementById('global-loading');
                 var qc = document.getElementById('quiz-content');
-                var sc = document.getElementById('student-card');
-                if (gl && gl.style.display !== 'none' && (!qc || qc.style.display !== 'block')) {
+                var wc = document.getElementById('waiting-room-card');
+                var rv = document.getElementById('result-view-container');
+                var ec = document.getElementById('error-card');
+                var hasContent = (qc && qc.style.display === 'block') || (wc && wc.style.display === 'block') || (rv && rv.style.display === 'block') || (ec && ec.style.display === 'block');
+                if (gl && gl.style.display !== 'none' && !hasContent) {
                     gl.style.display = 'none';
-                    if (sc) sc.style.display = 'block';
+                    if (ec) {
+                        var et = document.getElementById('error-title');
+                        var em = document.getElementById('error-msg');
+                        if (et) et.innerText = '⏳ Kết nối đề thi bị chậm';
+                        if (em) em.innerHTML = 'Không thể tải dữ liệu đề thi kịp thời. Vui lòng thử tải lại hoặc quay về trang chủ.<br><br><button type="button" onclick="window.location.reload()" style="background:#0284c7; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:800; cursor:pointer; margin-right:8px;">🔄 Tải lại</button><a href="./index.html" style="display:inline-block; background:#059669; color:#fff; padding:8px 16px; border-radius:8px; font-weight:800; text-decoration:none;">🏠 Về trang chủ</a>';
+                        ec.style.display = 'block';
+                    }
                 }
                 if (window.__rescueWatchdogTimer) clearInterval(window.__rescueWatchdogTimer);
-            }, 4500);
+            }, 8500);
 
             // Xử lý khi iPhone khôi phục trang từ bộ nhớ tạm (Back-Forward Cache / pageshow)
             window.addEventListener('pageshow', function(event) {
@@ -234,7 +241,6 @@
             .input-group input,
             .short-input-box,
             .st-input-field,
-            #exam-pass-input,
             #student-id,
             #student-name,
             #student-class {
@@ -386,45 +392,17 @@
     </header>
 
     <div class="container">
+        <!-- Dữ liệu thí sinh ẩn để tương thích 100% với các module (không hiển thị bảng đăng nhập cũ) -->
+        <input type="hidden" id="student-id" value="">
+        <input type="hidden" id="student-name" value="">
+        <input type="hidden" id="student-class" value="">
+
         <!-- VÙNG MỌC RA CÁC NÚT LỊCH SỬ NỘP BÀI LẦN 1, LẦN 2... CỦA HỌC SINH -->
         <div id="student-history-buttons-container"></div>
 
         <div id="error-card" class="card-panel" style="display: none; border-left: 6px solid #ef4444; background: #fff5f5;">
             <h3 id="error-title" style="color: #dc2626; margin-bottom: 8px; font-size: 1.15rem; font-weight: 900;">⚠️ Lỗi nạp bài thi</h3>
             <p id="error-msg" style="color: #7f1d1d; line-height: 1.5; font-size: 1rem; font-weight: 600;"></p>
-        </div>
-
-        <div id="login-box" class="card-panel" style="display: none;">
-            <h2 style="font-size: 1.3rem; font-weight: 900; color: #0284c7; margin-bottom: 16px;">🔒 Mật Khẩu Bài Thi</h2>
-            <div class="input-group">
-                <label>Nhập mật khẩu do giáo viên cung cấp (hoặc mã học sinh):</label>
-                <input type="password" id="exam-pass-input" placeholder="Nhập mật khẩu bài thi..." onkeydown="if(event.key==='Enter') checkPassword()" autocorrect="off" autocapitalize="none">
-            </div>
-            <button class="btn-action-main" onclick="checkPassword()">Tiếp Tục</button>
-        </div>
-
-        <div id="student-card" class="card-panel" style="display: none;">
-            <div style="text-align: center; margin-bottom: 22px;">
-                <div style="font-size: 40px; line-height: 1; margin-bottom: 8px;">🎯⚡</div>
-                <h2 id="banner-title" style="font-size: 1.35rem; font-weight: 900; color: #0369a1; text-transform: uppercase;">BÀI THI TRẮC NGHIỆM</h2>
-                <div id="exam-time-notice" style="color: #ea580c; font-size: 0.95rem; font-weight: 800; margin-top: 8px; display: none; background: #ffedd5; padding: 8px; border-radius: 10px; display: inline-block;"></div>
-            </div>
-            <h3 style="font-size: 1.12rem; font-weight: 900; color: #334155; margin-bottom: 14px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">👤 Thông Tin Học Sinh</h3>
-            
-            <div class="input-group">
-                <label>Số báo danh (*):</label>
-                <input type="text" id="student-id" placeholder="Ví dụ: 1001, 1016, 1137" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
-            </div>
-            <div class="input-group">
-                <label>Họ và tên học sinh (*):</label>
-                <input type="text" id="student-name" placeholder="Ví dụ: Nguyễn Văn Nam" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
-            </div>
-            <div class="input-group">
-                <label>Lớp (*):</label>
-                <input type="text" id="student-class" placeholder="Ví dụ: 10B, 11A" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
-            </div>
-            
-            <button class="btn-action-main" id="btn-start-exam" onclick="startExamAction()" style="margin-top: 20px; font-size: 1.15rem;">Vào Làm Bài</button>
         </div>
 
         <div id="waiting-room-card" class="card-panel" style="display: none; text-align: center; padding: 40px 16px;">
