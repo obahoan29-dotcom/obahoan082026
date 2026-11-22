@@ -447,7 +447,11 @@ function navigatePendingBack(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(false);
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
-    if (nav.mode === "exam") {
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    if ((nav.mode === "root" || nav.mode === "kho") && hasPartOrLevelFilter) {
+        qbankState.activeFilter.part = null;
+        qbankState.activeFilter.level = null;
+    } else if (nav.mode === "exam") {
         qbankState.pendingNav = { mode: "kho", khoId: nav.khoId, examId: null };
     } else if (nav.mode === "kho") {
         qbankState.pendingNav = { mode: "root", khoId: null, examId: null };
@@ -1356,7 +1360,8 @@ function ensureQbankDeleteMultiDropdownInDOM() {
 function updateQbankDeleteMenuCounts() {
     const allQ = qbankState.rawQuestions || [];
     const navMode = (qbankState.pendingNav && qbankState.pendingNav.mode) || "none";
-    const isFolderBrowserLevel = (navMode === "root" || navMode === "kho") && !qbankState.activeFilter.folderId;
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    const isFolderBrowserLevel = (navMode === "root" || navMode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter;
 
     const unassignedCount = allQ.filter(q => Boolean(q && !q.folderId)).length;
     const displayedList = isFolderBrowserLevel ? [] : getFilteredAndSortedQuestions();
@@ -1448,7 +1453,8 @@ function executeQbankMultiDelete(mode, event) {
 
     const allQ = qbankState.rawQuestions || [];
     const navMode = (qbankState.pendingNav && qbankState.pendingNav.mode) || "none";
-    const isFolderBrowserLevel = (navMode === "root" || navMode === "kho") && !qbankState.activeFilter.folderId;
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    const isFolderBrowserLevel = (navMode === "root" || navMode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter;
     let targets = [];
     let confirmMsg = "";
     let undoLabel = "";
@@ -1716,7 +1722,7 @@ function updateQbankMatrixStats() {
             html += `<div class="matrix-group ${isPartAct ? "active-filter" : ""}" onclick="filterByGlobalPart(${p})"><span class="matrix-title">Phần ${p} (${sumP})</span><div class="matrix-row"><span class="stat-pill nb ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === "nb" ? "active-filter" : ""}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'nb')">NB: ${s.nb}</span><span class="stat-pill th ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === "th" ? "active-filter" : ""}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'th')">TH: ${s.th}</span><span class="stat-pill vdt ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === "vdt" ? "active-filter" : ""}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'vdt')">VD: ${s.vdt}</span><span class="stat-pill vdc ${qbankState.activeFilter.part === p && qbankState.activeFilter.level === "vdc" ? "active-filter" : ""}" onclick="event.stopPropagation(); filterByGlobalCell(${p}, 'vdc')">VDC: ${s.vdc}</span></div></div>`;
         }
     });
-    html += `<div style="margin-left:auto; font-weight:900; color:#0f172a; font-size:11.5px; white-space:nowrap;">Đang xem: ${total} câu</div>`;
+    html += `<div style="margin-left:auto; font-weight:900; color:#0f172a; font-size:10.5px; white-space:nowrap;">Đang xem: ${total} câu</div>`;
 
     let filterLabels = [];
     if (qbankState.activeFilter.folderName) {
@@ -1975,7 +1981,8 @@ function renderQbankQuestions() {
     if (!container) return;
 
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
-    if (!qbankState.activeFilter.folderId) {
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    if (!qbankState.activeFilter.folderId && !hasPartOrLevelFilter) {
         if (nav.mode === "root") {
             renderPendingRootView(container);
             return;
@@ -1987,8 +1994,8 @@ function renderQbankQuestions() {
     }
 
     const questions = getFilteredAndSortedQuestions();
-    const topPendingNavHtml = (!qbankState.activeFilter.folderId && nav.mode === "exam" && nav.examId)
-        ? buildPendingNavBarHtml("exam", nav.khoId, nav.examId)
+    const topPendingNavHtml = (!qbankState.activeFilter.folderId && (nav.mode === "exam" || (hasPartOrLevelFilter && (nav.mode === "root" || nav.mode === "kho"))))
+        ? buildPendingNavBarHtml(nav.mode, nav.khoId, nav.examId)
         : "";
 
     if (questions.length === 0) {
