@@ -275,19 +275,50 @@ function parseUniversalExamText(text) {
 // 3. ĐÁNH SỐ ID TỰ ĐỘNG LIÊN TỤC TRONG CÙNG 1 LỚP
 //    VD: ID.L10-Ch1-Bai1-P1-Nhận biết-C1, C2... -> hết NB -> TH -> VD -> VDC -> P2...
 // ============================================================================
+function normalizeQbankLevel(level) {
+    const raw = String(level || "nb").trim().toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+    if (raw === "th" || raw.includes("thong hieu")) return "th";
+    if (raw === "vdc" || raw.includes("van dung cao")) return "vdc";
+    if (raw === "vdt" || raw === "vd" || raw.includes("van dung")) return "vdt";
+    return "nb";
+}
+
+// ƯU TIÊN TUYỆT ĐỐI q.part (1..4) VÀ q.isPart4 === false TRƯỚC KHI ĐOÁN THEO VĂN BẢN
 function getQbankQuestionPart(q) {
     if (!q) return 1;
-    if (q.part === 4 || q.isPart4 === true || q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return 4;
-    const txt = String(q.question || "").toUpperCase();
-    if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) return 4;
+    const explicitPart = parseInt(q.part, 10);
+    if (explicitPart >= 1 && explicitPart <= 4) return explicitPart;
+    if (q.isPart4 === true || q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return 4;
+    if (q.type === "multiple_choice") return 1;
     if (q.type === "true_false") return 2;
+    if (q.isPart4 !== false) {
+        const txt = String(q.question || "").toUpperCase();
+        if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) return 4;
+    }
     if (q.type === "short_answer") return 3;
-    return q.part ? parseInt(q.part, 10) || 1 : 1;
+    return 1;
+}
+
+// Đồng bộ quy tắc nhận diện Phần IV cho cả công cụ Soi đề khi mở từ Ngân hàng đề
+if (typeof window !== "undefined") {
+    window.isPart4Question = function(q) {
+        if (!q) return false;
+        const explicitPart = parseInt(q.part, 10);
+        if (explicitPart >= 1 && explicitPart <= 4) return explicitPart === 4;
+        if (q.isPart4 === true) return true;
+        if (q.isPart4 === false) return false;
+        if (q.type === "essay" || q.type === "essay_answer" || q.type === "part4") return true;
+        if (q.type === "multiple_choice" || q.type === "true_false") return false;
+        const txt = String(q.question || "").toUpperCase();
+        if (txt.includes("PHẦN IV") || txt.includes("PHAN IV") || txt.includes("PHẦN 4") || txt.includes("PHAN 4")) return true;
+        return false;
+    };
 }
 
 function getQbankLevelLabel(level) {
     const map = { nb: "Nhận biết", th: "Thông hiểu", vdt: "Vận dụng", vdc: "Vận dụng cao" };
-    return map[level || "nb"] || "Nhận biết";
+    return map[normalizeQbankLevel(level)] || "Nhận biết";
 }
 
 function formatNodeSlugForId(name) {
@@ -388,6 +419,7 @@ function recomputeAllMatrixIds() {
     const assignedQuestions = [];
     questions.forEach(q => {
         if (!q) return;
+        q.level = normalizeQbankLevel(q.level);
         if (!q.folderId || orderMap[q.folderId] === undefined) {
             q.folderId = null;
             q.folderName = "";
@@ -410,8 +442,8 @@ function recomputeAllMatrixIds() {
         const pB = getQbankQuestionPart(b);
         if (pA !== pB) return pA - pB;
 
-        const lvlA = levelOrder[a.level || "nb"] || 1;
-        const lvlB = levelOrder[b.level || "nb"] || 1;
+        const lvlA = levelOrder[normalizeQbankLevel(a.level)] || 1;
+        const lvlB = levelOrder[normalizeQbankLevel(b.level)] || 1;
         if (lvlA !== lvlB) return lvlA - lvlB;
 
         const atA = Number(a.assignedAt) || 0;
@@ -437,7 +469,8 @@ function recomputeAllMatrixIds() {
 
         const pathSlug = pathNodes.map(n => formatNodeSlugForId(n.name)).join("-");
         const part = getQbankQuestionPart(q);
-        const levelKey = q.level || "nb";
+        const levelKey = normalizeQbankLevel(q.level);
+        q.level = levelKey;
         const levelLabel = getQbankLevelLabel(levelKey);
 
         classCounters[rootClassId] = (classCounters[rootClassId] || 0) + 1;
@@ -782,14 +815,15 @@ async function loadQbankDraftState() {
             const cloudDraftTs = (cloudDraft && cloudDraft.updatedAt) ? Number(cloudDraft.updatedAt) || 0 : 0;
 
             if (cloudQuestions) {
-                const shouldTakeCloud = (localQuestions.length === 0 && cloudQuestions.length > 0) || (cloudDraftTs > (qbankState.draftUpdatedAt || 0));
+                const localTsNow = qbankState.draftUpdatedAt || 0;
+                const shouldTakeCloud = (localTsNow === 0 && cloudQuestions.length > 0) || (cloudDraftTs > localTsNow);
                 if (shouldTakeCloud) {
                     qbankState.rawQuestions = cloudQuestions;
                     qbankState.imagesMap = (cloudDraft.images && typeof cloudDraft.images === "object") ? cloudDraft.images : {};
                     qbankState.currentExamTitle = cloudDraft.currentExamTitle || "";
                     qbankState.draftUpdatedAt = cloudDraftTs || Date.now();
                     await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
-                } else if (localQuestions.length > 0 && (qbankState.draftUpdatedAt || 0) > cloudDraftTs) {
+                } else if (localTsNow > cloudDraftTs) {
                     await syncQbankDraftToCloud();
                 }
             } else if (localQuestions.length > 0) {
@@ -972,6 +1006,7 @@ async function openQbankCreatorModal(options = {}) {
 
 function closeQbankCreatorModal() {
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
+    if (typeof closeQbankDeleteMultiMenu === "function") closeQbankDeleteMultiMenu();
     if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(false);
     const modal = document.getElementById("modal-qbank-creator");
     if (modal) modal.style.display = "none";
@@ -1030,6 +1065,7 @@ window.normalizeDriveImageLinkIfNeeded = normalizeDriveImageLinkIfNeeded;
 window.resolveQbankImageUrl = resolveQbankImageUrl;
 window.handleQbankImgError = handleQbankImgError;
 window.parseUniversalExamText = parseUniversalExamText;
+window.normalizeQbankLevel = normalizeQbankLevel;
 window.getQbankQuestionPart = getQbankQuestionPart;
 window.getQbankLevelLabel = getQbankLevelLabel;
 window.formatNodeSlugForId = formatNodeSlugForId;
