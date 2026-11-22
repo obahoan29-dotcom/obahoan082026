@@ -34,6 +34,7 @@ function toggleQbankExportPopover(event) {
     if (!popover || !triggerBtn) return;
     if (popover.classList.contains("show")) { closeQbankExportPopover(); return; }
 
+    if (typeof closeQbankDeleteMultiMenu === "function") closeQbankDeleteMultiMenu();
     syncExportSelectedFolderIds();
     qbankState.exportCustomTitleTouched = false;
     renderQbankExportTree();
@@ -87,15 +88,23 @@ function toggleQbankExportNodeExpand(folderId, event) {
     renderQbankExportTree();
 }
 
+function getAllLeafFolderIdsOfNode(node) {
+    if (!node) return [];
+    if (!node.children || node.children.length === 0) return [node.id];
+    let leaves = [];
+    node.children.forEach(c => { leaves = leaves.concat(getAllLeafFolderIdsOfNode(c)); });
+    return leaves;
+}
+
 function getExportNodeCheckState(node) {
     const isLeaf = (!node.children || node.children.length === 0);
     if (isLeaf) return { checked: qbankState.exportSelectedFolderIds.has(node.id), indeterminate: false };
-    const descendantIds = getAllDescendantFolderIds(node).filter(id => id !== node.id);
-    if (descendantIds.length === 0) return { checked: qbankState.exportSelectedFolderIds.has(node.id), indeterminate: false };
-    let selectedCount = 0;
-    descendantIds.forEach(id => { if (qbankState.exportSelectedFolderIds.has(id)) selectedCount++; });
-    if (selectedCount === descendantIds.length) return { checked: true, indeterminate: false };
-    if (selectedCount > 0 || qbankState.exportSelectedFolderIds.has(node.id)) return { checked: false, indeterminate: true };
+    const leafIds = getAllLeafFolderIdsOfNode(node);
+    if (leafIds.length === 0) return { checked: qbankState.exportSelectedFolderIds.has(node.id), indeterminate: false };
+    let selectedLeafCount = 0;
+    leafIds.forEach(id => { if (qbankState.exportSelectedFolderIds.has(id)) selectedLeafCount++; });
+    if (selectedLeafCount === leafIds.length) return { checked: true, indeterminate: false };
+    if (selectedLeafCount > 0 || qbankState.exportSelectedFolderIds.has(node.id)) return { checked: false, indeterminate: true };
     return { checked: false, indeterminate: false };
 }
 
@@ -166,10 +175,11 @@ function renderQbankExportTree() {
         const count = getSubtreeCount(node);
         const state = getExportNodeCheckState(node);
         const nodeColor = node.color || "#0284c7";
+        const safeNodeId = safeQbankJsArg(node.id);
         if (state.indeterminate) indeterminateIds.push(node.id);
-        const toggleBtnHtml = !isLeaf ? `<button type="button" class="export-tree-toggle" onclick="toggleQbankExportNodeExpand('${node.id}', event)">${isCollapsed ? "▶" : "▼"}</button>` : `<span class="export-tree-toggle-spacer"></span>`;
+        const toggleBtnHtml = !isLeaf ? `<button type="button" class="export-tree-toggle" onclick="toggleQbankExportNodeExpand('${safeNodeId}', event)">${isCollapsed ? "▶" : "▼"}</button>` : `<span class="export-tree-toggle-spacer"></span>`;
         const childrenHtml = (!isLeaf && !isCollapsed) ? `<div class="export-tree-children">${node.children.map(c => buildExportNodeHtml(c)).join("")}</div>` : "";
-        return `<div class="export-tree-node"><div class="export-tree-row ${count === 0 ? "is-empty-folder" : ""}">${toggleBtnHtml}<label class="export-tree-label"><input type="checkbox" id="exp-chk-${node.id}" ${state.checked ? "checked" : ""} onchange="toggleQbankExportFolderCheck('${node.id}', this.checked)"><span style="color:${nodeColor}; font-size:13px;">${isLeaf ? "📄" : "📁"}</span><span class="export-tree-name" style="color:${nodeColor};">${escapeQbankHtml(node.name)}</span><span class="export-tree-count ${count === 0 ? "zero" : ""}">${count} câu</span></label></div>${childrenHtml}</div>`;
+        return `<div class="export-tree-node"><div class="export-tree-row ${count === 0 ? "is-empty-folder" : ""}">${toggleBtnHtml}<label class="export-tree-label"><input type="checkbox" id="exp-chk-${escapeQbankAttr(node.id)}" ${state.checked ? "checked" : ""} onchange="toggleQbankExportFolderCheck('${safeNodeId}', this.checked)"><span style="color:${nodeColor}; font-size:13px;">${isLeaf ? "📄" : "📁"}</span><span class="export-tree-name" style="color:${nodeColor};">${escapeQbankHtml(node.name)}</span><span class="export-tree-count ${count === 0 ? "zero" : ""}">${count} câu</span></label></div>${childrenHtml}</div>`;
     }
     let html = (qbankState.currentTree || []).map(r => buildExportNodeHtml(r)).join("");
     if (unassignedCount > 0) {
@@ -193,7 +203,7 @@ function getSelectedQbankExportQuestions() {
     return [...list].sort((a, b) => {
         const pA = getQbankQuestionPart(a), pB = getQbankQuestionPart(b);
         if (pA !== pB) return pA - pB;
-        const lvlA = levelOrder[a.level || "nb"] || 1, lvlB = levelOrder[b.level || "nb"] || 1;
+        const lvlA = levelOrder[normalizeQbankLevel(a.level)] || 1, lvlB = levelOrder[normalizeQbankLevel(b.level)] || 1;
         if (lvlA !== lvlB) return lvlA - lvlB;
         const ordA = a.folderId ? (orderMap[a.folderId] ?? 999999) : 999999;
         const ordB = b.folderId ? (orderMap[b.folderId] ?? 999999) : 999999;
@@ -262,19 +272,24 @@ function toggleQbankExportFormatMenu(event) {
     menu.classList.add("show");
 }
 
+// GIỮ NGUYÊN q.part & q.isPart4 TƯỜNG MINH ĐỂ CÂU ĐÃ CHUYỂN TỪ P4 -> P3 KHÔNG BỊ BẬT NGƯỢC KHI LƯU/XUẤT
 function normalizeQuestionForExamOutput(rawQ, idx, imagesMap) {
     const letters = ["A", "B", "C", "D"];
     const q = JSON.parse(JSON.stringify(rawQ));
     const p = getQbankQuestionPart(q);
     q.id = idx + 1;
+    q.part = p;
+    q.isPart4 = (p === 4);
+
     const resolvedImg = resolveQbankImageUrl(rawQ, imagesMap);
     if (resolvedImg) {
         q.imageUrl = resolvedImg;
         q.imageKey = `img_q_${q.id}`;
         if (imagesMap && typeof imagesMap === "object") imagesMap[q.imageKey] = resolvedImg;
     }
+
     if (p === 1) {
-        q.type = "multiple_choice"; delete q.part; delete q.isPart4;
+        q.type = "multiple_choice";
         q.options = Array.isArray(q.options) ? q.options.map(o => String(o ?? "")) : ["", "", "", ""];
         if (typeof q.correct === "string") {
             const cIdx = letters.indexOf(q.correct.trim().toUpperCase());
@@ -283,7 +298,7 @@ function normalizeQuestionForExamOutput(rawQ, idx, imagesMap) {
             q.correct = 0;
         }
     } else if (p === 2) {
-        q.type = "true_false"; delete q.part; delete q.isPart4;
+        q.type = "true_false";
         q.statements = Array.isArray(q.statements) ? q.statements.map((st, sIdx) => ({
             id: st.id || ["a", "b", "c", "d"][sIdx] || String(sIdx + 1),
             statement: String(st.statement ?? ""),
@@ -293,7 +308,7 @@ function normalizeQuestionForExamOutput(rawQ, idx, imagesMap) {
         q.type = "essay";
         q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
     } else {
-        q.type = "short_answer"; delete q.part; delete q.isPart4;
+        q.type = "short_answer";
         q.correctAnswer = String(q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : ""));
     }
     return q;
@@ -337,7 +352,7 @@ function updateQbankBuilderStats() {
     const pCounts = { 1: 0, 2: 0, 3: 0, 4: 0 }, lvlCounts = { nb: 0, th: 0, vdt: 0, vdc: 0 };
     qbankState.rawQuestions.forEach(q => {
         if (qbankState.selectedQuestionIds.has(String(q.id))) {
-            const p = getQbankQuestionPart(q), lvl = q.level || "nb";
+            const p = getQbankQuestionPart(q), lvl = normalizeQbankLevel(q.level);
             if (pCounts[p] !== undefined) pCounts[p]++;
             if (lvlCounts[lvl] !== undefined) lvlCounts[lvl]++;
         }
@@ -459,6 +474,7 @@ function filterSavedExamsList(gradeVal) {
         const assignedTags = (exam.assignedClasses && exam.assignedClasses.length > 0)
             ? exam.assignedClasses.map(c => `<span class="exam-tag">✅ ${escapeQbankHtml(c)}</span>`).join("")
             : `<span style="font-size:10.5px; color:#94a3b8; font-style:italic;">Chưa chuyển</span>`;
+        const safeId = safeQbankJsArg(exam.id);
         return `
             <div class="saved-exam-item">
                 <div style="flex:1; min-width:0;">
@@ -467,11 +483,11 @@ function filterSavedExamsList(gradeVal) {
                     <div class="exam-assigned-tags" style="display:flex; gap:4px; margin-top:5px; flex-wrap:wrap;">${assignedTags}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                    <button class="btn-qbank btn-qbank-primary" onclick="openTransferExamModal('${exam.id}')">🚀 Chuyển lớp</button>
-                    <button class="btn-qbank btn-qbank-success" onclick="previewSavedExam('${exam.id}')">👁️ Xem đề</button>
-                    <button class="btn-qbank" style="background:#8b5cf6; color:#fff;" onclick="openInSoiDeFromBank('${exam.id}')" title="Mở sang công cụ Soi đề">🔬 Soi đề</button>
-                    <button class="btn-qbank" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;" onclick="downloadSavedExamJson('${exam.id}')">💾 JSON</button>
-                    <button class="btn-qbank btn-qbank-danger" onclick="deleteSavedExam('${exam.id}')">🗑️</button>
+                    <button class="btn-qbank btn-qbank-primary" onclick="openTransferExamModal('${safeId}')">🚀 Chuyển lớp</button>
+                    <button class="btn-qbank btn-qbank-success" onclick="previewSavedExam('${safeId}')">👁️ Xem đề</button>
+                    <button class="btn-qbank" style="background:#8b5cf6; color:#fff;" onclick="openInSoiDeFromBank('${safeId}')" title="Mở sang công cụ Soi đề">🔬 Soi đề</button>
+                    <button class="btn-qbank" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;" onclick="downloadSavedExamJson('${safeId}')">💾 JSON</button>
+                    <button class="btn-qbank btn-qbank-danger" onclick="deleteSavedExam('${safeId}')">🗑️</button>
                 </div>
             </div>
         `;
@@ -499,11 +515,12 @@ function previewSavedExam(examId) {
         const imgUrl = resolveQbankImageUrl(q, examImages);
         const imgHtml = imgUrl ? `<div style="text-align:center; margin:6px 0;"><img src="${escapeQbankAttr(imgUrl)}" onerror="handleQbankImgError(this)" style="max-height:180px; max-width:100%; border-radius:8px; border:1px solid #cbd5e1;" alt="Hình câu ${idx + 1}"></div>` : "";
         let optionsHtml = "";
-        if (q.type === "multiple_choice" && Array.isArray(q.options)) {
+        const p = getQbankQuestionPart(q);
+        if (p === 1 && Array.isArray(q.options)) {
             let cIdx = typeof q.correct === "number" ? q.correct : letters.indexOf(String(q.correct).toUpperCase());
             optionsHtml = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:5px;">${q.options.map((opt, oIdx) => `<div style="padding:5px 8px; border-radius:5px; border:1px solid #cbd5e1; background:${oIdx === cIdx ? "#dcfce7" : "#f8fafc"}; font-size:12px; font-weight:${oIdx === cIdx ? "800" : "600"}; color:${oIdx === cIdx ? "#15803d" : "#1e293b"};"><b>${letters[oIdx]}.</b> ${opt} ${oIdx === cIdx ? "✓" : ""}</div>`).join("")}</div>`;
-        } else if (q.type === "true_false" && Array.isArray(q.statements)) {
-            optionsHtml = `<div style="margin-top:5px; border:1px solid #e2e8f0; border-radius:5px; padding:5px; background:#f8fafc;">${q.statements.map(st => `<div style="font-size:11.5px; margin-bottom:3px; display:flex; justify-content:space-between;"><span><b>${st.id})</b> ${st.statement}</span><b style="color:${st.correct ? "#16a34a" : "#dc2626"};">${st.correct ? "🟢 Đúng" : "🔴 Sai"}</b></div>`).join("")}</div>`;
+        } else if (p === 2 && Array.isArray(q.statements)) {
+            optionsHtml = `<div style="margin-top:5px; border:1px solid #e2e8f0; border-radius:5px; padding:5px; background:#f8fafc;">${q.statements.map(st => { const isT = (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true"); return `<div style="font-size:11.5px; margin-bottom:3px; display:flex; justify-content:space-between;"><span><b>${st.id})</b> ${st.statement}</span><b style="color:${isT ? "#16a34a" : "#dc2626"};">${isT ? "🟢 Đúng" : "🔴 Sai"}</b></div>`; }).join("")}</div>`;
         } else {
             optionsHtml = `<div style="margin-top:5px; font-size:12px; font-weight:800; color:#0d9488;">🎯 Đáp số: <span style="color:#0f172a;">${q.correctAnswer || q.correct || "---"}</span></div>`;
         }
