@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ: XÁO TRỘN ĐÁP ÁN A,B,C,D VÀ DỊCH NGƯỢC VỀ ĐỀ GỐC KHI NỘP BÀI)
+// (BẢN FIX TRIỆT ĐỂ: ĐÃ SỬA LỖI CÚ PHÁP DÒNG 1, GỠ BẢNG ĐĂNG NHẬP CŨ, ADMIN VÀO ĐỀ NGAY)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -247,7 +247,6 @@ function buildCurrentLiveDraftPayload() {
     let origAnswers = uiAnswers;
     let scoreResult;
 
-    // PHIÊN DỊCH ĐỂ LƯU LÊN SUPABASE LÀ BẢN GỐC TỪ ĐÓ GIÁO VIÊN NHÌN VÀ CHẤM SẼ HOÀN TOÀN CHUẨN XÁC
     if (typeof translateUserAnswersToOriginal === 'function' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
         origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
         
@@ -365,27 +364,43 @@ function lockExamInteractions() {
     }
 }
 
+function redirectToPortalNewLogin(quizId = "", cat = "") {
+    window.__isRedirectingToNewLogin = true;
+    try {
+        const targetUrl = new URL("./index.html", window.location.href);
+        if (quizId) targetUrl.searchParams.set("login_exam", quizId);
+        if (cat) targetUrl.searchParams.set("cat", cat);
+        window.location.replace(targetUrl.toString());
+    } catch (e) {
+        window.location.replace("./index.html");
+    }
+}
+
 function ensureSomeUIElementsAreVisible() {
+    if (window.__isRedirectingToNewLogin) return;
+
     const gl = document.getElementById('global-loading');
     const quizContent = document.getElementById("quiz-content");
-    const studentCard = document.getElementById("student-card");
-    const loginBox = document.getElementById("login-box");
+    const waitingCard = document.getElementById("waiting-room-card");
     const resView = document.getElementById("result-view-container");
     const errorCard = document.getElementById("error-card");
 
     const isQuizShown = quizContent && (quizContent.style.display === "block" || getComputedStyle(quizContent).display === "block");
-    const isStudentShown = studentCard && (studentCard.style.display === "block" || getComputedStyle(studentCard).display === "block");
-    const isLoginShown = loginBox && (loginBox.style.display === "block" || getComputedStyle(loginBox).display === "block");
+    const isWaitShown = waitingCard && (waitingCard.style.display === "block" || getComputedStyle(waitingCard).display === "block");
     const isResShown = resView && (resView.style.display === "block" || getComputedStyle(resView).display === "block");
     const isErrShown = errorCard && (errorCard.style.display === "block" || getComputedStyle(errorCard).display === "block");
 
-    if (!isQuizShown && !isStudentShown && !isLoginShown && !isResShown && !isErrShown) {
-        if (studentCard) {
-            studentCard.style.display = "block";
-        }
+    if (!isQuizShown && !isWaitShown && !isResShown && !isErrShown) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const qId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
+        const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+        showError(
+            "Chưa có thông tin thí sinh",
+            `Vui lòng đăng nhập từ trang chủ để vào đề thi.<br><br><a href="./index.html?login_exam=${encodeURIComponent(qId)}&cat=${encodeURIComponent(cat)}" style="display:inline-block; background:#0284c7; color:#fff; padding:9px 18px; border-radius:8px; font-weight:800; text-decoration:none;">🏠 Về trang chủ đăng nhập</a>`
+        );
     }
 
-    if (gl && (isQuizShown || isStudentShown || isLoginShown || isResShown || isErrShown)) {
+    if (gl) {
         gl.style.display = 'none';
     }
 }
@@ -433,7 +448,8 @@ async function initExamEngine() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id');
-    const isAutostart = (urlParams.get('autostart') === "1");
+    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+    const isAutostart = (urlParams.get('autostart') === "1") || isAdminMode;
 
     const hideLoading = () => {
         const gl = document.getElementById('global-loading');
@@ -481,24 +497,27 @@ async function initExamEngine() {
         window.ORIGINAL_EXAM_DATA = JSON.parse(JSON.stringify(examData));
 
         if (urlParams.get('review') === "1") {
-            if (examData.allowReviewOriginal !== true) {
+            if (examData.allowReviewOriginal !== true && !isAdminMode) {
                 hideLoading();
                 showError("Bị Khóa", "Giáo viên đã tắt tính năng xem đáp án gốc của đề thi này.");
                 return;
             }
             isSubmitted = true;
             totalQuestionsCount = examData.questions ? examData.questions.length : 0;
-            document.getElementById("top-navbar").style.display = "none";
-            document.getElementById("quiz-content").style.display = "none";
-            document.getElementById("login-box").style.display = "none";
-            document.getElementById("student-card").style.display = "none";
-            document.getElementById("waiting-room-card").style.display = "none";
+            const topNav = document.getElementById("top-navbar");
+            const quizCont = document.getElementById("quiz-content");
+            const waitCard = document.getElementById("waiting-room-card");
+            if (topNav) topNav.style.display = "none";
+            if (quizCont) quizCont.style.display = "none";
+            if (waitCard) waitCard.style.display = "none";
             renderOriginalReviewScreen();
             hideLoading();
             return;
         }
 
-        if (examData.allowFree !== undefined) {
+        if (isAdminMode) {
+            safeLocal.setItem(`exam_allow_free_${quizId}`, "true");
+        } else if (examData.allowFree !== undefined) {
             safeLocal.setItem(`exam_allow_free_${quizId}`, String(examData.allowFree !== false));
         }
 
@@ -560,7 +579,6 @@ function shuffleExamData(data) {
     
     // 1. TRỘN ĐÁP ÁN TRONG TỪNG CÂU HỎI TRƯỚC
     data.questions.forEach(q => {
-        // Trộn phương án A,B,C,D (Phần 1)
         if (q.type === "multiple_choice" && !isP4(q) && Array.isArray(q.options) && q.options.length > 0) {
             let originalCorrectIdx = 0;
             if (typeof q.correct === 'number') {
@@ -583,7 +601,6 @@ function shuffleExamData(data) {
             q.correct = mappedOptions.findIndex(o => o.isCorrect);
             if (q.correct === -1) q.correct = 0;
         } 
-        // Trộn mệnh đề Đúng/Sai (Phần 2)
         else if (q.type === "true_false" && !isP4(q) && Array.isArray(q.statements) && q.statements.length > 0) {
             let mappedStatements = q.statements.map((st, idx) => ({
                 ...st,
@@ -624,7 +641,9 @@ function toggleSubPadlet(qId) {
 function resetToFreshLoginScreen() { 
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
+    const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
 
     safeLocal.removeItem(getStorageKey()); 
     if (typeof getStorageKey === 'function') {
@@ -656,7 +675,13 @@ function resetToFreshLoginScreen() {
         window.currentStudentAttemptNumber = nextAttempt;
     }
 
-    window.location.reload(); 
+    if (isAdminMode) {
+        window.location.href = `./thi.html?id=${encodeURIComponent(quizId)}&cat=${encodeURIComponent(cat)}&sbd=Trying&name=Obahoan29&class=42&autostart=1&admin=1`;
+        return;
+    }
+
+    // Chuyển về Modal đăng nhập mới trên trang chủ (không còn bảng đăng nhập cũ)
+    redirectToPortalNewLogin(quizId, cat);
 }
 
 async function checkSessionStatus(isAutostart = false) { 
@@ -666,34 +691,47 @@ async function checkSessionStatus(isAutostart = false) {
         if (gl) gl.style.display = 'none';
     };
 
-    const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id);
+    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
+    const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+
+    let sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+    if (isAdminMode && !sId) {
+        if (typeof applyStudentToUI === 'function') {
+            applyStudentToUI({ sbd: "Trying", name: "Obahoan29", className: "42" });
+        }
+        sId = "Trying";
+    }
 
     if (typeof renderStudentSubmissionHistoryButtons === 'function') {
         renderStudentSubmissionHistoryButtons();
     }
 
     let attempt = 1;
-    if (quizId && sId) {
+    if (quizId && sId && !isAdminMode) {
         try {
             attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
         } catch(e) {
             attempt = 1;
         }
         window.currentStudentAttemptNumber = attempt;
-        checkAndDisplayAttemptNoticeOnStudentCard(sId);
+        if (typeof checkAndDisplayAttemptNoticeOnStudentCard === 'function') {
+            checkAndDisplayAttemptNoticeOnStudentCard(sId);
+        }
+    } else if (isAdminMode) {
+        window.currentStudentAttemptNumber = 1;
     }
 
     const isCleared = (safeLocal.getItem("last_submission_cleared") === "true");
-    if (isCleared && !isAutostart) {
+    if (isCleared && !isAutostart && !isAdminMode) {
         hideLoading();
-        ensureSomeUIElementsAreVisible();
+        redirectToPortalNewLogin(quizId, cat);
         return;
     }
 
     let isRestored = restoreExamStateFromStorage();
-    if (!isRestored && typeof examIndexedDB !== 'undefined') {
+    if (!isRestored && typeof examIndexedDB !== 'undefined' && sId) {
         try {
             const idbPromise = examIndexedDB.getItem('exam_states', getStorageKey(attempt));
             const timeoutPromise = new Promise(res => setTimeout(() => res(null), 300));
@@ -710,7 +748,7 @@ async function checkSessionStatus(isAutostart = false) {
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        if (timeRemaining <= 0 && totalTimeSeconds > 0) {
+        if (timeRemaining <= 0 && totalTimeSeconds > 0 && !isAdminMode) {
             safeLocal.removeItem(getStorageKey(attempt));
             if (typeof getStorageKey === 'function') {
                 safeLocal.removeItem(getStorageKey());
@@ -730,18 +768,23 @@ async function checkSessionStatus(isAutostart = false) {
     }
 
     if (isRestored) { 
-        const sName = document.getElementById("student-name").value.trim() || "Thí sinh"; 
-        const sClass = document.getElementById("student-class").value.trim() || "---"; 
-        document.getElementById("nav-student-name").innerText = sName; 
-        document.getElementById("nav-student-id").innerText = (attempt > 1) ? `${sId} (Lần ${attempt})` : sId; 
-        document.getElementById("nav-student-class").innerText = sClass; 
-        document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
+        const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh"; 
+        const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "---"; 
+        const navName = document.getElementById("nav-student-name");
+        const navId = document.getElementById("nav-student-id");
+        const navClass = document.getElementById("nav-student-class");
+        const navCode = document.getElementById("nav-exam-code-text");
+        if (navName) navName.innerText = sName; 
+        if (navId) navId.innerText = (attempt > 1) ? `${sId} (Lần ${attempt})` : sId; 
+        if (navClass) navClass.innerText = sClass; 
+        if (navCode) navCode.innerText = `Đề: ${getMaDe()}`; 
         
-        document.getElementById("login-box").style.display = "none"; 
-        document.getElementById("student-card").style.display = "none"; 
-        document.getElementById("waiting-room-card").style.display = "none"; 
-        document.getElementById("top-navbar").style.display = "block"; 
-        document.getElementById("quiz-content").style.display = "block"; 
+        const waitCard = document.getElementById("waiting-room-card"); 
+        if (waitCard) waitCard.style.display = "none"; 
+        const topNav = document.getElementById("top-navbar");
+        if (topNav) topNav.style.display = "block"; 
+        const quizCont = document.getElementById("quiz-content");
+        if (quizCont) quizCont.style.display = "block"; 
         
         hideLoading();
         reapplySavedAnswers(); 
@@ -749,23 +792,24 @@ async function checkSessionStatus(isAutostart = false) {
         
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
         if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
+        if (typeof checkAndDisplayAdminSoiDeButton === 'function') checkAndDisplayAdminSoiDeButton();
 
         const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        if (timeRemaining > 0 && !isExamLocked) {
-            remainingSeconds = timeRemaining; 
+        if (isAdminMode || (timeRemaining > 0 && !isExamLocked)) {
+            remainingSeconds = Math.max(0, timeRemaining); 
             startCountdownTimer(); 
-            startPresenceSystem(sId);
-            ensureActiveSessionAndDraft();
+            if (!isAdminMode) startPresenceSystem(sId);
+            if (!isAdminMode) ensureActiveSessionAndDraft();
             return; 
         }
     }
 
-    if (isAutostart) {
-        let sIdVal = document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || "";
-        let sNameVal = document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || "";
-        let sClassVal = document.getElementById("student-class")?.value.trim() || urlParams.get('class') || safeLocal.getItem("saved_student_class") || "";
+    if (isAutostart || isAdminMode) {
+        let sIdVal = document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || (isAdminMode ? "Trying" : "");
+        let sNameVal = document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || (isAdminMode ? "Obahoan29" : "");
+        let sClassVal = document.getElementById("student-class")?.value.trim() || urlParams.get('class') || safeLocal.getItem("saved_student_class") || (isAdminMode ? "42" : "");
 
         if (document.getElementById("student-id")) document.getElementById("student-id").value = sIdVal;
         if (document.getElementById("student-name")) document.getElementById("student-name").value = sNameVal;
@@ -776,30 +820,20 @@ async function checkSessionStatus(isAutostart = false) {
                 try {
                     const success = await startExamAction(true);
                     if (success) {
-                        document.getElementById("login-box").style.display = "none";
-                        document.getElementById("student-card").style.display = "none";
+                        if (typeof checkAndDisplayAdminSoiDeButton === 'function') checkAndDisplayAdminSoiDeButton();
                         hideLoading();
                         return;
-                    } else {
-                        document.getElementById("student-card").style.display = "block";
                     }
                 } catch(e) {
-                    document.getElementById("student-card").style.display = "block";
+                    console.warn("Lỗi autostart vào đề:", e);
                 }
             }
-            hideLoading();
-            ensureSomeUIElementsAreVisible();
-            return;
-        } else {
-            document.getElementById("student-card").style.display = "block";
-            hideLoading();
-            ensureSomeUIElementsAreVisible();
-            return;
         }
     }
 
+    // Nếu không có thông tin đăng nhập (và không phải Admin): chuyển thẳng về Modal đăng nhập mới trên trang chủ
     hideLoading();
-    ensureSomeUIElementsAreVisible();
+    redirectToPortalNewLogin(quizId, cat);
 }
 
 function fetchExamQuestions(isAutostart = false) { 
@@ -810,11 +844,13 @@ function fetchExamQuestions(isAutostart = false) {
         } 
         if (examData.title) { 
             EXAM_NAME = examData.title; 
-            document.getElementById("banner-title").innerText = EXAM_NAME; 
+            const bannerTitleEl = document.getElementById("banner-title");
+            if (bannerTitleEl) bannerTitleEl.innerText = EXAM_NAME; 
             const examTitleEl = document.getElementById("res-exam-title");
             if (examTitleEl) examTitleEl.innerText = EXAM_NAME;
         } 
-        document.getElementById("nav-exam-code-text").innerText = `Đề: ${getMaDe()}`; 
+        const navCodeText = document.getElementById("nav-exam-code-text");
+        if (navCodeText) navCodeText.innerText = `Đề: ${getMaDe()}`; 
         if (examData.password !== undefined) EXAM_PASSWORD = String(examData.password).trim(); 
         
         if (examData.timeLimitMinutes || examData.time_limit_minutes) { 
@@ -828,15 +864,17 @@ function fetchExamQuestions(isAutostart = false) {
             const st = stObj ? stObj.toLocaleString("vi-VN") : examData.examStartTimeStr;
             const et = etObj ? etObj.toLocaleString("vi-VN") : examData.examEndTimeStr;
             const noticeEl = document.getElementById("exam-time-notice"); 
-            noticeEl.innerText = `⏱ Mở từ: ${st} - Đến: ${et}`; 
-            noticeEl.style.display = "inline-block"; 
+            if (noticeEl) {
+                noticeEl.innerText = `⏱ Mở từ: ${st} - Đến: ${et}`; 
+                noticeEl.style.display = "inline-block"; 
+            }
         } 
 
         const urlParams = new URLSearchParams(window.location.search);
         const currentQuizId = urlParams.get('id') || examData.id || "quiz";
         
         const shuffleKey = `shuffled_exam_${currentQuizId}_${getExamCode()}`;
-        const isAdminMode = typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode();
+        const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
         let shouldShuffle = (examData.isShuffled !== false) && !isAdminMode; 
 
         examData.questions = synchronizeExamQuestionsAndImages(examData.questions || [], examData.images || {});
@@ -893,11 +931,6 @@ function fetchExamQuestions(isAutostart = false) {
                 safeLocal.setItem(shuffleKey, JSON.stringify(examData.questions));
             }
         }
-
-        if (!isAutostart) {
-            if (EXAM_PASSWORD !== "") document.getElementById("login-box").style.display = "block"; 
-            else document.getElementById("student-card").style.display = "block"; 
-        }
         
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
         
@@ -913,12 +946,12 @@ function fetchExamQuestions(isAutostart = false) {
 }
 
 function showError(title, msg) { 
-    document.getElementById("login-box").style.display = "none"; 
-    document.getElementById("student-card").style.display = "none"; 
     const errCard = document.getElementById("error-card"); 
     if (errCard) {
-        document.getElementById("error-title").innerText = title; 
-        document.getElementById("error-msg").innerHTML = msg + `<br><br><button type="button" onclick="window.location.reload()" style="background:#0284c7; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:800; cursor:pointer;">🔄 Tải lại trang</button>`; 
+        const titleEl = document.getElementById("error-title");
+        const msgEl = document.getElementById("error-msg");
+        if (titleEl) titleEl.innerText = title; 
+        if (msgEl) msgEl.innerHTML = msg + `<br><br><button type="button" onclick="window.location.reload()" style="background:#0284c7; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-weight:800; cursor:pointer;">🔄 Tải lại trang</button>`; 
         errCard.style.display = "block"; 
     }
 }
@@ -1049,6 +1082,15 @@ function startCountdownTimer() {
     const timerVal = document.getElementById("nav-timer-val"); 
     const timerBox = document.getElementById("nav-timer-box"); 
     if (timerInterval) clearInterval(timerInterval); 
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+
+    if (isAdminMode) {
+        if (timerVal) timerVal.innerText = formatHHMMSS(Math.max(0, remainingSeconds || totalTimeSeconds));
+        if (timerBox) timerBox.classList.remove("timer-warning");
+        return;
+    }
     
     timerInterval = setInterval(() => { 
         if (isExamLocked) {
@@ -1159,8 +1201,9 @@ function restoreExamStateFromStorage() {
             const savedStartTime = originStored ? parseInt(originStored, 10) : (parsed.examStartTime || Date.now());
             const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
+            const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
 
-            if (elapsed > limitSec || parsed.isExamLocked) {
+            if (!isAdminMode && (elapsed > limitSec || parsed.isExamLocked)) {
                 safeLocal.removeItem(storageKey);
                 if (typeof examIndexedDB !== 'undefined') {
                     try {
