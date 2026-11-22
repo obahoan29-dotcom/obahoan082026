@@ -87,7 +87,8 @@ function openQbankMidEditMode() {
     if (!requireQbankAdminOrPrompt()) return;
 
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
-    if ((nav.mode === "root" || nav.mode === "kho") && !qbankState.activeFilter.folderId) {
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    if ((nav.mode === "root" || nav.mode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter) {
         showQbankToast("⚠️ Hãy bấm vào tên 1 Đề (hoặc chọn 1 thư mục bên trái) trước khi bấm Sửa đề!", "warning");
         return;
     }
