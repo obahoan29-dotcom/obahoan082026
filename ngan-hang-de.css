@@ -5,6 +5,7 @@
    - MENU XÒE 4 KHO CHỜ XẾP Ở NÚT UPLOAD FILE JSON ĐỀ
    - POPUP CHỌN 4 KHO KHI CHUYỂN ĐỀ TỪ 8 LỚP NGOÀI TRANG CHỦ
    - BỘ DUYỆT THƯ MỤC 3 CẤP + THANH BACK + BREADCRUMB + THẺ ĐỀ THU GỌN
+   - THU GỌN TỐI ĐA CHIỀU CAO THANH TOP CỘT GIỮA ĐỂ NHƯỜNG KHÔNG GIAN CÂU HỎI
 ========================================================= */
 
 /* =========================================
@@ -139,19 +140,19 @@
 }
 .qbank-header { 
     background: #0f172a; 
-    padding: 8px 16px; 
+    padding: 5px 14px; 
     color: #fff; 
     display: flex; 
     align-items: center; 
     justify-content: space-between; 
-    gap: 12px;
+    gap: 10px;
     flex-shrink: 0; 
-    border-bottom: 3px solid #10b981; 
+    border-bottom: 2.5px solid #10b981; 
 }
 .qbank-header-left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
     flex: 1;
     flex-wrap: wrap;
@@ -163,9 +164,9 @@
     background: rgba(16, 185, 129, 0.16);
     border: 1px solid rgba(52, 211, 153, 0.65);
     color: #a7f3d0;
-    padding: 3px 10px;
+    padding: 2px 9px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 800;
     max-width: 520px;
     overflow: hidden;
@@ -180,7 +181,7 @@
 
 .qbank-toast {
     position: absolute;
-    top: 52px;
+    top: 46px;
     left: 50%;
     transform: translateX(-50%) translateY(-10px);
     background: linear-gradient(135deg, #059669, #047857);
@@ -439,7 +440,7 @@
 }
 
 /* =========================================
-   4. CỘT GIỮA: CÂU HỎI, MENU 4 KHO & MA TRẬN THỐNG KÊ
+   4. CỘT GIỮA: CÂU HỎI, MENU 4 KHO & MA TRẬN THỐNG KÊ (THU GỌN TỐI ĐA CHIỀU DỌC)
 ========================================= */
 .qbank-col-mid { 
     display: flex; 
@@ -452,18 +453,26 @@
 }
 .qbank-stats-bar { 
     background: #ffffff; 
-    padding: 6px 12px; 
+    padding: 3px 8px; 
     border-bottom: 1.5px solid #e2e8f0; 
     display: flex; 
     flex-direction: column; 
-    gap: 5px; 
+    gap: 2.5px; 
     flex-shrink: 0;
 }
 .qbank-tools-row { 
     display: flex; 
-    gap: 6px; 
+    gap: 3px; 
     flex-wrap: wrap; 
     align-items: center; 
+}
+.qbank-tools-row .btn-qbank {
+    padding: 2.5px 6.5px;
+    font-size: 10.5px;
+    line-height: 1.15;
+    border-radius: 5px;
+    gap: 3px;
+    min-height: 22px;
 }
 
 /* MENU XÒE 4 KHO CHỜ XẾP Ở NÚT UPLOAD FILE JSON ĐỀ */
@@ -758,8 +767,8 @@
     flex-wrap: wrap;
     background: #ffffff;
     border: 1.5px solid #93c5fd;
-    border-radius: 10px;
-    padding: 6px 10px;
+    border-radius: 9px;
+    padding: 4px 8px;
     box-shadow: 0 2px 6px rgba(2, 132, 199, 0.08);
 }
 .qbank-pending-nav-left {
@@ -774,9 +783,9 @@
     background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
     color: #0369a1;
     border: 1.3px solid #38bdf8;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 11.5px;
+    border-radius: 7px;
+    padding: 3px 9px;
+    font-size: 11px;
     font-weight: 900;
     cursor: pointer;
     display: inline-flex;
@@ -839,8 +848,8 @@
     background: #f8fafc;
     color: #334155;
     border: 1.2px solid #cbd5e1;
-    border-radius: 7px;
-    padding: 4px 8px;
+    border-radius: 6px;
+    padding: 3px 8px;
     font-size: 11px;
     font-weight: 800;
     cursor: pointer;
@@ -1281,7 +1290,7 @@
 .qb-edit-topbar {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     color: #ffffff;
-    padding: 5px 10px;
+    padding: 4px 10px;
     border-bottom: 2px solid #10b981;
     display: flex;
     align-items: center;
@@ -1291,7 +1300,7 @@
     flex-shrink: 0;
 }
 .qb-edit-topbar-title {
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 900;
     color: #34d399;
     display: flex;
@@ -1306,9 +1315,9 @@
     flex-wrap: wrap;
 }
 .btn-qb-edit-tool {
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 11px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-size: 10.5px;
     font-weight: 800;
     border: none;
     cursor: pointer;
@@ -1727,24 +1736,25 @@
 .qbank-export-format-item .fmt-text span { display: block; font-size: 10.5px; font-weight: 600; color: #64748b; margin-top: 2px; }
 .qbank-export-format-divider { height: 1px; background: #e2e8f0; margin: 2px 4px; }
 
-/* THANH HIỂN THỊ TÊN ĐỀ GỐC Ở CỘT GIỮA */
+/* THANH HIỂN THỊ TÊN ĐỀ GỐC Ở CỘT GIỮA (THU GỌN TỐI ĐA CHIỀU DỌC) */
 .qbank-mid-exam-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     flex-wrap: wrap;
     background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
-    border: 1.2px solid #93c5fd;
-    border-radius: 8px;
-    padding: 5px 10px;
-    font-size: 11.5px;
+    border: 1px solid #93c5fd;
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-size: 10.5px;
+    line-height: 1.2;
     color: #1e3a8a;
 }
 .qbank-mid-exam-title-wrap {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     min-width: 0;
     flex: 1;
     font-weight: 700;
@@ -1757,13 +1767,14 @@
     white-space: nowrap;
 }
 .qbank-mid-exam-counter {
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 800;
     color: #047857;
     background: #dcfce7;
     border: 1px solid #86efac;
-    padding: 2px 8px;
+    padding: 0.5px 6px;
     border-radius: 999px;
+    line-height: 1.35;
     white-space: nowrap;
 }
 
@@ -1803,9 +1814,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 10px;
-    border-radius: 8px;
-    font-size: 11px;
+    padding: 4px 9px;
+    border-radius: 7px;
+    font-size: 10.5px;
     font-weight: 900;
     letter-spacing: 0.2px;
     user-select: none;
@@ -1819,46 +1830,47 @@
     background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
     color: #0369a1;
     border: 1.2px solid #bae6fd;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
-/* THANH THỐNG KÊ MA TRẬN CO GỌN DỌC TỐI ĐA */
+/* THANH THỐNG KÊ MA TRẬN CO SÁT DỌC TỐI ĐA */
 .qbank-matrix-stats { 
     display: flex; 
     align-items: center; 
-    gap: 8px; 
+    gap: 2px 5px; 
     background: #f8fafc; 
-    padding: 4px 8px; 
-    border-radius: 8px; 
+    padding: 2px 6px; 
+    border-radius: 6px; 
     border: 1px solid #e2e8f0; 
-    font-size: 11px; 
+    font-size: 10px; 
     flex-wrap: wrap;
-    line-height: 1.2;
+    line-height: 1.15;
 }
 .matrix-group { 
     display: inline-flex; 
     align-items: center; 
-    gap: 5px; 
+    gap: 3px; 
     cursor: pointer;
-    padding: 2px 5px;
-    border-radius: 5px;
+    padding: 1px 3px;
+    border-radius: 4px;
     transition: background 0.12s;
 }
 .matrix-group:hover, .matrix-group.active-filter { background: #e0f2fe; }
-.matrix-title { font-weight: 900; color: #0284c7; font-size: 11px; white-space: nowrap; }
-.matrix-row { display: flex; gap: 3px; }
+.matrix-title { font-weight: 900; color: #0284c7; font-size: 10px; white-space: nowrap; }
+.matrix-row { display: flex; gap: 2px; }
 .stat-pill { 
-    padding: 1px 5px; 
-    border-radius: 4px; 
+    padding: 0px 4px; 
+    border-radius: 3px; 
     font-weight: 800; 
     border: 1px solid #cbd5e1; 
-    font-size: 10px; 
+    font-size: 9.5px; 
+    line-height: 1.35;
     cursor: pointer;
     user-select: none;
     transition: all 0.12s;
 }
 .stat-pill:hover { transform: scale(1.08); }
-.stat-pill.active-filter { outline: 2px solid #0284c7; font-weight: 900; }
+.stat-pill.active-filter { outline: 1.5px solid #0284c7; font-weight: 900; }
 .stat-pill.nb { background: #f0fdf4; color: #166534; border-color: #86efac; }
 .stat-pill.th { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
 .stat-pill.vdt { background: #fefce8; color: #854d0e; border-color: #fde047; }
@@ -1871,11 +1883,12 @@
     background: #e0f2fe;
     border: 1px solid #7dd3fc;
     color: #0369a1;
-    border-radius: 6px;
-    padding: 3px 8px;
-    font-size: 11px;
+    border-radius: 5px;
+    padding: 1.5px 6px;
+    font-size: 10px;
     font-weight: 700;
-    margin-top: 2px;
+    line-height: 1.2;
+    margin-top: 1px;
 }
 .btn-clear-filter {
     background: none;
@@ -1883,8 +1896,8 @@
     color: #dc2626;
     font-weight: 900;
     cursor: pointer;
-    font-size: 11px;
-    padding: 1px 4px;
+    font-size: 10px;
+    padding: 0 4px;
     border-radius: 4px;
 }
 .btn-clear-filter:hover { background: #fee2e2; }
@@ -1893,10 +1906,10 @@
 .qbank-questions-list { 
     flex: 1; 
     overflow-y: auto; 
-    padding: 8px 10px; 
+    padding: 6px 8px; 
     display: flex; 
     flex-direction: column; 
-    gap: 8px; 
+    gap: 6px; 
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
 }
@@ -1906,7 +1919,7 @@
 .qbank-q-card { 
     background: #ffffff; 
     border-radius: 10px; 
-    padding: 10px 12px; 
+    padding: 9px 11px; 
     border: 1.5px solid #cbd5e1; 
     box-shadow: 0 1px 4px rgba(0,0,0,0.04); 
     cursor: grab; 
@@ -1924,7 +1937,7 @@
 .qbank-q-header { 
     display: flex; 
     justify-content: space-between; 
-    margin-bottom: 6px; 
+    margin-bottom: 5px; 
     align-items: center; 
     border-bottom: 1px dashed #e2e8f0; 
     padding-bottom: 4px; 
