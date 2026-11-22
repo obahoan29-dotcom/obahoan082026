@@ -210,11 +210,11 @@ function qbEditInheritActiveFolderMeta(newQ) {
         const node = findNodeInTree(qbankState.currentTree, fId);
         if (node && (!node.children || node.children.length === 0)) {
             newQ.folderId = node.id; newQ.folderName = node.name;
-            newQ.level = qbankState.activeFilter.level || "nb"; newQ.assignedAt = Date.now();
+            newQ.level = normalizeQbankLevel(qbankState.activeFilter.level || "nb"); newQ.assignedAt = Date.now();
             return;
         }
     }
-    newQ.folderId = null; newQ.folderName = ""; newQ.level = newQ.level || "nb";
+    newQ.folderId = null; newQ.folderName = ""; newQ.level = normalizeQbankLevel(newQ.level || "nb");
 }
 
 function qbEditUpdateMeta() {
@@ -249,10 +249,8 @@ function qbEditRenderRightEditor() {
         card.style.border = `1.8px solid ${palette.border}`;
         card.addEventListener("focusin", () => qbEditScrollToLeftPreview(q.id, true));
 
-        let currentPartType = "multiple_choice";
-        if (qbEditGetPartType(q) === 4) currentPartType = "part4";
-        else if (q.type === "true_false") currentPartType = "true_false";
-        else if (q.type === "short_answer") currentPartType = "short_answer";
+        const pNum = qbEditGetPartType(q);
+        const currentPartType = pNum === 4 ? "part4" : (pNum === 2 ? "true_false" : (pNum === 3 ? "short_answer" : "multiple_choice"));
 
         const safeQId = safeQbankJsArg(q.id);
         const isRawEditing = qbankMidEditState.rawEditingCardIds.has(String(q.id));
@@ -289,7 +287,7 @@ function qbEditRenderRightEditor() {
                 specificHtml = `
                     <div class="soide-textarea-label">Các mệnh đề Đúng / Sai (a, b, c, d):</div>
                     <table class="soide-tf-editor-table">${(q.statements || []).map((st, sIdx) => {
-                        const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng");
+                        const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true");
                         return `<tr><td width="22" align="center"><b>${escapeQbankHtml(st.id)})</b></td><td><textarea class="soide-latex-input" rows="1" style="padding:3px 5px; font-size:12.5px !important; min-height:28px;" oninput="qbEditAutoResizeTextarea(this); qbEditUpdateStatementText(${qIdx}, ${sIdx}, this.value)">${escapeQbankHtml(st.statement)}</textarea></td><td width="82" align="center"><select class="soide-latex-input" style="padding:2px 4px; font-size:12px !important; min-height:28px;" onchange="qbEditUpdateStatementCorrect(${qIdx}, ${sIdx}, this.value)"><option value="Đúng" ${isTrue ? "selected" : ""}>🟢 Đúng</option><option value="Sai" ${!isTrue ? "selected" : ""}>🔴 Sai</option></select></td></tr>`;
                     }).join("")}</table>`;
             } else {
@@ -348,10 +346,8 @@ function qbEditRenderLeftLivePreview() {
     questions.forEach((q, qIdx) => {
         const displayIndex = qIdx + 1, qId = q.id, safeQId = safeQbankJsArg(qId);
         const palette = QBANK_EDIT_THEME_PALETTES[qIdx % QBANK_EDIT_THEME_PALETTES.length];
-        let currentPartType = "multiple_choice";
-        if (qbEditGetPartType(q) === 4) currentPartType = "part4";
-        else if (q.type === "true_false") currentPartType = "true_false";
-        else if (q.type === "short_answer") currentPartType = "short_answer";
+        const pNum = qbEditGetPartType(q);
+        const currentPartType = pNum === 4 ? "part4" : (pNum === 2 ? "true_false" : (pNum === 3 ? "short_answer" : "multiple_choice"));
 
         const imgUrl = resolveQbankImageUrl(q, imageMap), imgKey = q.imageKey || `img_q_${qId}`, safeImgKey = safeQbankJsArg(imgKey);
         const imgHtml = imgUrl ? `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}"><div class="quiz-img-wrapper" style="position:relative; display:inline-block;"><img src="${escapeQbankAttr(imgUrl)}" class="quiz-img" style="max-height:220px;" onerror="handleQbankImgError(this)" alt="Hình câu ${displayIndex}"></div></div>` : `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}" style="display:none;"></div>`;
@@ -378,7 +374,7 @@ function qbEditRenderLeftLivePreview() {
             }).join("")}</div>`;
         } else if (currentPartType === "true_false") {
             bodyHtml = `<div class="tf-table-box" style="margin-top:4px;"><table class="tf-table"><thead><tr><th>Mệnh đề</th><th width="70" style="text-align:center;">Đáp án</th></tr></thead><tbody>${(q.statements || []).map(st => {
-                const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng");
+                const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true");
                 return `<tr><td style="font-size:12.5px;"><b>${escapeQbankHtml(st.id)})</b> ${st.statement}</td><td align="center" style="font-weight:900; font-size:12px; color:${isTrue ? "#16a34a" : "#dc2626"};">${isTrue ? "🟢 Đúng" : "🔴 Sai"}</td></tr>`;
             }).join("")}</tbody></table></div>`;
         } else {
@@ -483,13 +479,24 @@ function qbEditUpdateStatementCorrect(qIdx, sIdx, val) { const q = qbankMidEditS
 function qbEditUpdateShortAnswer(qIdx, val) { if (qbankMidEditState.questions[qIdx]) { qbankMidEditState.questions[qIdx].correctAnswer = val; qbankMidEditState.isDirty = true; qbEditDebouncedLivePreview(); } }
 function qbEditUpdateExplanation(qIdx, val) { if (qbankMidEditState.questions[qIdx]) { qbankMidEditState.questions[qIdx].explanation = val; qbankMidEditState.isDirty = true; qbEditDebouncedLivePreview(); } }
 
+// GÁN TƯỜNG MINH q.part & q.isPart4 ĐỂ CHUYỂN PHẦN IV -> I/II/III KHÔNG BỊ BẬT NGƯỢC
 function qbEditChangeQuestionType(qIdx, newType) {
     const q = qbankMidEditState.questions[qIdx];
     if (!q) return;
-    if (newType === "multiple_choice") { q.type = "multiple_choice"; delete q.part; delete q.isPart4; if (!q.options || q.options.length < 4) q.options = ["Phương án A", "Phương án B", "Phương án C", "Phương án D"]; if (q.correct === undefined) q.correct = 0; }
-    else if (newType === "true_false") { q.type = "true_false"; delete q.part; delete q.isPart4; if (!q.statements || q.statements.length < 4) q.statements = [{ id: "a", statement: "Mệnh đề a", correct: true }, { id: "b", statement: "Mệnh đề b", correct: false }, { id: "c", statement: "Mệnh đề c", correct: true }, { id: "d", statement: "Mệnh đề d", correct: false }]; }
-    else if (newType === "short_answer") { q.type = "short_answer"; delete q.part; delete q.isPart4; if (!q.correctAnswer) q.correctAnswer = "0"; }
-    else if (newType === "part4") { q.type = "short_answer"; q.part = 4; if (!q.correctAnswer) q.correctAnswer = "0"; }
+    if (newType === "multiple_choice") {
+        q.type = "multiple_choice"; q.part = 1; q.isPart4 = false;
+        if (!q.options || q.options.length < 4) q.options = ["Phương án A", "Phương án B", "Phương án C", "Phương án D"];
+        if (q.correct === undefined || q.correct === null) q.correct = 0;
+    } else if (newType === "true_false") {
+        q.type = "true_false"; q.part = 2; q.isPart4 = false;
+        if (!q.statements || q.statements.length < 4) q.statements = [{ id: "a", statement: "Mệnh đề a", correct: true }, { id: "b", statement: "Mệnh đề b", correct: false }, { id: "c", statement: "Mệnh đề c", correct: true }, { id: "d", statement: "Mệnh đề d", correct: false }];
+    } else if (newType === "short_answer") {
+        q.type = "short_answer"; q.part = 3; q.isPart4 = false;
+        if (q.correctAnswer === undefined || q.correctAnswer === null || q.correctAnswer === "") q.correctAnswer = "0";
+    } else if (newType === "part4") {
+        q.type = "short_answer"; q.part = 4; q.isPart4 = true;
+        if (q.correctAnswer === undefined || q.correctAnswer === null || q.correctAnswer === "") q.correctAnswer = "0";
+    }
     qbankMidEditState.questions = qbEditReorganizeQuestions(qbankMidEditState.questions);
     qbankMidEditState.isDirty = true;
     qbEditRenderBothSides();
@@ -499,10 +506,10 @@ function qbEditChangeQuestionType(qIdx, newType) {
 function qbEditInsertQuestionAfter(qIdx) {
     const currentQ = qbankMidEditState.questions[qIdx], currentPart = currentQ ? qbEditGetPartType(currentQ) : 1;
     const newId = qbEditGenerateNewUniqueId();
-    let newQuestion = { id: newId, type: "multiple_choice", question: "Câu hỏi mới: Cho hàm số $y = f(x)$...", options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], correct: 0, explanation: "" };
-    if (currentPart === 2) newQuestion = { id: newId, type: "true_false", question: "Xét tính đúng sai của các mệnh đề sau:", statements: [{ id: "a", statement: "Mệnh đề a", correct: true }, { id: "b", statement: "Mệnh đề b", correct: false }, { id: "c", statement: "Mệnh đề c", correct: true }, { id: "d", statement: "Mệnh đề d", correct: false }], explanation: "" };
-    else if (currentPart === 3) newQuestion = { id: newId, type: "short_answer", question: "Tìm giá trị của biểu thức sau:", correctAnswer: "0", explanation: "" };
-    else if (currentPart === 4) newQuestion = { id: newId, type: "short_answer", part: 4, question: "PHẦN IV. Tự luận ngắn:", correctAnswer: "0", explanation: "" };
+    let newQuestion = { id: newId, type: "multiple_choice", part: 1, isPart4: false, question: "Câu hỏi mới: Cho hàm số $y = f(x)$...", options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], correct: 0, explanation: "" };
+    if (currentPart === 2) newQuestion = { id: newId, type: "true_false", part: 2, isPart4: false, question: "Xét tính đúng sai của các mệnh đề sau:", statements: [{ id: "a", statement: "Mệnh đề a", correct: true }, { id: "b", statement: "Mệnh đề b", correct: false }, { id: "c", statement: "Mệnh đề c", correct: true }, { id: "d", statement: "Mệnh đề d", correct: false }], explanation: "" };
+    else if (currentPart === 3) newQuestion = { id: newId, type: "short_answer", part: 3, isPart4: false, question: "Tìm giá trị của biểu thức sau:", correctAnswer: "0", explanation: "" };
+    else if (currentPart === 4) newQuestion = { id: newId, type: "short_answer", part: 4, isPart4: true, question: "PHẦN IV. Tự luận ngắn:", correctAnswer: "0", explanation: "" };
     qbEditInheritActiveFolderMeta(newQuestion);
     qbEditInsertOrganizedByPart([newQuestion]);
     qbankMidEditState.isDirty = true;
@@ -512,7 +519,7 @@ function qbEditInsertQuestionAfter(qIdx) {
 
 function qbEditAddNewQuestion() {
     const newId = qbEditGenerateNewUniqueId();
-    const newQ = { id: newId, type: "multiple_choice", question: "Câu hỏi trắc nghiệm mới...", options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], correct: 0, explanation: "" };
+    const newQ = { id: newId, type: "multiple_choice", part: 1, isPart4: false, question: "Câu hỏi trắc nghiệm mới...", options: ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"], correct: 0, explanation: "" };
     qbEditInheritActiveFolderMeta(newQ);
     qbEditInsertOrganizedByPart([newQ]);
     qbankMidEditState.isDirty = true;
@@ -572,7 +579,7 @@ async function qbEditHandlePasteZoneClick(qIdx, mode) {
         }, 50);
     } else if (mode === "insert") {
         let parsedQuestions = (clipboardText && clipboardText.trim()) ? qbEditParseMultipleQuestions(clipboardText) : [];
-        if (parsedQuestions.length === 0) parsedQuestions = [{ type: "multiple_choice", question: "Câu hỏi mới: ...", options: ["Phương án A", "Phương án B", "Phương án C", "Phương án D"], correct: 0, explanation: "" }];
+        if (parsedQuestions.length === 0) parsedQuestions = [{ type: "multiple_choice", part: 1, isPart4: false, question: "Câu hỏi mới: ...", options: ["Phương án A", "Phương án B", "Phương án C", "Phương án D"], correct: 0, explanation: "" }];
         parsedQuestions.forEach(q => { q.id = qbEditGenerateNewUniqueId(); qbEditInheritActiveFolderMeta(q); });
         qbEditInsertOrganizedByPart(parsedQuestions);
         parsedQuestions.forEach(q => qbankMidEditState.rawEditingCardIds.add(String(q.id)));
@@ -601,7 +608,7 @@ function qbEditHandlePasteOnQuestion(event, qIdx, mode) {
         setTimeout(() => { const ta = document.getElementById(`qb-edit-card-raw-text-${targetQ.id}`); if (ta) { if (text) ta.value = text.trim(); ta.focus(); } showQbankToast(`📋 Đã dán vào mã thô Câu ${qIdx + 1}!`, "info"); }, 40);
     } else if (mode === "insert") {
         let parsedQuestions = qbEditParseMultipleQuestions(text);
-        if (parsedQuestions.length === 0) parsedQuestions = [{ type: "multiple_choice", question: text || "Câu hỏi mới...", options: ["A", "B", "C", "D"], correct: 0, explanation: "" }];
+        if (parsedQuestions.length === 0) parsedQuestions = [{ type: "multiple_choice", part: 1, isPart4: false, question: text || "Câu hỏi mới...", options: ["A", "B", "C", "D"], correct: 0, explanation: "" }];
         parsedQuestions.forEach(q => { q.id = qbEditGenerateNewUniqueId(); qbEditInheritActiveFolderMeta(q); });
         qbEditInsertOrganizedByPart(parsedQuestions);
         parsedQuestions.forEach(q => qbankMidEditState.rawEditingCardIds.add(String(q.id)));
@@ -620,7 +627,7 @@ function qbEditApplyCardRawInput(qIdx, qId) {
     const qObj = qbEditParseSingleQuestion(rawVal);
     if (!qObj) return alert("⚠️ Không nhận diện được cấu trúc câu hỏi!");
 
-    const targetQ = qbankMidEditState.questions[qIdx];
+    const targetQ = (qbankMidEditState.questions || []).find(x => String(x.id) === String(qId)) || qbankMidEditState.questions[qIdx];
     if (targetQ) {
         targetQ.type = qObj.type; targetQ.question = qObj.question;
         if (qObj.options) targetQ.options = qObj.options;
@@ -628,9 +635,23 @@ function qbEditApplyCardRawInput(qIdx, qId) {
         if (qObj.correct !== undefined) targetQ.correct = qObj.correct;
         if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
         if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
-        if (qObj.part) targetQ.part = qObj.part; else if (targetQ.type !== "short_answer" || !qObj.part) delete targetQ.part;
-        if (qObj.imageUrl) targetQ.imageUrl = qObj.imageUrl;
-        if (qObj.imageKey) targetQ.imageKey = qObj.imageKey;
+        if (qObj.imageUrl !== undefined) targetQ.imageUrl = qObj.imageUrl;
+        if (qObj.imageKey !== undefined) targetQ.imageKey = qObj.imageKey;
+
+        const explicitPart = parseInt(qObj.part, 10);
+        if (explicitPart >= 1 && explicitPart <= 4) {
+            targetQ.part = explicitPart; targetQ.isPart4 = (explicitPart === 4);
+        } else if (qObj.type === "essay" || qObj.type === "essay_answer" || qObj.type === "part4") {
+            targetQ.part = 4; targetQ.isPart4 = true;
+        } else if (qObj.type === "multiple_choice") {
+            targetQ.part = 1; targetQ.isPart4 = false;
+        } else if (qObj.type === "true_false") {
+            targetQ.part = 2; targetQ.isPart4 = false;
+        } else if (qObj.type === "short_answer") {
+            const isTextP4 = /PH[ẦA]N\s*(IV|4)/i.test(String(qObj.question || ""));
+            targetQ.part = isTextP4 ? 4 : 3;
+            targetQ.isPart4 = isTextP4;
+        }
     }
 
     qbankMidEditState.questions = qbEditReorganizeQuestions(qbankMidEditState.questions);
@@ -816,7 +837,8 @@ async function commitQbankMidEditChanges(keepOpen = true) {
 
         if (keepOpen) {
             const freshMap = new Map((qbankState.rawQuestions || []).map(q => [String(q.id), q]));
-            qbankMidEditState.questions = qbankMidEditState.questions.map(q => freshMap.get(String(q.id)) || q);
+            // Clone sâu để các chỉnh sửa nháp tiếp theo không làm thay đổi trực tiếp qbankState nếu chưa bấm Update
+            qbankMidEditState.questions = qbankMidEditState.questions.map(q => JSON.parse(JSON.stringify(freshMap.get(String(q.id)) || q)));
             qbEditRenderBothSides();
             showQbankToast(`⚡ Đã cập nhật ${normalizedEdited.length} câu hỏi & đồng bộ Cloud thành công!`, "success");
         } else {
