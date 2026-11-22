@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s)
 // ĐÃ BỔ SUNG: CHỈ HIỆN NÚT HỆ THỐNG BIÊN SOẠN & MA TRẬN ĐỀ KHI ADMIN ĐĂNG NHẬP
+// ĐÃ BỔ SUNG: TỰ ĐỘNG MỞ MODAL ĐĂNG NHẬP MỚI KHI CHUYỂN HƯỚNG TỪ ?login_exam=...
 // =========================================================
 
 let activeDayThemCatId = null;
@@ -176,6 +177,71 @@ function loadDataFromCache() {
     } catch (e) {}
 }
 
+function handleAutoOpenLoginExamFromUrl() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const loginExamId = urlParams.get("login_exam");
+        const catParam = urlParams.get("cat") || "";
+        if (!loginExamId) return;
+
+        let foundItem = null;
+        let foundCatId = catParam || "";
+
+        const allCats = [...DAY_THEM_CATEGORIES, ...CHINH_KHOA_CATEGORIES, KHO_TAI_LIEU_FOLDER];
+
+        if (catParam) {
+            const targetCat = allCats.find(c => c.id === catParam);
+            if (targetCat && Array.isArray(targetCat.links)) {
+                foundItem = targetCat.links.find(l => {
+                    const qId = (typeof extractQuizIdFromItem === 'function') ? extractQuizIdFromItem(l) : null;
+                    return (qId === loginExamId || l.id === loginExamId || l.firebaseId === loginExamId);
+                });
+                if (foundItem) foundCatId = targetCat.id;
+            }
+        }
+
+        if (!foundItem) {
+            for (const c of allCats) {
+                if (!c || !Array.isArray(c.links)) continue;
+                const match = c.links.find(l => {
+                    const qId = (typeof extractQuizIdFromItem === 'function') ? extractQuizIdFromItem(l) : null;
+                    return (qId === loginExamId || l.id === loginExamId || l.firebaseId === loginExamId);
+                });
+                if (match) {
+                    foundItem = match;
+                    foundCatId = c.id;
+                    break;
+                }
+            }
+        }
+
+        if (foundItem) {
+            const dayCat = DAY_THEM_CATEGORIES.find(c => c.id === foundCatId);
+            const ckCat = CHINH_KHOA_CATEGORIES.find(c => c.id === foundCatId);
+            if (dayCat) {
+                activeDayThemCatId = foundCatId;
+            } else if (ckCat) {
+                if (ckCat.row === 1) activeChinhKhoaRow1CatId = foundCatId;
+                else activeChinhKhoaRow2CatId = foundCatId;
+            }
+            refreshAllViews();
+
+            if (typeof openStudentLoginModal === "function") {
+                openStudentLoginModal(foundItem, foundCatId);
+            }
+
+            try {
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete("login_exam");
+                cleanUrl.searchParams.delete("cat");
+                window.history.replaceState({}, "", cleanUrl.toString());
+            } catch(e) {}
+        }
+    } catch(e) {
+        console.warn("Lỗi tự động mở modal đăng nhập từ URL:", e);
+    }
+}
+
 async function loadDataFromSupabase() {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client) {
@@ -220,6 +286,7 @@ async function loadDataFromSupabase() {
         }
 
         refreshAllViews();
+        handleAutoOpenLoginExamFromUrl();
     } catch(e) {
         console.warn("Lỗi nạp dữ liệu Supabase:", e);
     }
