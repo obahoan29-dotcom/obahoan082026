@@ -3,6 +3,7 @@
 // MODULE 3/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
 // - CHẾ ĐỘ "✏️ SỬA ĐỀ" CHIA ĐÔI MÀN HÌNH NGAY TRONG CỘT GIỮA
 // - CHỈNH SỬA FORM TỪNG CÂU / MÃ NGUỒN THÔ / PASTE ĐÈ & PASTE THÊM
+// - TỰ ĐỘNG GẮN NGỮ CẢNH ĐỀ CHỜ XẾP (pendingExamId, pendingKhoId) KHI THÊM CÂU & UPDATE
 // - ĐỒNG BỘ CUỘN 2 CHIỀU TRÁI <-> PHẢI & NÚT ⚡ UPDATE
 // =========================================================
 
@@ -84,15 +85,35 @@ function toggleQbankMidEditMode() {
 
 function openQbankMidEditMode() {
     if (!requireQbankAdminOrPrompt()) return;
+
+    const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
+    if ((nav.mode === "root" || nav.mode === "kho") && !qbankState.activeFilter.folderId) {
+        showQbankToast("⚠️ Hãy bấm vào tên 1 Đề (hoặc chọn 1 thư mục bên trái) trước khi bấm Sửa đề!", "warning");
+        return;
+    }
+
     ensureQbankMidEditControlsInDOM();
     const visibleList = getFilteredAndSortedQuestions();
     const clonedQ = JSON.parse(JSON.stringify(visibleList));
+
+    let activePendingExamId = null;
+    let activePendingKhoId = null;
+    let activeTitle = qbankState.currentExamTitle || qbankState.activeFilter.folderName || "NGÂN HÀNG ĐỀ";
+
+    if (!qbankState.activeFilter.folderId && nav.mode === "exam" && nav.examId) {
+        const ex = (qbankState.pendingExams || []).find(e => e.id === nav.examId);
+        activePendingExamId = nav.examId;
+        activePendingKhoId = (ex && ex.khoId) || nav.khoId || null;
+        if (ex && ex.title) activeTitle = ex.title;
+    }
 
     qbankMidEditState.isActive = true;
     qbankMidEditState.questions = clonedQ;
     qbankMidEditState.images = JSON.parse(JSON.stringify(qbankState.imagesMap || {}));
     qbankMidEditState.editingSourceIds = new Set(clonedQ.map(q => String(q.id)));
-    qbankMidEditState.title = qbankState.currentExamTitle || qbankState.activeFilter.folderName || "NGÂN HÀNG ĐỀ";
+    qbankMidEditState.pendingExamId = activePendingExamId;
+    qbankMidEditState.pendingKhoId = activePendingKhoId;
+    qbankMidEditState.title = activeTitle;
     qbankMidEditState.maDe = "QBANK";
     qbankMidEditState.timeLimitMinutes = 90;
     qbankMidEditState.editorMode = "cards";
@@ -123,7 +144,11 @@ async function closeQbankMidEditMode(forceSkipPrompt = false) {
             return;
         }
     }
-    qbankMidEditState.isActive = false; qbankMidEditState.isDirty = false;
+    qbankMidEditState.isActive = false;
+    qbankMidEditState.isDirty = false;
+    qbankMidEditState.pendingExamId = null;
+    qbankMidEditState.pendingKhoId = null;
+
     const btnToggle = document.getElementById("btn-qbank-toggle-edit-mode");
     if (btnToggle) { btnToggle.classList.remove("is-active"); btnToggle.innerHTML = `<span>✏️</span> <span>Sửa đề</span>`; }
 
@@ -205,16 +230,31 @@ function qbEditGenerateNewUniqueId() {
 }
 
 function qbEditInheritActiveFolderMeta(newQ) {
+    if (!newQ) return;
     const fId = qbankState.activeFilter.folderId;
     if (fId) {
         const node = findNodeInTree(qbankState.currentTree, fId);
         if (node && (!node.children || node.children.length === 0)) {
-            newQ.folderId = node.id; newQ.folderName = node.name;
-            newQ.level = normalizeQbankLevel(qbankState.activeFilter.level || "nb"); newQ.assignedAt = Date.now();
+            newQ.folderId = node.id;
+            newQ.folderName = node.name;
+            newQ.level = normalizeQbankLevel(qbankState.activeFilter.level || "nb");
+            newQ.assignedAt = Date.now();
+            if (qbankMidEditState.pendingExamId) {
+                newQ.pendingExamId = qbankMidEditState.pendingExamId;
+                newQ.pendingKhoId = qbankMidEditState.pendingKhoId || "pending_11";
+                newQ.sourceExam = qbankMidEditState.title || newQ.sourceExam || "";
+            }
             return;
         }
     }
-    newQ.folderId = null; newQ.folderName = ""; newQ.level = normalizeQbankLevel(newQ.level || "nb");
+    newQ.folderId = null;
+    newQ.folderName = "";
+    newQ.level = normalizeQbankLevel(newQ.level || "nb");
+    if (qbankMidEditState.pendingExamId) {
+        newQ.pendingExamId = qbankMidEditState.pendingExamId;
+        newQ.pendingKhoId = qbankMidEditState.pendingKhoId || "pending_11";
+        newQ.sourceExam = qbankMidEditState.title || newQ.sourceExam || "";
+    }
 }
 
 function qbEditUpdateMeta() {
@@ -479,7 +519,6 @@ function qbEditUpdateStatementCorrect(qIdx, sIdx, val) { const q = qbankMidEditS
 function qbEditUpdateShortAnswer(qIdx, val) { if (qbankMidEditState.questions[qIdx]) { qbankMidEditState.questions[qIdx].correctAnswer = val; qbankMidEditState.isDirty = true; qbEditDebouncedLivePreview(); } }
 function qbEditUpdateExplanation(qIdx, val) { if (qbankMidEditState.questions[qIdx]) { qbankMidEditState.questions[qIdx].explanation = val; qbankMidEditState.isDirty = true; qbEditDebouncedLivePreview(); } }
 
-// GÁN TƯỜNG MINH q.part & q.isPart4 ĐỂ CHUYỂN PHẦN IV -> I/II/III KHÔNG BỊ BẬT NGƯỢC
 function qbEditChangeQuestionType(qIdx, newType) {
     const q = qbankMidEditState.questions[qIdx];
     if (!q) return;
@@ -747,6 +786,10 @@ function qbEditReadFile(file) {
                 const resolvedImg = resolveQbankImageUrl(q, rawImages);
                 if (resolvedImg) { const key = q.imageKey || `img_q_${q.id}`; q.imageUrl = resolvedImg; q.imageKey = key; qbankMidEditState.images[key] = resolvedImg; }
                 if (q.folderId === undefined) qbEditInheritActiveFolderMeta(q);
+                else if (qbankMidEditState.pendingExamId && !q.pendingExamId) {
+                    q.pendingExamId = qbankMidEditState.pendingExamId;
+                    q.pendingKhoId = qbankMidEditState.pendingKhoId || "pending_11";
+                }
             });
             qbankMidEditState.questions = qbEditReorganizeQuestions(rawQuestions);
             qbankMidEditState.isDirty = true;
@@ -796,6 +839,12 @@ async function commitQbankMidEditChanges(keepOpen = true) {
             if (q && !qbankMidEditState.editingSourceIds.has(String(q.id))) usedIds.add(String(q.id));
         });
 
+        const updatedTitleTrimmed = (qbankMidEditState.title || "").trim();
+        if (qbankMidEditState.pendingExamId && updatedTitleTrimmed) {
+            const pEx = (qbankState.pendingExams || []).find(e => e.id === qbankMidEditState.pendingExamId);
+            if (pEx) pEx.title = updatedTitleTrimmed;
+        }
+
         const normalizedEdited = editedQuestions.map((rawQ, idx) => {
             const resolvedImg = resolveQbankImageUrl(rawQ, mergedImages);
             const q = JSON.parse(JSON.stringify(rawQ));
@@ -806,6 +855,11 @@ async function commitQbankMidEditChanges(keepOpen = true) {
             }
             usedIds.add(String(q.id));
             if (!q.origIndex) q.origIndex = idx + 1;
+            if (qbankMidEditState.pendingExamId) {
+                if (!q.pendingExamId) q.pendingExamId = qbankMidEditState.pendingExamId;
+                if (!q.pendingKhoId) q.pendingKhoId = qbankMidEditState.pendingKhoId || "pending_11";
+                if (updatedTitleTrimmed) q.sourceExam = updatedTitleTrimmed;
+            }
             normalizeQuestionAnswerOnTransfer(q);
             if (resolvedImg) {
                 const key = q.imageKey || `img_q_${q.id}`;
@@ -819,16 +873,18 @@ async function commitQbankMidEditChanges(keepOpen = true) {
         const untouchedQuestions = (qbankState.rawQuestions || []).filter(q => q && !qbankMidEditState.editingSourceIds.has(String(q.id)));
         qbankState.rawQuestions = [...untouchedQuestions, ...normalizedEdited];
         qbankState.imagesMap = mergedImages;
-        if (!qbankState.activeFilter.folderId && qbankMidEditState.title && qbankMidEditState.title.trim()) qbankState.currentExamTitle = qbankMidEditState.title.trim();
+        if (!qbankState.activeFilter.folderId && updatedTitleTrimmed) qbankState.currentExamTitle = updatedTitleTrimmed;
 
         qbankMidEditState.questions = JSON.parse(JSON.stringify(normalizedEdited));
         qbankMidEditState.images = JSON.parse(JSON.stringify(mergedImages));
         qbankMidEditState.editingSourceIds = new Set(normalizedEdited.map(q => String(q.id)));
         qbankMidEditState.isDirty = false;
 
+        ensureQbankPendingExamsIntegrity();
         recomputeAllMatrixIds();
         await saveQbankDraftState(false);
 
+        if (typeof updateQbankUploadMenuCounts === "function") updateQbankUploadMenuCounts();
         renderQbankHeaderAndMidExamTitle();
         renderQbankTree();
         if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
@@ -837,7 +893,6 @@ async function commitQbankMidEditChanges(keepOpen = true) {
 
         if (keepOpen) {
             const freshMap = new Map((qbankState.rawQuestions || []).map(q => [String(q.id), q]));
-            // Clone sâu để các chỉnh sửa nháp tiếp theo không làm thay đổi trực tiếp qbankState nếu chưa bấm Update
             qbankMidEditState.questions = qbankMidEditState.questions.map(q => JSON.parse(JSON.stringify(freshMap.get(String(q.id)) || q)));
             qbEditRenderBothSides();
             showQbankToast(`⚡ Đã cập nhật ${normalizedEdited.length} câu hỏi & đồng bộ Cloud thành công!`, "success");
