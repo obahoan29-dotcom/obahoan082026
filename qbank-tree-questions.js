@@ -8,6 +8,17 @@
 // - MENU XÓA NHIỀU CÂU 3 TÙY CHỌN (1. CHỜ XẾP, 2. ĐANG HIỂN THỊ, 3. TÍCH CHỌN)
 // =========================================================
 
+let _qbankLeafHoverTimer = null;
+let _qbankLeafHoverFolderId = null;
+
+function cancelLeafAutoExpandTimer() {
+    if (_qbankLeafHoverTimer) {
+        clearTimeout(_qbankLeafHoverTimer);
+        _qbankLeafHoverTimer = null;
+    }
+    _qbankLeafHoverFolderId = null;
+}
+
 // ============================================================================
 // 1. CHUYỂN ĐỀ TỪ LỚP SANG CỘT GIỮA NGÂN HÀNG ĐỀ
 // ============================================================================
@@ -27,10 +38,15 @@ function findClassItemFallback(categoryId, itemId, quizId) {
 }
 
 function normalizeQuestionAnswerOnTransfer(q) {
+    if (!q) return;
     const letters = ["A", "B", "C", "D"];
     const part = getQbankQuestionPart(q);
+    q.level = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
+
     if (part === 1) {
         q.type = "multiple_choice";
+        q.part = 1;
+        q.isPart4 = false;
         let rawCorrect = q.correct !== undefined ? q.correct : (q.answer !== undefined ? q.answer : q.dapan);
         if (typeof rawCorrect === "string") {
             const u = rawCorrect.trim().toUpperCase();
@@ -43,6 +59,8 @@ function normalizeQuestionAnswerOnTransfer(q) {
         }
     } else if (part === 2) {
         q.type = "true_false";
+        q.part = 2;
+        q.isPart4 = false;
         if (Array.isArray(q.statements)) {
             q.statements.forEach((st, sIdx) => {
                 if (!st.id) st.id = ["a", "b", "c", "d"][sIdx] || String(sIdx + 1);
@@ -52,9 +70,15 @@ function normalizeQuestionAnswerOnTransfer(q) {
         }
     } else {
         if (part === 4) {
-            if (!q.part && q.type !== "essay" && q.type !== "essay_answer" && q.type !== "part4") q.part = 4;
+            q.part = 4;
+            q.isPart4 = true;
+            if (q.type !== "essay" && q.type !== "essay_answer" && q.type !== "part4") {
+                q.type = "short_answer";
+            }
         } else {
             q.type = "short_answer";
+            q.part = 3;
+            q.isPart4 = false;
         }
         let ans = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct_answer !== undefined ? q.correct_answer : (q.correct !== undefined ? q.correct : (q.answer !== undefined ? q.answer : q.dapan)));
         q.correctAnswer = (ans !== undefined && ans !== null) ? String(ans).trim() : "0";
@@ -115,7 +139,7 @@ async function transferClassExamToQBank(quizId, categoryId, itemId, event) {
             q.sourceCategoryId = categoryId || "";
             q.folderId = null; q.folderName = ""; q.matrixId = ""; q.matrixSeq = 0; q.matrixPathSlug = ""; q.rootClassId = "";
             delete q.assignedAt;
-            if (!q.level) q.level = "nb";
+            q.level = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
             normalizeQuestionAnswerOnTransfer(q);
             if (resolvedImgUrl) {
                 const uniqueImgKey = `img_q_${q.id}`;
@@ -158,12 +182,30 @@ function toggleLeafMatrixDisplay(folderId, event) {
     renderQbankTree();
 }
 
+// Thêm độ trễ 280ms khi lướt chuột qua thư mục lá đang đóng để tránh bung nhầm gây giật/đẩy ô phía dưới
 function handleLeafTreeDragOver(e, folderId, isLeaf) {
     if (!qbankState.draggedQId) return;
     e.preventDefault();
-    if (isLeaf && !qbankState.expandedLeafMatrixIds.has(folderId)) {
-        qbankState.expandedLeafMatrixIds.add(folderId);
-        renderQbankTree();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    if (!isLeaf || qbankState.expandedLeafMatrixIds.has(folderId)) return;
+
+    if (_qbankLeafHoverFolderId !== folderId) {
+        cancelLeafAutoExpandTimer();
+        _qbankLeafHoverFolderId = folderId;
+        _qbankLeafHoverTimer = setTimeout(() => {
+            if (qbankState.draggedQId && _qbankLeafHoverFolderId === folderId && !qbankState.expandedLeafMatrixIds.has(folderId)) {
+                qbankState.expandedLeafMatrixIds.add(folderId);
+                renderQbankTree();
+            }
+            cancelLeafAutoExpandTimer();
+        }, 280);
+    }
+}
+
+function handleLeafTreeDragLeave(e, folderId) {
+    if (e.currentTarget && e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+    if (_qbankLeafHoverFolderId === folderId) {
+        cancelLeafAutoExpandTimer();
     }
 }
 
@@ -195,6 +237,7 @@ function renderQbankTree() {
         const isLeaf = (!node.children || node.children.length === 0);
         const subtreeCount = getSubtreeQuestionCount(node);
         const subHtml = !isLeaf ? `<div class="tree-children">${node.children.map(c => buildNodeHtml(c, depth + 1)).join("")}</div>` : "";
+        const safeNodeId = safeQbankJsArg(node.id);
 
         let matrixDropHtml = "";
         const isMatrixOpen = isLeaf && qbankState.expandedLeafMatrixIds.has(node.id);
@@ -202,7 +245,8 @@ function renderQbankTree() {
             const counts = { 1: { nb: 0, th: 0, vdt: 0, vdc: 0 }, 2: { nb: 0, th: 0, vdt: 0, vdc: 0 }, 3: { nb: 0, th: 0, vdt: 0, vdc: 0 }, 4: { nb: 0, th: 0, vdt: 0, vdc: 0 } };
             (qbankState.rawQuestions || []).forEach(q => {
                 if (q && q.folderId === node.id) {
-                    const p = getQbankQuestionPart(q), lvl = q.level || "nb";
+                    const p = getQbankQuestionPart(q);
+                    const lvl = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
                     if (counts[p] && counts[p][lvl] !== undefined) counts[p][lvl]++;
                 }
             });
@@ -211,17 +255,17 @@ function renderQbankTree() {
                 <div class="leaf-matrix-container" onclick="event.stopPropagation()">
                     <div class="leaf-matrix-header-bar">
                         <span>📥 Ma trận 16 ô (${escapeQbankHtml(node.name)}):</span>
-                        <button type="button" class="btn-clear-filter" onclick="toggleLeafMatrixDisplay('${node.id}', event)">▲ Thu lại</button>
+                        <button type="button" class="btn-clear-filter" onclick="toggleLeafMatrixDisplay('${safeNodeId}', event)">▲ Thu lại</button>
                     </div>
                     ${[1, 2, 3, 4].map(p => {
                         const isPartFiltered = (qbankState.activeFilter.folderId === node.id && qbankState.activeFilter.part === p && !qbankState.activeFilter.level);
                         return `
                         <div class="leaf-matrix-row">
-                            <div class="leaf-matrix-lbl ${isPartFiltered ? "active-filter" : ""}" onclick="setFilterByNodePart('${node.id}', ${p})" title="Xem câu Phần ${p}">P${p}</div>
+                            <div class="leaf-matrix-lbl ${isPartFiltered ? "active-filter" : ""}" onclick="setFilterByNodePart('${safeNodeId}', ${p})" title="Xem câu Phần ${p}">P${p}</div>
                             ${["nb", "th", "vdt", "vdc"].map(lvl => {
                                 const lblMap = { nb: "NB", th: "TH", vdt: "VD", vdc: "VDC" };
                                 const isCellFiltered = (qbankState.activeFilter.folderId === node.id && qbankState.activeFilter.part === p && qbankState.activeFilter.level === lvl);
-                                return `<div class="leaf-drop-zone ${isCellFiltered ? "active-filter" : ""}" ondragover="handleDropZoneOver(event)" ondragleave="handleDropZoneLeave(event)" ondrop="handleDropZoneDrop(event, '${node.id}', ${p}, '${lvl}')" onclick="handleMatrixCellClick('${node.id}', ${p}, '${lvl}')" title="Kéo thả hoặc Click lọc P${p}-${lblMap[lvl]}"><span>${lblMap[lvl]}</span><b>(${counts[p][lvl]})</b></div>`;
+                                return `<div class="leaf-drop-zone ${isCellFiltered ? "active-filter" : ""}" ondragover="handleDropZoneOver(event)" ondragleave="handleDropZoneLeave(event)" ondrop="handleDropZoneDrop(event, '${safeNodeId}', ${p}, '${lvl}')" onclick="handleMatrixCellClick('${safeNodeId}', ${p}, '${lvl}')" title="Kéo thả hoặc Click lọc P${p}-${lblMap[lvl]}"><span style="pointer-events:none;">${lblMap[lvl]}</span><b style="pointer-events:none;">(${counts[p][lvl]})</b></div>`;
                             }).join("")}
                         </div>`;
                     }).join("")}
@@ -231,18 +275,18 @@ function renderQbankTree() {
 
         return `
             <div class="tree-item-wrapper" style="margin-left:${depth > 0 ? 3 : 0}px;">
-                <div class="tree-item ${isActive ? "active" : ""}" id="tree-node-${node.id}" onclick="handleFolderNodeClick('${node.id}')" ondragover="handleLeafTreeDragOver(event, '${node.id}', ${isLeaf})" style="border-left:3.5px solid transparent;">
+                <div class="tree-item ${isActive ? "active" : ""}" id="tree-node-${escapeQbankAttr(node.id)}" onclick="handleFolderNodeClick('${safeNodeId}')" ondragover="handleLeafTreeDragOver(event, '${safeNodeId}', ${isLeaf})" ondragleave="handleLeafTreeDragLeave(event, '${safeNodeId}')" style="border-left:3.5px solid transparent;">
                     <div style="display:flex; align-items:center; gap:5px; min-width:0; flex:1;">
                         <span style="color:${nodeColor}; font-size:13px;">${isLeaf ? "📄" : "📁"}</span>
                         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:${nodeColor}; font-weight:800;" title="${escapeQbankHtml(node.name)}">${escapeQbankHtml(node.name)}</span>
                         ${subtreeCount > 0 ? `<span class="tree-q-count">${subtreeCount}</span>` : ""}
                     </div>
                     <div style="display:flex; align-items:center; gap:2px;" onclick="event.stopPropagation()">
-                        ${isLeaf ? `<button class="btn-matrix-toggle ${isMatrixOpen ? "is-open" : ""}" onclick="toggleLeafMatrixDisplay('${node.id}', event)" title="Mở/Đóng ma trận 16 ô">⊞</button>` : ""}
-                        <div class="tree-color-picker-dot" style="background:${nodeColor};" onclick="promptChangeFolderColor('${node.id}')" title="Đổi màu"></div>
-                        <button class="btn-rename-tree" onclick="promptRenameFolder('${node.id}')" title="Đổi tên">✏️</button>
-                        ${!isLeaf || depth < 2 ? `<button class="btn-add-tree" onclick="promptAddChildFolder('${node.id}')" title="Thêm mục con">+</button>` : ""}
-                        <button class="btn-add-tree" style="color:#ef4444;" onclick="promptDeleteFolder('${node.id}')" title="Xóa">✕</button>
+                        ${isLeaf ? `<button class="btn-matrix-toggle ${isMatrixOpen ? "is-open" : ""}" onclick="toggleLeafMatrixDisplay('${safeNodeId}', event)" title="Mở/Đóng ma trận 16 ô">⊞</button>` : ""}
+                        <div class="tree-color-picker-dot" style="background:${nodeColor};" onclick="promptChangeFolderColor('${safeNodeId}')" title="Đổi màu"></div>
+                        <button class="btn-rename-tree" onclick="promptRenameFolder('${safeNodeId}')" title="Đổi tên">✏️</button>
+                        ${!isLeaf || depth < 2 ? `<button class="btn-add-tree" onclick="promptAddChildFolder('${safeNodeId}')" title="Thêm mục con">+</button>` : ""}
+                        <button class="btn-add-tree" style="color:#ef4444;" onclick="promptDeleteFolder('${safeNodeId}')" title="Xóa">✕</button>
                     </div>
                 </div>
                 ${matrixDropHtml}
@@ -375,12 +419,16 @@ function promptAddChildFolder(parentId) {
 }
 
 function promptChangeFolderColor(folderId) {
+    const oldModal = document.getElementById("color-picker-modal");
+    if (oldModal) oldModal.remove();
+    const safeFId = safeQbankJsArg(folderId);
     let colorHtml = `<div style="display:flex; gap:8px; justify-content:center; margin:10px 0;">`;
-    QBANK_COLOR_PALETTE.forEach(c => { colorHtml += `<div onclick="applyFolderColorChange('${folderId}', '${c}')" style="width:24px; height:24px; border-radius:50%; background:${c}; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`; });
+    QBANK_COLOR_PALETTE.forEach(c => { colorHtml += `<div onclick="applyFolderColorChange('${safeFId}', '${c}')" style="width:24px; height:24px; border-radius:50%; background:${c}; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>`; });
     colorHtml += `</div>`;
     let div = document.createElement("div");
     div.className = "qbank-modal-overlay"; div.id = "color-picker-modal"; div.style.display = "flex";
-    div.innerHTML = `<div class="qbank-modal-container" style="width:320px; height:auto; padding:22px; background:#fff; box-shadow:0 25px 60px rgba(0,0,0,0.5);"><h3 style="margin-top:0; color:#0f172a; font-weight:900; font-size:15px; text-align:center;">🎨 Chọn màu thư mục</h3>${colorHtml}<button onclick="document.getElementById('color-picker-modal').remove()" style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:800; color:#475569; margin-top:10px;">Đóng</button></div>`;
+    div.onclick = function(e) { if (e.target === div) div.remove(); };
+    div.innerHTML = `<div class="qbank-modal-container" style="width:320px; height:auto; padding:22px; background:#fff; box-shadow:0 25px 60px rgba(0,0,0,0.5);" onclick="event.stopPropagation()"><h3 style="margin-top:0; color:#0f172a; font-weight:900; font-size:15px; text-align:center;">🎨 Chọn màu thư mục</h3>${colorHtml}<button onclick="document.getElementById('color-picker-modal').remove()" style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; background:#f1f5f9; cursor:pointer; font-weight:800; color:#475569; margin-top:10px;">Đóng</button></div>`;
     document.body.appendChild(div);
 }
 
@@ -430,37 +478,89 @@ function selectQbankFolder(folderId) { handleFolderNodeClick(folderId); }
 // ============================================================================
 // 3. KÉO THẢ & GÁN VÀO MA TRẬN 16 Ô
 // ============================================================================
-function handleDropZoneOver(e) { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }
-function handleDropZoneLeave(e) { e.currentTarget.classList.remove("drag-over"); }
+function handleDropZoneOver(e) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    cancelLeafAutoExpandTimer();
+    if (e.currentTarget) e.currentTarget.classList.add("drag-over");
+}
 
+function handleDropZoneLeave(e) {
+    if (e.currentTarget && e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
+    if (e.currentTarget) e.currentTarget.classList.remove("drag-over");
+}
+
+// GÁN TƯỜNG MINH q.part (1..4) VÀ q.isPart4 (true/false) ĐỂ KHÔNG BAO GIỜ BỊ ĐẨY NHẦM VỀ P4
 function mutateQuestionMatrix(qId, folderId, part, level, assignedTimestamp = null) {
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (!q) return null;
-    if (part === 1) { q.type = "multiple_choice"; delete q.part; delete q.isPart4; if (!q.options) q.options = ["A", "B", "C", "D"]; }
-    else if (part === 2) { q.type = "true_false"; delete q.part; delete q.isPart4; if (!q.statements) q.statements = [{ id: "a", statement: "", correct: true }]; }
-    else if (part === 3) { q.type = "short_answer"; delete q.part; delete q.isPart4; }
-    else if (part === 4) { q.type = "short_answer"; q.part = 4; }
-    q.level = level; q.folderId = folderId; q.assignedAt = assignedTimestamp || Date.now();
+
+    const targetPart = parseInt(part, 10) || 1;
+    const targetLevel = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(level) : (level || "nb");
+
+    if (targetPart === 1) {
+        q.type = "multiple_choice";
+        q.part = 1;
+        q.isPart4 = false;
+        if (!Array.isArray(q.options) || q.options.length === 0) q.options = ["Phương án A", "Phương án B", "Phương án C", "Phương án D"];
+        if (q.correct === undefined || q.correct === null) q.correct = 0;
+    } else if (targetPart === 2) {
+        q.type = "true_false";
+        q.part = 2;
+        q.isPart4 = false;
+        if (!Array.isArray(q.statements) || q.statements.length === 0) {
+            q.statements = [
+                { id: "a", statement: "", correct: true },
+                { id: "b", statement: "", correct: false },
+                { id: "c", statement: "", correct: true },
+                { id: "d", statement: "", correct: false }
+            ];
+        }
+    } else if (targetPart === 3) {
+        q.type = "short_answer";
+        q.part = 3;
+        q.isPart4 = false;
+        if (q.correctAnswer === undefined || q.correctAnswer === null) {
+            q.correctAnswer = q.correct !== undefined ? String(q.correct) : "0";
+        }
+    } else if (targetPart === 4) {
+        q.type = "short_answer";
+        q.part = 4;
+        q.isPart4 = true;
+        if (q.correctAnswer === undefined || q.correctAnswer === null) {
+            q.correctAnswer = q.correct !== undefined ? String(q.correct) : "0";
+        }
+    }
+
+    q.level = targetLevel;
+    q.folderId = folderId;
+    q.assignedAt = assignedTimestamp || Date.now();
     const cur = findNodeInTree(qbankState.currentTree, folderId);
     q.folderName = cur ? cur.name : "";
     return q;
 }
 
 function handleDropZoneDrop(e, folderId, part, level) {
-    e.preventDefault(); e.currentTarget.classList.remove("drag-over");
-    const qId = e.dataTransfer.getData("text/plain") || qbankState.draggedQId;
+    e.preventDefault();
+    e.stopPropagation();
+    cancelLeafAutoExpandTimer();
+    if (e.currentTarget) e.currentTarget.classList.remove("drag-over");
+
+    const qId = (e.dataTransfer ? e.dataTransfer.getData("text/plain") : "") || qbankState.draggedQId;
     qbankState.draggedQId = null;
     if (!qId) return;
 
+    const targetPart = parseInt(part, 10) || 1;
+    const targetLevel = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(level) : (level || "nb");
     const targetFolder = findNodeInTree(qbankState.currentTree, folderId);
     const folderLabel = targetFolder ? targetFolder.name : "Thư mục";
     const isMultiDrag = qbankState.selectedQuestionIds.has(String(qId)) && qbankState.selectedQuestionIds.size > 1;
     const idsToMove = isMultiDrag ? Array.from(qbankState.selectedQuestionIds) : [String(qId)];
 
-    pushQbankUndoState(`Xếp ${idsToMove.length} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`);
+    pushQbankUndoState(`Xếp ${idsToMove.length} câu vào ${folderLabel} (P${targetPart} - ${getQbankLevelLabel(targetLevel)})`);
     const baseTs = Date.now();
     let lastMovedQ = null;
-    idsToMove.forEach((id, idx) => { const m = mutateQuestionMatrix(id, folderId, part, level, baseTs + idx); if (m) lastMovedQ = m; });
+    idsToMove.forEach((id, idx) => { const m = mutateQuestionMatrix(id, folderId, targetPart, targetLevel, baseTs + idx); if (m) lastMovedQ = m; });
     if (isMultiDrag) { qbankState.selectedQuestionIds.clear(); updateQbankDeleteSelectedButtonUI(); }
     if (!lastMovedQ) return;
 
@@ -473,14 +573,16 @@ function handleDropZoneDrop(e, folderId, part, level) {
 
 function assignSelectedQuestionsToMatrix(folderId, part, level) {
     if (qbankState.selectedQuestionIds.size === 0) return;
+    const targetPart = parseInt(part, 10) || 1;
+    const targetLevel = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(level) : (level || "nb");
     const targetFolder = findNodeInTree(qbankState.currentTree, folderId);
     const folderLabel = targetFolder ? targetFolder.name : "Thư mục";
     const count = qbankState.selectedQuestionIds.size;
 
-    pushQbankUndoState(`Xếp ${count} câu vào ${folderLabel} (P${part} - ${getQbankLevelLabel(level)})`);
+    pushQbankUndoState(`Xếp ${count} câu vào ${folderLabel} (P${targetPart} - ${getQbankLevelLabel(targetLevel)})`);
     const baseTs = Date.now();
     let idx = 0;
-    qbankState.selectedQuestionIds.forEach(qId => { mutateQuestionMatrix(qId, folderId, part, level, baseTs + idx); idx++; });
+    qbankState.selectedQuestionIds.forEach(qId => { mutateQuestionMatrix(qId, folderId, targetPart, targetLevel, baseTs + idx); idx++; });
     qbankState.selectedQuestionIds.clear();
 
     recomputeAllMatrixIds(); saveQbankDraftState(false);
@@ -491,9 +593,11 @@ function assignSelectedQuestionsToMatrix(folderId, part, level) {
 }
 
 function applyMatrixToQuestion(qId, folderId, part, level) {
+    const targetPart = parseInt(part, 10) || 1;
+    const targetLevel = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(level) : (level || "nb");
     const targetFolder = findNodeInTree(qbankState.currentTree, folderId);
-    pushQbankUndoState(`Chuyển câu vào ${targetFolder ? targetFolder.name : "Thư mục"}`);
-    const q = mutateQuestionMatrix(qId, folderId, part, level, Date.now());
+    pushQbankUndoState(`Chuyển câu vào ${targetFolder ? targetFolder.name : "Thư mục"} (P${targetPart} - ${getQbankLevelLabel(targetLevel)})`);
+    const q = mutateQuestionMatrix(qId, folderId, targetPart, targetLevel, Date.now());
     if (!q) return;
     recomputeAllMatrixIds(); saveQbankDraftState(false);
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
@@ -737,7 +841,6 @@ function executeQbankMultiDelete(mode, event) {
 
     if (!confirm(confirmMsg)) return;
 
-    // Nếu đang mở chế độ Sửa đề chia đôi ở cột giữa thì đóng lại trước khi xóa để đồng bộ
     if (typeof qbankMidEditState !== "undefined" && qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") {
         closeQbankMidEditMode(true);
     }
@@ -751,7 +854,6 @@ function executeQbankMultiDelete(mode, event) {
     idsToDelete.forEach(id => qbankState.selectedQuestionIds.delete(id));
     cleanupOrphanedImagesInQbank(deletedQuestions);
 
-    // Nếu xóa sạch toàn bộ câu chờ xếp thì làm sạch tiêu đề đề gốc chờ xếp
     const remainingUnassigned = (qbankState.rawQuestions || []).filter(q => Boolean(q && !q.folderId)).length;
     if (remainingUnassigned === 0 && mode === "unassigned") {
         qbankState.currentExamTitle = "";
@@ -769,7 +871,6 @@ function executeQbankMultiDelete(mode, event) {
     showQbankToast(toastMsg, "warning");
 }
 
-// Đóng menu Xóa nhiều câu khi click ra ngoài hoặc nhấn phím Escape
 document.addEventListener("click", function(e) {
     const menu = document.getElementById("qbank-delete-multi-menu");
     if (!menu || !menu.classList.contains("show")) return;
@@ -807,9 +908,13 @@ function deleteQbankQuestion(qId) {
 function promptMoveQuestion(qId) {
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (!q) return;
+
+    const existingModal = document.getElementById("move-qbank-modal");
+    if (existingModal) existingModal.remove();
+
     let options = [];
     function traverse(nodes, path) {
-        nodes.forEach(n => {
+        (nodes || []).forEach(n => {
             let p = path ? path + " > " + n.name : n.name;
             if (!n.children || n.children.length === 0) options.push({ id: n.id, name: p });
             else traverse(n.children, p);
@@ -818,14 +923,16 @@ function promptMoveQuestion(qId) {
     traverse(qbankState.currentTree, "");
     if (options.length === 0) return alert("Chưa có thư mục lá nào để chuyển!");
 
-    const currentPart = getQbankQuestionPart(q), currentLevel = q.level || "nb";
-    let selectHtml = `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">1. Chọn thư mục lưu trữ:</label><select id="move-qbank-folder" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700;">${options.map(o => `<option value="${o.id}" ${o.id === q.folderId ? "selected" : ""}>${escapeQbankHtml(o.name)}</option>`).join("")}</select></div>`;
+    const currentPart = getQbankQuestionPart(q);
+    const currentLevel = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
+    let selectHtml = `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">1. Chọn thư mục lưu trữ:</label><select id="move-qbank-folder" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700;">${options.map(o => `<option value="${escapeQbankAttr(o.id)}" ${o.id === q.folderId ? "selected" : ""}>${escapeQbankHtml(o.name)}</option>`).join("")}</select></div>`;
     selectHtml += `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">2. Chọn Phần thi:</label><select id="move-qbank-part" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700;"><option value="1" ${currentPart === 1 ? "selected" : ""}>Phần I: Trắc nghiệm 4 lựa chọn</option><option value="2" ${currentPart === 2 ? "selected" : ""}>Phần II: Trắc nghiệm Đúng/Sai</option><option value="3" ${currentPart === 3 ? "selected" : ""}>Phần III: Trả lời ngắn</option><option value="4" ${currentPart === 4 ? "selected" : ""}>Phần IV: Tự luận ngắn</option></select></div>`;
     selectHtml += `<div style="margin-bottom:12px;"><label style="font-size:12px; font-weight:800; color:#475569; display:block; margin-bottom:4px;">3. Chọn Mức độ:</label><select id="move-qbank-level" style="width:100%; padding:8px 10px; border-radius:8px; border:1.5px solid #cbd5e1; font-weight:700;"><option value="nb" ${currentLevel === "nb" ? "selected" : ""}>Nhận biết (NB)</option><option value="th" ${currentLevel === "th" ? "selected" : ""}>Thông hiểu (TH)</option><option value="vdt" ${currentLevel === "vdt" ? "selected" : ""}>Vận dụng (VD)</option><option value="vdc" ${currentLevel === "vdc" ? "selected" : ""}>Vận dụng cao (VDC)</option></select></div>`;
 
     let div = document.createElement("div");
     div.className = "qbank-modal-overlay"; div.id = "move-qbank-modal"; div.style.display = "flex";
-    div.innerHTML = `<div class="qbank-modal-container" style="width:50vw; min-width:320px; max-width:520px; height:auto; padding:22px; overflow:visible; background:#fff;"><h3 style="margin-top:0; color:#0284c7; font-weight:900; font-size:17px; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:14px;">🔄 CHUYỂN CÂU HỎI SANG MỤC KHÁC</h3>${selectHtml}<div style="display:flex; gap:10px; margin-top:16px;"><button onclick="document.getElementById('move-qbank-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:1.5px solid #cbd5e1; background:#f8fafc; cursor:pointer; font-weight:800;">✕ Hủy</button><button onclick="executeMoveQbankQuestion('${safeQbankJsArg(qId)}')" style="flex:1.5; padding:10px; border-radius:8px; border:none; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; cursor:pointer; font-weight:900;">🚀 Xác nhận chuyển</button></div></div>`;
+    div.onclick = function(e) { if (e.target === div) div.remove(); };
+    div.innerHTML = `<div class="qbank-modal-container" style="width:50vw; min-width:320px; max-width:520px; height:auto; padding:22px; overflow:visible; background:#fff;" onclick="event.stopPropagation()"><h3 style="margin-top:0; color:#0284c7; font-weight:900; font-size:17px; border-bottom:1.5px solid #e2e8f0; padding-bottom:8px; margin-bottom:14px;">🔄 CHUYỂN CÂU HỎI SANG MỤC KHÁC</h3>${selectHtml}<div style="display:flex; gap:10px; margin-top:16px;"><button onclick="document.getElementById('move-qbank-modal').remove()" style="flex:1; padding:10px; border-radius:8px; border:1.5px solid #cbd5e1; background:#f8fafc; cursor:pointer; font-weight:800;">✕ Hủy</button><button onclick="executeMoveQbankQuestion('${safeQbankJsArg(qId)}')" style="flex:1.5; padding:10px; border-radius:8px; border:none; background:linear-gradient(135deg, #0284c7, #0369a1); color:#fff; cursor:pointer; font-weight:900;">🚀 Xác nhận chuyển</button></div></div>`;
     document.body.appendChild(div);
 }
 
@@ -883,7 +990,7 @@ function readQbankJsonFile(file) {
                 q.id = `qb_${nowTs}_${idx + 1}`; q.origIndex = idx + 1; q.sourceExam = examTitle;
                 q.folderId = null; q.folderName = ""; q.matrixId = ""; q.matrixSeq = 0; q.matrixPathSlug = ""; q.rootClassId = "";
                 delete q.assignedAt;
-                if (!q.level) q.level = "nb";
+                q.level = (typeof normalizeQbankLevel === "function") ? normalizeQbankLevel(q.level) : (q.level || "nb");
                 normalizeQuestionAnswerOnTransfer(q);
                 if (resolvedImgUrl) {
                     const uniqueImgKey = `img_q_${q.id}`;
@@ -942,7 +1049,7 @@ function sortAssignedQuestionsArray(arr) {
         if (orderA !== orderB) return orderA - orderB;
         const pA = getQbankQuestionPart(a), pB = getQbankQuestionPart(b);
         if (pA !== pB) return pA - pB;
-        const lvlA = levelOrder[a.level || "nb"] || 1, lvlB = levelOrder[b.level || "nb"] || 1;
+        const lvlA = levelOrder[normalizeQbankLevel(a.level)] || 1, lvlB = levelOrder[normalizeQbankLevel(b.level)] || 1;
         if (lvlA !== lvlB) return lvlA - lvlB;
         const seqA = Number(a.matrixSeq) || 0, seqB = Number(b.matrixSeq) || 0;
         if (seqA !== seqB) return seqA - seqB;
@@ -953,7 +1060,10 @@ function sortAssignedQuestionsArray(arr) {
 function getFilteredAndSortedQuestions() {
     let list = getScopeQuestionsForMatrix();
     if (qbankState.activeFilter.part) list = list.filter(q => getQbankQuestionPart(q) === qbankState.activeFilter.part);
-    if (qbankState.activeFilter.level) list = list.filter(q => (q.level || "nb") === qbankState.activeFilter.level);
+    if (qbankState.activeFilter.level) {
+        const filterLvl = normalizeQbankLevel(qbankState.activeFilter.level);
+        list = list.filter(q => normalizeQbankLevel(q.level) === filterLvl);
+    }
     const assigned = list.filter(q => Boolean(q && q.folderId && q.matrixId));
     const unassigned = list.filter(q => Boolean(q && !(q.folderId && q.matrixId)));
     return [...sortAssignedQuestionsArray(assigned), ...[...unassigned].sort((a, b) => (Number(a.origIndex) || 0) - (Number(b.origIndex) || 0))];
@@ -970,7 +1080,8 @@ function updateQbankMatrixStats() {
     const stats = { 1: { nb: 0, th: 0, vdt: 0, vdc: 0 }, 2: { nb: 0, th: 0, vdt: 0, vdc: 0 }, 3: { nb: 0, th: 0, vdt: 0, vdc: 0 }, 4: { nb: 0, th: 0, vdt: 0, vdc: 0 } };
     let total = 0;
     scopedQuestions.forEach(q => {
-        const p = getQbankQuestionPart(q), lvl = q.level || "nb";
+        const p = getQbankQuestionPart(q);
+        const lvl = normalizeQbankLevel(q.level);
         if (stats[p] && stats[p][lvl] !== undefined) { stats[p][lvl]++; total++; }
     });
 
@@ -1035,7 +1146,7 @@ function renderQbankCardHtml(q, idx) {
         let correctIdx = typeof q.correct === "number" ? q.correct : letters.indexOf(String(q.correct || "A").trim().toUpperCase());
         contentDetailsHtml = `<div class="qbank-options-preview">${q.options.map((opt, oIdx) => `<div class="qbank-opt-item ${oIdx === correctIdx ? "is-correct" : ""}"><span class="qbank-opt-circle">${letters[oIdx] || ""}</span><span>${opt} ${oIdx === correctIdx ? "<b>✓</b>" : ""}</span></div>`).join("")}</div>`;
     } else if (p === 2 && Array.isArray(q.statements)) {
-        contentDetailsHtml = `<div style="margin:4px 0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:5px; padding:4px 6px;">${q.statements.map(st => { const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng"); return `<div style="font-size:11.5px; margin-bottom:2px; display:flex; justify-content:space-between;"><span><b>${st.id})</b> ${st.statement}</span><b style="color:${isTrue ? "#16a34a" : "#dc2626"};">${isTrue ? "🟢 Đúng" : "🔴 Sai"}</b></div>`; }).join("")}</div>`;
+        contentDetailsHtml = `<div style="margin:4px 0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:5px; padding:4px 6px;">${q.statements.map(st => { const isTrue = (st.correct === true || String(st.correct).toLowerCase() === "đúng" || String(st.correct).toLowerCase() === "true"); return `<div style="font-size:11.5px; margin-bottom:2px; display:flex; justify-content:space-between;"><span><b>${st.id})</b> ${st.statement}</span><b style="color:${isTrue ? "#16a34a" : "#dc2626"};">${isTrue ? "🟢 Đúng" : "🔴 Sai"}</b></div>`; }).join("")}</div>`;
     } else {
         contentDetailsHtml = `<div style="margin:4px 0; font-size:11.5px; font-weight:800; color:#0d9488; background:#f0fdfa; padding:3px 6px; border-radius:5px; border:1px solid #99f6e4;">🎯 Đáp số: <span style="color:#0f172a;">${q.correctAnswer !== undefined ? q.correctAnswer : (q.correct || "0")}</span></div>`;
     }
@@ -1102,8 +1213,19 @@ function renderQbankQuestions() {
     if (window.MathJax && MathJax.typesetPromise) { try { MathJax.typesetPromise([container]).catch(() => {}); } catch (e) {} }
 }
 
-function handleQuestionDragStart(e, qId) { qbankState.draggedQId = qId; e.dataTransfer.setData("text/plain", qId); }
-function handleQuestionDragEnd() { qbankState.draggedQId = null; }
+function handleQuestionDragStart(e, qId) {
+    cancelLeafAutoExpandTimer();
+    qbankState.draggedQId = qId;
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", qId);
+    }
+}
+function handleQuestionDragEnd() {
+    cancelLeafAutoExpandTimer();
+    qbankState.draggedQId = null;
+    document.querySelectorAll(".leaf-drop-zone.drag-over").forEach(el => el.classList.remove("drag-over"));
+}
 function toggleSelectQuestion(qId, isChecked) {
     if (isChecked) qbankState.selectedQuestionIds.add(String(qId));
     else qbankState.selectedQuestionIds.delete(String(qId));
@@ -1215,6 +1337,7 @@ window.normalizeQuestionAnswerOnTransfer = normalizeQuestionAnswerOnTransfer;
 window.transferClassExamToQBank = transferClassExamToQBank;
 window.toggleLeafMatrixDisplay = toggleLeafMatrixDisplay;
 window.handleLeafTreeDragOver = handleLeafTreeDragOver;
+window.handleLeafTreeDragLeave = handleLeafTreeDragLeave;
 window.renderQbankTree = renderQbankTree;
 window.handleFolderNodeClick = handleFolderNodeClick;
 window.setFilterByNodePart = setFilterByNodePart;
