@@ -393,8 +393,9 @@ async function updateExamFromSoiDe() {
         const finalMade = soiDeState.examData.maDe || "101";
         const finalMinutes = parseInt(soiDeState.examData.timeLimitMinutes, 10) || 90;
 
+        // 2. NẾU MỞ TỪ "NGÂN HÀNG ĐỀ (ĐÃ LƯU)" -> CẬP NHẬT VÀO qbank_saved_exams VÀ DỪNG (KHÔNG TẠO BẢN GHI RÁC TRONG quizzes)
         if (String(quizId).startsWith("exam_bank_") && typeof qbankState !== "undefined" && Array.isArray(qbankState.savedExams)) {
-            const bankIdx = qbankState.savedExams.findIndex(e => e.id === quizId);
+            const bankIdx = qbankState.savedExams.findIndex(e => String(e.id) === String(quizId));
             if (bankIdx !== -1) {
                 qbankState.savedExams[bankIdx] = {
                     ...qbankState.savedExams[bankIdx],
@@ -404,8 +405,18 @@ async function updateExamFromSoiDe() {
                     images: imagesMap
                 };
                 try { localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams)); } catch (e) {}
-                await client.from("app_key_values").upsert({ key: "qbank_saved_exams", value: qbankState.savedExams });
+                const { error: bankErr } = await client
+                    .from("app_key_values")
+                    .upsert({ key: "qbank_saved_exams", value: qbankState.savedExams }, { onConflict: "key" });
+                if (bankErr) throw bankErr;
+
                 if (typeof filterSavedExamsList === "function") filterSavedExamsList(qbankState.savedExamFilter || "all");
+                soiDeState.examData.questions = cleanQuestions;
+                soiDeState.examData.images = imagesMap;
+                soiDeState.rawEditingCardIds.clear();
+                renderSoiDeBothSides();
+                alert(`🎉 ĐÃ CẬP NHẬT ĐỀ "${finalTitle}" TRONG NGÂN HÀNG ĐỀ ĐÃ LƯU (${cleanQuestions.length} câu)!`);
+                return;
             }
         }
 
