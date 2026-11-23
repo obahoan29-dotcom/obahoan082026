@@ -3,8 +3,128 @@
 // MODULE 4/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
 // - POPOVER XUẤT FILE (PDF / WORD) THEO CÂY THƯ MỤC KIẾN THỨC
 // - CỘT 3: TRÍCH XUẤT & LƯU ĐỀ THI MỚI VÀO NGÂN HÀNG
-// - MODAL NGÂN HÀNG ĐỀ ĐÃ LƯU (XEM TRƯỚC, SOI ĐỀ, JSON, XÓA, CHUYỂN SANG 8 LỚP)
+// - MODAL NGÂN HÀNG ĐỀ ĐÃ LƯU (XÓA VĨNH VIỄN TRÊN SUPABASE + CHỐNG HỒI SINH,
+//   TÌM KIẾM, ĐỔI TÊN, XUẤT PDF/WORD, XEM TRƯỚC, SOI ĐỀ, JSON, CHUYỂN SANG 8 LỚP)
 // =========================================================
+
+const QBANK_SAVED_EXAMS_LS_KEY = "qbank_saved_exams";
+const QBANK_SAVED_EXAMS_DIRTY_KEY = "qbank_saved_exams_dirty";
+const QBANK_SAVED_EXAMS_TOMBSTONE_KEY = "qbank_deleted_saved_exam_ids";
+
+let _savedExamsLoadEpoch = 0;
+let _savedExamsSearchQuery = "";
+
+// ============================================================================
+// 0. TRỢ GIÚP ĐỒNG BỘ BỀN VỮNG CHO NGÂN HÀNG ĐỀ ĐÃ LƯU
+// ============================================================================
+function getSavedExamTombstoneSet() {
+    try {
+        const raw = localStorage.getItem(QBANK_SAVED_EXAMS_TOMBSTONE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr.map(x => String(x)) : []);
+    } catch (e) {
+        return new Set();
+    }
+}
+
+function addSavedExamTombstoneId(examId) {
+    try {
+        const set = getSavedExamTombstoneSet();
+        set.add(String(examId));
+        localStorage.setItem(QBANK_SAVED_EXAMS_TOMBSTONE_KEY, JSON.stringify(Array.from(set)));
+        localStorage.setItem(QBANK_SAVED_EXAMS_DIRTY_KEY, "1");
+    } catch (e) {}
+}
+
+function clearSavedExamsDirtyState() {
+    try {
+        localStorage.removeItem(QBANK_SAVED_EXAMS_DIRTY_KEY);
+        localStorage.removeItem(QBANK_SAVED_EXAMS_TOMBSTONE_KEY);
+    } catch (e) {}
+}
+
+async function saveSavedExamsToCloud(listOverride = null) {
+    const listToSave = Array.isArray(listOverride) ? listOverride : (qbankState.savedExams || []);
+    qbankState.savedExams = listToSave;
+
+    try {
+        localStorage.setItem(QBANK_SAVED_EXAMS_LS_KEY, JSON.stringify(listToSave));
+    } catch (e) {}
+
+    const client = getQbankSupabaseClient();
+    if (!client) {
+        try { localStorage.setItem(QBANK_SAVED_EXAMS_DIRTY_KEY, "1"); } catch (e) {}
+        return { ok: false, error: new Error("Chưa kết nối được Supabase!") };
+    }
+
+    try {
+        const { error } = await client
+            .from("app_key_values")
+            .upsert({ key: QBANK_SAVED_EXAMS_LS_KEY, value: listToSave }, { onConflict: "key" });
+
+        if (error) {
+            try { localStorage.setItem(QBANK_SAVED_EXAMS_DIRTY_KEY, "1"); } catch (e) {}
+            return { ok: false, error };
+        }
+
+        clearSavedExamsDirtyState();
+        return { ok: true, error: null };
+    } catch (err) {
+        try { localStorage.setItem(QBANK_SAVED_EXAMS_DIRTY_KEY, "1"); } catch (e) {}
+        return { ok: false, error: err };
+    }
+}
+
+function ensureSavedExamsToolbarControls() {
+    const filterSel = document.getElementById("qbank-filter-grade");
+    if (!filterSel || !filterSel.parentNode) return;
+    const bar = filterSel.parentNode;
+
+    bar.style.flexWrap = "wrap";
+    bar.style.paddingBottom = "10px";
+    bar.style.borderBottom = "1px solid #e2e8f0";
+
+    if (!document.getElementById("qbank-saved-search")) {
+        const searchInp = document.createElement("input");
+        searchInp.type = "text";
+        searchInp.id = "qbank-saved-search";
+        searchInp.placeholder = "🔍 Tìm tên đề...";
+        searchInp.value = _savedExamsSearchQuery;
+        searchInp.style.cssText = "padding: 5px 10px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-weight: 600; outline: none; background: #fff; font-size: 12px; min-width: 190px; flex: 1; max-width: 280px;";
+        searchInp.oninput = function() {
+            _savedExamsSearchQuery = this.value || "";
+            const sel = document.getElementById("qbank-filter-grade");
+            filterSavedExamsList(sel ? sel.value : qbankState.savedExamFilter || "all");
+        };
+        bar.appendChild(searchInp);
+    }
+
+    if (!document.getElementById("qbank-saved-count-badge")) {
+        const badge = document.createElement("span");
+        badge.id = "qbank-saved-count-badge";
+        badge.style.cssText = "margin-left:auto; font-size:11.5px; font-weight:800; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; padding:3px 9px; border-radius:999px; white-space:nowrap;";
+        badge.textContent = "0 đề";
+        bar.appendChild(badge);
+    }
+
+    if (!document.getElementById("btn-qbank-saved-refresh")) {
+        const refBtn = document.createElement("button");
+        refBtn.type = "button";
+        refBtn.id = "btn-qbank-saved-refresh";
+        refBtn.className = "btn-qbank btn-qbank-primary";
+        refBtn.style.padding = "5px 10px";
+        refBtn.style.fontSize = "11.5px";
+        refBtn.innerHTML = "🔄 Làm mới";
+        refBtn.onclick = async () => {
+            refBtn.disabled = true;
+            refBtn.innerText = "⏳...";
+            await loadSavedExamsList(true);
+            refBtn.disabled = false;
+            refBtn.innerHTML = "🔄 Làm mới";
+        };
+        bar.appendChild(refBtn);
+    }
+}
 
 // ============================================================================
 // 1. XUẤT FILE (PDF / WORD) THEO CÂY THƯ MỤC
@@ -272,7 +392,6 @@ function toggleQbankExportFormatMenu(event) {
     menu.classList.add("show");
 }
 
-// GIỮ NGUYÊN q.part & q.isPart4 TƯỜNG MINH ĐỂ CÂU ĐÃ CHUYỂN TỪ P4 -> P3 KHÔNG BỊ BẬT NGƯỢC KHI LƯU/XUẤT
 function normalizeQuestionForExamOutput(rawQ, idx, imagesMap) {
     const letters = ["A", "B", "C", "D"];
     const q = JSON.parse(JSON.stringify(rawQ));
@@ -413,10 +532,13 @@ async function saveExtractedExamToBank() {
 
     try {
         await loadSavedExamsList(false);
+        _savedExamsLoadEpoch++;
         qbankState.savedExams.unshift(newExam);
-        localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams));
-        const client = getQbankSupabaseClient();
-        if (client) await client.from("app_key_values").upsert({ key: "qbank_saved_exams", value: qbankState.savedExams });
+
+        const saveRes = await saveSavedExamsToCloud(qbankState.savedExams);
+        if (!saveRes.ok) {
+            throw saveRes.error || new Error("Không thể lưu đề lên Supabase!");
+        }
 
         if (qbankState.storageTarget === "drive" && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && !GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
             fetch(GOOGLE_DRIVE_UPLOAD_GAS_URL, {
@@ -434,24 +556,72 @@ async function saveExtractedExamToBank() {
         closeQbankCreatorModal();
         openSavedExamsModal();
     } catch (err) {
-        alert("❌ Lỗi lưu đề: " + err.message);
+        alert("❌ Lỗi lưu đề: " + (err.message || err));
     } finally {
         if (btn) { btn.disabled = false; btn.innerText = "💾 Lưu đề vào Ngân hàng"; }
     }
 }
 
 async function loadSavedExamsList(doRender = true) {
-    try { const local = localStorage.getItem("qbank_saved_exams"); if (local) qbankState.savedExams = JSON.parse(local) || []; } catch (e) {}
+    const myEpoch = ++_savedExamsLoadEpoch;
+    ensureSavedExamsToolbarControls();
+
+    let localList = [];
+    try {
+        const local = localStorage.getItem(QBANK_SAVED_EXAMS_LS_KEY);
+        if (local) {
+            const parsed = JSON.parse(local);
+            if (Array.isArray(parsed)) localList = parsed;
+        }
+    } catch (e) {}
+
+    const tombstones = getSavedExamTombstoneSet();
+    const isDirty = (localStorage.getItem(QBANK_SAVED_EXAMS_DIRTY_KEY) === "1");
+
+    if (tombstones.size > 0) {
+        localList = localList.filter(e => e && !tombstones.has(String(e.id)));
+    }
+    qbankState.savedExams = localList;
+
     const client = getQbankSupabaseClient();
     if (client) {
         try {
-            const { data } = await client.from("app_key_values").select("value").eq("key", "qbank_saved_exams").single();
-            if (data && Array.isArray(data.value)) {
-                qbankState.savedExams = data.value;
-                localStorage.setItem("qbank_saved_exams", JSON.stringify(data.value));
+            const { data, error } = await client
+                .from("app_key_values")
+                .select("value")
+                .eq("key", QBANK_SAVED_EXAMS_LS_KEY)
+                .maybeSingle();
+
+            if (myEpoch !== _savedExamsLoadEpoch) return;
+
+            if (!error && data && Array.isArray(data.value)) {
+                if (isDirty) {
+                    // Bản trên máy có thay đổi (VD: vừa xóa offline) chưa đẩy lên Cloud -> giữ bản máy và đẩy bù lên Cloud
+                    const filteredLocal = localList.filter(e => e && !tombstones.has(String(e.id)));
+                    qbankState.savedExams = filteredLocal;
+                    await saveSavedExamsToCloud(filteredLocal);
+                } else {
+                    const cloudCleaned = tombstones.size > 0
+                        ? data.value.filter(e => e && !tombstones.has(String(e.id)))
+                        : data.value;
+
+                    qbankState.savedExams = cloudCleaned;
+                    try {
+                        localStorage.setItem(QBANK_SAVED_EXAMS_LS_KEY, JSON.stringify(cloudCleaned));
+                    } catch (e) {}
+
+                    if (tombstones.size > 0 && cloudCleaned.length !== data.value.length) {
+                        await saveSavedExamsToCloud(cloudCleaned);
+                    }
+                }
+            } else if (isDirty && localList.length >= 0) {
+                await saveSavedExamsToCloud(localList);
             }
         } catch (e) {}
     }
+
+    if (myEpoch !== _savedExamsLoadEpoch) return;
+
     if (doRender) {
         const filterSel = document.getElementById("qbank-filter-grade");
         filterSavedExamsList(filterSel ? filterSel.value : "all");
@@ -459,13 +629,29 @@ async function loadSavedExamsList(doRender = true) {
 }
 
 function filterSavedExamsList(gradeVal) {
-    qbankState.savedExamFilter = gradeVal;
+    ensureSavedExamsToolbarControls();
+    qbankState.savedExamFilter = gradeVal || "all";
     const container = document.getElementById("qbank-saved-list");
+    const countBadge = document.getElementById("qbank-saved-count-badge");
     if (!container) return;
+
     let list = qbankState.savedExams || [];
-    if (gradeVal !== "all") list = list.filter(e => e.grade === gradeVal);
+    if (qbankState.savedExamFilter !== "all") {
+        list = list.filter(e => e.grade === qbankState.savedExamFilter);
+    }
+
+    const q = (_savedExamsSearchQuery || "").trim().toLowerCase();
+    if (q) {
+        list = list.filter(e => (e.title || "").toLowerCase().includes(q));
+    }
+
+    if (countBadge) {
+        const totalAll = (qbankState.savedExams || []).length;
+        countBadge.textContent = (list.length === totalAll) ? `${totalAll} đề` : `${list.length} / ${totalAll} đề`;
+    }
+
     if (list.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">Chưa có đề thi nào trong phân loại này.</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b; font-size:12px;">${q ? `Không tìm thấy đề nào khớp từ khóa "${escapeQbankHtml(q)}".` : "Chưa có đề thi nào trong phân loại này."}</div>`;
         return;
     }
 
@@ -476,18 +662,21 @@ function filterSavedExamsList(gradeVal) {
             : `<span style="font-size:10.5px; color:#94a3b8; font-style:italic;">Chưa chuyển</span>`;
         const safeId = safeQbankJsArg(exam.id);
         return `
-            <div class="saved-exam-item">
+            <div class="saved-exam-item" data-saved-exam-id="${escapeQbankAttr(exam.id)}">
                 <div style="flex:1; min-width:0;">
-                    <div style="font-size:14px; font-weight:900; color:#0f172a;">📑 ${escapeQbankHtml(exam.title)}</div>
-                    <div style="font-size:11.5px; color:#64748b; font-weight:600; margin-top:3px;">${exam.questionCount} câu • Khối: <b style="color:#0284c7;">${escapeQbankHtml(exam.grade)}</b> • Tạo: ${dateStr}</div>
+                    <div style="font-size:14px; font-weight:900; color:#0f172a; word-break:break-word;">📑 ${escapeQbankHtml(exam.title)}</div>
+                    <div style="font-size:11.5px; color:#64748b; font-weight:600; margin-top:3px;">${exam.questionCount || (exam.questions ? exam.questions.length : 0)} câu • Khối: <b style="color:#0284c7;">${escapeQbankHtml(exam.grade)}</b> • Tạo: ${dateStr}</div>
                     <div class="exam-assigned-tags" style="display:flex; gap:4px; margin-top:5px; flex-wrap:wrap;">${assignedTags}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                    <button class="btn-qbank btn-qbank-primary" onclick="openTransferExamModal('${safeId}')">🚀 Chuyển lớp</button>
-                    <button class="btn-qbank btn-qbank-success" onclick="previewSavedExam('${safeId}')">👁️ Xem đề</button>
-                    <button class="btn-qbank" style="background:#8b5cf6; color:#fff;" onclick="openInSoiDeFromBank('${safeId}')" title="Mở sang công cụ Soi đề">🔬 Soi đề</button>
-                    <button class="btn-qbank" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;" onclick="downloadSavedExamJson('${safeId}')">💾 JSON</button>
-                    <button class="btn-qbank btn-qbank-danger" onclick="deleteSavedExam('${safeId}')">🗑️</button>
+                    <button type="button" class="btn-qbank btn-qbank-primary" onclick="openTransferExamModal('${safeId}')">🚀 Chuyển lớp</button>
+                    <button type="button" class="btn-qbank btn-qbank-success" onclick="previewSavedExam('${safeId}')">👁️ Xem đề</button>
+                    <button type="button" class="btn-qbank" style="background:#8b5cf6; color:#fff;" onclick="openInSoiDeFromBank('${safeId}')" title="Mở sang công cụ Soi đề">🔬 Soi đề</button>
+                    <button type="button" class="btn-qbank" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;" onclick="renameSavedExam('${safeId}')" title="Đổi tên đề này">✏️</button>
+                    <button type="button" class="btn-qbank" style="background:#f0fdfa; color:#0f766e; border:1px solid #99f6e4;" onclick="exportSavedExamFromBank('${safeId}', 'pdf')" title="Xuất PDF đề thi">📄 PDF</button>
+                    <button type="button" class="btn-qbank" style="background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd;" onclick="exportSavedExamFromBank('${safeId}', 'word')" title="Xuất file Word (.doc)">📝 Word</button>
+                    <button type="button" class="btn-qbank" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;" onclick="downloadSavedExamJson('${safeId}')">💾 JSON</button>
+                    <button type="button" class="btn-qbank btn-qbank-danger" onclick="deleteSavedExam('${safeId}', event)" title="Xóa vĩnh viễn đề này">🗑️</button>
                 </div>
             </div>
         `;
@@ -496,7 +685,7 @@ function filterSavedExamsList(gradeVal) {
 
 function previewSavedExam(examId) {
     if (!requireQbankAdminOrPrompt()) return;
-    const exam = qbankState.savedExams.find(e => e.id === examId);
+    const exam = qbankState.savedExams.find(e => String(e.id) === String(examId));
     if (!exam) return;
     let modal = document.getElementById("modal-qbank-preview");
     if (!modal) {
@@ -535,7 +724,7 @@ function previewSavedExam(examId) {
 
 function openInSoiDeFromBank(examId) {
     if (!requireQbankAdminOrPrompt()) return;
-    const exam = qbankState.savedExams.find(e => e.id === examId);
+    const exam = qbankState.savedExams.find(e => String(e.id) === String(examId));
     if (!exam) return;
     if (typeof ensureSoiDeModalInDOM === "function") ensureSoiDeModalInDOM();
     if (typeof soiDeState !== "undefined") {
@@ -557,7 +746,7 @@ function openInSoiDeFromBank(examId) {
 
 function openTransferExamModal(examId) {
     if (!requireQbankAdminOrPrompt()) return;
-    const exam = qbankState.savedExams.find(e => e.id === examId);
+    const exam = qbankState.savedExams.find(e => String(e.id) === String(examId));
     if (!exam) return;
     qbankState.currentExamToTransfer = exam;
     createTransferModalInDOM();
@@ -642,8 +831,8 @@ async function confirmTransferExamToClasses() {
         if (!exam.assignedClasses) exam.assignedClasses = [];
         checked.map(c => classNamesMap[c] || c).forEach(c => { if (!exam.assignedClasses.includes(c)) exam.assignedClasses.push(c); });
 
-        localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams));
-        await client.from("app_key_values").upsert({ key: "qbank_saved_exams", value: qbankState.savedExams });
+        _savedExamsLoadEpoch++;
+        await saveSavedExamsToCloud(qbankState.savedExams);
 
         alert(`🎉 ĐÃ CHUYỂN ĐỀ "${exam.title}" THÀNH CÔNG VÀO ${checked.length} LỚP!`);
         document.getElementById("modal-transfer-exam").style.display = "none";
@@ -654,9 +843,48 @@ async function confirmTransferExamToClasses() {
     }
 }
 
+async function renameSavedExam(examId) {
+    if (!requireQbankAdminOrPrompt()) return;
+    const exam = (qbankState.savedExams || []).find(e => String(e.id) === String(examId));
+    if (!exam) return;
+
+    const newTitle = prompt("✏️ Nhập tên mới cho đề thi trong Ngân hàng:", exam.title || "");
+    if (!newTitle || !newTitle.trim() || newTitle.trim() === exam.title) return;
+
+    _savedExamsLoadEpoch++;
+    exam.title = newTitle.trim();
+    filterSavedExamsList(qbankState.savedExamFilter);
+
+    const res = await saveSavedExamsToCloud(qbankState.savedExams);
+    if (!res.ok) {
+        alert("⚠️ Đã đổi tên trên máy, nhưng lỗi đồng bộ Supabase: " + (res.error?.message || "Mất kết nối"));
+    }
+}
+
+function exportSavedExamFromBank(examId, format) {
+    if (!requireQbankAdminOrPrompt()) return;
+    const exam = (qbankState.savedExams || []).find(e => String(e.id) === String(examId));
+    if (!exam) return;
+    const includeKey = confirm(`Xuất "${exam.title}" ra ${format === "pdf" ? "PDF" : "Word"}:\n\n• Bấm [OK] để xuất KÈM ĐÁP ÁN & LỜI GIẢI\n• Bấm [Cancel] để xuất CHỈ ĐỀ THI (không đáp án)`);
+    const exportData = {
+        title: exam.title,
+        maDe: "101",
+        timeLimitMinutes: 90,
+        questions: exam.questions || [],
+        images: exam.images || {}
+    };
+    if (format === "pdf") {
+        if (typeof exportExamToPDF !== "function") return alert("❌ Không tìm thấy bộ xuất PDF!");
+        exportExamToPDF(exportData, exam.title, "101", 90, includeKey);
+    } else {
+        if (typeof exportExamToWord !== "function") return alert("❌ Không tìm thấy bộ xuất Word!");
+        exportExamToWord(exportData, exam.title, "101", 90, includeKey);
+    }
+}
+
 function downloadSavedExamJson(examId) {
     if (!requireQbankAdminOrPrompt()) return;
-    const exam = qbankState.savedExams.find(e => e.id === examId);
+    const exam = qbankState.savedExams.find(e => String(e.id) === String(examId));
     if (!exam) return;
     const a = document.createElement("a");
     const blob = new Blob([JSON.stringify(exam, null, 2)], { type: "application/json" });
@@ -668,14 +896,34 @@ function downloadSavedExamJson(examId) {
     setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
 
-function deleteSavedExam(examId) {
+async function deleteSavedExam(examId, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     if (!requireQbankAdminOrPrompt()) return;
-    if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA đề thi này khỏi Ngân hàng đề không?")) return;
-    qbankState.savedExams = qbankState.savedExams.filter(e => e.id !== examId);
-    localStorage.setItem("qbank_saved_exams", JSON.stringify(qbankState.savedExams));
-    const client = getQbankSupabaseClient();
-    if (client) client.from("app_key_values").upsert({ key: "qbank_saved_exams", value: qbankState.savedExams });
+
+    const target = (qbankState.savedExams || []).find(e => String(e.id) === String(examId));
+    const examName = target ? target.title : examId;
+    if (!confirm(`⚠️ Bạn có chắc chắn muốn XÓA VĨNH VIỄN đề thi:\n"${examName}"\nkhỏi Ngân hàng đề đã lưu không?`)) return;
+
+    const triggerBtn = event && event.currentTarget ? event.currentTarget : null;
+    if (triggerBtn) {
+        triggerBtn.disabled = true;
+        triggerBtn.innerText = "⏳";
+    }
+
+    _savedExamsLoadEpoch++;
+    addSavedExamTombstoneId(examId);
+
+    qbankState.savedExams = (qbankState.savedExams || []).filter(e => String(e.id) !== String(examId));
+    try {
+        localStorage.setItem(QBANK_SAVED_EXAMS_LS_KEY, JSON.stringify(qbankState.savedExams));
+    } catch (e) {}
+
     filterSavedExamsList(qbankState.savedExamFilter);
+
+    const res = await saveSavedExamsToCloud(qbankState.savedExams);
+    if (!res.ok) {
+        alert(`⚠️ Đã xóa trên máy nhưng chưa đồng bộ được lên Supabase (${res.error?.message || "Lỗi mạng"}).\nHệ thống đã đánh dấu chờ và sẽ tự động xóa trên máy chủ khi có mạng trở lại.`);
+    }
 }
 
 // Xuất ra window scope
@@ -698,5 +946,7 @@ window.previewSavedExam = previewSavedExam;
 window.openInSoiDeFromBank = openInSoiDeFromBank;
 window.openTransferExamModal = openTransferExamModal;
 window.confirmTransferExamToClasses = confirmTransferExamToClasses;
+window.renameSavedExam = renameSavedExam;
+window.exportSavedExamFromBank = exportSavedExamFromBank;
 window.downloadSavedExamJson = downloadSavedExamJson;
 window.deleteSavedExam = deleteSavedExam;
