@@ -506,7 +506,8 @@ async function updatePresence(cleanSbd) {
 
         const currentAttempt = window.currentStudentAttemptNumber || 1;
         const originStored = safeLocal.getItem(`exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`);
-        const reliableStartTime = originStored ? parseInt(originStored, 10) : (examStartTime || nowMs);
+        const parsedOrigin = originStored ? parseInt(originStored, 10) : NaN;
+        const reliableStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : (examStartTime || nowMs);
 
         const { data: updated } = await client.from('active_sessions')
             .update({ last_ping: nowMs })
@@ -579,23 +580,43 @@ function startTimeWatcherRealtime(quizId) {
             const freshData = payload.new;
             if (!freshData || isSubmitted || !examStartTime) return;
 
-            // Cập nhật thời gian thi
-            if (freshData.time_limit_minutes && freshData.time_limit_minutes !== TIME_LIMIT_MINUTES) {
-                TIME_LIMIT_MINUTES = freshData.time_limit_minutes;
+            // Cập nhật thời gian thi & đồng bộ ngay trên đồng hồ
+            const freshMins = parseInt(freshData.time_limit_minutes, 10);
+            if (!isNaN(freshMins) && freshMins > 0 && freshMins !== TIME_LIMIT_MINUTES) {
+                TIME_LIMIT_MINUTES = freshMins;
                 totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
-                const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000);
+                const elapsedTimeSec = Math.max(0, Math.floor((Date.now() - examStartTime) / 1000));
                 remainingSeconds = Math.max(0, totalTimeSeconds - elapsedTimeSec);
+
+                const timerVal = document.getElementById("nav-timer-val");
+                const timerBox = document.getElementById("nav-timer-box");
+                if (timerVal && typeof formatHHMMSS === 'function') {
+                    timerVal.innerText = formatHHMMSS(remainingSeconds);
+                }
+                if (timerBox) {
+                    timerBox.classList.add("timer-updated");
+                    setTimeout(() => timerBox.classList.remove("timer-updated"), 2000);
+                }
+                if (typeof startCountdownTimer === 'function' && !isExamLocked && remainingSeconds > 0) {
+                    startCountdownTimer();
+                }
                 showTimeChangeToast(`⏱ Giáo viên vừa cập nhật thời gian: ${TIME_LIMIT_MINUTES} phút!`);
             }
 
-            // Cập nhật khung giờ làm bài
-            if (freshData.exam_start_time || freshData.exam_end_time) {
+            // Cập nhật đồng bộ cả 2 trường khung giờ làm bài
+            if (freshData.exam_start_time !== undefined || freshData.exam_end_time !== undefined) {
                 if (examData) {
-                    examData.exam_start_time = freshData.exam_start_time || examData.exam_start_time;
-                    examData.exam_end_time = freshData.exam_end_time || examData.exam_end_time;
+                    if (freshData.exam_start_time !== undefined) {
+                        examData.exam_start_time = freshData.exam_start_time;
+                        examData.examStartTimeStr = freshData.exam_start_time;
+                    }
+                    if (freshData.exam_end_time !== undefined) {
+                        examData.exam_end_time = freshData.exam_end_time;
+                        examData.examEndTimeStr = freshData.exam_end_time;
+                    }
                 }
                 const noticeEl = document.getElementById("exam-time-notice");
-                if (noticeEl) {
+                if (noticeEl && freshData.exam_start_time && freshData.exam_end_time) {
                     const st = new Date(freshData.exam_start_time).toLocaleString("vi-VN");
                     const et = new Date(freshData.exam_end_time).toLocaleString("vi-VN");
                     noticeEl.innerText = `⏱ Mở từ: ${st} - Đến: ${et}`;
@@ -719,15 +740,20 @@ document.addEventListener("visibilitychange", async function() {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
     const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
 
-    if (!document.hidden) {
-        // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase!
-        updatePresence(cleanSbd);
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAdminPreviewUrl = (urlParams.get('admin') === '1');
 
-        const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
-        if (elapsedSec >= totalTimeSeconds) {
-            if (typeof window.executeSubmitExam === 'function') {
-                window.executeSubmitExam(true);
-                return;
+    if (!document.hidden) {
+        if (!isAdminPreviewUrl) {
+            // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase!
+            updatePresence(cleanSbd);
+
+            const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
+            if (elapsedSec >= totalTimeSeconds) {
+                if (typeof window.executeSubmitExam === 'function') {
+                    window.executeSubmitExam(true);
+                    return;
+                }
             }
         }
     }
@@ -737,7 +763,7 @@ document.addEventListener("visibilitychange", async function() {
             isTabHidden = true; 
             leaveTime = Date.now(); 
             tabSwitchCount++; 
-            if (typeof window.__saveExamState === 'function') window.__saveExamState();
+            if (!isAdminPreviewUrl && typeof window.__saveExamState === 'function') window.__saveExamState();
         } 
     } else { 
         if (isTabHidden && leaveTime > 0) { 
@@ -747,7 +773,9 @@ document.addEventListener("visibilitychange", async function() {
             let mins = Math.floor(durationSec / 60); 
             let secs = durationSec % 60; 
             let durationStr = mins > 0 ? `${mins} phút ${secs} giây` : `${secs} giây`; 
-            sendTabSwitchLog(tabSwitchCount, durationStr, durationSec); 
+            if (!isAdminPreviewUrl) {
+                sendTabSwitchLog(tabSwitchCount, durationStr, durationSec); 
+            }
             if (typeof showTimeChangeToast === 'function') {
                 showTimeChangeToast(`⚠️ Bạn vừa rời bài thi ${durationStr} (Lần ${tabSwitchCount})!`);
             }
@@ -756,6 +784,8 @@ document.addEventListener("visibilitychange", async function() {
 });
 
 window.addEventListener("focus", function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('admin') === '1') return;
     if (examStartTime && !isSubmitted) {
         const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
         const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
