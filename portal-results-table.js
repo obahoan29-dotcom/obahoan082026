@@ -1,6 +1,8 @@
 // =========================================================
 // FILE: portal-results-table.js 
 // BẢNG KẾT QUẢ THI: ĐÃ BỔ SUNG CẢM ỨNG 2 NGÓN TAY PHÓNG TO THU NHỎ
+// ĐÃ FIX TRIỆT ĐỂ: MENU LẦN THI / XẾP HẠNG / SỐ ĐỀ THI NỔI TRÊN CÙNG (PORTAL),
+// KHÔNG BAO GIỜ BỊ CẮT HAY CHÌM SAU CÁC DÒNG KHI BẬT "VỪA MÀN"
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -30,7 +32,6 @@ let isFitAllRowsActive = false;
             overscroll-behavior: contain !important;
         }
 
-        /* ĐÃ SỬA LỖI Ở ĐÂY: KHÔNG CHO PHÉP RỚT DÒNG ĐỂ TRÁNH CHE KHUẤT BAR BÊN DƯỚI */
         .result-modal-header {
             padding: 2px 8px !important;
             min-height: 28px !important;
@@ -43,8 +44,8 @@ let isFitAllRowsActive = false;
             display: flex !important;
             align-items: center !important;
             justify-content: space-between !important;
-            flex-wrap: nowrap !important; /* KHÔNG RỚT DÒNG */
-            overflow-x: auto !important;  /* TRƯỢT NGANG NẾU MÀN HÌNH QUÁ BÉ */
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
             scrollbar-width: none !important;
         }
         .result-modal-header::-webkit-scrollbar { display: none; }
@@ -143,7 +144,6 @@ let isFitAllRowsActive = false;
             white-space: nowrap !important;
         }
 
-        /* NÚT THU BÀI TẠM THỜI */
         .btn-temp-draft-capture {
             background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%) !important;
             color: #ffffff !important;
@@ -301,6 +301,10 @@ let isFitAllRowsActive = false;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
         }
+        .result-table.table-fitted-compact thead th.has-active-header-menu {
+            overflow: visible !important;
+            z-index: 500 !important;
+        }
         .result-table.table-fitted-compact tbody tr {
             height: auto !important;
         }
@@ -313,6 +317,18 @@ let isFitAllRowsActive = false;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
+        }
+        .result-table.table-fitted-compact tbody td.td-attempt-cell-wrap {
+            overflow: visible !important;
+            padding: 0px 2px !important;
+        }
+        .result-table tbody tr.has-active-attempt-menu {
+            position: relative !important;
+            z-index: 500 !important;
+        }
+        .result-table tbody tr.has-active-attempt-menu td.td-attempt-cell-wrap {
+            z-index: 500 !important;
+            overflow: visible !important;
         }
 
         .result-table.table-fitted-compact th.td-stt { width: 34px !important; }
@@ -475,18 +491,183 @@ let isFitAllRowsActive = false;
         .attempt-dropdown-menu {
             display: none; position: absolute !important; top: calc(100% + 4px) !important; left: 0 !important;
             min-width: 255px !important; background: #ffffff !important; border-radius: 12px !important;
-            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.22), 0 0 0 1px #cbd5e1 !important;
-            border: 1.5px solid #cbd5e1 !important; padding: 8px 10px !important; z-index: 9999999 !important;
-            animation: popInBadge 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important; text-align: left !important; white-space: nowrap !important;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.25), 0 0 0 1.5px #cbd5e1 !important;
+            border: 1.5px solid #cbd5e1 !important; padding: 8px 10px !important; z-index: 2147483001 !important;
+            animation: popInBadge 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important; text-align: left !important; white-space: nowrap !important;
         }
         .attempt-dropdown-menu.show { display: flex !important; flex-direction: column !important; gap: 4px !important; }
         .attempt-dropdown-header { font-size: 11px !important; font-weight: 900 !important; color: #334155 !important; text-align: center !important; margin-bottom: 5px !important; }
-        .attempt-menu-item { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 10px !important; padding: 6px 10px !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; }
+        .attempt-menu-item { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 10px !important; padding: 6px 10px !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; color: #0f172a !important; }
         .attempt-menu-item:hover { background: #f1f5f9 !important; }
         .attempt-menu-item.selected { background: #ede9fe !important; color: #6d28d9 !important; font-weight: 900 !important; }
+
+        /* ĐẢM BẢO CÁC DROPDOWN KHI ĐƯỢC PORTAL RA LỚP NỔI LUÔN HIỂN THỊ CHUẨN ĐẸP */
+        #result-floating-dropdown-portal {
+            position: fixed !important;
+            inset: 0 !important;
+            pointer-events: none !important;
+            z-index: 2147483000 !important;
+        }
+        #result-floating-dropdown-portal > * {
+            pointer-events: auto !important;
+            box-sizing: border-box !important;
+        }
+        #result-floating-dropdown-portal .exam-picker-menu {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 3px !important;
+            max-width: min(380px, calc(100vw - 16px)) !important;
+        }
+        #result-floating-dropdown-portal .rank-picker-menu {
+            display: block !important;
+            max-width: min(230px, calc(100vw - 16px)) !important;
+        }
+        #result-floating-dropdown-portal .attempt-dropdown-menu {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 4px !important;
+            max-width: min(320px, calc(100vw - 16px)) !important;
+        }
     `;
     document.head.appendChild(style);
 })();
+
+// ============================================================================
+// BỘ PORTAL FLOATING DROPDOWN: GIẢI QUYẾT TRIỆT ĐỂ 100% LỖI BỊ CẮT / CHÌM SAU DÒNG
+// ============================================================================
+function ensureResultFloatingPortal() {
+    const modal = document.getElementById("result-fullscreen-modal");
+    if (!modal) return null;
+    let portal = document.getElementById("result-floating-dropdown-portal");
+    if (!portal) {
+        portal = document.createElement("div");
+        portal.id = "result-floating-dropdown-portal";
+        modal.appendChild(portal);
+    }
+    return portal;
+}
+
+function restorePortaledDropdownElement(menu) {
+    if (!menu) return;
+    menu.classList.remove("show");
+    if (menu.id === "rank-sort-dropdown-menu") {
+        menu.style.display = "none";
+    }
+
+    if (menu.dataset.origStyle !== undefined) {
+        menu.setAttribute("style", menu.dataset.origStyle);
+    } else {
+        menu.style.position = "";
+        menu.style.top = "";
+        menu.style.left = "";
+        menu.style.right = "";
+        menu.style.bottom = "";
+        menu.style.transform = "";
+        menu.style.margin = "";
+        menu.style.zIndex = "";
+        menu.style.maxHeight = "";
+        menu.style.overflowY = "";
+    }
+
+    const origParent = menu._origParent;
+    if (origParent && document.body.contains(origParent)) {
+        if (menu._origNextSibling && menu._origNextSibling.parentNode === origParent) {
+            origParent.insertBefore(menu, menu._origNextSibling);
+        } else {
+            origParent.appendChild(menu);
+        }
+    } else {
+        menu.remove();
+    }
+    menu._origParent = null;
+    menu._origNextSibling = null;
+}
+
+function closeAllResultFloatingDropdowns() {
+    const portal = document.getElementById("result-floating-dropdown-portal");
+    if (portal) {
+        Array.from(portal.children).forEach(child => restorePortaledDropdownElement(child));
+    }
+
+    document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
+    document.querySelectorAll('.exam-picker-menu.show').forEach(m => m.classList.remove('show'));
+    const rankMenu = document.getElementById("rank-sort-dropdown-menu");
+    if (rankMenu) {
+        rankMenu.classList.remove('show');
+        rankMenu.style.display = "none";
+    }
+    document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
+    document.querySelectorAll('th.has-active-header-menu').forEach(th => th.classList.remove('has-active-header-menu'));
+}
+
+function portalAndPositionFloatingMenu(menu, anchorEl, opts = {}) {
+    if (!menu || !anchorEl) return;
+    const portal = ensureResultFloatingPortal();
+    if (!portal) return;
+
+    if (menu.dataset.origStyle === undefined) {
+        menu.dataset.origStyle = menu.getAttribute("style") || "";
+    }
+    if (menu.parentNode !== portal) {
+        menu._origParent = menu.parentNode;
+        menu._origNextSibling = menu.nextSibling;
+        portal.appendChild(menu);
+    }
+
+    const maxH = Math.min(340, Math.max(150, window.innerHeight - 24));
+    menu.style.position = "fixed";
+    menu.style.margin = "0";
+    menu.style.transform = "none";
+    menu.style.right = "auto";
+    menu.style.bottom = "auto";
+    menu.style.zIndex = "2147483001";
+    menu.style.maxHeight = maxH + "px";
+    menu.style.overflowY = "auto";
+    if (opts.minWidth) {
+        menu.style.minWidth = Math.min(opts.minWidth, window.innerWidth - 16) + "px";
+    }
+
+    // Đặt tạm để đo kích thước thực
+    menu.style.top = "0px";
+    menu.style.left = "0px";
+
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const menuW = menuRect.width || opts.minWidth || 220;
+    const menuH = Math.min(menuRect.height || 180, maxH);
+
+    const spaceBelow = window.innerHeight - anchorRect.bottom - 8;
+    const spaceAbove = anchorRect.top - 8;
+
+    let top;
+    if (spaceBelow >= menuH || spaceBelow >= spaceAbove) {
+        top = Math.min(anchorRect.bottom + 4, window.innerHeight - menuH - 8);
+    } else {
+        top = Math.max(8, anchorRect.top - menuH - 4);
+    }
+
+    let left;
+    if (opts.align === "center") {
+        left = anchorRect.left + (anchorRect.width - menuW) / 2;
+    } else if (opts.align === "right") {
+        left = anchorRect.right - menuW;
+    } else {
+        left = anchorRect.left;
+    }
+    left = Math.max(8, Math.min(left, window.innerWidth - menuW - 8));
+
+    menu.style.top = Math.round(top) + "px";
+    menu.style.left = Math.round(left) + "px";
+}
+
+function attachTableScrollCloseListener() {
+    const wrap = document.querySelector(".result-table-scroll-wrap");
+    if (!wrap || wrap.dataset.hasFloatClose === "1") return;
+    wrap.dataset.hasFloatClose = "1";
+    wrap.addEventListener("scroll", () => {
+        closeAllResultFloatingDropdowns();
+    }, { passive: true });
+}
 
 function formatAttemptDateTime(timestamp) {
     if (!timestamp) return "---";
@@ -510,6 +691,7 @@ function applyModalZoomLevel(newLevel) {
         if (!el) return;
         if ('zoom' in el.style) {
             el.style.zoom = modalCustomZoomLevel;
+            el.style.width = modalCustomZoomLevel !== 1 ? `${(100 / modalCustomZoomLevel).toFixed(3)}%` : "";
         } else {
             el.style.transform = `scale(${modalCustomZoomLevel})`;
             el.style.transformOrigin = "top center";
@@ -527,31 +709,59 @@ function applyModalZoomLevel(newLevel) {
 }
 
 function adjustModalZoomStep(step) {
+    closeAllResultFloatingDropdowns();
     isFitAllRowsActive = false;
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
+        fitBtn.innerHTML = "📐 Vừa màn";
     }
     const table = document.getElementById("admin-result-table");
-    if (table) table.classList.remove("table-fitted-compact");
+    if (table) {
+        table.classList.remove("table-fitted-compact");
+        table.style.fontSize = "";
+    }
+    applyTableSettings();
     applyModalZoomLevel(modalCustomZoomLevel + step);
 }
 
 function resetModalZoom() {
+    closeAllResultFloatingDropdowns();
     isFitAllRowsActive = false;
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
-        fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
+        fitBtn.innerHTML = "📐 Vừa màn";
     }
     const table = document.getElementById("admin-result-table");
-    if (table) table.classList.remove("table-fitted-compact");
+    if (table) {
+        table.classList.remove("table-fitted-compact");
+        table.style.fontSize = "";
+    }
+    applyTableSettings();
+    applyModalZoomLevel(1.0);
+}
+
+function resetResultModalZoomOnClose() {
+    closeAllResultFloatingDropdowns();
+    isFitAllRowsActive = false;
+    const fitBtn = document.getElementById("btn-fit-all-rows");
+    if (fitBtn) {
+        fitBtn.classList.remove("is-fitted");
+        fitBtn.innerHTML = "📐 Vừa màn";
+    }
+    const table = document.getElementById("admin-result-table");
+    if (table) {
+        table.classList.remove("table-fitted-compact");
+        table.style.fontSize = "";
+    }
     applyModalZoomLevel(1.0);
 }
 
 function fitAllRowsInView(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
+    closeAllResultFloatingDropdowns();
+
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
     const table = document.getElementById("admin-result-table");
     const fitBtn = document.getElementById("btn-fit-all-rows");
@@ -561,16 +771,16 @@ function fitAllRowsInView(event) {
         isFitAllRowsActive = false;
         if (fitBtn) {
             fitBtn.classList.remove("is-fitted");
-            fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
+            fitBtn.innerHTML = "📐 Vừa màn";
         }
         table.classList.remove("table-fitted-compact");
-        resetTableSettings();
+        table.style.fontSize = "";
+        initTableSettings();
         applyModalZoomLevel(1.0);
         return;
     }
 
     table.classList.add("table-fitted-compact");
-    tableDisplaySettings.rowPadding = 0;
     applyModalZoomLevel(1.0);
 
     setTimeout(() => {
@@ -611,10 +821,16 @@ function fitAllRowsInView(event) {
             }
         }
 
-        tableDisplaySettings.fontSize = chosenFs;
         table.style.setProperty("--table-font-size", chosenFs + "px");
         table.style.fontSize = chosenFs + "px";
         applyModalZoomLevel(chosenZoom);
+
+        // Tinh chỉnh nhẹ nếu vẫn còn dư 1-2px cuộn dọc sau khi zoom
+        let guard = 0;
+        while (scrollWrap.scrollHeight > scrollWrap.clientHeight + 2 && modalCustomZoomLevel > 0.42 && guard < 6) {
+            applyModalZoomLevel(modalCustomZoomLevel - 0.02);
+            guard++;
+        }
 
         scrollWrap.scrollTop = 0;
         isFitAllRowsActive = true;
@@ -631,7 +847,6 @@ function ensureModalZoomControlsInHeader() {
     const toolsWrap = document.querySelector(".result-modal-tools");
     if (!toolsWrap) return;
 
-    // 1. NÚT "📋 Thu tạm"
     if (!document.getElementById("btn-temp-draft-capture")) {
         const tempBtn = document.createElement("button");
         tempBtn.type = "button";
@@ -649,14 +864,13 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
-    // 2. NÚT "📐 Vừa màn" (ĐÃ ĐỔI TÊN RÚT GỌN CHỐNG TRÀN DÒNG)
     if (!document.getElementById("btn-fit-all-rows")) {
         const fitBtn = document.createElement("button");
         fitBtn.type = "button";
         fitBtn.className = "btn-fit-all-rows";
         fitBtn.id = "btn-fit-all-rows";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ học sinh trên 1 màn hình mà không cần cuộn chuột";
-        fitBtn.innerHTML = "📐 Vừa màn"; /* ĐÃ RÚT GỌN TÊN NÚT */
+        fitBtn.innerHTML = "📐 Vừa màn";
         fitBtn.onclick = (e) => fitAllRowsInView(e);
 
         const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
@@ -667,7 +881,6 @@ function ensureModalZoomControlsInHeader() {
         }
     }
 
-    // 3. BỘ ZOOM
     if (!document.getElementById("modal-independent-zoom-control")) {
         const zoomDiv = document.createElement("div");
         zoomDiv.className = "modal-independent-zoom-control";
@@ -688,7 +901,6 @@ function ensureModalZoomControlsInHeader() {
     }
 }
 
-// HÀM XỬ LÝ KHI BẤM NÚT "THU TẠM": GỬI LỆNH REALTIME VÀ PUSH SANG GAS
 async function triggerCollectTempDraftsToDrive(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const currentItem = currentExamResultData.item;
@@ -702,7 +914,6 @@ async function triggerCollectTempDraftsToDrive(event) {
     if (btn) { btn.disabled = true; btn.innerText = "⏳ Đang thu..."; }
 
     try {
-        // 1. Phát sóng Realtime TEMP_DRAFT_CAPTURE tới các máy học sinh đang thi
         const channelName = `exam_force_submit_${quizId}`;
         const tempChannel = client.channel(channelName);
         tempChannel.subscribe(async (status) => {
@@ -716,7 +927,6 @@ async function triggerCollectTempDraftsToDrive(event) {
             }
         });
 
-        // 2. Phía Admin: Quét đồng thời các bản nháp từ Supabase live_drafts để đẩy bù sang GAS
         const { data: drafts } = await client.from('live_drafts').select('*').eq('quiz_id', quizId);
         let sentCount = 0;
 
@@ -785,7 +995,6 @@ async function triggerCollectTempDraftsToDrive(event) {
 
 // BỘ NHẬN DIỆN ZOOM MỚI: HỖ TRỢ CẢ CTRL+WHEEL VÀ PINCH-TO-ZOOM (TOUCH 2 NGÓN TAY)
 (function setupIsolatedWheelAndTouchZoom() {
-    // 1. Dành cho chuột / trackpad (Ctrl + Cuộn)
     window.addEventListener("wheel", function(e) {
         const modal = document.getElementById("result-fullscreen-modal");
         if (!modal || modal.style.display !== "flex") return;
@@ -798,7 +1007,6 @@ async function triggerCollectTempDraftsToDrive(event) {
         }
     }, { passive: false });
 
-    // 2. Dành cho màn hình cảm ứng (Pinch-to-zoom 2 ngón tay)
     let initialPinchDist = 0;
     let initialZoom = 1;
 
@@ -807,7 +1015,6 @@ async function triggerCollectTempDraftsToDrive(event) {
         if (!modal || modal.style.display !== "flex") return;
 
         if (e.touches && e.touches.length === 2 && modal.contains(e.target)) {
-            // Chỉ chặn hành vi vuốt mặc định khi 2 ngón chạm vào vùng bảng dữ liệu
             if (e.target.closest('.result-table-card') || e.target.closest('#result-detailed-stats-view')) {
                 if (e.cancelable) e.preventDefault();
             }
@@ -824,38 +1031,16 @@ async function triggerCollectTempDraftsToDrive(event) {
         if (!modal || modal.style.display !== "flex") return;
 
         if (e.touches && e.touches.length === 2 && initialPinchDist > 0 && modal.contains(e.target)) {
-            if (e.cancelable) e.preventDefault(); // CHỐNG ZOOM NATIVE MẶC ĐỊNH TRÊN MOBILE/WINDOWS TOUCH
+            if (e.cancelable) e.preventDefault();
             const currentDist = Math.hypot(
                 e.touches[0].clientX - e.touches[1].clientX,
                 e.touches[0].clientY - e.touches[1].clientY
             );
             const scale = currentDist / initialPinchDist;
             let newZoom = initialZoom * scale;
-            
-            // Giới hạn thu phóng từ 40% đến 180%
             newZoom = Math.min(1.8, Math.max(0.40, newZoom));
-            modalCustomZoomLevel = newZoom;
-            
-            const mainView = document.getElementById("result-modal-main-view");
-            const detailView = document.getElementById("result-detailed-stats-view");
-            
-            const applyToEl = (el) => {
-                if (!el) return;
-                if ('zoom' in el.style) {
-                    el.style.zoom = modalCustomZoomLevel;
-                } else {
-                    el.style.transform = `scale(${modalCustomZoomLevel})`;
-                    el.style.transformOrigin = "top center";
-                }
-            };
+            applyModalZoomLevel(newZoom);
 
-            applyToEl(mainView);
-            applyToEl(detailView);
-
-            const badge = document.getElementById("modal-zoom-display-val");
-            if (badge) badge.innerText = `${Math.round(modalCustomZoomLevel * 100)}%`;
-
-            // Tắt chế độ "Vừa màn" nếu người dùng chủ động zoom
             isFitAllRowsActive = false;
             const fitBtn = document.getElementById("btn-fit-all-rows");
             if (fitBtn) {
@@ -863,7 +1048,10 @@ async function triggerCollectTempDraftsToDrive(event) {
                 fitBtn.innerHTML = "📐 Vừa màn";
             }
             const table = document.getElementById("admin-result-table");
-            if (table) table.classList.remove("table-fitted-compact");
+            if (table) {
+                table.classList.remove("table-fitted-compact");
+                table.style.fontSize = "";
+            }
         }
     }, { passive: false });
 
@@ -898,6 +1086,7 @@ function initTableSettings() {
 function applyTableSettings() {
     const table = document.getElementById("admin-result-table");
     if (table) {
+        table.style.fontSize = "";
         table.style.setProperty("--table-font-size", tableDisplaySettings.fontSize + "px");
         table.style.setProperty("--table-row-padding-y", tableDisplaySettings.rowPadding + "px");
     }
@@ -917,6 +1106,9 @@ function applyTableSettings() {
 
 function toggleTableSettingsPopover(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
+    closeAllResultFloatingDropdowns();
+    if (typeof closeRegradeModal === "function") closeRegradeModal();
+
     const popover = document.getElementById("table-settings-popover");
     const btn = document.getElementById("btn-table-settings");
     if (!popover) return;
@@ -924,7 +1116,6 @@ function toggleTableSettingsPopover(event) {
         popover.classList.remove("show");
         if (btn) btn.classList.remove("active");
     } else {
-        // FIX LỖI 2: Tính toán tọa độ tuyệt đối (fixed) để tránh bị cắt xén bởi overflow-x của header
         if (btn) {
             btn.classList.add("active");
             const rect = btn.getBoundingClientRect();
@@ -932,6 +1123,9 @@ function toggleTableSettingsPopover(event) {
             popover.style.top = (rect.bottom + 8) + 'px';
             popover.style.left = 'auto';
             popover.style.right = Math.max(10, (window.innerWidth - rect.right)) + 'px';
+            popover.style.maxHeight = 'calc(100vh - 70px)';
+            popover.style.overflowY = 'auto';
+            popover.style.zIndex = '2147483002';
         }
         popover.classList.add("show");
     }
@@ -996,20 +1190,44 @@ function initTableResizable() {
 function toggleExamPickerMenu(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const menu = document.getElementById("exam-picker-dropdown-list");
-    if (menu) menu.classList.toggle("show");
+    if (!menu) return;
+    const wasShown = menu.classList.contains("show");
+    closeAllResultFloatingDropdowns();
+    closeTableSettingsPopover();
+    if (typeof closeRegradeModal === "function") closeRegradeModal();
+
+    if (!wasShown) {
+        const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(".btn-exam-picker");
+        const th = btn ? btn.closest("th") : null;
+        if (th) th.classList.add("has-active-header-menu");
+        menu.classList.add("show");
+        if (btn) portalAndPositionFloatingMenu(menu, btn, { align: "left", minWidth: 280 });
+    }
 }
 
 function toggleRankSortMenu(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     const menu = document.getElementById("rank-sort-dropdown-menu");
-    if (menu) { menu.style.display = (menu.style.display === "none" || menu.style.display === "") ? "block" : "none"; }
+    if (!menu) return;
+    const wasShown = (menu.style.display === "block" || menu.classList.contains("show"));
+    closeAllResultFloatingDropdowns();
+    closeTableSettingsPopover();
+    if (typeof closeRegradeModal === "function") closeRegradeModal();
+
+    if (!wasShown) {
+        const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(".btn-rank-picker");
+        const th = btn ? btn.closest("th") : null;
+        if (th) th.classList.add("has-active-header-menu");
+        menu.style.display = "block";
+        menu.classList.add("show");
+        if (btn) portalAndPositionFloatingMenu(menu, btn, { align: "center", minWidth: 195 });
+    }
 }
 
 function changeRankSort(mode, event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     currentRankSortMode = mode;
-    const menu = document.getElementById("rank-sort-dropdown-menu");
-    if (menu) menu.style.display = "none";
+    closeAllResultFloatingDropdowns();
     const btnText = document.getElementById("rank-header-btn-text");
     if (btnText) {
         if (mode === 'desc') btnText.innerHTML = "🏅 Hạng: Cao ➔ Thấp";
@@ -1020,6 +1238,7 @@ function changeRankSort(mode, event) {
 }
 
 function renderExamPickerDropdown() {
+    closeAllResultFloatingDropdowns();
     const menu = document.getElementById("exam-picker-dropdown-list");
     if (!menu) return;
     menu.innerHTML = "";
@@ -1042,7 +1261,7 @@ function renderExamPickerDropdown() {
         itemEl.innerHTML = `<span>${idx + 1}.</span> <span style="flex:1;">${exam.title}</span>`;
         itemEl.onclick = async (e) => {
             e.stopPropagation();
-            menu.classList.remove("show");
+            closeAllResultFloatingDropdowns();
             await switchExamResult(exam);
         };
         menu.appendChild(itemEl);
@@ -1050,6 +1269,7 @@ function renderExamPickerDropdown() {
 }
 
 async function switchExamResult(examItem) {
+    closeAllResultFloatingDropdowns();
     const preservedCat = currentExamResultData.categoryId || examItem.categoryId || "them-11";
     examItem.categoryId = preservedCat;
     currentExamResultData.item = examItem;
@@ -1079,6 +1299,11 @@ async function switchExamResult(examItem) {
 async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     let event = (categoryIdOrEvent && typeof categoryIdOrEvent === 'object' && categoryIdOrEvent.preventDefault) ? categoryIdOrEvent : maybeEvent;
     if (event) { event.preventDefault(); event.stopPropagation(); }
+
+    closeAllResultFloatingDropdowns();
+    if (typeof window.clearResultEnhancementFilter === "function") {
+        window.clearResultEnhancementFilter(true);
+    }
 
     let explicitCat = (typeof categoryIdOrEvent === 'string' && categoryIdOrEvent) ? categoryIdOrEvent : "";
     let catId = explicitCat || item.categoryId || "";
@@ -1124,7 +1349,9 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     if (currentExamBtnText) currentExamBtnText.innerText = `📑 ${item.title}`;
 
     ensureModalZoomControlsInHeader();
-    applyModalZoomLevel(modalCustomZoomLevel || 1.0);
+    resetResultModalZoomOnClose();
+    initTableSettings();
+    attachTableScrollCloseListener();
 
     const cacheKey = `${catId}_${item.firebaseId || item.id || item.title}`;
     if (_examResultsCache[cacheKey]) {
@@ -1134,7 +1361,6 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
         renderExamResultTable(catId, [], {}, {}, {}, item, { examTitle: item.title });
     }
 
-    applyTableSettings();
     renderExamPickerDropdown();
     setTimeout(initTableResizable, 50);
 
@@ -1182,33 +1408,47 @@ function toggleAttemptMenu(rowUid, event) {
     const targetMenu = document.getElementById(`attempt-menu-${rowUid}`);
     if (!targetMenu) return;
     const isShown = targetMenu.classList.contains("show");
-    
-    document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
-    document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
-    
+
+    closeAllResultFloatingDropdowns();
+    closeTableSettingsPopover();
+    if (typeof closeRegradeModal === "function") closeRegradeModal();
+
     if (!isShown) {
-        targetMenu.classList.add("show");
-        const tr = targetMenu.closest('tr');
+        const triggerBtn = (event && event.currentTarget) ? event.currentTarget : targetMenu.previousElementSibling;
+        const tr = triggerBtn ? triggerBtn.closest('tr') : targetMenu.closest('tr');
         if (tr) tr.classList.add('has-active-attempt-menu');
+        targetMenu.classList.add("show");
+        if (triggerBtn) {
+            portalAndPositionFloatingMenu(targetMenu, triggerBtn, { align: "left", minWidth: 255 });
+        }
     }
 }
 
 function selectStudentAttempt(rowUid, attemptIdx, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
+    closeAllResultFloatingDropdowns();
     const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
     if (row && row.allAttempts && row.allAttempts[attemptIdx]) { 
         row.selectedAttemptIndex = attemptIdx; 
-        const sbdKey = String(row.account?.sbd || "").trim().toLowerCase();
+        const rawSbd = row.account?.sbd || "";
+        const sbdKey = (typeof cleanSbdStandard === 'function')
+            ? cleanSbdStandard(rawSbd)
+            : String(rawSbd).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         if (sbdKey && typeof window._userSelectedAttemptsBySbd !== 'undefined') {
             window._userSelectedAttemptsBySbd[sbdKey] = attemptIdx;
         }
-        calculateRanksForRows(currentExamResultData.rawRows); 
-        filterResultTable(); 
+        calculateRanksForRows(currentExamResultData.rawRows);
+        if (typeof updateStatsAndRenderTable === "function") {
+            updateStatsAndRenderTable(currentExamResultData.rawRows);
+        } else {
+            filterResultTable();
+        }
     }
 }
 
 function deleteResultRowPermanently(rowUid, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
+    closeAllResultFloatingDropdowns();
     const rIdx = currentExamResultData.rawRows.findIndex(r => r._rowUid === rowUid);
     if (rIdx === -1) return;
     currentExamResultData.rawRows.splice(rIdx, 1);
@@ -1299,7 +1539,6 @@ function ensureActionColumnHeaders() {
     }
 }
 
-// BẢN FIX: CẬP NHẬT ĐỒNG HỒ ĐANG THI CHÍNH XÁC TỪ MỐC THỜI GIAN GỐC
 function startLiveDoingTicker() {
     if (_liveDoingTickerInterval) clearInterval(_liveDoingTickerInterval);
     _liveDoingTickerInterval = setInterval(() => {
@@ -1314,9 +1553,25 @@ function startLiveDoingTicker() {
     }, 1000);
 }
 
+function handleClickStudentDetails(rowUid, event) {
+    if (event) { event.stopPropagation(); }
+    if (typeof window.openStudentDetailInspector === "function") {
+        window.openStudentDetailInspector(rowUid, event);
+        return;
+    }
+    const row = currentExamResultData.rawRows.find(r => r._rowUid === rowUid);
+    const sub = row && row.allAttempts ? row.allAttempts[row.selectedAttemptIndex] : null;
+    if (sub && sub.dataString) {
+        alert(`📋 CHI TIẾT BÀI LÀM (LẦN ${(row.selectedAttemptIndex || 0) + 1}):\n\n` + sub.dataString.replace(/ \| /g, '\n'));
+    }
+}
+
 function renderFilteredResultTable(rows) {
+    closeAllResultFloatingDropdowns();
     ensureActionColumnHeaders();
     ensureModalZoomControlsInHeader();
+    attachTableScrollCloseListener();
+
     const table = document.getElementById("admin-result-table");
     const tbody = document.getElementById("result-table-tbody"); 
     if (!tbody || !table) return; 
@@ -1328,6 +1583,7 @@ function renderFilteredResultTable(rows) {
 
     if (!rows || rows.length === 0) {
         tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#64748b;">Không tìm thấy dữ liệu học sinh nào!</td></tr>`;
+        if (typeof window.syncResultEnhancementUI === "function") window.syncResultEnhancementUI();
         return;
     }
 
@@ -1347,6 +1603,8 @@ function renderFilteredResultTable(rows) {
             if (scA !== scB) return scA - scB; return a.stt - b.stt;
         });
     } else { sortedRows.sort((a, b) => a.stt - b.stt); }
+
+    const escJs = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
 
     sortedRows.forEach((row, rowIdx) => {
         const tr = document.createElement("tr");
@@ -1369,7 +1627,7 @@ function renderFilteredResultTable(rows) {
         }
 
         let col1_stt = row.stt;
-        let col_examName = `<div class="td-exam-text" title="${currentExamTitle}">${currentExamTitle}</div>`;
+        let col_examName = `<div class="td-exam-text" title="${currentExamTitle.replace(/"/g, '&quot;')}">${currentExamTitle}</div>`;
         let col_attemptCount = `<span class="status-not-submitted">---</span>`;
 
         if (attCount === 0) {
@@ -1393,7 +1651,7 @@ function renderFilteredResultTable(rows) {
                 let scoreText = (at.score10 !== undefined && at.score10 !== null) ? `${Number(at.score10)}đ` : "--đ";
 
                 dropdownItemsHtml += `
-                    <div class="attempt-menu-item ${isSelected ? 'selected' : ''}" onclick="selectStudentAttempt('${uid}', ${aIdx}, event)">
+                    <div class="attempt-menu-item ${isSelected ? 'selected' : ''}" onclick="selectStudentAttempt('${escJs(uid)}', ${aIdx}, event)">
                         <span class="attempt-item-left">
                             <span class="attempt-check-icon">${isSelected ? '✓' : ''}</span>
                             <span>Lần ${aIdx + 1} (${timeFormatted})</span>
@@ -1405,7 +1663,7 @@ function renderFilteredResultTable(rows) {
 
             col_attemptCount = `
                 <div class="attempt-picker-wrapper">
-                    <button type="button" class="${btnClass}" onclick="toggleAttemptMenu('${uid}', event)" title="Bấm để chọn xem lần thi">
+                    <button type="button" class="${btnClass}" onclick="toggleAttemptMenu('${escJs(uid)}', event)" title="Bấm để chọn xem lần thi">
                         ${btnText}
                     </button>
                     <div class="attempt-dropdown-menu" id="attempt-menu-${uid}" onclick="event.stopPropagation()">
@@ -1464,11 +1722,10 @@ function renderFilteredResultTable(rows) {
 
             if (currentSub.dataString) {
                 let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
-                col11_details = `<span class="td-details" title="${safeText}" onclick="alert('📋 CHI TIẾT BÀI LÀM (LẦN ${row.selectedAttemptIndex + 1}):\\n\\n' + this.title.replace(/ \\| /g, '\\n'))">${currentSub.dataString}</span>`;
+                col11_details = `<span class="td-details" title="${safeText}" onclick="handleClickStudentDetails('${escJs(uid)}', event)">${currentSub.dataString}</span>`;
             }
         }
 
-        // BẢN FIX: HIỂN THỊ CHÍNH XÁC ĐANG THI VÀ ĐẾM THỜI GIAN THEO START_TIME GỐC
         if (row.isDoing) {
             let startMs = row.doingStartTime || Date.now();
             let formattedIn = formatDateTimeFull(startMs);
@@ -1506,29 +1763,29 @@ function renderFilteredResultTable(rows) {
         
         let col_force_submit = `
             <button type="button" class="btn-force-submit-item" 
-                    onclick="sendForceSubmitCommand('${col5_sbd}', '${rawName.replace(/'/g, "\\'")}')" 
+                    onclick="sendForceSubmitCommand('${escJs(col5_sbd)}', '${escJs(rawName)}')" 
                     title="Gửi lệnh ép nộp bài ngay lập tức tới máy em này">
                 ⚡ Thu ép
             </button>
         `;
 
-        let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${uid}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; padding:2px 6px; font-size:10.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s;">🗑️</button>`;
+        let col_action = `<button type="button" class="btn-delete-result-row" onclick="deleteResultRowPermanently('${escJs(uid)}', event)" title="Ẩn tạm thời dòng này khỏi bảng" style="background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; padding:2px 6px; font-size:10.5px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:2px; transition:0.15s;">🗑️</button>`;
 
         tr.innerHTML = `
             <td class="td-stt">${col1_stt}</td>
-            <td class="td-exam-col" title="${currentExamTitle}">${col_examName}</td>
+            <td class="td-exam-col" title="${currentExamTitle.replace(/"/g, '&quot;')}">${col_examName}</td>
             <td class="td-attempt-cell-wrap">${col_attemptCount}</td>
             <td class="td-truncate" title="${stripHtml(col2_inTime)}">${col2_inTime}</td>
             <td class="td-truncate" title="${stripHtml(col3_spentTime)}">${col3_spentTime}</td>
-            <td class="td-truncate" title="${rawName}">${col4_name}</td>
-            <td class="td-class td-truncate" title="${rawClass}">${col_class}</td>
-            <td class="td-sbd td-truncate" title="${col5_sbd}">${col5_sbd}</td>
+            <td class="td-truncate" title="${String(rawName).replace(/"/g, '&quot;')}">${col4_name}</td>
+            <td class="td-class td-truncate" title="${String(rawClass).replace(/"/g, '&quot;')}">${col_class}</td>
+            <td class="td-sbd td-truncate" title="${String(col5_sbd).replace(/"/g, '&quot;')}">${col5_sbd}</td>
             <td style="text-align:center;">${col6_status}</td>
             <td style="text-align:center;">${col7_correct}</td>
             <td class="td-score">${col8_score}</td>
             <td style="text-align:center;">${col_rank}</td>
             <td class="td-tabs">${col9_tabs}</td>
-            <td class="td-tab-times td-truncate" title="${safeTitleCol10}">${col10_cheatTime}</td>
+            <td class="td-tab-times td-truncate" title="${safeTitleCol10.replace(/"/g, '&quot;')}">${col10_cheatTime}</td>
             <td class="td-truncate">${col11_details}</td>
             <td style="text-align:center;">${col_force_submit}</td>
             <td style="text-align:center;">${col_action}</td>
@@ -1537,30 +1794,43 @@ function renderFilteredResultTable(rows) {
     });
 
     startLiveDoingTicker();
+    if (typeof window.syncResultEnhancementUI === "function") {
+        window.syncResultEnhancementUI();
+    }
 }
 
 function filterResultTable() {
-    const query = (document.getElementById("result-search-input").value || "").trim().toLowerCase();
-    if (!query) { renderFilteredResultTable(currentExamResultData.rawRows); return; }
+    const query = (document.getElementById("result-search-input")?.value || "").trim().toLowerCase();
+    let filtered = currentExamResultData.rawRows || [];
 
-    const filtered = currentExamResultData.rawRows.filter(r => {
-        let name = (r.account.name || "").toLowerCase(); 
-        let sbd = String(r.account.sbd || "").toLowerCase(); 
-        let cName = String(r.account.className || "").toLowerCase();
-        let statusText = r.isDoing ? "đang thi" : (r.allAttempts.length > 0 ? "đã nộp bài" : (r.isFreeDoing ? "đang thi tự do" : "chưa thi"));
-        let rankText = (r.rank !== null && r.rank !== undefined) ? `hạng ${r.rank}` : "";
-        return name.includes(query) || sbd.includes(query) || cName.includes(query) || statusText.includes(query) || rankText.includes(query);
-    });
+    if (query) {
+        filtered = filtered.filter(r => {
+            let name = (r.account.name || "").toLowerCase(); 
+            let sbd = String(r.account.sbd || "").toLowerCase(); 
+            let cName = String(r.account.className || "").toLowerCase();
+            let statusText = r.isDoing ? "đang thi" : (r.allAttempts.length > 0 ? "đã nộp bài" : (r.isFreeDoing ? "đang thi tự do" : "chưa thi"));
+            let rankText = (r.rank !== null && r.rank !== undefined) ? `hạng ${r.rank}` : "";
+            return name.includes(query) || sbd.includes(query) || cName.includes(query) || statusText.includes(query) || rankText.includes(query);
+        });
+    }
+
+    if (typeof window.applyResultEnhancementFilter === "function") {
+        filtered = window.applyResultEnhancementFilter(filtered);
+    }
+
     renderFilteredResultTable(filtered);
 }
 
 document.addEventListener("click", function(event) {
-    if (!event.target.closest('.attempt-picker-wrapper')) {
-        document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
-        document.querySelectorAll('tr.has-active-attempt-menu').forEach(tr => tr.classList.remove('has-active-attempt-menu'));
+    const inPortal = Boolean(event.target.closest('#result-floating-dropdown-portal'));
+    const inAttemptBtn = Boolean(event.target.closest('.attempt-picker-wrapper'));
+    const inExamBtn = Boolean(event.target.closest('.exam-picker-wrapper'));
+    const inRankBtn = Boolean(event.target.closest('.rank-picker-wrapper'));
+
+    if (!inPortal && !inAttemptBtn && !inExamBtn && !inRankBtn) {
+        closeAllResultFloatingDropdowns();
     }
     
-    // FIX: Đóng menu Chấm lại khi click ra ngoài
     if (!event.target.closest('.regrade-action-wrapper')) {
         const regradeDrop = document.getElementById("regrade-inline-dropdown");
         if (regradeDrop && regradeDrop.style.display === "block") {
@@ -1568,7 +1838,6 @@ document.addEventListener("click", function(event) {
         }
     }
     
-    // FIX: Đóng menu Cài đặt bảng (bánh răng) khi click ra ngoài
     if (!event.target.closest('.table-settings-wrapper')) {
         const settingsDrop = document.getElementById("table-settings-popover");
         const settingsBtn = document.getElementById("btn-table-settings");
@@ -1579,8 +1848,14 @@ document.addEventListener("click", function(event) {
     }
 });
 
+window.closeAllResultFloatingDropdowns = closeAllResultFloatingDropdowns;
+window.resetResultModalZoomOnClose = resetResultModalZoomOnClose;
+window.handleClickStudentDetails = handleClickStudentDetails;
 window.toggleAttemptMenu = toggleAttemptMenu;
 window.selectStudentAttempt = selectStudentAttempt;
+window.toggleExamPickerMenu = toggleExamPickerMenu;
+window.toggleRankSortMenu = toggleRankSortMenu;
+window.changeRankSort = changeRankSort;
 window.adjustModalZoomStep = adjustModalZoomStep;
 window.resetModalZoom = resetModalZoom;
 window.applyModalZoomLevel = applyModalZoomLevel;
