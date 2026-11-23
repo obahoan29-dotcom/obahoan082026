@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ: ĐỒNG HỒ LUÔN ĐẾM LÙI CHUẨN XÁC Ở MỌI CHẾ ĐỘ, HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI)
+// (BẢN FIX TRIỆT ĐỂ: CHỐNG TỰ THOÁT RA TRANG CHỦ, ĐỒNG HỒ LUÔN ĐẾM LÙI CHUẨN XÁC,
+//  HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI, BẢO VỆ F5 KHI KHÔNG CÓ LOCALSTORAGE)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -830,15 +831,17 @@ async function checkSessionStatus(isAutostart = false) {
         }
     }
 
-    if (isAutostart || isAdminPreviewUrl) {
-        let sIdVal = document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || (isAdminPreviewUrl ? "Trying" : "");
-        let sNameVal = document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || (isAdminPreviewUrl ? "Obahoan29" : "");
-        let sClassVal = document.getElementById("student-class")?.value.trim() || urlParams.get('class') || safeLocal.getItem("saved_student_class") || (isAdminPreviewUrl ? "42" : "");
+    const sIdVal = (document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || (isAdminPreviewUrl ? "Trying" : "")).trim();
+    const sNameVal = (document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || (isAdminPreviewUrl ? "Obahoan29" : "")).trim();
+    const fallbackCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(cat) : (cat || "Tự do");
+    const sClassVal = (document.getElementById("student-class")?.value.trim() || urlParams.get('class') || safeLocal.getItem("saved_student_class") || (isAdminPreviewUrl ? "42" : fallbackCatName)).trim();
 
-        if (document.getElementById("student-id")) document.getElementById("student-id").value = sIdVal;
-        if (document.getElementById("student-name")) document.getElementById("student-name").value = sNameVal;
-        if (document.getElementById("student-class")) document.getElementById("student-class").value = sClassVal;
+    if (document.getElementById("student-id")) document.getElementById("student-id").value = sIdVal;
+    if (document.getElementById("student-name")) document.getElementById("student-name").value = sNameVal;
+    if (document.getElementById("student-class")) document.getElementById("student-class").value = sClassVal;
 
+    // Cho phép vào thẳng đề khi có autostart, admin=1, HOẶC đã có sẵn thông tin thí sinh hợp lệ (chống đá ra trang chủ khi F5 trên iOS/in-app browser)
+    if (isAutostart || isAdminPreviewUrl || (sIdVal && sNameVal && !isCleared)) {
         if (sIdVal && sNameVal) {
             if (typeof startExamAction === 'function') {
                 try {
@@ -848,16 +851,33 @@ async function checkSessionStatus(isAutostart = false) {
                         hideLoading();
                         return;
                     }
+                    // Nếu startExamAction trả về false nhưng đang có thông tin hoặc ở chế độ Admin: báo lỗi thay vì tự thoát về trang chủ
+                    if (isAdminPreviewUrl) {
+                        hideLoading();
+                        showError("Không thể khởi tạo chế độ xem thử Admin", "Vui lòng bấm tải lại trang hoặc kiểm tra lại mã đề.");
+                        return;
+                    }
                 } catch(e) {
-                    console.warn("Lỗi autostart vào đề:", e);
+                    console.error("Lỗi khởi động bài thi:", e);
+                    hideLoading();
+                    showError("Lỗi khởi động phòng thi", `Không thể vào bài thi (${e.message || e}). Vui lòng thử tải lại trang.`);
+                    return;
                 }
+            } else {
+                hideLoading();
+                showError("Lỗi nạp module phòng thi", "File <b>student-exam-flow.js</b> chưa được nạp thành công (có thể do cache cũ hoặc lỗi mạng). Vui lòng tải lại trang!");
+                return;
             }
         }
     }
 
-    // Nếu không có thông tin đăng nhập (và không phải Admin): chuyển thẳng về Modal đăng nhập mới trên trang chủ
+    // Chỉ chuyển về Modal đăng nhập mới trên trang chủ khi thực sự chưa có thông tin đăng nhập (và không phải Admin xem thử)
     hideLoading();
-    redirectToPortalNewLogin(quizId, cat);
+    if (!isAdminPreviewUrl) {
+        redirectToPortalNewLogin(quizId, cat);
+    } else {
+        showError("Lỗi mở chế độ Admin", "Không xác định được phiên xem thử đề thi. Vui lòng thử lại!");
+    }
 }
 
 function fetchExamQuestions(isAutostart = false) { 
