@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-render.js (BẢN FIX ĐỒNG BỘ ẢNH 4 PHẦN VÀ HIỂN THỊ CHUẨN XÁC)
-// ĐÃ SỬA: XỬ LÝ TẬN GỐC LỖI LATEX UNKNOWN ENVIRONMENT CENTER & TABULAR (LỖI BẢNG)
+// ĐÃ SỬA: XỬ LÝ TẬN GỐC LỖI LATEX CENTER/TABULAR & BỌC CHUỖI AN TOÀN CHO q.id DẠNG qb_...
 // =========================================================
 
 function isPart4Question(q) {
@@ -36,6 +36,10 @@ function formatQuestionText(text) {
     return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, function(match, prefix, content) {
         return prefix + '<span style="color: #78350f; font-weight: 800;">// ' + content.trim() + '</span>';
     });
+}
+
+function escapeRenderJsArg(val) {
+    return String(val ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 function scrollToSection(partId) {
@@ -76,6 +80,8 @@ function renderQuizLayout(questions, imageMap) {
     function buildAdminImageUploader(q, qIdx) {
         if (!isAdminMode) return "";
         const imgKey = q.imageKey || `img_q_${q.id}`;
+        const safeQId = escapeRenderJsArg(q.id);
+        const safeImgKey = escapeRenderJsArg(imgKey);
         const currentImg = (typeof getEffectiveImageUrl === 'function') ? getEffectiveImageUrl(q, imageMap) : (q.imageUrl || "");
 
         const hasOriginalImg = Boolean(
@@ -88,16 +94,16 @@ function renderQuizLayout(questions, imageMap) {
         return `
         <div class="admin-img-uploader-zone" id="zone-q-${q.id}" tabindex="0" title="Click vào đây và bấm Ctrl+V để dán ảnh chụp màn hình từ Snipping Tool">
             <div class="admin-uploader-btn-group">
-                <button type="button" class="btn-admin-paste-img" onclick="triggerPastePrompt(${q.id}, '${imgKey}')">
+                <button type="button" class="btn-admin-paste-img" onclick="triggerPastePrompt('${safeQId}', '${safeImgKey}')">
                     📋 Dán ảnh (Ctrl+V)
                 </button>
-                <button type="button" class="btn-admin-file-img" onclick="document.getElementById('input-file-q-${q.id}').click()">
+                <button type="button" class="btn-admin-file-img" onclick="document.getElementById('input-file-q-${safeQId}').click()">
                     📁 Chọn tệp
                 </button>
-                <button type="button" class="btn-admin-del-img" id="btn-del-img-${q.id}" onclick="deleteQuestionImage(${q.id}, '${imgKey}', ${qIdx})" style="${hasActiveImg ? 'display:inline-flex;' : 'display:none;'}">
+                <button type="button" class="btn-admin-del-img" id="btn-del-img-${q.id}" onclick="deleteQuestionImage('${safeQId}', '${safeImgKey}', ${qIdx})" style="${hasActiveImg ? 'display:inline-flex;' : 'display:none;'}">
                     🗑️ Xóa ảnh
                 </button>
-                <input type="file" id="input-file-q-${q.id}" accept="image/*" style="display:none;" onchange="handleAdminFileSelected(this, ${q.id}, '${imgKey}', ${qIdx})">
+                <input type="file" id="input-file-q-${q.id}" accept="image/*" style="display:none;" onchange="handleAdminFileSelected(this, '${safeQId}', '${safeImgKey}', ${qIdx})">
                 
                 ${hasOriginalImg ? `
                 <span class="admin-badge-has-img" id="badge-has-img-${q.id}">
@@ -114,33 +120,34 @@ function renderQuizLayout(questions, imageMap) {
     }
 
     function buildPart4RowHtml(qId) {
+        const safeQId = escapeRenderJsArg(qId);
         return `
         <div class="part4-row-container"> 
             <div class="part4-left-col"> 
-                <input type="text" class="short-input-box" id="q${qId}-input" placeholder="Nhập đáp số của bạn..." oninput="onShortInputChange(${qId})"> 
+                <input type="text" class="short-input-box" id="q${qId}-input" placeholder="Nhập đáp số của bạn..." oninput="onShortInputChange('${safeQId}')"> 
             </div> 
             <div class="part4-right-col"> 
                 <div style="display:flex; gap:6px; flex-wrap:wrap; width:100%;">
-                    <button type="button" class="btn-photo-trigger" style="background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); flex:1;" onclick="triggerExamRoomDriveUpload(${qId})" title="Chụp hoặc chọn ảnh bài làm tự luận để lưu thẳng vào Google Drive 5TB"> 
+                    <button type="button" class="btn-photo-trigger" style="background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); flex:1;" onclick="triggerExamRoomDriveUpload('${safeQId}')" title="Chụp hoặc chọn ảnh bài làm tự luận để lưu thẳng vào Google Drive 5TB"> 
                         📷 Chụp ảnh nộp Drive
                     </button> 
-                    <button type="button" class="btn-photo-trigger" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; width:auto; padding:9px 10px;" onclick="toggleSubPadlet(${qId})" title="Hoặc nộp qua Padlet dự phòng"> 
+                    <button type="button" class="btn-photo-trigger" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; width:auto; padding:9px 10px;" onclick="toggleSubPadlet('${safeQId}')" title="Hoặc nộp qua Padlet dự phòng"> 
                         ▾
                     </button>
                 </div>
                 <span id="drive-upload-status-${qId}" class="drive-up-status" style="display:none; font-size:11.5px; font-weight:800; margin-top:4px;"></span>
                 <div id="sub-padlet-dropdown-${qId}" class="sub-padlet-dropdown"> 
                     <div style="font-size:11px; font-weight:800; color:#64748b; padding-bottom:4px; border-bottom:1px solid #f1f5f9;">PADLET DỰ PHÒNG:</div>
-                    <a href="https://padlet.com/obahoan29/11a-nop-tu-luan-padlet-160926-s023me0a6si1mqhqpnb4" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick(${qId})"> 
+                    <a href="https://padlet.com/obahoan29/11a-nop-tu-luan-padlet-160926-s023me0a6si1mqhqpnb4" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick('${safeQId}')"> 
                         📌 11A nộp padlet 
                     </a> 
-                    <a href="https://padlet.com/obahoan29/11c-nop-tu-luan-padlet-160926-s023me1v17byc9z8qj13" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick(${qId})"> 
+                    <a href="https://padlet.com/obahoan29/11c-nop-tu-luan-padlet-160926-s023me1v17byc9z8qj13" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick('${safeQId}')"> 
                         📌 11C nộp Padlet 
                     </a> 
-                    <a href="https://padlet.com/obahoan29/10p-nop-tu-luan-tu-05-09-2026-s023mdx0qopg0az79ix0" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick(${qId})"> 
+                    <a href="https://padlet.com/obahoan29/10p-nop-tu-luan-tu-05-09-2026-s023mdx0qopg0az79ix0" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick('${safeQId}')"> 
                         📌 10P nộp Padlet 
                     </a> 
-                    <a href="https://padlet.com/obahoan42/nop-tu-luan-11e-padlet-s024j7r2sdb80rqmahq7" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick(${qId})"> 
+                    <a href="https://padlet.com/obahoan42/nop-tu-luan-11e-padlet-s024j7r2sdb80rqmahq7" target="_blank" rel="noopener noreferrer" class="btn-padlet-opt" onclick="trackPadletClick('${safeQId}')"> 
                         📌 11E chụp tự luận Padlet 
                     </a> 
                 </div> 
@@ -168,6 +175,7 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p1"><div class="section-icon">📑</div><div class="section-text"><h3>PHẦN 1. TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN</h3><p>Chọn duy nhất 01 phương án đúng trong các phương án A, B, C, D</p></div></div>`; 
         p1List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
+            const safeQId = escapeRenderJsArg(q.id);
             
             let resolvedCorrect = undefined;
             if (q.correct !== undefined) resolvedCorrect = q.correct;
@@ -192,7 +200,7 @@ function renderQuizLayout(questions, imageMap) {
                 <div class="q-header"><div class="q-num-badge">${displayIndex}</div><div class="q-content-text">${formatQuestionText(q.question)}</div></div> 
                 ${uploaderHTML}
                 ${imgHTML} 
-                <div class="options-list grid-2"> ${q.options.map((opt, oIdx) => `<label class="opt-label" id="opt-box-${q.id}-${letters[oIdx]}" onclick="selectOption(${q.id}, '${letters[oIdx]}')"> <input type="radio" name="q${q.id}" value="${letters[oIdx]}"> <span class="opt-circle">${letters[oIdx]}</span> <span class="opt-text">${opt}</span> </label>`).join('')} </div> 
+                <div class="options-list grid-2"> ${q.options.map((opt, oIdx) => `<label class="opt-label" id="opt-box-${q.id}-${letters[oIdx]}" onclick="selectOption('${safeQId}', '${letters[oIdx]}')"> <input type="radio" name="q${q.id}" value="${letters[oIdx]}"> <span class="opt-circle">${letters[oIdx]}</span> <span class="opt-text">${opt}</span> </label>`).join('')} </div> 
             </div>`; 
             displayIndex++; 
         }); 
@@ -210,6 +218,7 @@ function renderQuizLayout(questions, imageMap) {
             let rows = ""; 
             (q.statements || []).forEach((st) => { 
                 const subKey = `q${q.id}_${st.id}`; 
+                const safeSubKey = escapeRenderJsArg(subKey);
                 
                 let stVal = undefined;
                 if (st.correct !== undefined) stVal = st.correct;
@@ -222,7 +231,7 @@ function renderQuizLayout(questions, imageMap) {
                     window.SECURE_VAULT.answers[subKey] = "Đúng";
                 }
                 
-                rows += `<tr><td><b>${st.id})</b> ${st.statement}</td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Đúng" onchange="onStatementChange('${subKey}')"></td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Sai" onchange="onStatementChange('${subKey}')"></td></tr>`; 
+                rows += `<tr><td><b>${st.id})</b> ${st.statement}</td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Đúng" onchange="onStatementChange('${safeSubKey}')"></td> <td width="70" align="center"><input type="radio" name="${subKey}" value="Sai" onchange="onStatementChange('${safeSubKey}')"></td></tr>`; 
             }); 
             if (q.explanation) {
                 window.SECURE_VAULT.explanations[`q${q.id}`] = q.explanation;
@@ -242,6 +251,7 @@ function renderQuizLayout(questions, imageMap) {
         html += `<div class="exam-section-banner" id="exam-section-p3" style="background: linear-gradient(135deg, #0d9488, #059669);"><div class="section-icon">✍️</div><div class="section-text"><h3>PHẦN 3. TRẢ LỜI NGẮN</h3><p>Nhập đáp số chính xác vào ô trống</p></div></div>`; 
         p3List.forEach((q, qIdx) => { 
             window.SECURE_VAULT.questionData[q.id] = q; 
+            const safeQId = escapeRenderJsArg(q.id);
             
             let resolvedAns = undefined;
             if (q.correctAnswer !== undefined) resolvedAns = q.correctAnswer;
@@ -269,7 +279,7 @@ function renderQuizLayout(questions, imageMap) {
                 ${imgHTML} 
                 <div class="part4-row-container">
                     <div class="part4-left-col" style="flex:1;">
-                        <input type="text" class="short-input-box" id="q${q.id}-input" placeholder="Nhập đáp số của bạn..." oninput="onShortInputChange(${q.id})">
+                        <input type="text" class="short-input-box" id="q${q.id}-input" placeholder="Nhập đáp số của bạn..." oninput="onShortInputChange('${safeQId}')">
                     </div>
                 </div>
             </div>`; 
@@ -349,7 +359,8 @@ function renderQuestionPalette(questions) {
     if (p1List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p1')" title="Cuộn tới Phần I">Phần I</div>`;
         p1List.forEach(q => {
-            html += `<div class="q-circle part-1" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            const safeQId = escapeRenderJsArg(q.id);
+            html += `<div class="q-circle part-1" id="q-nav-btn-${q.id}" onclick="scrollToQuestion('${safeQId}')" title="Câu ${globalIdx}">${globalIdx}</div>`;
             globalIdx++;
         });
     }
@@ -358,7 +369,8 @@ function renderQuestionPalette(questions) {
     if (p2List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p2')" title="Cuộn tới Phần II">Phần II</div>`;
         p2List.forEach(q => {
-            html += `<div class="q-circle part-2" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            const safeQId = escapeRenderJsArg(q.id);
+            html += `<div class="q-circle part-2" id="q-nav-btn-${q.id}" onclick="scrollToQuestion('${safeQId}')" title="Câu ${globalIdx}">${globalIdx}</div>`;
             globalIdx++;
         });
     }
@@ -367,7 +379,8 @@ function renderQuestionPalette(questions) {
     if (p3List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p3')" title="Cuộn tới Phần III">Phần III</div>`;
         p3List.forEach(q => {
-            html += `<div class="q-circle part-3" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            const safeQId = escapeRenderJsArg(q.id);
+            html += `<div class="q-circle part-3" id="q-nav-btn-${q.id}" onclick="scrollToQuestion('${safeQId}')" title="Câu ${globalIdx}">${globalIdx}</div>`;
             globalIdx++;
         });
     }
@@ -376,7 +389,8 @@ function renderQuestionPalette(questions) {
     if (p4List.length > 0) {
         html += `<div class="q-part-badge" onclick="scrollToSection('exam-section-p4')" title="Cuộn tới Phần IV">Phần IV</div>`;
         p4List.forEach(q => {
-            html += `<div class="q-circle part-4" id="q-nav-btn-${q.id}" onclick="scrollToQuestion(${q.id})" title="Câu ${globalIdx}">${globalIdx}</div>`;
+            const safeQId = escapeRenderJsArg(q.id);
+            html += `<div class="q-circle part-4" id="q-nav-btn-${q.id}" onclick="scrollToQuestion('${safeQId}')" title="Câu ${globalIdx}">${globalIdx}</div>`;
             globalIdx++;
         });
     }
@@ -401,13 +415,14 @@ function scrollToQuestion(qId) {
 }
 
 function highlightActiveCircle(qId) { 
-    if (currentActiveQId === qId) return; 
+    const idStr = String(qId);
+    if (String(currentActiveQId) === idStr) return; 
     if (currentActiveQId) { 
         const prev = document.getElementById(`q-nav-btn-${currentActiveQId}`); 
         if (prev) prev.classList.remove('active'); 
     } 
-    currentActiveQId = qId; 
-    const curr = document.getElementById(`q-nav-btn-${qId}`); 
+    currentActiveQId = idStr; 
+    const curr = document.getElementById(`q-nav-btn-${idStr}`); 
     if (curr) { 
         curr.classList.add('active'); 
         const scrollContainer = document.getElementById("q-nav-scroll-container");
