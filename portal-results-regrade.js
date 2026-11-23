@@ -1,10 +1,16 @@
 // =========================================================
 // FILE: portal-results-regrade.js (BẢN TỐI ƯU HỖ TRỢ CHẤM LẠI & FILE DỰ PHÒNG)
+// ĐÃ BỔ SUNG: ĐÓNG SẠCH MENU NỔI & RESET ZOOM KHI ĐÓNG MODAL, CHỐNG TRÀN MÉP CHẤM LẠI
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
     stopAutoRefreshResult();
     if (typeof stopRealtimeSubmissionsListener === 'function') stopRealtimeSubmissionsListener();
+    if (typeof closeAllResultFloatingDropdowns === 'function') closeAllResultFloatingDropdowns();
+    if (typeof closeTableSettingsPopover === 'function') closeTableSettingsPopover();
+    if (typeof closeStudentDetailInspector === 'function') closeStudentDetailInspector();
+    if (typeof resetResultModalZoomOnClose === 'function') resetResultModalZoomOnClose();
+
     const modal = document.getElementById("result-fullscreen-modal");
     if (modal) modal.style.display = "none";
     closeRegradeModal();
@@ -44,6 +50,9 @@ function toggleAutoRefresh(event) {
 
 function openRegradeModal(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
+    if (typeof closeAllResultFloatingDropdowns === "function") closeAllResultFloatingDropdowns();
+    if (typeof closeTableSettingsPopover === "function") closeTableSettingsPopover();
+
     const dropdown = document.getElementById("regrade-inline-dropdown");
     const btn = document.getElementById("btn-regrade-exam");
     const preview = document.getElementById("regrade-file-preview-status");
@@ -56,13 +65,18 @@ function openRegradeModal(event) {
     if (preview) { preview.style.display = "none"; preview.innerText = ""; }
     _regradeFileParsedAnswers = null; 
     
-    // FIX LỖI 1: Tính toán tọa độ tuyệt đối (fixed) để tránh bị cắt xén bởi overflow-x của header
     if (btn) {
         const rect = btn.getBoundingClientRect();
+        const dropW = Math.min(340, window.innerWidth - 20);
+        const rightPx = Math.max(10, Math.min(window.innerWidth - rect.right, window.innerWidth - dropW - 10));
         dropdown.style.position = 'fixed';
         dropdown.style.top = (rect.bottom + 8) + 'px';
         dropdown.style.left = 'auto';
-        dropdown.style.right = Math.max(10, (window.innerWidth - rect.right)) + 'px';
+        dropdown.style.right = rightPx + 'px';
+        dropdown.style.maxWidth = 'calc(100vw - 20px)';
+        dropdown.style.maxHeight = 'calc(100vh - 60px)';
+        dropdown.style.overflowY = 'auto';
+        dropdown.style.zIndex = '2147483002';
     }
 
     dropdown.style.display = "block";
@@ -213,7 +227,6 @@ async function handleBackupJsonFileInput(input) {
             const effectiveQuizId = targetQuizId || data.quiz_id || data.quizId || "exam";
             const sbdClean = String(data.sbd || data.studentId || "user").replace(/[^a-zA-Z0-9]/g, '_');
             
-            // TẠO ID MỚI KÈM TIMESTAMP ĐỂ KHÔNG BAO GIỜ GHI ĐÈ LẦN THI CŨ
             const uniqueSubId = data.id || `sub_${effectiveQuizId}_${sbdClean}_${Date.now()}`;
             
             const studentName = data.student_name || data.studentName || data.name || "Học sinh";
@@ -229,7 +242,6 @@ async function handleBackupJsonFileInput(input) {
             let wrongCount = (data.wrong_count !== undefined || data.wrongCount !== undefined) ? parseInt(data.wrong_count || data.wrongCount, 10) : null;
             let dataString = data.data_string || data.dataString || "";
 
-            // Tự chấm điểm từ đáp án gốc nếu file json là bản lưu nháp
             if ((score10 === null || isNaN(score10)) && Object.keys(userAnswers).length > 0) {
                 try {
                     const { data: quizObj } = await client.from('quizzes').select('*').eq('id', effectiveQuizId).single();
