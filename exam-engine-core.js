@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ: ĐÃ SỬA LỖI CÚ PHÁP DÒNG 1, GỠ BẢNG ĐĂNG NHẬP CŨ, ADMIN VÀO ĐỀ NGAY)
+// (BẢN FIX TRIỆT ĐỂ: ĐỒNG HỒ LUÔN ĐẾM LÙI CHUẨN XÁC Ở MỌI CHẾ ĐỘ, HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -130,7 +130,8 @@ async function ensureActiveSessionAndDraft() {
         if (cfg.pingIntervalSec !== 0) {
             const currentAttempt = window.currentStudentAttemptNumber || 1;
             const originStored = safeLocal.getItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`);
-            const trueStartTime = originStored ? parseInt(originStored, 10) : (examStartTime || nowMs);
+            const parsedOrigin = originStored ? parseInt(originStored, 10) : NaN;
+            const trueStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : (examStartTime || nowMs);
 
             const { data: updatedAct } = await client.from('active_sessions')
                 .update({
@@ -163,23 +164,31 @@ async function ensureActiveSessionAndDraft() {
     } catch(err) {}
 }
 
-// BỘ PHIÊN DỊCH TỪ ĐÁP ÁN UI (BỊ TRỘN) SANG ĐÁP ÁN GỐC CỦA ĐỀ
+// BỘ PHIÊN DỊCH TỪ ĐÁP ÁN UI (BỊ TRỘN) SANG ĐÁP ÁN GỐC CỦA ĐỀ (HỖ TRỢ CẢ ID SỐ VÀ ID CHUỖI qb_...)
 function translateUserAnswersToOriginal(uiAnswers, shuffledQuestions) {
-    if (!window.ORIGINAL_EXAM_DATA) return uiAnswers;
+    if (!window.ORIGINAL_EXAM_DATA || !Array.isArray(shuffledQuestions)) return uiAnswers;
     let origAnswers = {};
     const letters = ["A", "B", "C", "D"];
     
     for (let key in uiAnswers) {
         let val = uiAnswers[key];
-        let qIdMatch = key.match(/^q(\d+)(?:_(.+))?$/);
-        if (!qIdMatch) {
-            origAnswers[key] = val;
-            continue;
+        let q = null;
+        let stId = null;
+
+        for (let i = 0; i < shuffledQuestions.length; i++) {
+            const cand = shuffledQuestions[i];
+            if (!cand) continue;
+            const prefix = `q${cand.id}`;
+            if (key === prefix) {
+                q = cand;
+                stId = null;
+                break;
+            } else if (key.startsWith(prefix + "_")) {
+                q = cand;
+                stId = key.slice(prefix.length + 1);
+                break;
+            }
         }
-        
-        let qId = qIdMatch[1];
-        let stId = qIdMatch[2]; 
-        let q = shuffledQuestions.find(x => String(x.id) === String(qId));
         
         if (!q) {
             origAnswers[key] = val;
@@ -188,7 +197,7 @@ function translateUserAnswersToOriginal(uiAnswers, shuffledQuestions) {
 
         if (q.type === "multiple_choice" && !stId) {
             if (q.originalLettersMap && val) {
-                let uiIdx = letters.indexOf(val.toUpperCase());
+                let uiIdx = letters.indexOf(String(val).toUpperCase());
                 if (uiIdx !== -1 && q.originalLettersMap[uiIdx]) {
                     origAnswers[key] = q.originalLettersMap[uiIdx];
                 } else {
@@ -202,7 +211,7 @@ function translateUserAnswersToOriginal(uiAnswers, shuffledQuestions) {
             if (q.statements) {
                 let st = q.statements.find(x => String(x.id) === String(stId));
                 if (st && st.originalId) {
-                    origAnswers[`q${qId}_${st.originalId}`] = val;
+                    origAnswers[`q${q.id}_${st.originalId}`] = val;
                 } else {
                     origAnswers[key] = val;
                 }
@@ -448,8 +457,9 @@ async function initExamEngine() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id');
-    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
-    const isAutostart = (urlParams.get('autostart') === "1") || isAdminMode;
+    const isAdminPreviewUrl = (urlParams.get('admin') === '1');
+    const isAdminMode = isAdminPreviewUrl || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+    const isAutostart = (urlParams.get('autostart') === "1") || isAdminPreviewUrl;
 
     const hideLoading = () => {
         const gl = document.getElementById('global-loading');
@@ -515,7 +525,7 @@ async function initExamEngine() {
             return;
         }
 
-        if (isAdminMode) {
+        if (isAdminPreviewUrl) {
             safeLocal.setItem(`exam_allow_free_${quizId}`, "true");
         } else if (examData.allowFree !== undefined) {
             safeLocal.setItem(`exam_allow_free_${quizId}`, String(examData.allowFree !== false));
@@ -643,7 +653,7 @@ function resetToFreshLoginScreen() {
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
     const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+    const isAdminPreviewUrl = (urlParams.get('admin') === '1');
 
     safeLocal.removeItem(getStorageKey()); 
     if (typeof getStorageKey === 'function') {
@@ -675,7 +685,7 @@ function resetToFreshLoginScreen() {
         window.currentStudentAttemptNumber = nextAttempt;
     }
 
-    if (isAdminMode) {
+    if (isAdminPreviewUrl) {
         window.location.href = `./thi.html?id=${encodeURIComponent(quizId)}&cat=${encodeURIComponent(cat)}&sbd=Trying&name=Obahoan29&class=42&autostart=1&admin=1`;
         return;
     }
@@ -694,10 +704,10 @@ async function checkSessionStatus(isAutostart = false) {
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
     const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+    const isAdminPreviewUrl = (urlParams.get('admin') === '1');
 
     let sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
-    if (isAdminMode && !sId) {
+    if (isAdminPreviewUrl && !sId) {
         if (typeof applyStudentToUI === 'function') {
             applyStudentToUI({ sbd: "Trying", name: "Obahoan29", className: "42" });
         }
@@ -709,7 +719,7 @@ async function checkSessionStatus(isAutostart = false) {
     }
 
     let attempt = 1;
-    if (quizId && sId && !isAdminMode) {
+    if (quizId && sId && !isAdminPreviewUrl) {
         try {
             attempt = await fetchStudentAttemptNumberFromCloud(quizId, sId);
         } catch(e) {
@@ -719,19 +729,28 @@ async function checkSessionStatus(isAutostart = false) {
         if (typeof checkAndDisplayAttemptNoticeOnStudentCard === 'function') {
             checkAndDisplayAttemptNoticeOnStudentCard(sId);
         }
-    } else if (isAdminMode) {
+    } else if (isAdminPreviewUrl) {
         window.currentStudentAttemptNumber = 1;
     }
 
     const isCleared = (safeLocal.getItem("last_submission_cleared") === "true");
-    if (isCleared && !isAutostart && !isAdminMode) {
+    if (isCleared && !isAutostart && !isAdminPreviewUrl) {
         hideLoading();
         redirectToPortalNewLogin(quizId, cat);
         return;
     }
 
-    let isRestored = restoreExamStateFromStorage();
-    if (!isRestored && typeof examIndexedDB !== 'undefined' && sId) {
+    // Nếu Admin bấm "View đề & Đổi ảnh" (admin=1&autostart=1) thì luôn mở phiên mới để đồng hồ đếm lùi đủ từ đầu
+    if (isAdminPreviewUrl && isAutostart) {
+        try {
+            const cleanSbd = String(sId || "Trying").replace(/[^a-zA-Z0-9]/g, '_');
+            safeLocal.removeItem(getStorageKey(1));
+            safeLocal.removeItem(`exam_start_time_origin_${quizId}_${cleanSbd}_lan1`);
+        } catch(e) {}
+    }
+
+    let isRestored = (isAdminPreviewUrl && isAutostart) ? false : restoreExamStateFromStorage();
+    if (!isRestored && !(isAdminPreviewUrl && isAutostart) && typeof examIndexedDB !== 'undefined' && sId) {
         try {
             const idbPromise = examIndexedDB.getItem('exam_states', getStorageKey(attempt));
             const timeoutPromise = new Promise(res => setTimeout(() => res(null), 300));
@@ -745,10 +764,10 @@ async function checkSessionStatus(isAutostart = false) {
     }
 
     if (isRestored) { 
-        const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
+        const elapsedTimeSec = Math.max(0, Math.floor((Date.now() - examStartTime) / 1000)); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        if (timeRemaining <= 0 && totalTimeSeconds > 0 && !isAdminMode) {
+        if (timeRemaining <= 0 && totalTimeSeconds > 0 && !isAdminPreviewUrl) {
             safeLocal.removeItem(getStorageKey(attempt));
             if (typeof getStorageKey === 'function') {
                 safeLocal.removeItem(getStorageKey());
@@ -794,22 +813,27 @@ async function checkSessionStatus(isAutostart = false) {
         if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
         if (typeof checkAndDisplayAdminSoiDeButton === 'function') checkAndDisplayAdminSoiDeButton();
 
-        const elapsedTimeSec = Math.floor((Date.now() - examStartTime) / 1000); 
+        const elapsedTimeSec = Math.max(0, Math.floor((Date.now() - examStartTime) / 1000)); 
         const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
 
-        if (isAdminMode || (timeRemaining > 0 && !isExamLocked)) {
-            remainingSeconds = Math.max(0, timeRemaining); 
+        if (isAdminPreviewUrl || (timeRemaining > 0 && !isExamLocked)) {
+            if (isAdminPreviewUrl && timeRemaining <= 0) {
+                examStartTime = Date.now();
+                remainingSeconds = totalTimeSeconds;
+            } else {
+                remainingSeconds = Math.max(0, timeRemaining);
+            }
             startCountdownTimer(); 
-            if (!isAdminMode) startPresenceSystem(sId);
-            if (!isAdminMode) ensureActiveSessionAndDraft();
+            if (!isAdminPreviewUrl) startPresenceSystem(sId);
+            if (!isAdminPreviewUrl) ensureActiveSessionAndDraft();
             return; 
         }
     }
 
-    if (isAutostart || isAdminMode) {
-        let sIdVal = document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || (isAdminMode ? "Trying" : "");
-        let sNameVal = document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || (isAdminMode ? "Obahoan29" : "");
-        let sClassVal = document.getElementById("student-class")?.value.trim() || urlParams.get('class') || safeLocal.getItem("saved_student_class") || (isAdminMode ? "42" : "");
+    if (isAutostart || isAdminPreviewUrl) {
+        let sIdVal = document.getElementById("student-id")?.value.trim() || urlParams.get('sbd') || safeLocal.getItem("saved_student_sbd") || (isAdminPreviewUrl ? "Trying" : "");
+        let sNameVal = document.getElementById("student-name")?.value.trim() || urlParams.get('name') || safeLocal.getItem("saved_student_name") || (isAdminPreviewUrl ? "Obahoan29" : "");
+        let sClassVal = document.getElementById("student-class")?.value.trim() || urlParams.get('class') || safeLocal.getItem("saved_student_class") || (isAdminPreviewUrl ? "42" : "");
 
         if (document.getElementById("student-id")) document.getElementById("student-id").value = sIdVal;
         if (document.getElementById("student-name")) document.getElementById("student-name").value = sNameVal;
@@ -853,11 +877,15 @@ function fetchExamQuestions(isAutostart = false) {
         if (navCodeText) navCodeText.innerText = `Đề: ${getMaDe()}`; 
         if (examData.password !== undefined) EXAM_PASSWORD = String(examData.password).trim(); 
         
-        if (examData.timeLimitMinutes || examData.time_limit_minutes) { 
-            TIME_LIMIT_MINUTES = parseInt(examData.timeLimitMinutes || examData.time_limit_minutes, 10); 
-            totalTimeSeconds = TIME_LIMIT_MINUTES * 60; 
-            remainingSeconds = totalTimeSeconds; 
-        } 
+        const parsedMins = parseInt(examData.timeLimitMinutes || examData.time_limit_minutes, 10);
+        if (!isNaN(parsedMins) && parsedMins > 0) {
+            TIME_LIMIT_MINUTES = parsedMins;
+        } else {
+            TIME_LIMIT_MINUTES = 90;
+        }
+        totalTimeSeconds = TIME_LIMIT_MINUTES * 60; 
+        remainingSeconds = totalTimeSeconds; 
+
         if (examData.examStartTimeStr && examData.examEndTimeStr) { 
             const stObj = parseUniversalDate(examData.examStartTimeStr);
             const etObj = parseUniversalDate(examData.examEndTimeStr);
@@ -874,8 +902,8 @@ function fetchExamQuestions(isAutostart = false) {
         const currentQuizId = urlParams.get('id') || examData.id || "quiz";
         
         const shuffleKey = `shuffled_exam_${currentQuizId}_${getExamCode()}`;
-        const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
-        let shouldShuffle = (examData.isShuffled !== false) && !isAdminMode; 
+        const isAdminPreviewUrl = (urlParams.get('admin') === '1');
+        let shouldShuffle = (examData.isShuffled !== false) && !isAdminPreviewUrl; 
 
         examData.questions = synchronizeExamQuestionsAndImages(examData.questions || [], examData.images || {});
 
@@ -1050,90 +1078,117 @@ function updateProgress() {
 function reapplySavedAnswers() { 
     Object.keys(window.SECURE_VAULT.userAnswers).forEach(key => { 
         const val = window.SECURE_VAULT.userAnswers[key]; 
-        if (key.includes('_')) { 
-            const r = document.querySelector(`input[name="${key}"][value="${val}"]`); 
-            if (r) r.checked = true; 
-        } else if (document.getElementById(`${key}-input`)) { 
-            document.getElementById(`${key}-input`).value = val; 
-        } else { 
-            const qId = key.replace('q', ''); 
-            const letters = ["A", "B", "C", "D"]; 
-            letters.forEach(l => { 
-                const el = document.getElementById(`opt-box-${qId}-${l}`); 
-                if (el) el.classList.remove('selected'); 
-            }); 
-            const current = document.getElementById(`opt-box-${qId}-${val}`); 
-            if (current) current.classList.add('selected'); 
-            const radio = document.querySelector(`input[name="q${qId}"][value="${val}"]`); 
-            if (radio) radio.checked = true; 
-        } 
+        const shortInput = document.getElementById(`${key}-input`);
+        if (shortInput) { 
+            shortInput.value = val; 
+            return;
+        }
+        const matchedInput = document.querySelector(`input[name="${key}"][value="${val}"]`);
+        if (matchedInput) {
+            matchedInput.checked = true;
+            if (key.startsWith('q')) {
+                const qId = key.slice(1);
+                const optBox = document.getElementById(`opt-box-${qId}-${val}`);
+                if (optBox) {
+                    ["A", "B", "C", "D"].forEach(l => {
+                        const el = document.getElementById(`opt-box-${qId}-${l}`);
+                        if (el) el.classList.remove('selected');
+                    });
+                    optBox.classList.add('selected');
+                }
+            }
+        }
     }); 
 }
 
 function formatHHMMSS(totalSecs) { 
-    const h = Math.floor(totalSecs / 3600); 
-    const m = Math.floor((totalSecs % 3600) / 60); 
-    const s = totalSecs % 60; 
+    const safe = Math.max(0, Math.floor(Number(totalSecs) || 0));
+    const h = Math.floor(safe / 3600); 
+    const m = Math.floor((safe % 3600) / 60); 
+    const s = safe % 60; 
     return `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`; 
 }
 
+// BỘ ĐẾM NGƯỢC ĐÃ FIX: LUÔN CHẠY ĐẾM LÙI TỪNG GIÂY Ở MỌI CHẾ ĐỘ (KỂ CẢ ADMIN TEST & HỌC SINH)
 function startCountdownTimer() { 
     if (isExamLocked) return;
     const timerVal = document.getElementById("nav-timer-val"); 
     const timerBox = document.getElementById("nav-timer-box"); 
-    if (timerInterval) clearInterval(timerInterval); 
+    if (timerInterval) {
+        clearInterval(timerInterval); 
+        timerInterval = null;
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+    const isAdminPreview = (urlParams.get('admin') === '1');
 
-    if (isAdminMode) {
-        if (timerVal) timerVal.innerText = formatHHMMSS(Math.max(0, remainingSeconds || totalTimeSeconds));
-        if (timerBox) timerBox.classList.remove("timer-warning");
-        return;
+    if (!examStartTime || isNaN(Number(examStartTime))) {
+        examStartTime = Date.now();
     }
-    
-    timerInterval = setInterval(() => { 
-        if (isExamLocked) {
-            clearInterval(timerInterval);
-            timerInterval = null;
+    if (!totalTimeSeconds || isNaN(Number(totalTimeSeconds)) || totalTimeSeconds <= 0) {
+        totalTimeSeconds = (TIME_LIMIT_MINUTES || 90) * 60;
+    }
+
+    const tickCountdown = () => {
+        if (isExamLocked || isSubmitted) {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
             return;
         }
 
         const now = Date.now(); 
         let currentEndTimeMs = Infinity; 
-        if (typeof examData !== 'undefined' && examData && examData.examEndTimeStr) { 
-            let dEnd = parseUniversalDate(examData.examEndTimeStr);
+        const endStr = (typeof examData !== 'undefined' && examData) ? (examData.examEndTimeStr || examData.exam_end_time) : null;
+        if (!isAdminPreview && endStr) { 
+            let dEnd = parseUniversalDate(endStr);
             if (dEnd && !isNaN(dEnd.getTime())) currentEndTimeMs = dEnd.getTime();
         } 
 
-        const elapsedTimeSec = examStartTime ? Math.floor((now - examStartTime) / 1000) : 0; 
-        remainingSeconds = totalTimeSeconds - elapsedTimeSec; 
+        const elapsedTimeSec = Math.max(0, Math.floor((now - examStartTime) / 1000)); 
+        remainingSeconds = Math.max(0, totalTimeSeconds - elapsedTimeSec); 
 
-        if (elapsedTimeSec < 15 && (remainingSeconds <= 0 || now >= currentEndTimeMs)) {
-            if (now >= currentEndTimeMs) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-                alert("⚠️ KHUNG GIỜ LÀM BÀI THI NÀY ĐÃ KẾT THÚC!\nHệ thống không nhận bài làm mới. Vui lòng quay lại trang chủ.");
-                window.location.href = "./index.html";
-                return;
-            }
-            remainingSeconds = totalTimeSeconds;
+        if (!isAdminPreview && elapsedTimeSec < 15 && now >= currentEndTimeMs) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            alert("⚠️ KHUNG GIỜ LÀM BÀI THI NÀY ĐÃ KẾT THÚC!\nHệ thống không nhận bài làm mới. Vui lòng quay lại trang chủ.");
+            window.location.href = "./index.html";
             return;
         }
 
-        if (now >= currentEndTimeMs || remainingSeconds <= 0) { 
+        if (!isAdminPreview && (now >= currentEndTimeMs || remainingSeconds <= 0)) { 
             clearInterval(timerInterval); 
             timerInterval = null;
+            remainingSeconds = 0;
             if (timerVal) timerVal.innerText = "00:00:00"; 
             lockExamInteractions();
             if (typeof executeSubmitExam === 'function') executeSubmitExam(true); 
             return; 
-        } 
+        }
+
+        if (isAdminPreview && remainingSeconds <= 0) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            remainingSeconds = 0;
+            if (timerVal) timerVal.innerText = "00:00:00";
+            if (timerBox) timerBox.classList.add("timer-warning");
+            if (typeof showTimeChangeToast === 'function') {
+                showTimeChangeToast("⏱ Đã hết thời gian làm bài (Chế độ Admin xem thử - không tự động nộp).");
+            }
+            return;
+        }
 
         if (timerVal) timerVal.innerText = formatHHMMSS(remainingSeconds); 
         if (remainingSeconds <= 120 && timerBox) timerBox.classList.add("timer-warning"); 
         else if (timerBox) timerBox.classList.remove("timer-warning");
-    }, 1000); 
+    };
+
+    // Cập nhật ngay ở giây 0 để tránh chớp 00:45:00 mặc định trong HTML
+    tickCountdown();
+    if (!isExamLocked && !isSubmitted) {
+        timerInterval = setInterval(tickCountdown, 1000); 
+    }
 }
 
 function saveExamStateToStorage() { 
@@ -1198,12 +1253,14 @@ function restoreExamStateFromStorage() {
             const originKey = `exam_start_time_origin_${quizId}_${cleanSbd}_lan${currentAttempt}`;
             const originStored = safeLocal.getItem(originKey);
 
-            const savedStartTime = originStored ? parseInt(originStored, 10) : (parsed.examStartTime || Date.now());
-            const elapsed = Math.floor((Date.now() - savedStartTime) / 1000);
-            const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 45) * 60;
-            const isAdminMode = (urlParams.get('admin') === '1') || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+            const parsedOrigin = originStored ? parseInt(originStored, 10) : NaN;
+            const parsedSaved = parsed.examStartTime ? parseInt(parsed.examStartTime, 10) : NaN;
+            const savedStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : ((!isNaN(parsedSaved) && parsedSaved > 0) ? parsedSaved : Date.now());
+            const elapsed = Math.max(0, Math.floor((Date.now() - savedStartTime) / 1000));
+            const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 90) * 60;
+            const isAdminPreviewUrl = (urlParams.get('admin') === '1');
 
-            if (!isAdminMode && (elapsed > limitSec || parsed.isExamLocked)) {
+            if (!isAdminPreviewUrl && (elapsed >= limitSec || parsed.isExamLocked)) {
                 safeLocal.removeItem(storageKey);
                 if (typeof examIndexedDB !== 'undefined') {
                     try {
@@ -1218,7 +1275,7 @@ function restoreExamStateFromStorage() {
             tabSwitchCount = parsed.tabSwitchCount || 0; 
             examStartTime = savedStartTime; 
             
-            if (parsed.timeLimitMinutes) {
+            if (parsed.timeLimitMinutes && !isNaN(parseInt(parsed.timeLimitMinutes, 10)) && parseInt(parsed.timeLimitMinutes, 10) > 0) {
                 TIME_LIMIT_MINUTES = parseInt(parsed.timeLimitMinutes, 10);
                 totalTimeSeconds = TIME_LIMIT_MINUTES * 60;
             }
