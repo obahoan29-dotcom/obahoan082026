@@ -5,7 +5,7 @@
 // - TỰ ĐỘNG DI TRÚ TỪ DÒNG JSON CŨ (qbank_workspace_draft) SANG qbank_questions
 // - CHẶN TRIỆT ĐỂ ẢNH BASE64 LỌT VÀO SUPABASE
 // - BỔ SUNG NÚT & MODAL KHÔI PHỤC TỪ BACKUP DRIVE / FILE JSON + TẢI BACKUP JSON
-// - BẢO VỆ COI CHẬM/ĐƠ KHI MỞ SOI ĐỀ TRÊN KHO LỚN
+// - FIX: Date.now() THIẾU NGOẶC, PHÂN TRANG TIE-BREAKER ID, KHỬ TRÙNG ID KHI UPSERT
 // =========================================================
 
 const QBANK_PENDING_KHOS = [
@@ -187,7 +187,7 @@ function ensureQbankPendingExamsIntegrity() {
     const cleanedExams = [];
     qbankState.pendingExams.forEach((ex, idx) => {
         if (!ex || typeof ex !== "object") return;
-        const id = String(ex.id || `pexam_legacy_${idx}_${Date.now}`);
+        const id = String(ex.id || `pexam_legacy_${idx}_${Date.now()}`);
         if (examMap.has(id)) return;
         const khoId = validKhoIds.has(ex.khoId) ? ex.khoId : guessPendingKhoId(ex.sourceCategoryId, ex.title);
         const normalized = {
@@ -801,6 +801,7 @@ async function fetchAllQbankQuestionsFromTable(client) {
             .from("qbank_questions")
             .select("*")
             .order("orig_index", { ascending: true })
+            .order("id", { ascending: true })
             .range(from, from + pageSize - 1);
         if (error) return { ok: false, error, rows: [] };
         if (!data || data.length === 0) break;
@@ -820,7 +821,7 @@ async function syncQbankTreeToCloud() {
         const { error } = await client.from("app_key_values").upsert({
             key: QBANK_CLOUD_TREE_KEY,
             value: { tree: qbankState.currentTree, updatedAt: ts }
-        });
+        }, { onConflict: "key" });
         return !error;
     } catch (e) { return false; }
 }
@@ -838,24 +839,23 @@ async function syncQbankDraftToCloud() {
 
         // 1. NẾU BẢNG RIÊNG qbank_questions SẴN SÀNG -> CHỈ GỬI DIFF (TỪNG DÒNG THAY ĐỔI)
         if (qbankState.useDedicatedTable) {
-            const currentRows = [];
             const currentIdSet = new Set();
-            const toUpsert = [];
+            const upsertMap = new Map();
             const nextFingerprints = new Map();
 
             (qbankState.rawQuestions || []).forEach(q => {
                 if (!q || !q.id) return;
                 const row = serializeQbankQuestionRow(q);
                 const fp = computeQbankRowFingerprint(row);
-                currentRows.push(row);
                 currentIdSet.add(row.id);
                 nextFingerprints.set(row.id, fp);
 
                 if (_qbankSyncedFingerprints.get(row.id) !== fp) {
-                    toUpsert.push(row);
+                    upsertMap.set(row.id, row);
                 }
             });
 
+            const toUpsert = Array.from(upsertMap.values());
             const toDeleteIds = [];
             _qbankSyncedFingerprints.forEach((_, oldId) => {
                 if (!currentIdSet.has(oldId)) toDeleteIds.push(oldId);
@@ -883,9 +883,9 @@ async function syncQbankDraftToCloud() {
                     images: cleanImagesMap,
                     currentExamTitle: qbankState.currentExamTitle || "",
                     updatedAt: ts,
-                    questionCount: currentRows.length
+                    questionCount: currentIdSet.size
                 }
-            });
+            }, { onConflict: "key" });
             return !metaErr;
         }
 
@@ -899,7 +899,7 @@ async function syncQbankDraftToCloud() {
                 currentExamTitle: qbankState.currentExamTitle || "",
                 updatedAt: ts
             }
-        });
+        }, { onConflict: "key" });
         return !error;
     } catch (e) {
         console.warn("Lỗi syncQbankDraftToCloud:", e);
@@ -1148,7 +1148,7 @@ async function loadQbankDraftState() {
                 await syncQbankTreeToCloud();
             }
 
-            // 2. ĐỒNG BỘ CÂU HỎI TỪ BẢNG RIÊNG qbank_questions (NẾU BẢNG ĐÃ ĐƯỢC TẠO)
+            // 2. ĐỒNG BỘ CÂU HỎI TỪ BẢNG RIÊNG qbank_questions
             if (tableRes && tableRes.ok) {
                 qbankState.useDedicatedTable = true;
                 const metaVal = (metaRow && metaRow.value) ? metaRow.value : {};
@@ -1177,14 +1177,12 @@ async function loadQbankDraftState() {
                         rebuildSyncedFingerprintsFromState();
                         await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
                     } else {
-                        // Local mới hơn cloud -> giữ bản snapshot cũ là cloud để chỉ đẩy phần diff mới từ local lên
                         const tmpMap = new Map();
                         tableRes.rows.forEach(r => tmpMap.set(String(r.id), computeQbankRowFingerprint(r)));
                         _qbankSyncedFingerprints = tmpMap;
                         await syncQbankDraftToCloud();
                     }
                 } else {
-                    // Bảng qbank_questions hiện đang rỗng -> Kiểm tra tự động di trú từ qbank_workspace_draft cũ hoặc từ máy
                     const legacyQuestions = (legacyDraft && Array.isArray(legacyDraft.questions)) ? legacyDraft.questions : [];
                     const legacyTs = Number(legacyDraft && legacyDraft.updatedAt) || 0;
 
@@ -1200,11 +1198,10 @@ async function loadQbankDraftState() {
                         await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
                         const migrated = await syncQbankDraftToCloud();
                         if (migrated) {
-                            // Thu gọn dòng JSON cũ để giải phóng dung lượng ngay
                             client.from("app_key_values").upsert({
                                 key: QBANK_CLOUD_DRAFT_KEY,
                                 value: { migratedToTable: true, updatedAt: qbankState.draftUpdatedAt }
-                            }).then(() => {});
+                            }, { onConflict: "key" }).then(() => {});
                             showQbankToast(`🚀 Đã di trú tự động ${legacyQuestions.length} câu sang bảng riêng qbank_questions!`, "success");
                         }
                     } else if ((qbankState.rawQuestions || []).length > 0 || (qbankState.pendingExams || []).length > 0) {
@@ -1214,7 +1211,7 @@ async function loadQbankDraftState() {
                     }
                 }
             } else {
-                // 3. FALLBACK TƯƠNG THÍCH CŨ NẾU CHƯA TẠO BẢNG qbank_questions
+                // 3. FALLBACK TƯƠNG THÍCH CŨ
                 qbankState.useDedicatedTable = false;
                 const cloudDraft = draftRow ? draftRow.value : null;
                 const cloudQuestions = (cloudDraft && Array.isArray(cloudDraft.questions)) ? cloudDraft.questions : null;
@@ -1337,7 +1334,6 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
         qbankState.activeFolderObj = null;
         qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
     } else {
-        // GỘP THÊM (MERGE)
         if (incomingTree && qbankState.currentTree.length === 0) {
             qbankState.currentTree = incomingTree;
         }
