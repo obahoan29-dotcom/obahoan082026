@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-engine-core.js 
 // (BẢN FIX TRIỆT ĐỂ: CHỐNG TỰ THOÁT RA TRANG CHỦ, ĐỒNG HỒ LUÔN ĐẾM LÙI CHUẨN XÁC,
-//  HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI, BẢO VỆ F5 KHI KHÔNG CÓ LOCALSTORAGE)
+//  HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI, BẢO VỆ F5 & BỎ .select() THỪA KHI PING)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -134,7 +134,9 @@ async function ensureActiveSessionAndDraft() {
             const parsedOrigin = originStored ? parseInt(originStored, 10) : NaN;
             const trueStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : (examStartTime || nowMs);
 
-            const { data: updatedAct } = await client.from('active_sessions')
+            window.__lastPresencePingMs = nowMs;
+
+            const { error: upErr, count } = await client.from('active_sessions')
                 .update({
                     name: sName,
                     class_name: strictClassName,
@@ -143,11 +145,10 @@ async function ensureActiveSessionAndDraft() {
                     ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                     exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
                     last_ping: nowMs
-                })
-                .match({ quiz_id: quizId, sbd: cleanSbd })
-                .select();
+                }, { count: 'exact' })
+                .match({ quiz_id: quizId, sbd: cleanSbd });
 
-            if (!updatedAct || updatedAct.length === 0) {
+            if (!upErr && count === 0) {
                 await client.from('active_sessions').insert([{
                     quiz_id: quizId,
                     sbd: cleanSbd,
@@ -825,8 +826,8 @@ async function checkSessionStatus(isAutostart = false) {
                 remainingSeconds = Math.max(0, timeRemaining);
             }
             startCountdownTimer(); 
+            // startPresenceSystem đã tự ping 1 lần nếu cần (không gọi trùng ensureActiveSessionAndDraft)
             if (!isAdminPreviewUrl) startPresenceSystem(sId);
-            if (!isAdminPreviewUrl) ensureActiveSessionAndDraft();
             return; 
         }
     }
