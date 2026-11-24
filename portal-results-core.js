@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: portal-results-core.js 
-// (BẢN FIX ĐỒNG BỘ 100%: REALTIME CHÍNH XÁC, KHÔNG BỊ MẤT ĐANG THI KHI RỜI APP)
-// ĐÃ SỬA: SẮP XẾP LẠI CHUỖI CHI TIẾT ĐÁP ÁN (DATA_STRING) ĐÚNG THEO THỨ TỰ SỐ
+// (BẢN TỐI ƯU BĂNG THÔNG 95% + ĐỒNG BỘ 100%: REALTIME IN-MEMORY PING,
+//  LỌC ĐÚNG ĐỀ ACTIVE_SESSIONS, CACHE META ĐỀ THI, SẮP XẾP CHUẨN DATA_STRING)
 // =========================================================
 
 let currentExamResultData = {
@@ -20,8 +20,9 @@ window._userSelectedAttemptsBySbd = window._userSelectedAttemptsBySbd || {};
 
 let realtimeSubmissionsChannel = null;
 let realtimeDebounceTimer = null;
+let _pendingSilentResultRefresh = false;
 
-function debouncedRefreshResults(delayMs = 250) {
+function debouncedRefreshResults(delayMs = 600) {
     if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
     realtimeDebounceTimer = setTimeout(() => {
         if (currentExamResultData.item) {
@@ -29,6 +30,17 @@ function debouncedRefreshResults(delayMs = 250) {
         }
     }, delayMs);
 }
+
+// Khi Thầy chuyển từ tab khác quay lại bảng điểm đang mở, nếu có cập nhật chờ thì tải bù ngay
+document.addEventListener("visibilitychange", function() {
+    if (!document.hidden && _pendingSilentResultRefresh && currentExamResultData.item) {
+        const modal = document.getElementById("result-fullscreen-modal");
+        if (modal && modal.style.display === "flex") {
+            _pendingSilentResultRefresh = false;
+            fetchAndRenderExamResults(currentExamResultData.item, true);
+        }
+    }
+});
 
 function cleanSbdStandard(sbd) {
     if (!sbd) return "";
@@ -145,6 +157,7 @@ function stopRealtimeSubmissionsListener() {
         clearTimeout(realtimeDebounceTimer);
         realtimeDebounceTimer = null;
     }
+    _pendingSilentResultRefresh = false;
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
     if (realtimeSubmissionsChannel && client) {
         try { client.removeChannel(realtimeSubmissionsChannel); } catch(e) {}
@@ -152,7 +165,88 @@ function stopRealtimeSubmissionsListener() {
     }
 }
 
-// BẢN FIX: KHÔNG CHẶN SỰ KIỆN UPDATE CỦA ACTIVE_SESSIONS -> ADMIN CẬP NHẬT ĐANG THI NGAY SAU 0.2S
+// XỬ LÝ THÔNG MINH CẬP NHẬT PING TRÊN RAM (0 BYTE TRUY VẤN SUPABASE)
+function handleRealtimeActiveSessionChange(newRow, eventType) {
+    if (!newRow || !newRow.sbd) {
+        if (eventType === 'INSERT' || eventType === 'DELETE') debouncedRefreshResults(600);
+        return;
+    }
+
+    const currentItem = currentExamResultData.item;
+    const targetCatId = (currentItem && currentItem.categoryId) || currentExamResultData.categoryId || "them-11";
+    const quizId = currentItem ? (typeof extractQuizIdFromItem === 'function' ? extractQuizIdFromItem(currentItem) : currentItem.id) : "";
+    const cacheKey = `${targetCatId}_${quizId}`;
+    const cached = _examResultsCache[cacheKey];
+
+    const rawKey = String(newRow.sbd).trim();
+    const cleanKey = cleanSbdStandard(newRow.sbd);
+    const sessObj = {
+        id: newRow.id,
+        sbd: newRow.sbd,
+        name: newRow.name || newRow.student_name,
+        className: newRow.class_name,
+        startTime: newRow.start_time,
+        lastPing: newRow.last_ping,
+        isFree: newRow.is_free,
+        categoryId: newRow.category_id,
+        quizId: newRow.quiz_id,
+        examTitle: newRow.exam_title
+    };
+
+    if (cached && cached.activeSessionsData) {
+        if (rawKey) cached.activeSessionsData[rawKey] = sessObj;
+        if (cleanKey) cached.activeSessionsData[cleanKey] = sessObj;
+    }
+
+    const rows = currentExamResultData.rawRows || [];
+    const matchedRow = rows.find(r => r && r.account && isSbdMatchedFlexibly(r.account.sbd, newRow.sbd));
+
+    if (eventType === 'UPDATE') {
+        // Nếu học sinh đã hiển thị "💓 Đang thi" bình thường -> BỎ QUA HOÀN TOÀN (0 query DB, 0 vẽ lại DOM)
+        if (matchedRow && matchedRow.isDoing && !matchedRow.isAwayApp) {
+            return;
+        }
+        // Nếu học sinh vừa quay lại từ app khác -> chỉ gỡ cờ isAwayApp trên RAM
+        if (matchedRow && matchedRow.isDoing && matchedRow.isAwayApp) {
+            matchedRow.isAwayApp = false;
+            if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(rows);
+            return;
+        }
+        // Nếu học sinh vừa bắt đầu lần thi mới đè lên dòng cũ
+        if (matchedRow && !matchedRow.isDoing) {
+            const rawStart = Number(newRow.start_time || 0);
+            const latestSubTime = matchedRow.allAttempts.length > 0
+                ? getSubmissionTimestamp(matchedRow.allAttempts[matchedRow.allAttempts.length - 1])
+                : 0;
+            if (matchedRow.allAttempts.length === 0 || rawStart > (latestSubTime + 3000)) {
+                matchedRow.isDoing = true;
+                matchedRow.isAwayApp = false;
+                matchedRow.doingStartTime = rawStart > 0 ? rawStart : (Number(newRow.last_ping) || Date.now());
+                if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(rows);
+            }
+            return;
+        }
+        // Chỉ tải lại nếu là thí sinh tự do hoàn toàn mới chưa có trong bảng
+        if (!matchedRow) {
+            debouncedRefreshResults(800);
+        }
+        return;
+    }
+
+    // Với INSERT: nếu dòng đã có trong danh sách lớp -> bật Đang thi ngay trên RAM, không cần query DB
+    if (eventType === 'INSERT') {
+        if (matchedRow) {
+            matchedRow.isDoing = true;
+            matchedRow.isAwayApp = false;
+            matchedRow.doingStartTime = Number(newRow.start_time || newRow.last_ping || Date.now());
+            if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(rows);
+            return;
+        }
+        debouncedRefreshResults(600);
+    }
+}
+
+// BẢN TỐI ƯU: KHÔNG TẢI LẠI TOÀN BỘ BẢNG ĐIỂM KHI HỌC SINH PING (TIẾT KIỆM >95% BĂNG THÔNG)
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
@@ -176,29 +270,36 @@ function startRealtimeSubmissionsListener(quizId) {
         let channel = client.channel(`admin_realtime_${targetQuizId}_${Date.now()}`);
 
         candidateIds.forEach(id => {
-            // Lắng nghe bài nộp
+            // 1. Lắng nghe bài nộp (gom nhóm 800ms để tránh tải dồn khi nộp hàng loạt)
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'submissions', 
                 filter: `quiz_id=eq.${id}` 
-            }, () => debouncedRefreshResults(200));
+            }, () => debouncedRefreshResults(800));
 
-            // Lắng nghe phiên làm bài: nhận tất cả sự kiện (INSERT, UPDATE, DELETE) không bị chặn
+            // 2. Lắng nghe phiên làm bài: INSERT & DELETE mới refresh, UPDATE ping chỉ xử lý nhẹ trên RAM
             channel = channel.on('postgres_changes', { 
-                event: '*', 
+                event: 'INSERT', 
                 schema: 'public', 
                 table: 'active_sessions', 
                 filter: `quiz_id=eq.${id}` 
-            }, () => debouncedRefreshResults(200));
-        });
+            }, (payload) => handleRealtimeActiveSessionChange(payload && payload.new, 'INSERT'));
 
-        // Lắng nghe nháp trực tiếp
-        channel = channel.on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'live_drafts' 
-        }, () => debouncedRefreshResults(200));
+            channel = channel.on('postgres_changes', { 
+                event: 'DELETE', 
+                schema: 'public', 
+                table: 'active_sessions', 
+                filter: `quiz_id=eq.${id}` 
+            }, () => debouncedRefreshResults(600));
+
+            channel = channel.on('postgres_changes', { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'active_sessions', 
+                filter: `quiz_id=eq.${id}` 
+            }, (payload) => handleRealtimeActiveSessionChange(payload && payload.new, 'UPDATE'));
+        });
 
         channel.subscribe();
         realtimeSubmissionsChannel = channel;
@@ -209,6 +310,13 @@ function startRealtimeSubmissionsListener(quizId) {
 
 async function fetchAndRenderExamResults(item, isSilent = false) {
     if (!item) return;
+
+    // Nếu tab đang ẩn và là lệnh làm mới ngầm -> tạm hoãn tới khi Thầy mở lại tab
+    if (isSilent && typeof document !== 'undefined' && document.hidden) {
+        _pendingSilentResultRefresh = true;
+        return;
+    }
+
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
     if (!client) {
         console.error("Lỗi: Không tìm thấy Supabase Client");
@@ -218,13 +326,18 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     let quizId = (typeof extractQuizIdFromItem === 'function' ? extractQuizIdFromItem(item) : null) || item.id || item.quizId || item.firebaseId || "";
     let maDe = item.made || item.maDe || "";
     let examTitle = item.title || "";
-    let quizObj = item.quizObj || null;
+    let quizObj = item.quizObj || item._cachedQuizMeta || null;
 
     if (quizId && !quizObj) {
         try {
-            const { data: qData } = await client.from('quizzes').select('*').eq('id', quizId).maybeSingle();
+            const { data: qData } = await client
+                .from('quizzes')
+                .select('id, title, made, time_limit_minutes')
+                .eq('id', quizId)
+                .maybeSingle();
             if (qData) {
                 quizObj = qData;
+                item._cachedQuizMeta = qData;
                 if (!maDe && qData.made) maDe = qData.made;
                 if (!examTitle && qData.title) examTitle = qData.title;
             }
@@ -233,7 +346,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
     if (!isSilent) {
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
     }
 
     try {
@@ -245,37 +358,26 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             candidateCodes.push(String(quizId).trim());
         }
 
-        let [subRes, cheatRes, activeRes, draftRes] = await Promise.all([
-            client.from('submissions').select('*').in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
-            client.from('cheating_logs').select('*').in('quiz_id', candidateCodes),
-            client.from('active_sessions').select('*'),
-            client.from('live_drafts').select('*')
+        const SUB_SLIM_COLS = 'id, quiz_id, sbd, student_name, class_name, score10, raw_score, correct_count, wrong_count, completion_time, spent_mins, tab_switch_count, data_string, created_at, is_free, category_id';
+        const CHEAT_SLIM_COLS = 'id, sbd, student_name, duration_str, switch_count';
+        const ACTIVE_SLIM_COLS = 'id, sbd, name, class_name, start_time, last_ping, is_free, category_id, quiz_id, exam_title';
+
+        let [subRes, cheatRes, activeRes] = await Promise.all([
+            client.from('submissions').select(SUB_SLIM_COLS).in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
+            client.from('cheating_logs').select(CHEAT_SLIM_COLS).in('quiz_id', candidateCodes),
+            client.from('active_sessions').select(ACTIVE_SLIM_COLS).in('quiz_id', candidateCodes)
         ]);
 
         let rawSubsData = subRes.data || [];
-        let allActiveData = activeRes.data || [];
-        let allDraftsData = draftRes.data || [];
+        let activeData = activeRes.data || [];
         let cheatData = cheatRes.data || [];
 
-        const candSet = new Set(candidateCodes.map(c => String(c).trim().toLowerCase()));
-        const cleanTitleNorm = normalizeName(examTitle);
-
-        let activeData = allActiveData.filter(a => {
-            if (!a) return false;
-            const qMatch = a.quiz_id && candSet.has(String(a.quiz_id).trim().toLowerCase());
-            const titleMatch = cleanTitleNorm && a.exam_title && normalizeName(a.exam_title).includes(cleanTitleNorm);
-            return qMatch || titleMatch;
-        });
-
-        let draftsData = allDraftsData.filter(d => {
-            if (!d) return false;
-            const qMatch = d.quiz_id && candSet.has(String(d.quiz_id).trim().toLowerCase());
-            const titleMatch = cleanTitleNorm && d.exam_title && normalizeName(d.exam_title).includes(cleanTitleNorm);
-            return qMatch || titleMatch;
-        });
-
         if (rawSubsData.length === 0 && examTitle && examTitle.trim() !== "") {
-            const { data: extraSubs } = await client.from('submissions').select('*').ilike('exam_title', `%${examTitle.trim()}%`).order('created_at', { ascending: true });
+            const { data: extraSubs } = await client
+                .from('submissions')
+                .select(SUB_SLIM_COLS)
+                .ilike('exam_title', `%${examTitle.trim()}%`)
+                .order('created_at', { ascending: true });
             if (extraSubs && extraSubs.length > 0) {
                 rawSubsData = extraSubs;
             }
@@ -297,7 +399,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
                 spentMins: r.spent_mins,
                 tabSwitchCount: r.tab_switch_count,
                 dataString: r.data_string,
-                userAnswers: r.user_answers,
                 timestamp: (typeof formatDateTimeFull === 'function' && tMs > 0) ? formatDateTimeFull(tMs) : (r.timestamp || r.created_at || "---"),
                 createdAt: tMs > 0 ? tMs : Date.now(),
                 isFree: r.is_free,
@@ -337,24 +438,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         });
 
         const liveDraftsMap = {};
-        draftsData.forEach(d => {
-            if (!d || !d.sbd) return;
-            const cleanKey = cleanSbdStandard(d.sbd);
-            liveDraftsMap[cleanKey] = {
-                id: d.id,
-                sbd: d.sbd,
-                name: d.student_name,
-                className: d.class_name,
-                userAnswers: d.user_answers || {},
-                score10: d.score10,
-                correctCount: d.correct_count,
-                lastUpdated: d.last_updated,
-                categoryId: d.category_id,
-                quizId: d.quiz_id,
-                examTitle: d.exam_title
-            };
-        });
-
         const targetCatId = item.categoryId || currentExamResultData.categoryId || "them-11";
         const examMeta = { quizId, maDe, examTitle, quizObj };
 
@@ -374,7 +457,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     } catch(err) {
         console.error("❌ Lỗi nạp bảng điểm Supabase:", err);
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
     }
 }
 
