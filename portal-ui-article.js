@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: portal-ui-article.js (BẢN SUPABASE HOÀN HẢO)
 // QUẢN LÝ BÀI VIẾT, BẢN TIN THƯỜNG NGÀY PHONG CÁCH BÁO DÂN TRÍ
+// (ĐÃ FIX: MERGE site_meta KHI SỬA TIÊU ĐỀ ĐỂ KHÔNG XÓA MẤT totalVisits)
 // =========================================================
 
 function formatDantriDateTime(d = new Date()) {
@@ -20,9 +21,14 @@ async function editReminderSectionTitle(event) {
 
         try {
             const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            const { data: existMeta } = await client.from('app_key_values').select('value').eq('key', 'site_meta').maybeSingle();
+            const mergedMeta = {
+                ...((existMeta && existMeta.value && typeof existMeta.value === 'object') ? existMeta.value : {}),
+                reminderTitle: REMINDER_SECTION_TITLE
+            };
             await client.from('app_key_values').upsert({
                 key: 'site_meta',
-                value: { reminderTitle: REMINDER_SECTION_TITLE }
+                value: mergedMeta
             });
         } catch(e) { console.error("Lỗi lưu tiêu đề nhắc nhở:", e); }
     }
