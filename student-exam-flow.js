@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: student-exam-flow.js 
 // (BẢN FIX TRIỆT ĐỂ: SẠCH 100% LỖI CÚ PHÁP, TÁCH CHẾ ĐỘ ADMIN & HỌC SINH,
-//  KHÔNG BỊ TRẢ FALSE KHI THIẾU LỚP, XÓA CACHE TRỘN ĐỀ ĐÚNG KEY)
+//  KHÔNG BỊ TRẢ FALSE KHI THIẾU LỚP, XÓA CACHE TRỘN ĐỀ ĐÚNG KEY, BỎ .select() THỪA)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -471,6 +471,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
 
     if (client && !effectiveAdmin) {
         try {
+            window.__lastPresencePingMs = nowMs;
             const handshakeTask = async () => {
                 const sessionPayload = {
                     quiz_id: currentQuizId,
@@ -485,7 +486,8 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                     last_ping: nowMs
                 };
 
-                const { data: updated } = await client.from('active_sessions')
+                // Bỏ .select() thừa -> dùng count: 'exact' (trả về response body rỗng 0 byte)
+                const { error: upErr, count } = await client.from('active_sessions')
                     .update({
                         name: sName,
                         class_name: strictClassName,
@@ -495,11 +497,10 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                         exam_title: exactExamTitle,
                         start_time: effectiveStartTime,
                         last_ping: nowMs
-                    })
-                    .match({ quiz_id: currentQuizId, sbd: cleanSbd })
-                    .select();
+                    }, { count: 'exact' })
+                    .match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-                if (!updated || updated.length === 0) {
+                if (!upErr && count === 0) {
                     await client.from('active_sessions').insert([sessionPayload]);
                 }
 
