@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
+// ĐÃ TỐI ƯU BĂNG THÔNG: BỎ .select() THỪA KHI PING & CHỐNG PING KÉP
 // ĐÃ TỐI ƯU HOÀN TOÀN CHO IPHONE TRONG TRÌNH DUYỆT NHÚNG MESSENGER & SAFARI (IOS WEBKIT)
 // =========================================================
 
@@ -484,44 +485,58 @@ async function startPresenceSystem(sId) {
     }
 
     if (intervalSec > 0) {
-        updatePresence(cleanSbd);
+        // Nếu executeStartExamAPI vừa mới ghi danh cách đây < 5s -> không cần ping lặp lại ở giây 0
+        if (!window.__lastPresencePingMs || (Date.now() - window.__lastPresencePingMs) > 5000) {
+            updatePresence(cleanSbd);
+        }
         presenceInterval = setInterval(() => { 
             updatePresence(cleanSbd); 
         }, intervalSec * 1000);
     }
 }
 
-// BẢN FIX: GIỮ NGUYÊN START_TIME GỐC KHÔNG BAO GIỜ BỊ ĐÈ THỜI GIAN HIỆN TẠI
+// BẢN TỐI ƯU ĐIỂM 2: BỎ .select() THỪA KHI PING (GIẢM RESPONSE TỪ ~1KB XUỐNG 0 BYTE) + CHỐNG PING KÉP 3S
 async function updatePresence(cleanSbd) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         const urlParams = new URLSearchParams(window.location.search); 
-        const currentQuizId = urlParams.get('id') || "";
+        const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? (examData.id || "") : "");
         if (!currentQuizId || isSubmitted || !client) return;
 
-        const sId = document.getElementById("student-id")?.value.trim() || cleanSbd;
-        const sName = document.getElementById("student-name")?.value.trim() || "Thí sinh";
-        const sClass = document.getElementById("student-class")?.value.trim() || "Lớp";
         const nowMs = Date.now();
+        if (window.__lastPresencePingMs && (nowMs - window.__lastPresencePingMs) < 3000) {
+            return;
+        }
+        window.__lastPresencePingMs = nowMs;
 
-        const currentAttempt = window.currentStudentAttemptNumber || 1;
-        const originStored = safeLocal.getItem(`exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`);
-        const parsedOrigin = originStored ? parseInt(originStored, 10) : NaN;
-        const reliableStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : (examStartTime || nowMs);
+        // Chỉ update last_ping với count: 'exact' và KHÔNG gọi .select() -> returning minimal (0 byte body)
+        const { error: upErr, count } = await client
+            .from('active_sessions')
+            .update({ last_ping: nowMs }, { count: 'exact' })
+            .match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-        const { data: updated } = await client.from('active_sessions')
-            .update({ last_ping: nowMs })
-            .match({ quiz_id: currentQuizId, sbd: cleanSbd })
-            .select();
+        if (!upErr && count === 0) {
+            const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || cleanSbd;
+            const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
+            const rawClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
+            const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
+            const strictClass = (typeof getStrictStandardClassName === 'function')
+                ? getStrictStandardClassName(rawClass || currentCat, sId)
+                : rawClass;
 
-        if (!updated || updated.length === 0) {
+            const currentAttempt = window.currentStudentAttemptNumber || 1;
+            const originStored = safeLocal.getItem(`exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`);
+            const parsedOrigin = originStored ? parseInt(originStored, 10) : NaN;
+            const reliableStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : (examStartTime || nowMs);
+            const isFree = !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat));
+
             await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 name: sName,
-                class_name: sClass,
-                category_id: typeof getExamCategory === 'function' ? getExamCategory() : "them-11",
-                is_free: false,
+                class_name: strictClass,
+                category_id: currentCat,
+                is_free: isFree,
                 ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                 exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
                 start_time: reliableStartTime,
@@ -745,7 +760,7 @@ document.addEventListener("visibilitychange", async function() {
 
     if (!document.hidden) {
         if (!isAdminPreviewUrl) {
-            // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase!
+            // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase (có cooldown chống dội 3s)!
             updatePresence(cleanSbd);
 
             const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
