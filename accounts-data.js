@@ -239,7 +239,7 @@ window.STUDENT_ACCOUNTS["lop-11c"] = [
     { stt: 3, pass: "3", sbd: "11C03", username: "VŨ NGUYỆT ÁNH", name: "VŨ NGUYỆT ÁNH", className: "11C" },
     { stt: 4, pass: "4", sbd: "11C04", username: "LÊ PHONG BA", name: "LÊ PHONG BA", className: "11C" },
     { stt: 5, pass: "5", sbd: "11C05", username: "NGUYỄN VĂN CAO", name: "NGUYỄN VĂN CAO", className: "11C" },
-    { stt: 6, pass: "6", sbd: "11C06", username: "PHẠM KHẮC DUY", name: "PHẠM KHẮC DUY", className: "11C" },
+    { stt: 6, pass: "6", sbd: "11C06", username: "ktktkt", name: "ktktkt", className: "11C" },
     { stt: 7, pass: "7", sbd: "11C07", username: "LÊ THÙY DƯƠNG", name: "LÊ THÙY DƯƠNG", className: "11C" },
     { stt: 8, pass: "8", sbd: "11C08", username: "TRỊNH QUANG ĐĂNG", name: "TRỊNH QUANG ĐĂNG", className: "11C" },
     { stt: 9, pass: "9", sbd: "11C09", username: "ĐINH NGỌC HƯƠNG GIANG", name: "ĐINH NGỌC HƯƠNG GIANG", className: "11C" },
