@@ -1,5 +1,6 @@
 // =========================================================
-// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER, FALLBACK ẢNH ĐA TẦNG & ĐO BĂNG THÔNG)
+// FILE 1: app-utils.js (BẢN FIX TRIỆT ĐỂ CHO IPHONE TRONG MESSENGER,
+// FALLBACK ẢNH ĐA TẦNG, TỐI ƯU ĐO BĂNG THÔNG & NẠP BỘ CỨU HỘ NỘP BÀI)
 // =========================================================
 
 const safeLocal = {
@@ -408,7 +409,7 @@ async function sha256Hash(message) {
 }
 
 // ============================================================================
-// BỘ ĐO LƯỜNG BĂNG THÔNG SUPABASE TỰ ĐỘNG (KHÔNG LÀM CHẬM REQUEST)
+// BỘ ĐO LƯỜNG BĂNG THÔNG SUPABASE TỐI ƯU (GOM MỖI 3 PHÚT ĐỂ GIẢM 90% RPC)
 // ============================================================================
 function getVNDateKeyShared(d = new Date()) {
     try {
@@ -470,9 +471,11 @@ function getVNDateKeyShared(d = new Date()) {
         try { safeLocal.setItem(BW_PENDING_STORAGE_KEY, JSON.stringify(bwBuffer)); } catch (e) {}
     }
 
-    async function flushBandwidthBuffer() {
+    async function flushBandwidthBuffer(force = false) {
         if (rpcMissingFlag) return;
         if (bwBuffer.reqs === 0 && bwBuffer.egress === 0 && bwBuffer.ingress === 0) return;
+        // Chỉ đẩy định kỳ khi đã gom được >= 3 request (hoặc khi ẩn/rời trang/Admin đo thủ công)
+        if (!force && bwBuffer.reqs < 3 && (bwBuffer.egress + bwBuffer.ingress) < 10240) return;
 
         const client = (typeof getSupabaseClient === 'function')
             ? getSupabaseClient()
@@ -546,12 +549,33 @@ function getVNDateKeyShared(d = new Date()) {
         return promise;
     };
 
-    setInterval(flushBandwidthBuffer, 45000);
+    // Tăng chu kỳ gửi thống kê băng thông lên 180s (3 phút) để giảm 90% RPC
+    setInterval(() => flushBandwidthBuffer(false), 180000);
     document.addEventListener("visibilitychange", () => {
-        if (document.hidden) flushBandwidthBuffer();
+        if (document.hidden) flushBandwidthBuffer(true);
     });
-    window.addEventListener("pagehide", () => { flushBandwidthBuffer(); });
-    window.flushSupabaseBandwidthNow = flushBandwidthBuffer;
+    window.addEventListener("pagehide", () => { flushBandwidthBuffer(true); });
+    window.flushSupabaseBandwidthNow = () => flushBandwidthBuffer(true);
+})();
+
+// Tự động nạp module cứu hộ nộp bài offline (không cần sửa HTML)
+(function loadOfflineRescueModule() {
+    try {
+        if (typeof document === "undefined" || window.__offlineRescueLoaded) return;
+        window.__offlineRescueLoaded = true;
+        const inject = () => {
+            if (document.querySelector('script[src*="offline-sync-rescue.js"]')) return;
+            const s = document.createElement("script");
+            s.src = "offline-sync-rescue.js";
+            s.async = true;
+            (document.head || document.documentElement).appendChild(s);
+        };
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", inject);
+        } else {
+            inject();
+        }
+    } catch(e) {}
 })();
 
 window.safeLocal = safeLocal;
