@@ -1,23 +1,20 @@
 // =========================================================
 // FILE: portal-tuluan-upload.js (BẢN TỐI ƯU 100% CHO IPHONE / SAFARI / ANDROID / PC)
-// XỬ LÝ UPLOAD ẢNH TỰ LUẬN, CHUẨN NÉN ẢNH, GỬI GOOGLE DRIVE
+// ĐÃ SỬA: GIỮ NGUYÊN TRẠNG THÁI CAMELCASE (isApproved, lastSubmit, crossScore...) KHI CẬP NHẬT BẢNG
 // =========================================================
 
-// HÀM TIỆN ÍCH CHUYỂN ARRAYBUFFER SANG BASE64 AN TOÀN TRÊN IPHONE (CHỐNG TRÀN STACK)
 function arrayBufferToBase64Safe(buffer) {
     let binary = '';
     const bytes = new Uint8Array(buffer);
     const len = bytes.byteLength;
-    const chunkSize = 0x8000; // 32KB mỗi khối, tránh lỗi Maximum call stack size exceeded trên iOS
+    const chunkSize = 0x8000;
     for (let i = 0; i < len; i += chunkSize) {
         binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
     }
     return btoa(binary);
 }
 
-// HÀM ĐỌC FILE RA BASE64 ĐA TẦNG (KHÔNG PHỤ THUỘC VÀO FILEREADER CỦA SAFARI)
 async function readFileAsBase64UniversalAsync(file) {
-    // 1. Ưu tiên số 1: Dùng arrayBuffer() - chuẩn hiện đại 100% hỗ trợ trên mọi iOS Safari & Android
     if (file && typeof file.arrayBuffer === "function") {
         try {
             const buf = await file.arrayBuffer();
@@ -25,7 +22,6 @@ async function readFileAsBase64UniversalAsync(file) {
         } catch(e) {}
     }
 
-    // 2. Dự phòng: Kiểm tra an toàn window.FileReader hoặc self.FileReader
     const SafeFR = (typeof window !== "undefined" && window.FileReader) 
         ? window.FileReader 
         : ((typeof self !== "undefined" && self.FileReader) ? self.FileReader : (typeof FileReader !== "undefined" ? FileReader : null));
@@ -50,12 +46,10 @@ async function readFileAsBase64UniversalAsync(file) {
     throw new Error("Trình duyệt không hỗ trợ đọc tệp ảnh này!");
 }
 
-// BỘ NÉN ẢNH TỰ LUẬN DÙNG CREATEOBJECTURL (SIÊU NHẸ RAM CHO IPHONE, KHÔNG CẦN FILEREADER)
 function compressImageForTuLuanAsync(file, maxDimension = 2048, quality = 0.82) {
     return new Promise(async (resolve, reject) => {
         if (!file) return reject(new Error("Không tìm thấy tệp được chọn!"));
 
-        // Tạo ObjectURL trực tiếp từ bộ nhớ native của thiết bị
         let objectUrl = null;
         let createdUrl = false;
         if (typeof window !== "undefined" && window.URL && typeof window.URL.createObjectURL === "function") {
@@ -94,7 +88,6 @@ function compressImageForTuLuanAsync(file, maxDimension = 2048, quality = 0.82) 
                 canvas.height = height;
                 const ctx = canvas.getContext("2d");
 
-                // Tô nền trắng tránh ảnh PNG trong suốt hoặc HEIC bị đen nền khi sang JPEG
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, width, height);
                 ctx.drawImage(img, 0, 0, width, height);
@@ -105,7 +98,6 @@ function compressImageForTuLuanAsync(file, maxDimension = 2048, quality = 0.82) 
                 resolve({ base64, dataUrl, mimeType: "image/jpeg" });
             } catch(canvasErr) {
                 cleanUpUrl();
-                // Nếu canvas bị lỗi giới hạn phần cứng, fallback đọc Base64 nhị phân
                 readFileAsBase64UniversalAsync(file).then(b64 => {
                     resolve({ base64: b64, dataUrl: `data:${file.type || "image/jpeg"};base64,${b64}`, mimeType: file.type || "image/jpeg" });
                 }).catch(err => reject(err));
@@ -114,7 +106,6 @@ function compressImageForTuLuanAsync(file, maxDimension = 2048, quality = 0.82) 
 
         img.onerror = function() {
             cleanUpUrl();
-            // Nếu không load được qua objectUrl (định dạng đặc thù), fallback đọc trực tiếp
             readFileAsBase64UniversalAsync(file).then(b64 => {
                 resolve({ base64: b64, dataUrl: `data:${file.type || "image/jpeg"};base64,${b64}`, mimeType: file.type || "image/jpeg" });
             }).catch(err => reject(new Error("Không thể giải mã tệp ảnh này trên thiết bị. Vui lòng chọn ảnh chụp JPG/PNG!")));
@@ -123,7 +114,6 @@ function compressImageForTuLuanAsync(file, maxDimension = 2048, quality = 0.82) 
         if (objectUrl) {
             img.src = objectUrl;
         } else {
-            // Trường hợp trình duyệt cũ không hỗ trợ createObjectURL
             try {
                 const b64 = await readFileAsBase64UniversalAsync(file);
                 img.src = `data:${file.type || "image/jpeg"};base64,${b64}`;
@@ -168,7 +158,6 @@ function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
     const sessionAuthKey = `tuluan_authed_${currentTuLuanModalData.quizId}_${cleanSbd}`;
     const input = document.getElementById(`tuluan-input-${cleanSbd}`);
 
-    // BẢO ĐẢM TRÊN IPHONE: Luôn cho phép pointerEvents="auto" để WebKit cho phép kích hoạt tệp
     if (input) {
         input.style.display = "inline-block";
         input.style.position = "absolute";
@@ -177,21 +166,18 @@ function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
         input.style.width = "1px";
         input.style.height = "1px";
         input.style.opacity = "0.01";
-        input.style.pointerEvents = "auto"; // SỬA LỖI IPHONE Ở ĐÂY: KHÔNG DÙNG NONE
+        input.style.pointerEvents = "auto";
         input.style.zIndex = "-1";
     }
 
-    // 1. Kiểm tra nếu học sinh này chính là em đang đăng nhập trong phòng thi hoặc Admin
     const loggedStudentSbd = (safeLocal.getItem("saved_student_sbd") || "").trim().toLowerCase();
     const isOwner = Boolean(loggedStudentSbd && (loggedStudentSbd === String(sbd).trim().toLowerCase() || loggedStudentSbd === cleanSbd.toLowerCase()));
 
-    // Nếu đã đăng nhập hoặc đã xác thực phiên: MỞ NGAY LẬP TỨC 0S KHÔNG CẦN HỎI MẬT KHẨU
     if (checkCurrentIsAdmin() || isOwner || safeSession.getItem(sessionAuthKey) === "true") {
         if (input) input.click();
         return;
     }
 
-    // 2. Nếu là học sinh khác hoặc chưa đăng nhập: Yêu cầu xác thực
     const effectivePass = getEffectiveStudentPassword(cleanSbd, sbd, defaultPass);
     const inputPass = prompt(`🔐 XÁC NHẬN NỘP BÀI:\n\nEm đang nộp bài cho: [${stt}] ${studentName} (SBD: ${sbd}).\nNhập Mật khẩu (mặc định: SBD):`);
     if (inputPass === null) return;
@@ -207,7 +193,6 @@ function triggerStudentUpload(stt, sbd, studentName, defaultPass) {
             input.click();
         }
 
-        // Trên Safari iOS: Prompt chặn User Gesture, báo em chạm lại 1 lần là mở tức thì vì đã lưu phiên
         if (isIOS) {
             alert(`✅ Mật khẩu chính xác!\n\n👉 Em hãy chạm lại nút [📷 Tải ảnh] của em một lần nữa để chọn ảnh bài làm nhé!`);
         }
@@ -285,6 +270,7 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
         const now = new Date(); 
         const pad = n => String(n).padStart(2, '0');
         const submitDateStr = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+        const nowMs = Date.now();
 
         const subPayload = {
             quiz_id: quizId, 
@@ -294,7 +280,7 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
             class_name: driveClassName, 
             exam_title: examTitle, 
             last_submit: submitDateStr, 
-            last_submit_time: Date.now(),
+            last_submit_time: nowMs,
             count: existingImages.length, 
             images: existingImages, 
             cross_score: currentSub.crossScore || "",
@@ -308,8 +294,28 @@ async function handleStudentEssayUploadPC(stt, sbd, studentName, fileInput) {
         const client = getDbClient();
         if (client) await client.from('tu_luan_submissions').upsert(subPayload, { onConflict: 'quiz_id,sbd' });
 
-        currentTuLuanModalData.submissionsMap[cleanSbd] = { ...subPayload, detailScores: currentSub.detailScores || {} };
+        // Đồng bộ đầy đủ camelCase để giao diện bảng hiển thị chuẩn 100% ngay lập tức
+        currentTuLuanModalData.submissionsMap[cleanSbd] = {
+            stt: String(stt || "00"),
+            sbd: cleanSbd,
+            studentName: studentName,
+            className: driveClassName,
+            examTitle: examTitle,
+            lastSubmit: submitDateStr,
+            lastSubmitTime: nowMs,
+            count: existingImages.length,
+            images: existingImages,
+            crossScore: currentSub.crossScore || "",
+            crossScoreBy: currentSub.crossScoreBy || "",
+            crossScoreTime: currentSub.crossScoreTime || "",
+            feedback: currentSub.feedback || "",
+            feedbackTime: currentSub.feedbackTime || "",
+            isApproved: !!currentSub.isApproved,
+            detailScores: currentSub.detailScores || {},
+            questionCount: currentSub.questionCount || (typeof detectExamQuestionCount === 'function' ? detectExamQuestionCount() : 30)
+        };
         renderTuLuanStudentsTable();
+        if (typeof updateCrossScoreInputStyles === 'function') updateCrossScoreInputStyles();
         alert(`🎉 THÀNH CÔNG!\nĐã lưu ${successCount} ảnh bài làm lên Drive.`);
     }
 
@@ -332,14 +338,13 @@ async function triggerExamRoomDriveUpload(qId) {
         input.id = `drive-exam-input-${qId}`; 
         input.accept = "image/*"; 
         input.multiple = true; 
-        // ĐẢM BẢO KHÔNG DÙNG pointer-events: none CHO IPHONE
         input.style.position = "absolute";
         input.style.top = "-9999px";
         input.style.left = "-9999px";
         input.style.width = "1px";
         input.style.height = "1px";
         input.style.opacity = "0.01";
-        input.style.pointerEvents = "auto"; // SỬA LỖI IPHONE Ở ĐÂY
+        input.style.pointerEvents = "auto";
         input.style.zIndex = "-1";
         document.body.appendChild(input);
         
@@ -487,6 +492,7 @@ async function deleteSingleStudentImage(cleanSbd, imgIndex, studentName, default
             }
         }
         renderTuLuanStudentsTable();
+        if (typeof updateCrossScoreInputStyles === 'function') updateCrossScoreInputStyles();
         alert("🗑️ Đã xóa ảnh thành công!");
     } catch(err) { 
         alert("❌ Lỗi khi xóa ảnh: " + err.message); 
