@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: student-exam-flow.js 
 // (BẢN FIX TRIỆT ĐỂ: SẠCH 100% LỖI CÚ PHÁP, TÁCH CHẾ ĐỘ ADMIN & HỌC SINH,
-//  KHÔNG BỊ TRẢ FALSE KHI THIẾU LỚP, XÓA CACHE TRỘN ĐỀ ĐÚNG KEY)
+//  KHÔNG GHI RÁC "Bắt đầu Lần ..." VÀO cheating_logs GÂY SAI CỘT CHUYỂN TAB)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -325,7 +325,6 @@ function submitStudentLogin() {
 }
 
 function checkPassword() { 
-    // Bảng đăng nhập cũ đã được gỡ bỏ -> Chuyển hướng về trang chủ dùng modal đăng nhập mới
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id') || "";
     const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
@@ -502,17 +501,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                 if (!updated || updated.length === 0) {
                     await client.from('active_sessions').insert([sessionPayload]);
                 }
-
-                client.from('cheating_logs').insert([{
-                    quiz_id: currentQuizId,
-                    sbd: cleanSbd,
-                    student_name: sName,
-                    student_class: strictClassName,
-                    category_id: currentCat,
-                    switch_count: 0,
-                    duration_str: `Bắt đầu Lần ${currentAttempt}`,
-                    duration_sec: 0
-                }]).then();
+                // Không ghi dòng "Bắt đầu Lần ..." vào cheating_logs để cột chuyển tab luôn sạch và chính xác 100%
             };
 
             const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 1800));
@@ -650,7 +639,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     let origAnswers = uiAnswers;
     let scoreResult = null;
     
-    // TIẾN HÀNH PHIÊN DỊCH VỀ BẢN GỐC TRƯỚC KHI NỘP ĐỂ GIÁO VIÊN ĐỌC ĐƯỢC CHUẨN XÁC
     if (typeof translateUserAnswersToOriginal === 'function' && typeof examData !== 'undefined' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
         origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
         
