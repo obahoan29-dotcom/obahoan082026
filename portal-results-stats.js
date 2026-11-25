@@ -1,19 +1,16 @@
 // =========================================================
 // FILE: portal-results-stats.js
 // THỐNG KÊ KPI, VẼ BIỂU ĐỒ PHỔ ĐIỂM CHART.JS & XUẤT EXCEL
-// CẬP NHẬT ĐỒNG BỘ "ĐANG THI" CHUẨN XÁC VÀ ĐẸP MẮT
+// ĐÃ SỬA: GIỮ NGUYÊN MENU NỔI KHI REFRESH NGẦM & ĐỒNG BỘ CHỈ SỐ CHUYỂN TAB RA EXCEL
 // =========================================================
 
-function updateStatsAndRenderTable(rows) {
+function updateStatsAndRenderTable(rows, opts = {}) {
     let total = rows.length;
     let classCount = rows.filter(r => r.isClassStudent).length;
     let freeCount = total - classCount;
 
-    // Số em đang thi: tính tất cả em có cờ isDoing = true
     let doingCount = rows.filter(r => r.isDoing).length;
-    // Số em đã nộp bài ít nhất 1 lần
     let submittedCount = rows.filter(r => r.allAttempts.length > 0 && !r.isDoing).length;
-    // Số em chưa hề thi và không đang trong phòng thi
     let unsubmittedCount = rows.filter(r => r.allAttempts.length === 0 && !r.isDoing).length;
     
     let sumScore = 0; let scoredStudents = 0;
@@ -42,7 +39,6 @@ function updateStatsAndRenderTable(rows) {
     const unsubEl = document.getElementById("stat-unsubmitted-students"); const avgEl = document.getElementById("stat-avg-score");
     if (subEl) subEl.innerText = submittedCount; 
     
-    // Cập nhật khối "Đang thi" với hiệu ứng nhịp tim trên thanh thống kê
     if (doingEl) {
         doingEl.innerText = doingCount;
         const parentBadge = doingEl.closest('.stat-badge-item');
@@ -72,7 +68,7 @@ function updateStatsAndRenderTable(rows) {
     if (el_6_7) el_6_7.innerText = c_6_to_7; if (el_7_8) el_7_8.innerText = c_7_to_8; if (el_8_9) el_8_9.innerText = c_8_to_9;
     if (el_9_10) el_9_10.innerText = c_9_to_10;
 
-    filterResultTable();
+    filterResultTable(opts);
 
     const detailView = document.getElementById("result-detailed-stats-view");
     if (detailView && detailView.style.display === "flex") { renderDetailedScoreChart(); }
@@ -220,10 +216,14 @@ function exportResultsToExcel() {
         let correct = sub ? (sub.calcMetrics ? sub.calcMetrics.correctCount : (sub.correctCount !== undefined ? sub.correctCount : 0)) : "";
         let score = sub ? (sub.score10 !== undefined ? sub.score10 : (sub.calcMetrics ? sub.calcMetrics.score10Scale : "")) : "";
         let rankStr = (r.rank !== null && r.rank !== undefined) ? `Hạng ${r.rank}` : "---";
-        let rawSubTab = sub ? (parseInt(sub.tabSwitchCount, 10) || 0) : 0; let dataStringTab = sub ? extractTabCountFromDataString(sub.dataString) : 0;
-        let logTab = r.cheatLogsTabCount || 0; let finalTabCount = Math.max(rawSubTab, dataStringTab, logTab);
-        let tabs = sub ? `${finalTabCount} lần` : (r.isDoing ? `${finalTabCount} lần` : "");
-        let cheatTimes = r.cheatTimeString || ""; let details = sub ? (sub.dataString || "") : "";
+
+        const cheatStats = (typeof getAttemptCheatStats === "function")
+            ? getAttemptCheatStats(r, sub)
+            : { tabCount: Math.max(sub ? (parseInt(sub.tabSwitchCount, 10) || 0) : 0, r.cheatLogsTabCount || 0), timeString: r.cheatTimeString || "" };
+
+        let tabs = (sub || r.isDoing) ? `${cheatStats.tabCount} lần` : "";
+        let cheatTimes = (sub || r.isDoing) ? (cheatStats.timeString || "") : "";
+        let details = sub ? (sub.dataString || "") : "";
         excelData.push([stt, currentExamTitle, soLanThi, inTime, spent, name, lop, sbd, tinhTrang, correct, score, rankStr, tabs, cheatTimes, details]);
     });
 
