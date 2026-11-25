@@ -1,13 +1,14 @@
 // =========================================================
 // FILE: portal-results-enhancements.js
 // MODULE NÂNG CẤP CHO MODAL KẾT QUẢ THI:
-// 1. LỌC NHANH NGAY KHI BẤM VÀO CÁC BADGE KPI & PHÂN LOẠI ĐIỂM
+// 1. LỌC NHANH NGAY KHI BẤM VÀO CÁC BADGE KPI, PHÂN LOẠI ĐIỂM & "🔁 THI ≥2 LẦN"
 // 2. CỬA SỔ XEM CHI TIẾT BÀI LÀM TRỰC QUAN (XANH/ĐỎ TỪNG CÂU)
-// 3. CHUYỂN LẦN THI, COPY BÁO CÁO GỬI ZALO PHỤ HUYNH & XÓA RIÊNG 1 LẦN THI (ADMIN)
-// 4. PHÍM TẮT ESC ĐÓNG POPUP THEO THỨ TỰ ƯU TIÊN
+// 3. SO SÁNH ĐIỂM GIỮA CÁC LẦN THI (LẦN 1 -> LẦN 2), TẢI JSON BÀI LÀM, COPY BÁO CÁO ZALO & XÓA RIÊNG 1 LẦN THI
+// 4. ĐỒNG BỘ CHỈ SỐ CHUYỂN TAB CHUẨN XÁC QUA getAttemptCheatStats
+// 5. PHÍM TẮT ESC ĐÓNG POPUP THEO THỨ TỰ ƯU TIÊN
 // =========================================================
 
-let _activeResultKpiFilter = null; // { type: 'status'|'score', value: 'submitted'|'doing'|'unsubmitted'|'0-3'|... }
+let _activeResultKpiFilter = null; // { type: 'status'|'score'|'multi', value: ... }
 let _inspectorCurrentRowUid = null;
 
 (function injectResultEnhancementStyles() {
@@ -73,7 +74,7 @@ let _inspectorCurrentRowUid = null;
         }
         .st-inspector-card {
             background: #ffffff;
-            width: min(820px, 96vw);
+            width: min(840px, 96vw);
             max-height: 90vh;
             border-radius: 16px;
             border: 1.5px solid #cbd5e1;
@@ -150,6 +151,20 @@ let _inspectorCurrentRowUid = null;
             border-color: #0284c7;
             box-shadow: 0 2px 7px rgba(2, 132, 199, 0.3);
         }
+        .st-ins-compare-banner {
+            background: #ffffff;
+            border: 1.2px solid #cbd5e1;
+            border-left: 4px solid #8b5cf6;
+            border-radius: 10px;
+            padding: 7px 11px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
         .st-ins-answers-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
@@ -209,6 +224,12 @@ let _inspectorCurrentRowUid = null;
             color: #ffffff;
         }
         .btn-ins-copy:hover { filter: brightness(1.08); }
+        .btn-ins-json {
+            background: #f0fdf4;
+            color: #15803d;
+            border-color: #86efac;
+        }
+        .btn-ins-json:hover { background: #dcfce7; }
         .btn-ins-delete-attempt {
             background: #fee2e2;
             color: #dc2626;
@@ -228,11 +249,12 @@ let _inspectorCurrentRowUid = null;
     document.head.appendChild(style);
 })();
 
-// 1. BỘ LỌC TƯƠNG TÁC TRÊN THANH KPI & PHÂN LOẠI ĐIỂM
+// 1. BỘ LỌC TƯƠNG TÁC TRÊN THANH KPI & PHÂN LOẠI ĐIỂM + LỌC THI ≥2 LẦN
 const KPI_FILTER_DEFS = [
     { id: "stat-submitted-students", type: "status", value: "submitted" },
     { id: "stat-doing-students",     type: "status", value: "doing" },
     { id: "stat-unsubmitted-students", type: "status", value: "unsubmitted" },
+    { id: "stat-multi-attempt-students", type: "multi", value: "multi" },
     { id: "stat-score-0-to-3",  type: "score", value: "0-3" },
     { id: "stat-score-3-to-5",  type: "score", value: "3-5" },
     { id: "stat-score-5-to-6",  type: "score", value: "5-6" },
@@ -269,8 +291,40 @@ function setupStatsBarInteractiveFilters() {
     });
 }
 
+function updateMultiAttemptQuickBadge() {
+    const bar = document.getElementById("result-modal-stats-bar");
+    if (!bar || !bar.firstElementChild) return;
+    const firstRow = bar.firstElementChild;
+    const rows = (typeof currentExamResultData !== "undefined" && Array.isArray(currentExamResultData.rawRows))
+        ? currentExamResultData.rawRows : [];
+    const multiCount = rows.filter(r => Array.isArray(r.allAttempts) && r.allAttempts.length >= 2).length;
+
+    let badge = document.getElementById("badge-multi-attempt-filter");
+    if (multiCount > 0) {
+        if (!badge) {
+            badge = document.createElement("div");
+            badge.id = "badge-multi-attempt-filter";
+            badge.className = "stat-badge-item is-clickable-filter";
+            badge.style.cssText = "background:#fff1f2; border-color:#fda4af; color:#be123c;";
+            const anchor = document.getElementById("stat-avg-score")?.closest(".stat-badge-item");
+            if (anchor && anchor.nextSibling) {
+                firstRow.insertBefore(badge, anchor.nextSibling);
+            } else {
+                firstRow.appendChild(badge);
+            }
+        }
+        badge.innerHTML = `🔁 Thi ≥2 lần: <b id="stat-multi-attempt-students" style="color:#e11d48; margin-left:3px;">${multiCount}</b>`;
+    } else if (badge) {
+        badge.remove();
+        if (_activeResultKpiFilter && _activeResultKpiFilter.type === "multi") {
+            _activeResultKpiFilter = null;
+        }
+    }
+}
+
 function syncResultEnhancementUI() {
     setupStatsBarInteractiveFilters();
+    updateMultiAttemptQuickBadge();
     const bar = document.getElementById("result-modal-stats-bar");
     if (!bar) return;
 
@@ -317,6 +371,10 @@ function applyResultEnhancementFilter(rows) {
         if (value === "submitted") return rows.filter(r => r.allAttempts.length > 0 && !r.isDoing);
         if (value === "doing") return rows.filter(r => r.isDoing);
         if (value === "unsubmitted") return rows.filter(r => r.allAttempts.length === 0 && !r.isDoing);
+    }
+
+    if (type === "multi") {
+        return rows.filter(r => Array.isArray(r.allAttempts) && r.allAttempts.length >= 2);
     }
 
     if (type === "score") {
@@ -404,11 +462,13 @@ function renderStudentInspectorContent(row) {
 
     const subDateMs = typeof getSubmissionTimestamp === "function" ? getSubmissionTimestamp(sub) : 0;
     const submitTimeStr = subDateMs && typeof formatDateTimeFull === "function" ? formatDateTimeFull(subDateMs) : (sub.timestamp || "---");
-    const rawSubTab = parseInt(sub.tabSwitchCount, 10) || 0;
-    const dataStrTab = typeof extractTabCountFromDataString === "function" ? extractTabCountFromDataString(sub.dataString) : 0;
-    const finalTab = Math.max(rawSubTab, dataStrTab, row.cheatLogsTabCount || 0);
+
+    const cheatStats = (typeof getAttemptCheatStats === "function")
+        ? getAttemptCheatStats(row, sub)
+        : { tabCount: Math.max(parseInt(sub.tabSwitchCount, 10) || 0, row.cheatLogsTabCount || 0), timeString: row.cheatTimeString || "0s" };
 
     let attemptsBarHtml = "";
+    let compareBannerHtml = "";
     if (row.allAttempts.length > 1) {
         attemptsBarHtml = `
             <div class="st-ins-attempts-bar">
@@ -418,6 +478,22 @@ function renderStudentInspectorContent(row) {
                         Lần ${idx + 1} (${a.score10 ?? '--'}đ)
                     </button>
                 `).join('')}
+            </div>
+        `;
+
+        const firstScore = Number(row.allAttempts[0]?.score10 ?? 0);
+        const latestScore = Number(row.allAttempts[row.allAttempts.length - 1]?.score10 ?? 0);
+        const diff = Math.round((latestScore - firstScore) * 100) / 100;
+        const diffText = diff > 0
+            ? `<span style="color:#16a34a;">📈 Tăng +${diff}đ</span>`
+            : (diff < 0 ? `<span style="color:#dc2626;">📉 Giảm ${diff}đ</span>` : `<span style="color:#64748b;">⚖️ Không đổi</span>`);
+        const progression = row.allAttempts.map((a, i) => `Lần ${i + 1}: <b>${a.score10 ?? '--'}đ</b>`).join(' → ');
+
+        compareBannerHtml = `
+            <div class="st-ins-compare-banner">
+                <span>🔁 Tiến trình ${row.allAttempts.length} lần thi:</span>
+                <span>${progression}</span>
+                <span>• ${diffText}</span>
             </div>
         `;
     }
@@ -434,11 +510,12 @@ function renderStudentInspectorContent(row) {
     const body = document.getElementById("st-ins-body");
     body.innerHTML = `
         ${attemptsBarHtml}
+        ${compareBannerHtml}
         <div class="st-inspector-summary-grid">
             <div class="st-ins-kpi"><small>Điểm lần ${attIdx + 1}</small><b style="color:#0284c7; font-size:17px;">${sub.score10 ?? 0} điểm</b></div>
             <div class="st-ins-kpi"><small>Số câu đúng</small><b style="color:#16a34a;">${sub.correctCount ?? 0} câu</b></div>
             <div class="st-ins-kpi"><small>Thời gian làm</small><b>${escapeInsHtml(sub.completionTime || "---")}</b></div>
-            <div class="st-ins-kpi"><small>Chuyển tab</small><b style="color:${finalTab > 0 ? '#dc2626' : '#16a34a'};">${finalTab} lần (${escapeInsHtml(row.cheatTimeString || '0s')})</b></div>
+            <div class="st-ins-kpi"><small>Chuyển tab</small><b style="color:${cheatStats.tabCount > 0 ? '#dc2626' : '#16a34a'};">${cheatStats.tabCount} lần (${escapeInsHtml(cheatStats.timeString)})</b></div>
             <div class="st-ins-kpi"><small>Thời điểm nộp</small><b style="font-size:12px;">${escapeInsHtml(submitTimeStr)}</b></div>
         </div>
         <div>
@@ -453,6 +530,7 @@ function renderStudentInspectorContent(row) {
     footer.innerHTML = `
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn-ins-action btn-ins-copy" onclick="copyStudentZaloReport()">📋 Copy báo cáo gửi Zalo</button>
+            <button type="button" class="btn-ins-action btn-ins-json" onclick="downloadStudentAttemptJson()">💾 Tải JSON bài này</button>
             <button type="button" class="btn-ins-action btn-ins-delete-attempt" onclick="deleteSingleAttemptFromCloud('${escapeInsHtml(sub.id || '')}')">🗑️ Xóa lần thi ${attIdx + 1} trên máy chủ</button>
         </div>
         <button type="button" class="btn-ins-action btn-ins-close" onclick="closeStudentDetailInspector()">Đóng</button>
@@ -468,6 +546,29 @@ window.switchInspectorAttempt = function(attIdx) {
     if (row) renderStudentInspectorContent(row);
 };
 
+window.downloadStudentAttemptJson = function() {
+    if (!_inspectorCurrentRowUid) return;
+    const row = (currentExamResultData.rawRows || []).find(r => r._rowUid === _inspectorCurrentRowUid);
+    if (!row || !row.allAttempts || row.allAttempts.length === 0) return;
+
+    const acc = row.account || {};
+    const attIdx = row.selectedAttemptIndex || 0;
+    const sub = row.allAttempts[attIdx];
+    const sbd = String(acc.sbd || sub.sbd || "hs").replace(/[^a-zA-Z0-9]/g, '_');
+    const sName = String(acc.name || sub.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
+
+    const jsonStr = JSON.stringify({ ...sub, attemptNumber: attIdx + 1 }, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${sbd}_${sName}_lan${attIdx + 1}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
 window.copyStudentZaloReport = function() {
     if (!_inspectorCurrentRowUid) return;
     const row = (currentExamResultData.rawRows || []).find(r => r._rowUid === _inspectorCurrentRowUid);
@@ -480,11 +581,15 @@ window.copyStudentZaloReport = function() {
     const tokens = String(sub.dataString || "").split(/\s*\|\s*/).filter(Boolean);
     const wrongList = tokens.filter(t => t.includes("[SAI")).slice(0, 12);
 
+    const cheatStats = (typeof getAttemptCheatStats === "function")
+        ? getAttemptCheatStats(row, sub)
+        : { tabCount: Math.max(parseInt(sub.tabSwitchCount, 10) || 0, row.cheatLogsTabCount || 0), timeString: row.cheatTimeString || "0s" };
+
     const text = [
         `📊 KẾT QUẢ BÀI THI: ${examTitle}`,
         `👤 Học sinh: ${acc.name || sub.studentName} (SBD: ${acc.sbd || sub.sbd} - Lớp: ${acc.className || sub.studentClass})`,
         `🎯 Kết quả (Lần ${attIdx + 1}): ${sub.score10 ?? 0} điểm | Đúng: ${sub.correctCount ?? 0} câu | Thời gian: ${sub.completionTime || "---"}`,
-        `⚠️ Chuyển tab: ${Math.max(parseInt(sub.tabSwitchCount, 10) || 0, row.cheatLogsTabCount || 0)} lần`,
+        `⚠️ Chuyển tab: ${cheatStats.tabCount} lần (${cheatStats.timeString})`,
         wrongList.length > 0 ? `❌ Các câu sai cần xem lại: ${wrongList.join("; ")}` : `✅ Làm bài rất tốt, không có câu sai!`
     ].join("\n");
 
