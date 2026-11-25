@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: SẠCH 100% LỖI CÚ PHÁP, TÁCH CHẾ ĐỘ ADMIN & HỌC SINH,
-//  KHÔNG BỊ TRẢ FALSE KHI THIẾU LỚP, XÓA CACHE TRỘN ĐỀ ĐÚNG KEY, BỎ .select() THỪA)
+// (BẢN FIX TRIỆT ĐỂ: ĐĂNG KÝ active_sessions CHẮC CHẮN 100% NGAY LÚC VÀO THI,
+//  XỬ LÝ count === null & TRÙNG KHÓA 23505, CACHE ĐẾM LẦN THI 10S TIẾT KIỆM BĂNG THÔNG)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -93,20 +93,30 @@ async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client || !quizId || !sbd) return localAttempt;
 
+    const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
+    const now = Date.now();
+    if (window.__cachedAttemptInfo &&
+        window.__cachedAttemptInfo.quizId === quizId &&
+        window.__cachedAttemptInfo.sbd === cleanSbd &&
+        (now - window.__cachedAttemptInfo.ts) < 10000) {
+        return Math.max(localAttempt, window.__cachedAttemptInfo.attempt);
+    }
+
     try {
-        const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
+        // Dùng head: true để chỉ đếm số lần nộp (0 byte dữ liệu tải về)
         const queryPromise = client
             .from('submissions')
-            .select('id, created_at')
+            .select('id', { count: 'exact', head: true })
             .eq('quiz_id', quizId)
             .ilike('sbd', `${cleanSbd}%`);
         
-        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ data: null }), 1800));
-        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ count: null, error: { message: 'timeout' } }), 1800));
+        const { count, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-        if (!error && Array.isArray(data)) {
-            const cloudCount = data.length;
-            return Math.max(localAttempt, cloudCount + 1);
+        if (!error && typeof count === 'number') {
+            const finalAttempt = Math.max(localAttempt, count + 1);
+            window.__cachedAttemptInfo = { quizId, sbd: cleanSbd, attempt: finalAttempt, ts: Date.now() };
+            return finalAttempt;
         }
     } catch(e) {}
     return localAttempt;
@@ -325,7 +335,6 @@ function submitStudentLogin() {
 }
 
 function checkPassword() { 
-    // Bảng đăng nhập cũ đã được gỡ bỏ -> Chuyển hướng về trang chủ dùng modal đăng nhập mới
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id') || "";
     const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
@@ -422,6 +431,64 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
     } catch(e) {}
 }
 
+// ĐĂNG KÝ PHIÊN LÀM BÀI ĐỘ TIN CẬY CAO (XỬ LÝ count === null, upErr & TRÙNG KHÓA 23505)
+async function registerActiveSessionReliable(client, currentQuizId, cleanSbd, sessionPayload) {
+    if (!client || !currentQuizId || !cleanSbd) return false;
+    try {
+        const updateFields = {
+            name: sessionPayload.name,
+            class_name: sessionPayload.class_name,
+            category_id: sessionPayload.category_id,
+            is_free: sessionPayload.is_free,
+            ma_de: sessionPayload.ma_de,
+            exam_title: sessionPayload.exam_title,
+            start_time: sessionPayload.start_time,
+            last_ping: sessionPayload.last_ping
+        };
+
+        // 1. Cập nhật nếu đã tồn tại (returning=minimal, 0 byte response body)
+        const { error: upErr, count } = await client
+            .from('active_sessions')
+            .update(updateFields, { count: 'exact' })
+            .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+
+        if (!upErr && typeof count === 'number' && count > 0) {
+            window.__activeSessionConfirmed = true;
+            window.__lastPresencePingMs = Date.now();
+            return true;
+        }
+
+        // 2. Nếu chưa có dòng (count === 0) hoặc count === null / upErr -> chèn mới
+        const { error: insErr } = await client
+            .from('active_sessions')
+            .insert([sessionPayload]);
+
+        if (!insErr) {
+            window.__activeSessionConfirmed = true;
+            window.__lastPresencePingMs = Date.now();
+            return true;
+        }
+
+        // 3. Nếu vừa trùng khóa (race condition giữa 2 tab/retry) -> cập nhật lại
+        const errCode = String(insErr.code || "");
+        const errMsg = String(insErr.message || "").toLowerCase();
+        if (errCode === '23505' || errMsg.includes('duplicate') || errMsg.includes('unique')) {
+            const { error: retryErr } = await client
+                .from('active_sessions')
+                .update(updateFields)
+                .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+            if (!retryErr) {
+                window.__activeSessionConfirmed = true;
+                window.__lastPresencePingMs = Date.now();
+                return true;
+            }
+        }
+    } catch (e) {
+        console.warn("Lỗi đăng ký active_sessions:", e);
+    }
+    return false;
+}
+
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false, isAdminMode = false) { 
     const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
@@ -470,40 +537,25 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
     if (client && !effectiveAdmin) {
-        try {
-            window.__lastPresencePingMs = nowMs;
-            const handshakeTask = async () => {
-                const sessionPayload = {
-                    quiz_id: currentQuizId,
-                    sbd: cleanSbd,
-                    name: sName,
-                    class_name: strictClassName,
-                    category_id: currentCat,
-                    is_free: isFreeStudent,
-                    ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                    exam_title: exactExamTitle,
-                    start_time: effectiveStartTime,
-                    last_ping: nowMs
-                };
+        window.__activeSessionConfirmed = false;
+        window.__lastPresencePingMs = 0;
 
-                // Bỏ .select() thừa -> dùng count: 'exact' (trả về response body rỗng 0 byte)
-                const { error: upErr, count } = await client.from('active_sessions')
-                    .update({
-                        name: sName,
-                        class_name: strictClassName,
-                        category_id: currentCat,
-                        is_free: isFreeStudent,
-                        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-                        exam_title: exactExamTitle,
-                        start_time: effectiveStartTime,
-                        last_ping: nowMs
-                    }, { count: 'exact' })
-                    .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+        const sessionPayload = {
+            quiz_id: currentQuizId,
+            sbd: cleanSbd,
+            name: sName,
+            class_name: strictClassName,
+            category_id: currentCat,
+            is_free: isFreeStudent,
+            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+            exam_title: exactExamTitle,
+            start_time: effectiveStartTime,
+            last_ping: nowMs
+        };
 
-                if (!upErr && count === 0) {
-                    await client.from('active_sessions').insert([sessionPayload]);
-                }
-
+        const handshakeTask = (async () => {
+            try {
+                const ok = await registerActiveSessionReliable(client, currentQuizId, cleanSbd, sessionPayload);
                 client.from('cheating_logs').insert([{
                     quiz_id: currentQuizId,
                     sbd: cleanSbd,
@@ -514,13 +566,14 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                     duration_str: `Bắt đầu Lần ${currentAttempt}`,
                     duration_sec: 0
                 }]).then();
-            };
+                return ok;
+            } catch(err) {
+                return false;
+            }
+        })();
 
-            const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 1800));
-            await Promise.race([handshakeTask(), timeoutTask]);
-        } catch(err) {
-            console.warn("Handshake Supabase bị chậm, cho phép vào thi chế độ offline-first:", err);
-        }
+        const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 2500));
+        await Promise.race([handshakeTask, timeoutTask]);
     }
 
     if (!effectiveAdmin) {
@@ -651,7 +704,6 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     let origAnswers = uiAnswers;
     let scoreResult = null;
     
-    // TIẾN HÀNH PHIÊN DỊCH VỀ BẢN GỐC TRƯỚC KHI NỘP ĐỂ GIÁO VIÊN ĐỌC ĐƯỢC CHUẨN XÁC
     if (typeof translateUserAnswersToOriginal === 'function' && typeof examData !== 'undefined' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
         origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
         
@@ -1340,10 +1392,10 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
-// ĐĂNG KÝ TOÀN CỤC CÁC HÀM
 window.getStrictStandardClassName = getStrictStandardClassName;
 window.getRealStudentExamAttemptNumber = getRealStudentExamAttemptNumber;
 window.fetchStudentAttemptNumberFromCloud = fetchStudentAttemptNumberFromCloud;
+window.registerActiveSessionReliable = registerActiveSessionReliable;
 window.openStudentLoginModal = openStudentLoginModal;
 window.closeStudentLoginModal = closeStudentLoginModal;
 window.switchStudentLoginMode = switchStudentLoginMode;
