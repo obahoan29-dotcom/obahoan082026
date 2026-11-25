@@ -1,6 +1,6 @@
 // =========================================================
-// FILE: portal-results-regrade.js (BẢN TỐI ƯU HỖ TRỢ CHẤM LẠI & FILE DỰ PHÒNG)
-// ĐÃ BỔ SUNG: ĐÓNG SẠCH MENU NỔI & RESET ZOOM KHI ĐÓNG MODAL, CHỐNG TRÀN MÉP CHẤM LẠI
+// FILE: portal-results-regrade.js (BẢN TỐI ƯU HỖ TRỢ CHẤM LẠI THEO LÔ & FILE DỰ PHÒNG)
+// ĐÃ BỔ SUNG: CHẤM LẠI NHANH THEO BATCH 10 BÀI + TÌM ĐỦ candidateCodes + TRÁNH TRÙNG ID NHÁP
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
@@ -136,37 +136,51 @@ async function processRegradeWithAnswers() {
         }
 
         const newAnswerKey = {}; const letters = ["A", "B", "C", "D"];
+        const checkP4 = (q) => (typeof isPart4Question === 'function' ? isPart4Question(q) : (q.part === 4 || q.isPart4 === true || q.type === 'essay' || q.type === 'essay_answer'));
+
         quizObj.questions.forEach(q => {
-            if (q.type === "multiple_choice" && q.correct !== undefined) {
+            if (q.type === "multiple_choice" && !checkP4(q) && q.correct !== undefined) {
                 newAnswerKey[`q${q.id}`] = typeof q.correct === 'number' ? letters[q.correct] : String(q.correct).trim().toUpperCase();
-            } else if (q.type === "true_false" && q.statements) {
+            } else if (q.type === "true_false" && !checkP4(q) && q.statements) {
                 q.statements.forEach(st => {
                     newAnswerKey[`q${q.id}_${st.id}`] = (st.correct === true || String(st.correct).toLowerCase() === 'đúng') ? "Đúng" : "Sai";
                 });
-            } else if (q.correctAnswer !== undefined) {
-                newAnswerKey[`q${q.id}`] = String(q.correctAnswer).trim();
+            } else {
+                const rawAns = q.correctAnswer !== undefined ? q.correctAnswer : (q.correct !== undefined ? q.correct : (q.answer !== undefined ? q.answer : ""));
+                newAnswerKey[`q${q.id}`] = String(rawAns).trim();
             }
         });
 
         const scoringConfig = quizObj.scoring_config || { mode: 'option1' };
+        let candidateCodes = [quizId];
+        if (typeof getExamCandidateCodes === 'function') {
+            candidateCodes = getExamCandidateCodes(quizObj.title || currentItem.title, quizObj.made || currentItem.made, quizId);
+        }
 
-        const { data: subs } = await client.from('submissions').select('*').eq('quiz_id', quizId);
+        btn.innerText = "⏳ Đang chấm lại...";
+        const { data: subs } = await client
+            .from('submissions')
+            .select('id, user_answers')
+            .in('quiz_id', candidateCodes);
+
         let updatedCount = 0;
 
-        if (Array.isArray(subs)) {
-            for (const sub of subs) {
-                const userAns = sub.user_answers || {};
-                const scoreRes = calculateExamScoreWithConfig(quizObj.questions, userAns, newAnswerKey, scoringConfig);
-
-                await client.from('submissions').update({
-                    score10: scoreRes.finalScore,
-                    raw_score: scoreRes.totalRawScore,
-                    correct_count: scoreRes.correctCount,
-                    wrong_count: scoreRes.wrongCount,
-                    data_string: scoreRes.dataDetails.join(" | ")
-                }).match({ id: sub.id });
-
-                updatedCount++;
+        if (Array.isArray(subs) && subs.length > 0) {
+            const batchSize = 10;
+            for (let i = 0; i < subs.length; i += batchSize) {
+                const batch = subs.slice(i, i + batchSize);
+                await Promise.all(batch.map(async (sub) => {
+                    const userAns = sub.user_answers || {};
+                    const scoreRes = calculateExamScoreWithConfig(quizObj.questions, userAns, newAnswerKey, scoringConfig);
+                    const { error: upErr } = await client.from('submissions').update({
+                        score10: scoreRes.finalScore,
+                        raw_score: scoreRes.totalRawScore,
+                        correct_count: scoreRes.correctCount,
+                        wrong_count: scoreRes.wrongCount,
+                        data_string: scoreRes.dataDetails.join(" | ")
+                    }).match({ id: sub.id });
+                    if (!upErr) updatedCount++;
+                }));
             }
         }
 
@@ -179,10 +193,6 @@ async function processRegradeWithAnswers() {
         btn.disabled = false; btn.innerText = "🚀 Chấm lại ngay"; 
     }
 }
-
-// =========================================================================
-// BỘ XỬ LÝ UPLOAD BÀI THI TỪ FILE JSON DỰ PHÒNG NỘP SÓT (BẢO VỆ MỌI LẦN THI)
-// =========================================================================
 
 function triggerUploadBackupJson(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -221,13 +231,15 @@ async function handleBackupJsonFileInput(input) {
         const itemsToProcess = Array.isArray(parsed) ? parsed : [parsed];
         let successCount = 0;
 
-        for (const data of itemsToProcess) {
+        for (let idx = 0; idx < itemsToProcess.length; idx++) {
+            const data = itemsToProcess[idx];
             if (!data || typeof data !== 'object') continue;
 
             const effectiveQuizId = targetQuizId || data.quiz_id || data.quizId || "exam";
             const sbdClean = String(data.sbd || data.studentId || "user").replace(/[^a-zA-Z0-9]/g, '_');
             
-            const uniqueSubId = data.id || `sub_${effectiveQuizId}_${sbdClean}_${Date.now()}`;
+            const hasValidSubId = (data.id && String(data.id).startsWith("sub_"));
+            const uniqueSubId = hasValidSubId ? data.id : `sub_${effectiveQuizId}_${sbdClean}_${Date.now()}_${idx}`;
             
             const studentName = data.student_name || data.studentName || data.name || "Học sinh";
             const className = data.class_name || data.className || data.studentClass || "Lớp";
