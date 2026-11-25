@@ -1,7 +1,8 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ: CHỐNG TỰ THOÁT RA TRANG CHỦ, ĐỒNG HỒ LUÔN ĐẾM LÙI CHUẨN XÁC,
-//  HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI, BẢO VỆ F5 & BỎ .select() THỪA KHI PING)
+// (BẢN FIX TRIỆT ĐỂ: ĐỒNG BỘ BẢN NHÁP LIVE_DRAFTS TIẾT KIỆM BĂNG THÔNG,
+//  TỰ KHÔI PHỤC & TỰ THU BÀI KHI QUÁ GIỜ KỂ CẢ KHI F5/ĐÓNG TRÌNH DUYỆT,
+//  HIỂN THỊ THÔNG BÁO ĐIỂM RÕ RÀNG KHI TỰ THU HẾT GIỜ)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -23,6 +24,9 @@ let isSubmittingInProgress = false;
 let _storageDebounceTimer = null;
 let _statementDebounceTimer = null;
 let _autoSaveDebounceTimer = null;
+let _liveDraftCloudTimer = null;
+let _liveDraftDirty = false;
+let _liveDraftLastSyncMs = 0;
 
 (function injectLockStyles() {
     const styleId = "exam-engine-lock-styles";
@@ -53,6 +57,19 @@ let _autoSaveDebounceTimer = null;
             font-size: 12px;
             font-weight: 700;
             color: #1e40af;
+        }
+        .timeout-autosubmit-banner {
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border: 1.5px solid #fb923c;
+            border-radius: 12px;
+            padding: 10px 14px;
+            margin: 0 auto 14px auto;
+            color: #9a3412;
+            font-size: 0.94rem;
+            font-weight: 800;
+            line-height: 1.45;
+            box-shadow: 0 2px 10px rgba(249, 115, 22, 0.15);
+            text-align: center;
         }
     `;
     document.head.appendChild(style);
@@ -105,7 +122,9 @@ function calculateTemporaryDraftScore() {
 }
 
 async function ensureActiveSessionAndDraft() {
-    if (isSubmitted) return;
+    if (isSubmitted || isExamLocked) return;
+    if (typeof isStudentExamOvertimeNow === 'function' && isStudentExamOvertimeNow()) return;
+
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd");
     if (!sId) return;
 
@@ -148,7 +167,7 @@ async function ensureActiveSessionAndDraft() {
                 }, { count: 'exact' })
                 .match({ quiz_id: quizId, sbd: cleanSbd });
 
-            if (!upErr && count === 0) {
+            if (!upErr && (count === 0 || count === null)) {
                 await client.from('active_sessions').insert([{
                     quiz_id: quizId,
                     sbd: cleanSbd,
@@ -308,6 +327,68 @@ function buildCurrentLiveDraftPayload() {
     };
 }
 
+function cancelPendingLiveDraftCloudSync() {
+    if (_liveDraftCloudTimer) {
+        clearTimeout(_liveDraftCloudTimer);
+        _liveDraftCloudTimer = null;
+    }
+    _liveDraftDirty = false;
+}
+
+// ĐỒNG BỘ BẢN NHÁP LÊN SUPABASE SIÊU NHẸ (TỐI ĐA 1 LẦN / 20 GIÂY KHI CÓ THAY ĐỔI ĐÁP ÁN)
+// GIÚP ADMIN TỰ ĐỘNG THU & CHẤM ĐIỂM ĐÚNG KHI HỌC SINH TẮT HẲN MÁY SAU KHI QUÁ GIỜ
+async function flushLiveDraftToSupabase(isUrgent = false) {
+    if (isSubmitted || isExamLocked || !examStartTime) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('admin') === '1') return;
+
+    const uiAnswers = (window.SECURE_VAULT && window.SECURE_VAULT.userAnswers) || {};
+    if (Object.keys(uiAnswers).length === 0) return;
+    if (!_liveDraftDirty && !isUrgent) return;
+    if (isUrgent && !_liveDraftDirty) return;
+
+    const now = Date.now();
+    if (!isUrgent && _liveDraftLastSyncMs && (now - _liveDraftLastSyncMs) < 18000) return;
+
+    const draftData = buildCurrentLiveDraftPayload();
+    if (!draftData) return;
+
+    _liveDraftDirty = false;
+    _liveDraftLastSyncMs = now;
+
+    if (_liveDraftCloudTimer) {
+        clearTimeout(_liveDraftCloudTimer);
+        _liveDraftCloudTimer = null;
+    }
+
+    // Khi đóng tab / chuyển app, ưu tiên fetch(..., { keepalive: true }) để trình duyệt không hủy request
+    if (isUrgent && typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON_KEY !== 'undefined') {
+        try {
+            fetch(`${SUPABASE_URL}/rest/v1/live_drafts?on_conflict=id`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Prefer': 'resolution=merge-duplicates,return=minimal'
+                },
+                body: JSON.stringify(draftData),
+                keepalive: true
+            }).catch(() => {});
+            return;
+        } catch(e) {}
+    }
+
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
+
+    try {
+        await client.from('live_drafts').upsert(draftData, { onConflict: 'id' });
+    } catch(e) {
+        _liveDraftDirty = true;
+    }
+}
+
 async function autoSaveAnswerToCloud(qKey, answerVal) {
     if (isSubmitted || isExamLocked) return;
 
@@ -322,6 +403,17 @@ async function autoSaveAnswerToCloud(qKey, answerVal) {
             }).catch(() => {});
         } catch(e) {}
     }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('admin') === '1') return;
+
+    _liveDraftDirty = true;
+    if (!_liveDraftCloudTimer) {
+        _liveDraftCloudTimer = setTimeout(() => {
+            _liveDraftCloudTimer = null;
+            flushLiveDraftToSupabase(false);
+        }, 20000);
+    }
 }
 
 function sendDraftToGoogleSheetTemp(draftData) {
@@ -335,13 +427,15 @@ window.addEventListener('online', function() {
         if (typeof showTimeChangeToast === 'function') {
             showTimeChangeToast("📶 Đã có kết nối Internet! Đang tự động gửi lại bài...");
         }
-        if (typeof executeSubmitExam === 'function') executeSubmitExam(false);
+        if (typeof executeSubmitExam === 'function') executeSubmitExam(window.__lastSubmitReason || 'timeout');
     }
 });
 
 function lockExamInteractions() {
     isExamLocked = true;
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    if (typeof stopPresencePingOnly === 'function') stopPresencePingOnly();
+    cancelPendingLiveDraftCloudSync();
 
     const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
     if (!lockedDurationSec && examStartTime) {
@@ -363,7 +457,7 @@ function lockExamInteractions() {
         topSubmitBtn.innerText = "⏳ Đang nộp";
         topSubmitBtn.style.background = "linear-gradient(135deg, #0284c7, #0369a1)";
         topSubmitBtn.onclick = function() { 
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(false); 
+            if (typeof executeSubmitExam === 'function') executeSubmitExam(window.__lastSubmitReason || 'timeout'); 
         };
     }
 
@@ -505,7 +599,6 @@ async function initExamEngine() {
             scoringConfig: data.scoring_config
         };
 
-        // BẢO LƯU ĐỀ GỐC TRƯỚC KHI TRỘN VÀ HIỂN THỊ UI
         window.ORIGINAL_EXAM_DATA = JSON.parse(JSON.stringify(examData));
 
         if (urlParams.get('review') === "1") {
@@ -582,14 +675,12 @@ function shuffleArray(arr) {
     return array;
 }
 
-// BỘ TRỘN CÂU HỎI & PHƯƠNG ÁN A,B,C,D (ĐÃ FIX TẠO MAP ÁNH XẠ originalLettersMap)
 function shuffleExamData(data) {
     if (!data || !data.questions) return;
     const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 === true || q.type === "essay" || q.type === "essay_answer"));
     const letters = ["A", "B", "C", "D"];
     const tfLetters = ['a', 'b', 'c', 'd'];
     
-    // 1. TRỘN ĐÁP ÁN TRONG TỪNG CÂU HỎI TRƯỚC
     data.questions.forEach(q => {
         if (q.type === "multiple_choice" && !isP4(q) && Array.isArray(q.options) && q.options.length > 0) {
             let originalCorrectIdx = 0;
@@ -629,7 +720,6 @@ function shuffleExamData(data) {
         }
     });
 
-    // 2. TRỘN THỨ TỰ CÂU HỎI TRONG TỪNG PHẦN
     let p1 = shuffleArray(data.questions.filter(q => q.type === "multiple_choice" && !isP4(q)));
     let p2 = shuffleArray(data.questions.filter(q => q.type === "true_false" && !isP4(q)));
     let p3 = shuffleArray(data.questions.filter(q => (q.type === "short_answer") && !isP4(q)));
@@ -692,7 +782,6 @@ function resetToFreshLoginScreen() {
         return;
     }
 
-    // Chuyển về Modal đăng nhập mới trên trang chủ (không còn bảng đăng nhập cũ)
     redirectToPortalNewLogin(quizId, cat);
 }
 
@@ -766,29 +855,6 @@ async function checkSessionStatus(isAutostart = false) {
     }
 
     if (isRestored) { 
-        const elapsedTimeSec = Math.max(0, Math.floor((Date.now() - examStartTime) / 1000)); 
-        const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
-
-        if (timeRemaining <= 0 && totalTimeSeconds > 0 && !isAdminPreviewUrl) {
-            safeLocal.removeItem(getStorageKey(attempt));
-            if (typeof getStorageKey === 'function') {
-                safeLocal.removeItem(getStorageKey());
-            }
-            if (typeof examIndexedDB !== 'undefined') {
-                try {
-                    examIndexedDB.removeItem('exam_states', getStorageKey(attempt)).catch(() => {});
-                } catch(e) {}
-            }
-            isRestored = false;
-            isExamLocked = false;
-            lockedDurationSec = 0;
-            examStartTime = null;
-            window.SECURE_VAULT.userAnswers = {};
-            window.SECURE_VAULT.padletClicked = {};
-        }
-    }
-
-    if (isRestored) { 
         const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh"; 
         const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "---"; 
         const navName = document.getElementById("nav-student-name");
@@ -816,7 +882,29 @@ async function checkSessionStatus(isAutostart = false) {
         if (typeof checkAndDisplayAdminSoiDeButton === 'function') checkAndDisplayAdminSoiDeButton();
 
         const elapsedTimeSec = Math.max(0, Math.floor((Date.now() - examStartTime) / 1000)); 
-        const timeRemaining = totalTimeSeconds - elapsedTimeSec; 
+        let timeRemaining = totalTimeSeconds - elapsedTimeSec;
+
+        let endExpired = false;
+        const endStr = (typeof examData !== 'undefined' && examData) ? (examData.examEndTimeStr || examData.exam_end_time) : null;
+        if (!isAdminPreviewUrl && endStr) {
+            const dEnd = parseUniversalDate(endStr);
+            if (dEnd && !isNaN(dEnd.getTime()) && Date.now() >= dEnd.getTime()) {
+                endExpired = true;
+            }
+        }
+
+        // NẾU BÀI LÀM TRƯỚC ĐÓ ĐÃ QUÁ THỜI GIAN (>90 PHÚT HOẶC HẾT HẠN KHUNG GIỜ):
+        // KHÔI PHỤC ĐÁP ÁN, KHÓA ĐỀ VÀ TỰ ĐỘNG NỘP NGAY LẬP TỨC (TUYỆT ĐỐI KHÔNG XÓA CHO LÀM LẠI!)
+        if (!isAdminPreviewUrl && (timeRemaining <= 0 || endExpired || window.__restoredExpiredExam)) {
+            if (typeof showTimeChangeToast === 'function') {
+                showTimeChangeToast("⏰ Đã quá thời gian làm bài! Web đang tự động thu bài và tính điểm...");
+            }
+            lockExamInteractions();
+            if (typeof executeSubmitExam === 'function') {
+                executeSubmitExam('timeout');
+            }
+            return;
+        }
 
         if (isAdminPreviewUrl || (timeRemaining > 0 && !isExamLocked)) {
             if (isAdminPreviewUrl && timeRemaining <= 0) {
@@ -826,7 +914,6 @@ async function checkSessionStatus(isAutostart = false) {
                 remainingSeconds = Math.max(0, timeRemaining);
             }
             startCountdownTimer(); 
-            // startPresenceSystem đã tự ping 1 lần nếu cần (không gọi trùng ensureActiveSessionAndDraft)
             if (!isAdminPreviewUrl) startPresenceSystem(sId);
             return; 
         }
@@ -841,7 +928,6 @@ async function checkSessionStatus(isAutostart = false) {
     if (document.getElementById("student-name")) document.getElementById("student-name").value = sNameVal;
     if (document.getElementById("student-class")) document.getElementById("student-class").value = sClassVal;
 
-    // Cho phép vào thẳng đề khi có autostart, admin=1, HOẶC đã có sẵn thông tin thí sinh hợp lệ (chống đá ra trang chủ khi F5 trên iOS/in-app browser)
     if (isAutostart || isAdminPreviewUrl || (sIdVal && sNameVal && !isCleared)) {
         if (sIdVal && sNameVal) {
             if (typeof startExamAction === 'function') {
@@ -852,7 +938,6 @@ async function checkSessionStatus(isAutostart = false) {
                         hideLoading();
                         return;
                     }
-                    // Nếu startExamAction trả về false nhưng đang có thông tin hoặc ở chế độ Admin: báo lỗi thay vì tự thoát về trang chủ
                     if (isAdminPreviewUrl) {
                         hideLoading();
                         showError("Không thể khởi tạo chế độ xem thử Admin", "Vui lòng bấm tải lại trang hoặc kiểm tra lại mã đề.");
@@ -872,7 +957,6 @@ async function checkSessionStatus(isAutostart = false) {
         }
     }
 
-    // Chỉ chuyển về Modal đăng nhập mới trên trang chủ khi thực sự chưa có thông tin đăng nhập (và không phải Admin xem thử)
     hideLoading();
     if (!isAdminPreviewUrl) {
         redirectToPortalNewLogin(quizId, cat);
@@ -1130,7 +1214,6 @@ function formatHHMMSS(totalSecs) {
     return `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`; 
 }
 
-// BỘ ĐẾM NGƯỢC ĐÃ FIX: LUÔN CHẠY ĐẾM LÙI TỪNG GIÂY Ở MỌI CHẾ ĐỘ (KỂ CẢ ADMIN TEST & HỌC SINH)
 function startCountdownTimer() { 
     if (isExamLocked) return;
     const timerVal = document.getElementById("nav-timer-val"); 
@@ -1168,7 +1251,8 @@ function startCountdownTimer() {
         } 
 
         const elapsedTimeSec = Math.max(0, Math.floor((now - examStartTime) / 1000)); 
-        remainingSeconds = Math.max(0, totalTimeSeconds - elapsedTimeSec); 
+        const endRemainSec = (currentEndTimeMs < Infinity) ? Math.max(0, Math.floor((currentEndTimeMs - now) / 1000)) : Infinity;
+        remainingSeconds = Math.max(0, Math.min(totalTimeSeconds - elapsedTimeSec, endRemainSec)); 
 
         if (!isAdminPreview && elapsedTimeSec < 15 && now >= currentEndTimeMs) {
             clearInterval(timerInterval);
@@ -1184,7 +1268,10 @@ function startCountdownTimer() {
             remainingSeconds = 0;
             if (timerVal) timerVal.innerText = "00:00:00"; 
             lockExamInteractions();
-            if (typeof executeSubmitExam === 'function') executeSubmitExam(true); 
+            if (typeof showTimeChangeToast === 'function') {
+                showTimeChangeToast("⏰ Đã hết thời gian làm bài! Web đang tự động thu bài và gửi điểm...");
+            }
+            if (typeof executeSubmitExam === 'function') executeSubmitExam('timeout'); 
             return; 
         }
 
@@ -1205,7 +1292,6 @@ function startCountdownTimer() {
         else if (timerBox) timerBox.classList.remove("timer-warning");
     };
 
-    // Cập nhật ngay ở giây 0 để tránh chớp 00:45:00 mặc định trong HTML
     tickCountdown();
     if (!isExamLocked && !isSubmitted) {
         timerInterval = setInterval(tickCountdown, 1000); 
@@ -1254,6 +1340,7 @@ function saveExamStateToStorage() {
 
 function restoreExamStateFromStorage() { 
     try { 
+        window.__restoredExpiredExam = false;
         const currentAttempt = window.currentStudentAttemptNumber || 1;
         const storageKey = getStorageKey(currentAttempt);
         const raw = safeLocal.getItem(storageKey); 
@@ -1281,16 +1368,6 @@ function restoreExamStateFromStorage() {
             const limitSec = (parseInt(parsed.timeLimitMinutes, 10) || TIME_LIMIT_MINUTES || 90) * 60;
             const isAdminPreviewUrl = (urlParams.get('admin') === '1');
 
-            if (!isAdminPreviewUrl && (elapsed >= limitSec || parsed.isExamLocked)) {
-                safeLocal.removeItem(storageKey);
-                if (typeof examIndexedDB !== 'undefined') {
-                    try {
-                        examIndexedDB.removeItem('exam_states', storageKey).catch(() => {});
-                    } catch(e) {}
-                }
-                return false;
-            }
-
             window.SECURE_VAULT.userAnswers = parsed.userAnswers || {}; 
             window.SECURE_VAULT.padletClicked = parsed.padletClickedMap || {}; 
             tabSwitchCount = parsed.tabSwitchCount || 0; 
@@ -1303,9 +1380,16 @@ function restoreExamStateFromStorage() {
             if (parsed.studentId && document.getElementById("student-id")) document.getElementById("student-id").value = parsed.studentId; 
             if (parsed.studentName && document.getElementById("student-name")) document.getElementById("student-name").value = parsed.studentName; 
             if (parsed.studentClass && document.getElementById("student-class")) document.getElementById("student-class").value = parsed.studentClass; 
-            
-            isExamLocked = false;
-            lockedDurationSec = 0;
+
+            // Nếu đã quá giờ hoặc đã bị khóa trước đó -> đánh dấu hết giờ để checkSessionStatus TỰ NỘP BÀI (KHÔNG xóa bài)
+            if (!isAdminPreviewUrl && (elapsed >= limitSec || parsed.isExamLocked)) {
+                window.__restoredExpiredExam = true;
+                lockedDurationSec = Math.min(elapsed, limitSec);
+                isExamLocked = true;
+            } else {
+                isExamLocked = false;
+                lockedDurationSec = 0;
+            }
             return true; 
         } 
     } catch(e) {} 
@@ -1326,6 +1410,26 @@ function renderResultSummaryScreen(correct, wrong, spentMins, spentTimeStr, fina
     
     const resExamTitle = document.getElementById("res-exam-title");
     if (resExamTitle) resExamTitle.innerText = EXAM_NAME || "BÀI THI TRẮC NGHIỆM";
+
+    const summaryCard = document.querySelector(".result-summary-card");
+    if (summaryCard) {
+        let autoNotice = document.getElementById("res-timeout-auto-banner");
+        if (window.__lastSubmitReason === 'timeout') {
+            if (!autoNotice) {
+                autoNotice = document.createElement("div");
+                autoNotice.id = "res-timeout-auto-banner";
+                autoNotice.className = "timeout-autosubmit-banner";
+                const scoreOverview = document.getElementById("res-score-overview");
+                if (scoreOverview && scoreOverview.parentNode) {
+                    scoreOverview.parentNode.insertBefore(autoNotice, scoreOverview);
+                }
+            }
+            autoNotice.innerHTML = `⏰ <b>ĐÃ HẾT THỜI GIAN LÀM BÀI (${TIME_LIMIT_MINUTES} PHÚT)!</b><br>Hệ thống đã tự động thu bài, chấm điểm và gửi kết quả về giáo viên.`;
+            autoNotice.style.display = "block";
+        } else if (autoNotice) {
+            autoNotice.style.display = "none";
+        }
+    }
 
     const currentAttempt = window.currentStudentAttemptNumber || 1;
     const scoreTitle = (maxScale && maxScale !== 10.0)
@@ -1503,6 +1607,8 @@ window.__saveExamState = saveExamStateToStorage;
 window.__updateProgress = updateProgress;
 window.lockExamInteractions = lockExamInteractions;
 window.autoSaveAnswerToCloud = autoSaveAnswerToCloud;
+window.flushLiveDraftToSupabase = flushLiveDraftToSupabase;
+window.cancelPendingLiveDraftCloudSync = cancelPendingLiveDraftCloudSync;
 window.ensureActiveSessionAndDraft = ensureActiveSessionAndDraft;
 window.renderResultSummaryScreen = renderResultSummaryScreen;
 window.sendDraftToGoogleSheetTemp = sendDraftToGoogleSheetTemp;
