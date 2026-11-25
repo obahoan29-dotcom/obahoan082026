@@ -1,7 +1,11 @@
 // =========================================================
 // FILE: portal-results-core.js 
 // (BẢN FIX ĐỒNG BỘ 100%: REALTIME CHÍNH XÁC, KHÔNG BỊ MẤT ĐANG THI KHI RỜI APP)
-// ĐÃ SỬA: SẮP XẾP LẠI CHUỖI CHI TIẾT ĐÁP ÁN (DATA_STRING) ĐÚNG THEO THỨ TỰ SỐ
+// ĐÃ SỬA:
+// 1. LOẠI BỎ TRIỆT ĐỂ LOG "Bắt đầu Lần ..." KHỎI SỐ LẦN & THỜI GIAN CHUYỂN TAB
+// 2. SẮP XẾP LOG CHUYỂN TAB THEO THỜI GIAN TĂNG DẦN & TÁCH THEO TỪNG LẦN THI
+// 3. KHỚP SBD LINH HOẠT KỂ CẢ HẬU TỐ _lan2, _lan3
+// 4. GIỮ NGUYÊN MENU NỔI KHI BẢNG CẬP NHẬT NGẦM (isSilent)
 // =========================================================
 
 let currentExamResultData = {
@@ -32,14 +36,15 @@ function debouncedRefreshResults(delayMs = 250) {
 
 function cleanSbdStandard(sbd) {
     if (!sbd) return "";
-    return String(sbd).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return String(sbd).trim().toLowerCase().replace(/_lan\d+$/i, '').replace(/[^a-z0-9]/g, '');
 }
 
 function getSbdVariations(sbd) {
     if (!sbd) return [];
     const raw = String(sbd).trim();
-    const clean = cleanSbdStandard(raw);
-    const setVars = new Set([raw, raw.toLowerCase(), raw.toUpperCase(), clean]);
+    const baseRaw = raw.replace(/_lan\d+$/i, '').trim();
+    const clean = cleanSbdStandard(baseRaw);
+    const setVars = new Set([raw, raw.toLowerCase(), raw.toUpperCase(), baseRaw, baseRaw.toLowerCase(), baseRaw.toUpperCase(), clean]);
     const m = clean.match(/^([a-z]+|\d+[a-z]+)0*(\d+)$/i);
     if (m) {
         const prefix = m[1].toLowerCase();
@@ -64,13 +69,12 @@ function isSbdMatchedFlexibly(sbd1, sbd2) {
     return v1.some(x => v2.includes(x));
 }
 
-// FIX: Cập nhật hàm sortDataString để trích xuất số ID và sắp xếp theo Numeric Sort.
+// Sắp xếp chuỗi chi tiết đáp án theo thứ tự số câu (1, 2, ..., 10)
 function sortDataString(str) {
     if (!str) return "";
     let parts = str.split(/\s*\|\s*/);
     
     parts.sort((a, b) => {
-        // 1. Nhận diện các câu log hệ thống (Đẩy về cuối cùng)
         let isLogA = a.startsWith("[") || a.toLowerCase().includes("tab switch");
         let isLogB = b.startsWith("[") || b.toLowerCase().includes("tab switch");
         
@@ -78,19 +82,16 @@ function sortDataString(str) {
         if (!isLogA && isLogB) return -1;
         if (isLogA && isLogB) return a.localeCompare(b);
 
-        // 2. Lấy con số ID và chữ cái nhỏ ở đầu mỗi mục (Ví dụ: "1-A", "10-C", "2a-Đúng")
         let matchA = a.match(/^(\d+)([a-zA-Z]?)/);
         let matchB = b.match(/^(\d+)([a-zA-Z]?)/);
         
         let numA = matchA ? parseInt(matchA[1], 10) : 0;
         let numB = matchB ? parseInt(matchB[1], 10) : 0;
 
-        // 3. Sắp xếp theo số
         if (numA !== numB) {
             return numA - numB;
         }
         
-        // Nếu cùng số (VD: câu Đúng/Sai 2a, 2b, 2c), tiếp tục sắp xếp theo chữ cái
         let charA = matchA && matchA[2] ? matchA[2].toLowerCase() : "";
         let charB = matchB && matchB[2] ? matchB[2].toLowerCase() : "";
         
@@ -120,6 +121,79 @@ function getSubmissionTimestamp(sub) {
         if (!isNaN(t)) return t;
     }
     return 0;
+}
+
+// Chuẩn hóa thời gian chuyển tab ngắn gọn: "5 giây" -> "5s", "3 phút 50 giây" -> "3p50s"
+function formatShortCheatDuration(rawDur) {
+    if (!rawDur) return "";
+    const str = String(rawDur).trim();
+    if (!str || /^bắt\s*đầu/i.test(str) || str === "---") return "";
+    return str
+        .replace(/phút/gi, 'p')
+        .replace(/giây/gi, 's')
+        .replace(/\s+/g, '');
+}
+
+// Tính chính xác Số lần chuyển tab & Thời gian chuyển tab (ví dụ: 2 lần | 5s | 10s) cho đúng lần thi đang xem
+function getAttemptCheatStats(row, targetSub = null) {
+    const entries = Array.isArray(row?.cheatEntries) ? row.cheatEntries : [];
+    const attempts = Array.isArray(row?.allAttempts) ? row.allAttempts : [];
+    const sub = targetSub || (attempts.length > 0 ? (attempts[row.selectedAttemptIndex] || attempts[0]) : null);
+
+    let scopedEntries = entries;
+
+    if (entries.length > 0 && entries.some(e => e.createdAtMs > 0)) {
+        if (row?.isDoing && !sub && attempts.length > 0) {
+            const lastSubMs = getSubmissionTimestamp(attempts[attempts.length - 1]);
+            if (lastSubMs > 0) {
+                scopedEntries = entries.filter(e => e.createdAtMs > lastSubMs);
+            }
+        } else if (sub && attempts.length > 1) {
+            const attIdx = attempts.indexOf(sub);
+            if (attIdx !== -1) {
+                const winStart = attIdx === 0 ? 0 : getSubmissionTimestamp(attempts[attIdx - 1]);
+                const winEnd = getSubmissionTimestamp(sub) + 10000;
+                if (winEnd > 10000) {
+                    scopedEntries = entries.filter(e => {
+                        if (!e.createdAtMs) return false;
+                        return e.createdAtMs > winStart && e.createdAtMs <= winEnd;
+                    });
+                }
+            }
+        }
+    }
+
+    const durations = scopedEntries.map(e => e.durationShort).filter(Boolean);
+    const maxLogSwitch = scopedEntries.reduce((mx, e) => Math.max(mx, e.switchCount || 0), 0);
+
+    if (sub) {
+        const rawSubTab = parseInt(sub.tabSwitchCount, 10) || 0;
+        const dataStrTab = extractTabCountFromDataString(sub.dataString);
+        const subReported = Math.max(rawSubTab, dataStrTab);
+
+        // Nếu bài nộp ghi rõ 0 lần nhưng log chung (không có created_at) lại có dữ liệu của lần khác -> tránh gán nhầm
+        let effectiveLogCount = Math.max(maxLogSwitch, durations.length);
+        let effectiveDurations = durations;
+        if (attempts.length > 1 && subReported === 0 && !entries.some(e => e.createdAtMs > 0)) {
+            effectiveLogCount = 0;
+            effectiveDurations = [];
+        }
+
+        const tabCount = Math.max(subReported, effectiveLogCount);
+        const timeString = effectiveDurations.length > 0
+            ? effectiveDurations.join(" | ")
+            : (tabCount > 0 ? "---" : "0s");
+
+        return { tabCount, timeString, durations: effectiveDurations };
+    }
+
+    if (row?.isDoing) {
+        const tabCount = Math.max(maxLogSwitch, durations.length);
+        const timeString = durations.length > 0 ? durations.join(" | ") : "0s";
+        return { tabCount, timeString, durations };
+    }
+
+    return { tabCount: 0, timeString: "0s", durations: [] };
 }
 
 // BỘ LỌC CHỐNG SPAM CLICK KÉP (CHỈ LOẠI BỎ KHI NỘP TRÙNG TRONG VÒNG 2 GIÂY)
@@ -152,7 +226,6 @@ function stopRealtimeSubmissionsListener() {
     }
 }
 
-// BẢN FIX: KHÔNG CHẶN SỰ KIỆN UPDATE CỦA ACTIVE_SESSIONS -> ADMIN CẬP NHẬT ĐANG THI NGAY SAU 0.2S
 function startRealtimeSubmissionsListener(quizId) {
     stopRealtimeSubmissionsListener();
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : (typeof supabaseClient !== 'undefined' ? supabaseClient : null);
@@ -176,29 +249,26 @@ function startRealtimeSubmissionsListener(quizId) {
         let channel = client.channel(`admin_realtime_${targetQuizId}_${Date.now()}`);
 
         candidateIds.forEach(id => {
-            // Lắng nghe bài nộp
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'submissions', 
                 filter: `quiz_id=eq.${id}` 
-            }, () => debouncedRefreshResults(200));
+            }, () => debouncedRefreshResults(250));
 
-            // Lắng nghe phiên làm bài: nhận tất cả sự kiện (INSERT, UPDATE, DELETE) không bị chặn
             channel = channel.on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'active_sessions', 
                 filter: `quiz_id=eq.${id}` 
-            }, () => debouncedRefreshResults(200));
+            }, () => debouncedRefreshResults(350));
         });
 
-        // Lắng nghe nháp trực tiếp
         channel = channel.on('postgres_changes', { 
             event: '*', 
             schema: 'public', 
             table: 'live_drafts' 
-        }, () => debouncedRefreshResults(200));
+        }, () => debouncedRefreshResults(350));
 
         channel.subscribe();
         realtimeSubmissionsChannel = channel;
@@ -233,7 +303,7 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
     if (!isSilent) {
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#0284c7;">⏳ Đang tải dữ liệu từ máy chủ Supabase...</td></tr>`;
     }
 
     try {
@@ -305,15 +375,25 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             };
         });
 
-        const cheatingLogsMap = {};
-        cheatData.forEach(c => {
-            cheatingLogsMap[c.id] = {
-                sbd: c.sbd,
-                studentName: c.student_name,
-                durationStr: c.duration_str,
-                switchCount: c.switch_count
-            };
+        // Sắp xếp cheating_logs theo thứ tự thời gian tăng dần trong JS (an toàn kể cả nếu thiếu created_at)
+        const sortedCheatRows = [...cheatData].sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            if (ta !== tb) return ta - tb;
+            const ia = Number(a.id);
+            const ib = Number(b.id);
+            if (!isNaN(ia) && !isNaN(ib)) return ia - ib;
+            return String(a.id || "").localeCompare(String(b.id || ""));
         });
+
+        const cheatingLogsList = sortedCheatRows.map((c, idx) => ({
+            id: c.id || `cheat_${idx}`,
+            sbd: c.sbd,
+            studentName: c.student_name,
+            durationStr: c.duration_str,
+            switchCount: c.switch_count,
+            createdAtMs: c.created_at ? (new Date(c.created_at).getTime() || 0) : 0
+        }));
 
         const activeSessionsMap = {};
         activeData.forEach(a => {
@@ -360,47 +440,58 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
 
         _examResultsCache[`${targetCatId}_${quizId}`] = {
             submissionsListRaw: rawSubs,
-            cheatingLogsData: cheatingLogsMap,
+            cheatingLogsData: cheatingLogsList,
             activeSessionsData: activeSessionsMap,
             liveDraftsData: liveDraftsMap,
             examMeta: examMeta
         };
 
-        renderExamResultTable(targetCatId, rawSubs, cheatingLogsMap, activeSessionsMap, liveDraftsMap, item, examMeta);
-
-        const searchInput = document.getElementById("result-search-input");
-        if (searchInput && searchInput.value.trim() !== "") filterResultTable();
+        renderExamResultTable(targetCatId, rawSubs, cheatingLogsList, activeSessionsMap, liveDraftsMap, item, examMeta, { isSilent });
 
     } catch(err) {
         console.error("❌ Lỗi nạp bảng điểm Supabase:", err);
         const tbody = document.getElementById("result-table-tbody");
-        if (tbody) tbody.innerHTML = `<tr><td colspan="16" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+        if (tbody && !isSilent) tbody.innerHTML = `<tr><td colspan="17" style="text-align:center; padding:30px; font-weight:700; color:#dc2626;">❌ Lỗi tải dữ liệu: ${err.message}</td></tr>`;
     }
 }
 
-// BẢN FIX: XÁC ĐỊNH CHÍNH XÁC "ĐANG THI" & ĐẾM ĐỦ THỜI GIAN LÀM BÀI, KHÔNG BỊ TỤT VỀ CHƯA THI KHI RỜI APP
-function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, activeSessionsMap, liveDraftsMap, examItem, examMeta = {}) {
+function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, activeSessionsMap, liveDraftsMap, examItem, examMeta = {}, renderOpts = {}) {
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(categoryId) : [];
 
+    const cheatEntriesBySbd = {};
     const cheatHistoryBySbd = {};
     const maxCheatCountBySbd = {};
 
-    for (let k in cheatingMap) {
-        let log = cheatingMap[k];
-        if (!log) continue;
-        let sbdKey = cleanSbdStandard(log.sbd);
-        let dur = String(log.durationStr || "").trim();
-        if (!dur || dur.toLowerCase() === "bắt đầu") continue;
+    const cheatList = Array.isArray(cheatingInput)
+        ? cheatingInput
+        : Object.values(cheatingInput || {});
 
-        let shortDur = dur.replace(/phút/g, 'p').replace(/giây/g, 's').replace(/\s+/g, '');
-        let sCount = parseInt(log.switchCount, 10) || 0;
+    cheatList.forEach(log => {
+        if (!log) return;
+        const sbdKey = cleanSbdStandard(log.sbd);
+        if (!sbdKey || sbdKey === "---") return;
 
-        if (sbdKey && sbdKey !== "---") {
-            if (!cheatHistoryBySbd[sbdKey]) cheatHistoryBySbd[sbdKey] = [];
-            cheatHistoryBySbd[sbdKey].push(shortDur);
-            maxCheatCountBySbd[sbdKey] = Math.max(maxCheatCountBySbd[sbdKey] || 0, sCount);
-        }
-    }
+        const dur = String(log.durationStr || "").trim();
+        const sCount = parseInt(log.switchCount, 10) || 0;
+
+        // LỌC BỎ TRIỆT ĐỂ "Bắt đầu", "Bắt đầu Lần 1", "Bắt đầu Lần 2"... và các dòng không có chuyển tab thực tế
+        if (!dur || /^bắt\s*đầu/i.test(dur) || dur === "---") return;
+        if (sCount <= 0 && !/\d+\s*(?:giây|phút|s|p|m)/i.test(dur)) return;
+
+        const shortDur = formatShortCheatDuration(dur);
+        if (!shortDur) return;
+
+        if (!cheatEntriesBySbd[sbdKey]) cheatEntriesBySbd[sbdKey] = [];
+        cheatEntriesBySbd[sbdKey].push({
+            durationShort: shortDur,
+            switchCount: sCount,
+            createdAtMs: Number(log.createdAtMs) || 0
+        });
+
+        if (!cheatHistoryBySbd[sbdKey]) cheatHistoryBySbd[sbdKey] = [];
+        cheatHistoryBySbd[sbdKey].push(shortDur);
+        maxCheatCountBySbd[sbdKey] = Math.max(maxCheatCountBySbd[sbdKey] || 0, sCount);
+    });
 
     let submissionsList = [];
     for (let sub of (Array.isArray(submissionsListRaw) ? submissionsListRaw : [])) {
@@ -408,7 +499,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         if (sub.dataString) sub.dataString = sortDataString(sub.dataString);
         submissionsList.push(sub);
     }
-    // Sắp xếp các lần thi theo thời gian nộp tăng dần: Lần 1 -> Lần 2 -> Lần 3
     submissionsList.sort((a, b) => getSubmissionTimestamp(a) - getSubmissionTimestamp(b));
 
     const activeUsersMap = {};
@@ -427,9 +517,8 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
     const usedPendingKeys = new Set();
     const usedSubIds = new Set();
 
-    // LẤY THỜI LƯỢNG ĐỀ THI ĐỂ TÍNH HẠN CÒN ĐANG THI
     const timeLimitMinutes = parseInt(examItem?.timeLimitMinutes || examItem?.time_limit_minutes || examMeta?.quizObj?.time_limit_minutes || 90, 10);
-    const maxExamDurationMs = (timeLimitMinutes + 15) * 60 * 1000; // Cho phép trôi thêm 15 phút gia hạn
+    const maxExamDurationMs = (timeLimitMinutes + 15) * 60 * 1000;
 
     classAccounts.forEach((acc, idx) => {
         const accSbdClean = cleanSbdStandard(acc.sbd);
@@ -463,15 +552,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             }
         }
 
-        // BẢN FIX: XÁC ĐỊNH ĐANG THI CHÍNH XÁC KỂ CẢ KHI HỌC SINH MỞ APP KHÁC
         if (activeSess) {
             const rawStartTime = Number(activeSess.startTime || 0);
             const sessPingTime = Number(activeSess.lastPing || activeSess.startTime || 0);
             const timeSincePing = nowMs - sessPingTime;
             const timeSinceStart = rawStartTime > 0 ? (nowMs - rawStartTime) : 0;
 
-            const isPingFresh = (timeSincePing < 180000); // Dưới 3 phút: Đang thao tác trực tiếp
-            // Nếu học sinh rời sang app khác (máy tính, Zalo): vẫn giữ ĐANG THI trong suốt thời lượng bài thi
+            const isPingFresh = (timeSincePing < 180000);
             const isStillWithinExamTime = (timeSinceStart < maxExamDurationMs) && (timeSincePing < 25 * 60 * 1000);
 
             if (matchedSubs.length === 0) {
@@ -492,11 +579,11 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             }
         }
 
+        let cheatEntries = cheatEntriesBySbd[accSbdClean] || [];
         let cheatDurations = cheatHistoryBySbd[accSbdClean] || [];
         let cheatLogsTabCount = maxCheatCountBySbd[accSbdClean] || cheatDurations.length;
         let cheatTimeString = cheatDurations.length > 0 ? cheatDurations.join(" | ") : "0s";
 
-        // Mặc định hiển thị Lần 1 (chỉ mục 0), trừ khi giáo viên chọn xem lần khác
         let selectedAttemptIndex = 0;
         const savedAttemptIdx = window._userSelectedAttemptsBySbd[accSbdClean];
         if (savedAttemptIdx !== undefined && savedAttemptIdx >= 0 && savedAttemptIdx < matchedSubs.length) {
@@ -514,6 +601,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             isAwayApp: isAwayApp,
             doingStartTime: doingStartTime,
             isFreeDoing: false,
+            cheatEntries: cheatEntries,
             cheatTimeString: cheatTimeString,
             cheatLogsTabCount: cheatLogsTabCount
         });
@@ -551,6 +639,9 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             className: sess.className || "Tự do"
         };
 
+        const freeCheatEntries = cheatEntriesBySbd[cleanKey] || [];
+        const freeCheatDurations = cheatHistoryBySbd[cleanKey] || [];
+
         finalRows.push({
             _rowUid: 'row_free_doing_' + cleanKey,
             stt: freeSttCounter++,
@@ -562,14 +653,16 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             isAwayApp: !isPingFresh,
             doingStartTime: rawStartTime > 0 ? rawStartTime : sessPingTime,
             isFreeDoing: true,
-            cheatTimeString: "0s",
-            cheatLogsTabCount: 0
+            cheatEntries: freeCheatEntries,
+            cheatTimeString: freeCheatDurations.length > 0 ? freeCheatDurations.join(" | ") : "0s",
+            cheatLogsTabCount: maxCheatCountBySbd[cleanKey] || freeCheatDurations.length
         });
     }
 
     for (let sub of submissionsList) {
         if (usedSubIds.has(sub.id)) continue;
         const rawSbd = sub.sbd || sub.studentId || "free";
+        const cleanKey = cleanSbdStandard(rawSbd);
 
         if (classAccounts.some(acc => isSbdMatchedFlexibly(acc.sbd, rawSbd))) continue;
         if (typeof isSbdBelongsToCategory === 'function') {
@@ -579,7 +672,8 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         let existingFreeRow = finalRows.find(r => !r.isClassStudent && isSbdMatchedFlexibly(r.account.sbd, rawSbd));
         if (existingFreeRow) {
             existingFreeRow.allAttempts.push(sub);
-            const savedAttemptIdx = window._userSelectedAttemptsBySbd[cleanSbdStandard(rawSbd)];
+            existingFreeRow.allAttempts = deduplicateAttempts(existingFreeRow.allAttempts);
+            const savedAttemptIdx = window._userSelectedAttemptsBySbd[cleanKey];
             if (savedAttemptIdx !== undefined && savedAttemptIdx >= 0 && savedAttemptIdx < existingFreeRow.allAttempts.length) {
                 existingFreeRow.selectedAttemptIndex = savedAttemptIdx;
             } else {
@@ -590,15 +684,18 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
         }
 
         const freeAcc = {
-            sbd: sub.sbd || "---",
+            sbd: String(rawSbd).replace(/_lan\d+$/i, '') || "---",
             name: sub.studentName || "Thí sinh tự do",
             className: sub.studentClass || "Tự do"
         };
 
+        const freeCheatEntries = cheatEntriesBySbd[cleanKey] || [];
+        const freeCheatDurations = cheatHistoryBySbd[cleanKey] || [];
+
         usedSubIds.add(sub.id);
 
         finalRows.push({
-            _rowUid: 'row_free_' + cleanSbdStandard(rawSbd),
+            _rowUid: 'row_free_' + cleanKey,
             stt: freeSttCounter++,
             isClassStudent: false,
             account: freeAcc,
@@ -608,17 +705,19 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingMap, acti
             isAwayApp: false,
             doingStartTime: null,
             isFreeDoing: false,
-            cheatTimeString: "0s",
-            cheatLogsTabCount: 0
+            cheatEntries: freeCheatEntries,
+            cheatTimeString: freeCheatDurations.length > 0 ? freeCheatDurations.join(" | ") : "0s",
+            cheatLogsTabCount: maxCheatCountBySbd[cleanKey] || freeCheatDurations.length
         });
     }
 
     if (typeof calculateRanksForRows === 'function') calculateRanksForRows(finalRows);
     currentExamResultData.rawRows = finalRows;
-    if (typeof updateStatsAndRenderTable === 'function') updateStatsAndRenderTable(finalRows);
+    if (typeof updateStatsAndRenderTable === 'function') {
+        updateStatsAndRenderTable(finalRows, { keepFloatingMenu: Boolean(renderOpts && renderOpts.isSilent) });
+    }
 }
 
-// BỘ HỖ TRỢ LẤY CẤU TRÚC ĐỀ THI AN TOÀN
 async function getQuizObjectSafely(client, candidateCodes) {
     if (typeof examData !== 'undefined' && examData && Array.isArray(examData.questions) && examData.questions.length > 0) {
         return examData;
@@ -641,6 +740,10 @@ async function getQuizObjectSafely(client, candidateCodes) {
     return null;
 }
 
+window.cleanSbdStandard = cleanSbdStandard;
+window.getSbdVariations = getSbdVariations;
+window.isSbdMatchedFlexibly = isSbdMatchedFlexibly;
+window.getAttemptCheatStats = getAttemptCheatStats;
 window.startRealtimeSubmissionsListener = startRealtimeSubmissionsListener;
 window.stopRealtimeSubmissionsListener = stopRealtimeSubmissionsListener;
 window.fetchAndRenderExamResults = fetchAndRenderExamResults;
