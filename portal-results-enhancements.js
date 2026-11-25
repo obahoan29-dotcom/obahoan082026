@@ -3,12 +3,12 @@
 // MODULE NÂNG CẤP CHO MODAL KẾT QUẢ THI:
 // 1. LỌC NHANH NGAY KHI BẤM VÀO CÁC BADGE KPI, PHÂN LOẠI ĐIỂM & "🔁 THI ≥2 LẦN"
 // 2. CỬA SỔ XEM CHI TIẾT BÀI LÀM TRỰC QUAN (XANH/ĐỎ TỪNG CÂU)
-// 3. SO SÁNH ĐIỂM GIỮA CÁC LẦN THI (LẦN 1 -> LẦN 2), TẢI JSON BÀI LÀM, COPY BÁO CÁO ZALO & XÓA RIÊNG 1 LẦN THI
+// 3. SO SÁNH ĐIỂM GIỮA CÁC LẦN THI, TẢI JSON (LAZY-LOAD user_answers), COPY ZALO & XÓA 1 LẦN THI
 // 4. ĐỒNG BỘ CHỈ SỐ CHUYỂN TAB CHUẨN XÁC QUA getAttemptCheatStats
 // 5. PHÍM TẮT ESC ĐÓNG POPUP THEO THỨ TỰ ƯU TIÊN
 // =========================================================
 
-let _activeResultKpiFilter = null; // { type: 'status'|'score'|'multi', value: ... }
+let _activeResultKpiFilter = null;
 let _inspectorCurrentRowUid = null;
 
 (function injectResultEnhancementStyles() {
@@ -54,7 +54,6 @@ let _inspectorCurrentRowUid = null;
             color: #ffffff !important;
         }
 
-        /* MODAL XEM CHI TIẾT BÀI LÀM HỌC SINH */
         .st-inspector-overlay {
             position: fixed;
             inset: 0;
@@ -249,7 +248,6 @@ let _inspectorCurrentRowUid = null;
     document.head.appendChild(style);
 })();
 
-// 1. BỘ LỌC TƯƠNG TÁC TRÊN THANH KPI & PHÂN LOẠI ĐIỂM + LỌC THI ≥2 LẦN
 const KPI_FILTER_DEFS = [
     { id: "stat-submitted-students", type: "status", value: "submitted" },
     { id: "stat-doing-students",     type: "status", value: "doing" },
@@ -398,7 +396,6 @@ function applyResultEnhancementFilter(rows) {
     return rows;
 }
 
-// 2. CỬA SỔ XEM CHI TIẾT BÀI LÀM HỌC SINH
 function ensureStudentInspectorModal() {
     let modal = document.getElementById("student-detail-inspector-modal");
     if (modal) return modal;
@@ -546,7 +543,8 @@ window.switchInspectorAttempt = function(attIdx) {
     if (row) renderStudentInspectorContent(row);
 };
 
-window.downloadStudentAttemptJson = function() {
+// Lazy-load user_answers từ Supabase khi giáo viên thực sự bấm tải JSON 1 bài làm
+window.downloadStudentAttemptJson = async function() {
     if (!_inspectorCurrentRowUid) return;
     const row = (currentExamResultData.rawRows || []).find(r => r._rowUid === _inspectorCurrentRowUid);
     if (!row || !row.allAttempts || row.allAttempts.length === 0) return;
@@ -554,6 +552,19 @@ window.downloadStudentAttemptJson = function() {
     const acc = row.account || {};
     const attIdx = row.selectedAttemptIndex || 0;
     const sub = row.allAttempts[attIdx];
+
+    if (!sub.userAnswers && sub.id) {
+        try {
+            const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+            if (client) {
+                const { data } = await client.from('submissions').select('user_answers').eq('id', sub.id).maybeSingle();
+                if (data && data.user_answers) {
+                    sub.userAnswers = data.user_answers;
+                }
+            }
+        } catch (e) {}
+    }
+
     const sbd = String(acc.sbd || sub.sbd || "hs").replace(/[^a-zA-Z0-9]/g, '_');
     const sName = String(acc.name || sub.studentName || "hocsinh").replace(/[^a-zA-Z0-9_\u00C0-\u024F\u1E00-\u1EFF]/g, '_');
 
@@ -635,7 +646,6 @@ window.deleteSingleAttemptFromCloud = async function(subId) {
     }
 };
 
-// 3. PHÍM TẮT ESC ĐÓNG POPUP THEO THỨ TỰ ƯU TIÊN
 document.addEventListener("keydown", function(e) {
     if (e.key !== "Escape") return;
     const insModal = document.getElementById("student-detail-inspector-modal");
