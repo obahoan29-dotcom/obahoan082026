@@ -1,7 +1,5 @@
 // =========================================================
-// FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s)
-// ĐÃ BỔ SUNG: CHỈ HIỆN NÚT HỆ THỐNG BIÊN SOẠN & MA TRẬN ĐỀ KHI ADMIN ĐĂNG NHẬP
-// ĐÃ BỔ SUNG: TỰ ĐỘNG MỞ MODAL ĐĂNG NHẬP MỚI KHI CHUYỂN HƯỚNG TỪ ?login_exam=...
+// FILE: portal-ui-core.js (BẢN SUPABASE TỐI ƯU HIỂN THỊ TỨC THÌ 0s & GIẢM BĂNG THÔNG)
 // =========================================================
 
 let activeDayThemCatId = null;
@@ -76,11 +74,11 @@ document.addEventListener("DOMContentLoaded", async function() {
     const padletCat = CHINH_KHOA_CATEGORIES.find(c => c.id === "tu-luan-padlet");
     if (padletCat) padletCat.links = [...DEFAULT_PADLET_LINKS];
 
-    // 1. NẠP DỮ LIỆU TỪ CACHE (BỘ NHỚ ĐỆM) ĐỂ HIỂN THỊ NGAY LẬP TỨC 0s
+    // 1. NẠP DỮ LIỆU TỪ CACHE ĐỂ HIỂN THỊ NGAY LẬP TỨC 0s
     loadDataFromCache();
     refreshAllViews();
 
-    // 2. NGẦM TẢI DỮ LIỆU MỚI TỪ SUPABASE (KHÔNG LÀM KHỰNG GIAO DIỆN)
+    // 2. NẠP DỮ LIỆU TỪ SUPABASE (CÓ CACHE TTL 45s CHO HỌC SINH ĐỂ TIẾT KIỆM BĂNG THÔNG)
     await loadDataFromSupabase();
     
     if (typeof initSiteVisitTracker === "function") initSiteVisitTracker();
@@ -174,6 +172,10 @@ function loadDataFromCache() {
         if (cachedLinks) {
             processLinksData(JSON.parse(cachedLinks));
         }
+        const cachedTitle = safeLocal.getItem("cached_reminder_title");
+        if (cachedTitle) {
+            REMINDER_SECTION_TITLE = cachedTitle;
+        }
     } catch (e) {}
 }
 
@@ -249,10 +251,28 @@ async function loadDataFromSupabase() {
         return;
     }
 
+    const isAdminNow = (typeof checkAdminSessionValidity === "function") ? checkAdminSessionValidity() : Boolean(isAdminLoggedIn);
+    const hasLoginExamParam = new URLSearchParams(window.location.search).has("login_exam");
+
+    // Nếu học sinh vừa quay lại trang chủ trong vòng 45 giây và đã có cache -> dùng luôn, tiết kiệm 100% query custom_links
     try {
-        const { data: links, error: lErr } = await client
-            .from('custom_links')
-            .select('*');
+        const syncedAt = parseInt(safeSession.getItem("portal_links_synced_at") || "0", 10);
+        const hasCachedLinks = Boolean(safeLocal.getItem("cached_custom_links"));
+        if (!isAdminNow && !hasLoginExamParam && hasCachedLinks && syncedAt > 0 && (Date.now() - syncedAt) < 45000) {
+            if (window.__siteRedirectPromise) {
+                try { await window.__siteRedirectPromise; } catch(e) {}
+            }
+            if (typeof updateRedirectUIElements === 'function') updateRedirectUIElements();
+            refreshAllViews();
+            return;
+        }
+    } catch(e) {}
+
+    try {
+        const [{ data: links, error: lErr }, metaRes] = await Promise.all([
+            client.from('custom_links').select('*'),
+            client.from('app_key_values').select('value').eq('key', 'site_meta').maybeSingle()
+        ]);
 
         if (lErr) {
             console.error("Lỗi đọc dữ liệu custom_links từ Supabase:", lErr.message);
@@ -260,26 +280,22 @@ async function loadDataFromSupabase() {
         }
 
         if (Array.isArray(links)) {
-            try { safeLocal.setItem("cached_custom_links", JSON.stringify(links)); } catch(e) {}
+            try {
+                safeLocal.setItem("cached_custom_links", JSON.stringify(links));
+                safeSession.setItem("portal_links_synced_at", String(Date.now()));
+            } catch(e) {}
             processLinksData(links);
         }
 
-        try {
-            const { data: meta } = await client.from('app_key_values').select('value').eq('key', 'site_meta').single();
-            if (meta && meta.value && meta.value.reminderTitle) {
-                REMINDER_SECTION_TITLE = meta.value.reminderTitle;
-            }
-        } catch(e) {}
+        if (metaRes && metaRes.data && metaRes.data.value && metaRes.data.value.reminderTitle) {
+            REMINDER_SECTION_TITLE = metaRes.data.value.reminderTitle;
+            safeLocal.setItem("cached_reminder_title", REMINDER_SECTION_TITLE);
+        }
 
-        try {
-            const { data: redirectData } = await client.from('app_key_values').select('value').eq('key', 'site_redirect_config').single();
-            if (redirectData && redirectData.value) {
-                SITE_REDIRECT_CONFIG = {
-                    enabled: !!redirectData.value.enabled,
-                    targetUrl: redirectData.value.targetUrl || DEFAULT_BACKUP_WEB_URL
-                };
-            }
-        } catch(e) {}
+        // Tái sử dụng kết quả site_redirect_config đã fetch trong app-config.js (không query lần 2)
+        if (window.__siteRedirectPromise) {
+            try { await window.__siteRedirectPromise; } catch(e) {}
+        }
 
         if (typeof updateRedirectUIElements === 'function') {
             updateRedirectUIElements();
@@ -310,7 +326,6 @@ function refreshAllViews() {
         else gear.classList.remove("active-gear");
     }
 
-    // CHỈ HIỆN NÚT TẠO CÂU HỎI & NGÂN HÀNG ĐỀ KHI ĐANG Ở CHẾ ĐỘ ADMIN
     const qbankWrappers = document.querySelectorAll(".qbank-dropdown-wrapper");
     qbankWrappers.forEach(wrap => {
         wrap.style.display = isAdminNow ? "inline-flex" : "none";
