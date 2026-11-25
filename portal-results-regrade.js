@@ -1,13 +1,11 @@
 // =========================================================
 // FILE: portal-results-regrade.js (BẢN TỐI ƯU HỖ TRỢ CHẤM LẠI & FILE DỰ PHÒNG)
-// ĐÃ NÂNG CẤP: AUTO-REFRESH GỌI syncExamResultsLightweight() TIẾT KIỆM >95% BĂNG THÔNG
-// ĐÃ BỔ SUNG: ĐÓNG SẠCH MENU NỔI, DỪNG LIVE TICKER & RESET ZOOM KHI ĐÓNG MODAL
+// ĐÃ BỔ SUNG: ĐÓNG SẠCH MENU NỔI & RESET ZOOM KHI ĐÓNG MODAL, CHỐNG TRÀN MÉP CHẤM LẠI
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
     stopAutoRefreshResult();
     if (typeof stopRealtimeSubmissionsListener === 'function') stopRealtimeSubmissionsListener();
-    if (typeof stopLiveDoingTicker === 'function') stopLiveDoingTicker();
     if (typeof closeAllResultFloatingDropdowns === 'function') closeAllResultFloatingDropdowns();
     if (typeof closeTableSettingsPopover === 'function') closeTableSettingsPopover();
     if (typeof closeStudentDetailInspector === 'function') closeStudentDetailInspector();
@@ -25,17 +23,12 @@ function closeResultModal(triggerHistoryBack = true) {
 function startAutoRefreshResult() {
     stopAutoRefreshResult();
     if (!isAutoRefreshEnabled) return;
-    // Kiểm tra siêu nhẹ (~300 bytes) mỗi 25 giây: chỉ tải active_sessions + đếm head submissions
     autoRefreshTimer = setInterval(async () => {
         const modal = document.getElementById("result-fullscreen-modal");
         if (modal && modal.style.display === "flex" && currentExamResultData.item) {
-            if (typeof syncExamResultsLightweight === 'function') {
-                await syncExamResultsLightweight();
-            } else {
-                await fetchAndRenderExamResults(currentExamResultData.item, true);
-            }
+            await fetchAndRenderExamResults(currentExamResultData.item, true);
         }
-    }, 25000);
+    }, 60000); 
 }
 
 function stopAutoRefreshResult() {
@@ -49,7 +42,6 @@ function toggleAutoRefresh(event) {
     if (isAutoRefreshEnabled) {
         if (btn) { btn.innerHTML = "🟢 Auto: BẬT"; btn.style.color = "#38bdf8"; btn.style.borderColor = "#38bdf8"; }
         startAutoRefreshResult();
-        if (typeof syncExamResultsLightweight === 'function') syncExamResultsLightweight();
     } else {
         if (btn) { btn.innerHTML = "⚪ Auto: TẮT"; btn.style.color = "#94a3b8"; btn.style.borderColor = "#64748b"; }
         stopAutoRefreshResult();

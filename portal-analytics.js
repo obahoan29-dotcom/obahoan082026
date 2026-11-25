@@ -1,6 +1,5 @@
 // =========================================================
-// FILE: portal-analytics.js (BẢN CHUẨN XÁC 100% - TỰ ĐỘNG LÀM SẠCH, ĐỦ 7 NGÀY
-// & TỐI ƯU BĂNG THÔNG: CHỈ TẢI 14 NGÀY GẦN NHẤT + LƯU TỔNG TOÀN THỜI GIAN VÀO site_meta)
+// FILE: portal-analytics.js (BẢN CHUẨN XÁC 100% - TỰ ĐỘNG LÀM SẠCH VÀ ĐỦ 7 NGÀY)
 // =========================================================
 
 let siteVisitStatsCache = {
@@ -108,7 +107,7 @@ async function initSiteVisitTracker() {
         safeSession.setItem(sessionKey, "true"); 
         await recordSiteVisit(todayKey, currentHour); 
     }
-    await fetchAndRenderVisitStats(false);
+    await fetchAndRenderVisitStats();
 }
 
 async function recordSiteVisit(todayKey, hour) {
@@ -117,12 +116,8 @@ async function recordSiteVisit(todayKey, hour) {
         if (!client) return;
 
         const hourStr = String(hour).padStart(2, '0');
-        const [dayRes, metaRes] = await Promise.all([
-            client.from('site_visits').select('*').eq('day_key', todayKey).maybeSingle(),
-            client.from('app_key_values').select('value').eq('key', 'site_meta').maybeSingle()
-        ]);
+        const { data } = await client.from('site_visits').select('*').eq('day_key', todayKey).single();
 
-        const data = dayRes ? dayRes.data : null;
         let total = 1;
         let hours = {};
         if (data) {
@@ -138,100 +133,35 @@ async function recordSiteVisit(todayKey, hour) {
             total: total,
             hours: hours
         });
-
-        // Cộng dồn +1 vào tổng toàn thời gian trong site_meta (chỉ khi đã khởi tạo mốc lịch sử, luôn bảo toàn các trường khác như reminderTitle)
-        const existingMeta = (metaRes && metaRes.data && metaRes.data.value && typeof metaRes.data.value === 'object')
-            ? metaRes.data.value
-            : null;
-        if (existingMeta && existingMeta.totalVisitsInitialized) {
-            const curAllTime = Number(existingMeta.totalVisits || 0);
-            await client.from('app_key_values').upsert({
-                key: 'site_meta',
-                value: {
-                    ...existingMeta,
-                    totalVisits: curAllTime + 1
-                }
-            });
-        }
     } catch(e) {}
 }
 
-// Hàm phụ: Tính tổng toàn thời gian từ cột nhẹ (day_key, total) để khởi tạo 1 lần duy nhất hoặc đối soát khi Admin bấm Cập nhật
-async function computeAndSyncAllTimeVisitsToMeta(client, existingMeta = {}) {
-    try {
-        const { data: slimRows, error } = await client
-            .from('site_visits')
-            .select('day_key, total');
-
-        if (error || !Array.isArray(slimRows)) return null;
-
-        let validSum = 0;
-        let summaryVal = 0;
-        const extraGarbageKeys = [];
-
-        slimRows.forEach(row => {
-            if (!row) return;
-            const rawKey = String(row.day_key || "").trim();
-            const stdKey = standardizeDayKey(rawKey);
-            if (!stdKey) {
-                extraGarbageKeys.push(rawKey);
-                if (rawKey.toLowerCase() === 'summary' && Number(row.total) > 0) {
-                    summaryVal = Math.max(summaryVal, Number(row.total));
-                }
-                return;
-            }
-            validSum += Number(row.total) || 0;
-        });
-
-        if (extraGarbageKeys.length > 0) {
-            client.from('site_visits').delete().in('day_key', extraGarbageKeys).then();
-        }
-
-        const existingTotal = Number(existingMeta.totalVisits || existingMeta.visits || existingMeta.allTimeVisits || existingMeta.total_visits || existingMeta.total || 0);
-        const exactAllTime = Math.max(validSum, summaryVal, existingTotal);
-
-        const nextMeta = {
-            ...existingMeta,
-            totalVisits: exactAllTime,
-            totalVisitsInitialized: true,
-            totalVisitsSyncedAt: Date.now()
-        };
-
-        await client.from('app_key_values').upsert({
-            key: 'site_meta',
-            value: nextMeta
-        });
-
-        return exactAllTime;
-    } catch(e) {
-        return null;
-    }
-}
-
-// 4. Đọc dữ liệu tối ưu băng thông (chỉ tải 14 ngày gần nhất + tổng toàn thời gian từ site_meta)
-async function fetchAndRenderVisitStats(reconcileAllTime = false) {
+// 4. Đọc dữ liệu, tự động làm sạch DB và tính toán số liệu thống kê chuẩn 100%
+async function fetchAndRenderVisitStats() {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (!client) return;
 
         const todayKey = getVNDateKey();
 
-        // Chỉ tải tối đa 14 ngày gần nhất để vẽ bảng 7 ngày & biểu đồ 24h hôm nay
         const [visitsRes, metaRes] = await Promise.all([
-            client.from('site_visits').select('*').order('day_key', { ascending: false }).limit(14),
-            client.from('app_key_values').select('value').eq('key', 'site_meta').maybeSingle()
+            client.from('site_visits').select('*'),
+            client.from('app_key_values').select('value').eq('key', 'site_meta').single()
         ]);
 
         const rawList = visitsRes.data || [];
         const visitsByDate = {};
         const garbageKeys = [];
-        const existingMeta = (metaRes && metaRes.data && metaRes.data.value && typeof metaRes.data.value === 'object')
-            ? metaRes.data.value
-            : {};
+        let legacyHistoricalVisits = 0;
 
-        let legacyHistoricalVisits = Number(
-            existingMeta.totalVisits || existingMeta.visits || existingMeta.allTimeVisits || existingMeta.total_visits || existingMeta.total || 0
-        );
+        // Trích xuất số tích lũy lịch sử cũ từ Firebase nếu có
+        if (metaRes && metaRes.data && metaRes.data.value) {
+            const metaVal = metaRes.data.value;
+            legacyHistoricalVisits = Math.max(
+                legacyHistoricalVisits,
+                Number(metaVal.totalVisits || metaVal.visits || metaVal.allTimeVisits || metaVal.total_visits || metaVal.total || 0)
+            );
+        }
 
         // Lọc, chuẩn hóa và gộp các ngày bị phân mảnh (như 10/24/2026 gộp chung vào 2026-10-24)
         rawList.forEach(row => {
@@ -279,17 +209,6 @@ async function fetchAndRenderVisitStats(reconcileAllTime = false) {
             }
         }
 
-        // Khởi tạo mốc tổng lịch sử đúng 1 lần duy nhất (hoặc đối soát khi bấm Cập nhật trong Modal)
-        if (!existingMeta.totalVisitsInitialized || reconcileAllTime) {
-            const reconciled = await computeAndSyncAllTimeVisitsToMeta(client, {
-                ...existingMeta,
-                totalVisits: legacyHistoricalVisits
-            });
-            if (reconciled !== null) {
-                legacyHistoricalVisits = reconciled;
-            }
-        }
-
         // 5. TẠO CHÍNH XÁC ĐỦ 7 NGÀY LIÊN TIẾP (Từ Hôm nay lùi về đúng 6 ngày trước)
         const vnNow = getVNDate();
         const last7Days = [];
@@ -330,9 +249,12 @@ async function fetchAndRenderVisitStats(reconcileAllTime = false) {
         const yesterdayCount = last7Days[1].total;
         const weekCount = weekSum;
 
-        // Tổng toàn thời gian lấy từ site_meta.totalVisits (đảm bảo không thấp hơn tổng 14 ngày vừa tải)
-        const recent14DaysSum = Object.values(visitsByDate).reduce((sum, r) => sum + (Number(r.total) || 0), 0);
-        const finalAllTime = Math.max(recent14DaysSum, legacyHistoricalVisits);
+        // Tính tổng toàn thời gian = Tổng tất cả các ngày hợp lệ trong DB + số lịch sử cũ (nếu có)
+        const allDbDaysSum = Object.values(visitsByDate).reduce((sum, r) => sum + (Number(r.total) || 0), 0);
+        let finalAllTime = Math.max(allDbDaysSum, legacyHistoricalVisits);
+        if (legacyHistoricalVisits > 0 && allDbDaysSum < legacyHistoricalVisits) {
+            finalAllTime = legacyHistoricalVisits + todayCount;
+        }
 
         // Mảng phân bổ 24 giờ của ngày hôm nay
         const hourly = Array(24).fill(0);
@@ -392,7 +314,7 @@ function toggleVisitStatsModal(event) {
         closeVisitStatsModal();
     } else {
         modal.style.display = "flex";
-        fetchAndRenderVisitStats(false);
+        fetchAndRenderVisitStats();
     }
 }
 
@@ -443,7 +365,7 @@ async function refreshVisitStatsData() {
         btn.disabled = true;
         btn.innerText = "⏳ Đang tải...";
     }
-    await fetchAndRenderVisitStats(true);
+    await fetchAndRenderVisitStats();
     if (btn) {
         btn.disabled = false;
         btn.innerText = "🔄 Cập nhật";

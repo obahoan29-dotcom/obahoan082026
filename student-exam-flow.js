@@ -1,12 +1,10 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: ĐĂNG KÝ active_sessions CHẮC CHẮN 100%,
-//  TỰ ĐỘNG THU BÀI & THỬ NỘP LẠI LIÊN TỤC KHI HẾT GIỜ,
-//  CHỐNG TRÙNG BẢN GHI VỚI MODAL ADMIN & THÔNG BÁO ĐIỂM NGAY)
+// (BẢN FIX TRIỆT ĐỂ: SẠCH 100% LỖI CÚ PHÁP, TÁCH CHẾ ĐỘ ADMIN & HỌC SINH,
+//  KHÔNG BỊ TRẢ FALSE KHI THIẾU LỚP, XÓA CACHE TRỘN ĐỀ ĐÚNG KEY)
 // =========================================================
 
 let submissionCountdownTimer = null;
-let autoRetrySubmitTimer = null;
 
 // HÀM GIẢI MÃ THAM SỐ URL AN TOÀN TRÊN IOS SAFARI/MESSENGER (CHỐNG LỖI KÝ TỰ VIỆT)
 function safeDecodeParam(val) {
@@ -95,29 +93,20 @@ async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!client || !quizId || !sbd) return localAttempt;
 
-    const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
-    const now = Date.now();
-    if (window.__cachedAttemptInfo &&
-        window.__cachedAttemptInfo.quizId === quizId &&
-        window.__cachedAttemptInfo.sbd === cleanSbd &&
-        (now - window.__cachedAttemptInfo.ts) < 10000) {
-        return Math.max(localAttempt, window.__cachedAttemptInfo.attempt);
-    }
-
     try {
+        const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
         const queryPromise = client
             .from('submissions')
-            .select('id', { count: 'exact', head: true })
+            .select('id, created_at')
             .eq('quiz_id', quizId)
             .ilike('sbd', `${cleanSbd}%`);
         
-        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ count: null, error: { message: 'timeout' } }), 1800));
-        const { count, error } = await Promise.race([queryPromise, timeoutPromise]);
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ data: null }), 1800));
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-        if (!error && typeof count === 'number') {
-            const finalAttempt = Math.max(localAttempt, count + 1);
-            window.__cachedAttemptInfo = { quizId, sbd: cleanSbd, attempt: finalAttempt, ts: Date.now() };
-            return finalAttempt;
+        if (!error && Array.isArray(data)) {
+            const cloudCount = data.length;
+            return Math.max(localAttempt, cloudCount + 1);
         }
     } catch(e) {}
     return localAttempt;
@@ -336,6 +325,7 @@ function submitStudentLogin() {
 }
 
 function checkPassword() { 
+    // Bảng đăng nhập cũ đã được gỡ bỏ -> Chuyển hướng về trang chủ dùng modal đăng nhập mới
     const urlParams = new URLSearchParams(window.location.search);
     const quizId = urlParams.get('id') || "";
     const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
@@ -430,570 +420,6 @@ function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, at
             keepalive: true
         }).catch(() => null);
     } catch(e) {}
-}
-
-// ĐĂNG KÝ PHIÊN LÀM BÀI ĐỘ TIN CẬY CAO (XỬ LÝ count === null, upErr & TRÙNG KHÓA 23505)
-async function registerActiveSessionReliable(client, currentQuizId, cleanSbd, sessionPayload) {
-    if (!client || !currentQuizId || !cleanSbd) return false;
-    try {
-        const updateFields = {
-            name: sessionPayload.name,
-            class_name: sessionPayload.class_name,
-            category_id: sessionPayload.category_id,
-            is_free: sessionPayload.is_free,
-            ma_de: sessionPayload.ma_de,
-            exam_title: sessionPayload.exam_title,
-            start_time: sessionPayload.start_time,
-            last_ping: sessionPayload.last_ping
-        };
-
-        const { error: upErr, count } = await client
-            .from('active_sessions')
-            .update(updateFields, { count: 'exact' })
-            .match({ quiz_id: currentQuizId, sbd: cleanSbd });
-
-        if (!upErr && typeof count === 'number' && count > 0) {
-            window.__activeSessionConfirmed = true;
-            window.__lastPresencePingMs = Date.now();
-            return true;
-        }
-
-        const { error: insErr } = await client
-            .from('active_sessions')
-            .insert([sessionPayload]);
-
-        if (!insErr) {
-            window.__activeSessionConfirmed = true;
-            window.__lastPresencePingMs = Date.now();
-            return true;
-        }
-
-        const errCode = String(insErr.code || "");
-        const errMsg = String(insErr.message || "").toLowerCase();
-        if (errCode === '23505' || errMsg.includes('duplicate') || errMsg.includes('unique')) {
-            const { error: retryErr } = await client
-                .from('active_sessions')
-                .update(updateFields)
-                .match({ quiz_id: currentQuizId, sbd: cleanSbd });
-            if (!retryErr) {
-                window.__activeSessionConfirmed = true;
-                window.__lastPresencePingMs = Date.now();
-                return true;
-            }
-        }
-    } catch (e) {
-        console.warn("Lỗi đăng ký active_sessions:", e);
-    }
-    return false;
-}
-
-async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false, isAdminMode = false) { 
-    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
-    const effectiveAdmin = isAdminMode || (urlParams.get('admin') === '1');
-
-    const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-    const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM
-Model 11:03 PM
-ThinkingThoughts
-Expand to view model thoughts
-
-Dưới đây là toàn bộ mã nguồn hoàn chỉnh 100% của **File 3/4 (`student-exam-flow.js`)** (giữ nguyên phần mở đầu phía trên và viết tiếp đầy đủ đến cuối file) và **File 4/4 (`portal-results-core.js`)**.
-
----
-
-#### File 3/4 (Hoàn chỉnh 100%): `student-exam-flow.js`
-```javascript
-// =========================================================
-// FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: ĐĂNG KÝ active_sessions CHẮC CHẮN 100%,
-//  TỰ ĐỘNG THU BÀI & THỬ NỘP LẠI LIÊN TỤC KHI HẾT GIỜ,
-//  CHỐNG TRÙNG BẢN GHI VỚI MODAL ADMIN & THÔNG BÁO ĐIỂM NGAY)
-// =========================================================
-
-let submissionCountdownTimer = null;
-let autoRetrySubmitTimer = null;
-
-// HÀM GIẢI MÃ THAM SỐ URL AN TOÀN TRÊN IOS SAFARI/MESSENGER (CHỐNG LỖI KÝ TỰ VIỆT)
-function safeDecodeParam(val) {
-    if (!val) return "";
-    try {
-        return decodeURIComponent(val).trim();
-    } catch(e) {
-        return String(val).trim();
-    }
-}
-
-// =========================================================================
-// HÀM ÁNH XẠ CHÍNH XÁC TÊN LỚP DỰA TRÊN SỐ BÁO DANH (ƯU TIÊN TUYỆT ĐỐI)
-// =========================================================================
-function getStrictStandardClassName(rawClass, rawSbd) {
-    const sbd = String(rawSbd || "").trim().toLowerCase();
-    const s = String(rawClass || "").trim().toLowerCase();
-
-    if (/^11\d{2}$/.test(sbd)) return "Thêm 11";
-    if (/^10\d{2}$/.test(sbd)) return "Thêm 10";
-    if (/^12\d{2}$/.test(sbd)) return "Thêm 12";
-
-    if (sbd.startsWith("11a") || sbd.startsWith("11a_")) return "Lớp 11A";
-    if (sbd.startsWith("11c") || sbd.startsWith("11c_")) return "Lớp 11C";
-    if (sbd.startsWith("11e") || sbd.startsWith("11e_")) return "Lớp 11E";
-    if (sbd.startsWith("10p") || sbd.startsWith("10p_")) return "Lớp 10P";
-    if (sbd.startsWith("hsg")) return "HSG Toán 11";
-
-    if (window.STUDENT_ACCOUNTS) {
-        for (let cat in window.STUDENT_ACCOUNTS) {
-            const list = window.STUDENT_ACCOUNTS[cat];
-            if (Array.isArray(list)) {
-                const found = list.find(acc => acc.sbd && String(acc.sbd).trim().toLowerCase() === sbd);
-                if (found) {
-                    if (cat === "them-11") return "Thêm 11";
-                    if (cat === "them-10") return "Thêm 10";
-                    if (cat === "them-12") return "Thêm 12";
-                    if (cat === "lop-11a") return "Lớp 11A";
-                    if (cat === "lop-11c") return "Lớp 11C";
-                    if (cat === "lop-11e") return "Lớp 11E";
-                    if (cat === "lop-10p") return "Lớp 10P";
-                    if (cat === "hsg-toan-11") return "HSG Toán 11";
-                }
-            }
-        }
-    }
-
-    if (typeof getExamCategory === 'function') {
-        const cat = getExamCategory();
-        if (cat === "them-11") return "Thêm 11";
-        if (cat === "them-10") return "Thêm 10";
-        if (cat === "them-12") return "Thêm 12";
-        if (cat === "lop-11a") return "Lớp 11A";
-        if (cat === "lop-11c") return "Lớp 11C";
-        if (cat === "lop-11e") return "Lớp 11E";
-        if (cat === "lop-10p") return "Lớp 10P";
-        if (cat === "hsg-toan-11") return "HSG Toán 11";
-    }
-
-    if (s.includes("them-11") || s.includes("thêm 11") || s.includes("them 11")) return "Thêm 11";
-    if (s.includes("them-10") || s.includes("thêm 10") || s.includes("them 10")) return "Thêm 10";
-    if (s.includes("them-12") || s.includes("thêm 12") || s.includes("them 12")) return "Thêm 12";
-    if (s.includes("11a")) return "Lớp 11A";
-    if (s.includes("11c")) return "Lớp 11C";
-    if (s.includes("11e")) return "Lớp 11E";
-    if (s.includes("10p")) return "Lớp 10P";
-
-    return "Thêm 11";
-}
-
-function getRealStudentExamAttemptNumber(quizId, sbd) {
-    try {
-        const cleanSbd = String(sbd || "").replace(/[^a-zA-Z0-9]/g, '_');
-        const storageKey = `exam_history_${quizId}_${cleanSbd}`;
-        const raw = safeLocal.getItem(storageKey);
-        if (raw) {
-            const history = JSON.parse(raw);
-            if (Array.isArray(history) && history.length > 0) return history.length + 1;
-        }
-    } catch(e) {}
-    return 1;
-}
-
-async function fetchStudentAttemptNumberFromCloud(quizId, sbd) {
-    const localAttempt = getRealStudentExamAttemptNumber(quizId, sbd);
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (!client || !quizId || !sbd) return localAttempt;
-
-    const cleanSbd = String(sbd).replace(/[^a-zA-Z0-9]/g, '_');
-    const now = Date.now();
-    if (window.__cachedAttemptInfo &&
-        window.__cachedAttemptInfo.quizId === quizId &&
-        window.__cachedAttemptInfo.sbd === cleanSbd &&
-        (now - window.__cachedAttemptInfo.ts) < 10000) {
-        return Math.max(localAttempt, window.__cachedAttemptInfo.attempt);
-    }
-
-    try {
-        const queryPromise = client
-            .from('submissions')
-            .select('id', { count: 'exact', head: true })
-            .eq('quiz_id', quizId)
-            .ilike('sbd', `${cleanSbd}%`);
-        
-        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve({ count: null, error: { message: 'timeout' } }), 1800));
-        const { count, error } = await Promise.race([queryPromise, timeoutPromise]);
-
-        if (!error && typeof count === 'number') {
-            const finalAttempt = Math.max(localAttempt, count + 1);
-            window.__cachedAttemptInfo = { quizId, sbd: cleanSbd, attempt: finalAttempt, ts: Date.now() };
-            return finalAttempt;
-        }
-    } catch(e) {}
-    return localAttempt;
-}
-
-function openStudentLoginModal(item, categoryId, event) {
-    if (event) { event.preventDefault(); event.stopPropagation(); }
-
-    const targetCatId = categoryId || item.categoryId || "them-11";
-    activeStudentLogin.targetUrl = item.url || "";
-    activeStudentLogin.examTitle = item.title || "Bài kiểm tra";
-    activeStudentLogin.categoryId = targetCatId;
-    activeStudentLogin.currentMode = "class";
-    activeStudentLogin.item = item;
-
-    const modal = document.getElementById("student-login-modal");
-    const nameEl = document.getElementById("st-modal-exam-name");
-    const timeBox = document.getElementById("st-modal-time-box");
-    const errBox = document.getElementById("st-login-error");
-    const mainTitleEl = document.getElementById("st-modal-main-title");
-
-    const catName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(targetCatId) : targetCatId;
-    if (mainTitleEl) mainTitleEl.innerText = `Đăng Nhập Làm Bài Thi: ${catName}`;
-    if (nameEl) nameEl.innerText = item.title;
-    if (errBox) { errBox.style.display = "none"; errBox.innerText = ""; }
-
-    if (timeBox && typeof buildTimeBoxHtml === 'function') { 
-        timeBox.innerHTML = buildTimeBoxHtml(item.timeLimitMinutes, item.examStartTimeStr, item.examEndTimeStr, item.date || (typeof getItemDisplayDate === 'function' ? getItemDisplayDate(item) : "")); 
-    }
-
-    const userIn = document.getElementById("st-username-input");
-    const passIn = document.getElementById("st-password-input");
-    const fNameIn = document.getElementById("st-free-name-input");
-    const fClassIn = document.getElementById("st-free-class-input");
-    const fSbdIn = document.getElementById("st-free-sbd-input");
-
-    const placeholderHint = typeof getSbdPlaceholderForCategory === 'function' ? getSbdPlaceholderForCategory(targetCatId) : "Nhập SBD...";
-    if (userIn) {
-        userIn.value = "";
-        userIn.placeholder = placeholderHint;
-    }
-    if (passIn) { passIn.value = ""; passIn.type = "password"; }
-    if (fNameIn) fNameIn.value = "";
-    if (fClassIn) fClassIn.value = "";
-    if (fSbdIn) {
-        fSbdIn.value = "";
-        fSbdIn.placeholder = placeholderHint;
-    }
-
-    const eyeBtn = document.getElementById("st-eye-btn");
-    if (eyeBtn) eyeBtn.innerText = "👁️";
-
-    safeLocal.removeItem("saved_student_sbd");
-    safeLocal.removeItem("saved_student_name");
-    safeLocal.removeItem("saved_student_class");
-    safeLocal.removeItem("current_exam_student");
-
-    const allowFree = (item.allowFree !== false);
-    const tabFree = document.getElementById("tab-st-free");
-    if (tabFree) {
-        if (!allowFree) {
-            tabFree.disabled = true; 
-            tabFree.classList.add("disabled"); 
-            tabFree.title = "Đề thi này chỉ dành riêng cho học sinh trong danh sách lớp";
-        } else {
-            tabFree.disabled = false; 
-            tabFree.classList.remove("disabled"); 
-            tabFree.title = "";
-        }
-    }
-
-    switchStudentLoginMode("class");
-    if (modal) modal.style.display = "flex";
-}
-
-function closeStudentLoginModal() {
-    const modal = document.getElementById("student-login-modal");
-    if (modal) modal.style.display = "none";
-    const errBox = document.getElementById("st-login-error");
-    if (errBox) errBox.style.display = "none";
-}
-
-function switchStudentLoginMode(mode) {
-    activeStudentLogin.currentMode = mode;
-    const tabClass = document.getElementById("tab-st-class");
-    const tabFree = document.getElementById("tab-st-free");
-    const viewClass = document.getElementById("st-login-mode-class");
-    const viewFree = document.getElementById("st-login-mode-free");
-    const errBox = document.getElementById("st-login-error");
-
-    if (errBox) { errBox.style.display = "none"; errBox.innerText = ""; }
-
-    if (mode === "free") {
-        if (activeStudentLogin.item && activeStudentLogin.item.allowFree === false) { 
-            alert("⛔ Đề thi này không cho phép thí sinh tự do tham gia!"); 
-            return; 
-        }
-        if (tabClass) tabClass.classList.remove("active");
-        if (tabFree) tabFree.classList.add("active");
-        if (viewClass) viewClass.style.display = "none";
-        if (viewFree) viewFree.style.display = "block";
-    } else {
-        if (tabClass) tabClass.classList.add("active");
-        if (tabFree) tabFree.classList.remove("active");
-        if (viewClass) viewClass.style.display = "block";
-        if (viewFree) viewFree.style.display = "none";
-    }
-}
-
-function toggleStudentPassVisibility() {
-    const passIn = document.getElementById("st-password-input");
-    const eyeBtn = document.getElementById("st-eye-btn");
-    if (!passIn) return;
-    if (passIn.type === "password") { 
-        passIn.type = "text"; 
-        if (eyeBtn) eyeBtn.innerText = "🙈"; 
-    } else { 
-        passIn.type = "password"; 
-        if (eyeBtn) eyeBtn.innerText = "👁️"; 
-    }
-}
-
-function submitStudentLogin() {
-    const errBox = document.getElementById("st-login-error");
-    const showErr = (msg) => {
-        if (errBox) { errBox.innerText = msg; errBox.style.display = "block"; } else { alert(msg); }
-    };
-
-    let targetUrl = activeStudentLogin.targetUrl;
-    if (!targetUrl) { showErr("❌ Không tìm thấy đường dẫn đề thi!"); return; }
-
-    const targetCat = activeStudentLogin.categoryId || "them-11";
-    const targetCatDisplayName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(targetCat) : targetCat;
-
-    let finalSbd = ""; 
-    let finalName = ""; 
-    let finalClass = "";
-
-    if (activeStudentLogin.currentMode === "class") {
-        const usernameVal = (document.getElementById("st-username-input").value || "").trim();
-        const passVal = (document.getElementById("st-password-input").value || "").trim();
-
-        if (!usernameVal || !passVal) { 
-            showErr("⚠️ Vui lòng nhập đầy đủ Tên đăng nhập (hoặc SBD) và Mật khẩu!"); 
-            return; 
-        }
-
-        const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(targetCat) : [];
-        const normUser = typeof normalizeName === 'function' ? normalizeName(usernameVal) : usernameVal.toLowerCase();
-
-        const matched = classAccounts.find(acc => {
-            const accSbd = String(acc.sbd || "").trim().toLowerCase();
-            const accUser = typeof normalizeName === 'function' ? normalizeName(acc.username) : String(acc.username || "").toLowerCase();
-            const accName = typeof normalizeName === 'function' ? normalizeName(acc.name) : String(acc.name || "").toLowerCase();
-            const isUserMatch = (accSbd === usernameVal.toLowerCase()) || (normUser && (accUser === normUser || accName === normUser));
-            const passOk = String(acc.pass || "").trim() === passVal;
-            return isUserMatch && passOk;
-        });
-
-        if (!matched) {
-            const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(usernameVal) : null;
-            if (otherCat && otherCat !== targetCat) {
-                const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
-                showErr(`⛔ Tài khoản "${usernameVal}" thuộc danh sách ${otherCatName}!\nĐề thi này chỉ dành riêng cho ${targetCatDisplayName}. Vui lòng chọn đúng đề thi của lớp bạn!`);
-            } else {
-                showErr(`❌ Sai Tên đăng nhập (SBD) hoặc Mật khẩu trong danh sách ${targetCatDisplayName}!`);
-            }
-            return;
-        }
-
-        finalSbd = matched.sbd; 
-        finalName = matched.name || matched.username; 
-        finalClass = matched.className || targetCatDisplayName;
-    } else {
-        if (activeStudentLogin.item && activeStudentLogin.item.allowFree === false) { 
-            showErr("⛔ Giáo viên đã tắt chế độ thi tự do đối với đề thi này!"); 
-            return; 
-        }
-        finalName = (document.getElementById("st-free-name-input").value || "").trim();
-        finalClass = (document.getElementById("st-free-class-input").value || "").trim();
-        finalSbd = (document.getElementById("st-free-sbd-input").value || "").trim();
-        
-        if (!finalName || !finalClass || !finalSbd) { 
-            showErr("⚠️ Vui lòng nhập đầy đủ Họ tên, Lớp và SBD tự do!"); 
-            return; 
-        }
-
-        const detectedCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(finalSbd) : null;
-        if (detectedCat) {
-            const detectedName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(detectedCat) : detectedCat;
-            showErr(`⚠️ Số báo danh "${finalSbd}" thuộc danh sách chính thức của ${detectedName}!\nVui lòng chuyển sang tab "Học sinh theo lớp" để đăng nhập bằng mật khẩu.`);
-            return;
-        }
-    }
-
-    safeLocal.removeItem("last_submission_cleared"); 
-    safeLocal.removeItem("saved_student_sbd");
-    safeLocal.removeItem("saved_student_name"); 
-    safeLocal.removeItem("saved_student_class");
-    safeLocal.setItem("current_exam_student", JSON.stringify({ sbd: finalSbd, name: finalName, className: finalClass, categoryId: targetCat }));
-    safeLocal.setItem("saved_student_sbd", finalSbd);
-    safeLocal.setItem("saved_student_name", finalName);
-    safeLocal.setItem("saved_student_class", finalClass);
-
-    try {
-        let u = new URL(targetUrl, window.location.href);
-        u.searchParams.set("cat", targetCat); 
-        u.searchParams.set("sbd", finalSbd); 
-        u.searchParams.set("name", finalName);
-        u.searchParams.set("class", finalClass); 
-        u.searchParams.set("autostart", "1"); 
-        window.location.href = u.toString();
-    } catch (e) {
-        window.location.href = `${targetUrl}&cat=${encodeURIComponent(targetCat)}&sbd=${encodeURIComponent(finalSbd)}&name=${encodeURIComponent(finalName)}&class=${encodeURIComponent(finalClass)}&autostart=1`;
-    }
-}
-
-function checkPassword() { 
-    const urlParams = new URLSearchParams(window.location.search);
-    const quizId = urlParams.get('id') || "";
-    const cat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    window.location.href = `./index.html?login_exam=${encodeURIComponent(quizId)}&cat=${encodeURIComponent(cat)}`;
-}
-
-async function startExamAction(isAutostart = false) {
-    const urlParams = new URLSearchParams(window.location.search);
-    const isAdminPreviewUrl = (urlParams.get('admin') === '1');
-    const currentCat = typeof getExamCategory === 'function' ? getExamCategory() : "them-11";
-    const currentCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(currentCat) : currentCat;
-
-    let sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
-    let sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "";
-    let sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "";
-
-    if (!sId) sId = safeDecodeParam(urlParams.get('sbd'));
-    if (!sName) sName = safeDecodeParam(urlParams.get('name'));
-    if (!sClass) sClass = safeDecodeParam(urlParams.get('class'));
-
-    if (isAdminPreviewUrl) {
-        if (!sId) sId = "Trying";
-        if (!sName) sName = "Obahoan29";
-        if (!sClass) sClass = "42";
-    } else if (sId && sName && !sClass) {
-        sClass = currentCatName || "Tự do";
-    }
-
-    if (document.getElementById("student-id")) document.getElementById("student-id").value = sId;
-    if (document.getElementById("student-name")) document.getElementById("student-name").value = sName;
-    if (document.getElementById("student-class")) document.getElementById("student-class").value = sClass;
-
-    const quizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "";
-
-    if (!sId || !sName) {
-        if (!isAutostart) {
-            window.location.href = `./index.html?login_exam=${encodeURIComponent(quizId)}&cat=${encodeURIComponent(currentCat)}`;
-        }
-        return false;
-    }
-
-    const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
-    const checkInClass = classAccounts.find(acc => 
-        String(acc.sbd || "").trim().toLowerCase() === sId.toLowerCase()
-    );
-
-    const isFree = !checkInClass;
-
-    if (isFree && !isAdminPreviewUrl) {
-        const otherCat = typeof detectCategoryFromSbd === 'function' ? detectCategoryFromSbd(sId) : null;
-        if (otherCat && otherCat !== currentCat) {
-            const otherCatName = typeof getCategoryDisplayName === 'function' ? getCategoryDisplayName(otherCat) : otherCat;
-            alert(`⛔ Số báo danh "${sId}" thuộc danh sách học sinh của ${otherCatName}!\nBạn không thể sử dụng tài khoản này để làm đề thi của ${currentCatName}.\nVui lòng quay lại trang chủ và chọn đúng đề thi của lớp bạn!`);
-            window.location.href = `./index.html`;
-            return false;
-        }
-
-        const allowFree = typeof isCurrentExamAllowFree === 'function' ? isCurrentExamAllowFree() : true;
-        if (!allowFree) {
-            alert(`⛔ Đề thi này chỉ dành riêng cho học sinh lớp ${currentCatName}!\nThí sinh tự do hoặc học sinh lớp khác không được phép tham gia.`);
-            window.location.href = `./index.html`;
-            return false;
-        }
-    }
-
-    return await executeStartExamAPI(sId, sName, sClass, isFree, isAutostart, isAdminPreviewUrl);
-}
-
-function sendStartExamBackupLogToDrive(sId, sName, sClass, quizId, examTitle, attempt) {
-    try {
-        const gasUrl = (typeof GOOGLE_DRIVE_TULUAN_GAS_URL !== "undefined" && GOOGLE_DRIVE_TULUAN_GAS_URL) 
-            ? GOOGLE_DRIVE_TULUAN_GAS_URL 
-            : ((typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined") ? GOOGLE_DRIVE_UPLOAD_GAS_URL : "");
-
-        if (!gasUrl || gasUrl.includes("DÁN_URL")) return;
-
-        const payload = {
-            action: "logStudentExamStart",
-            sbd: sId,
-            student_name: sName,
-            className: sClass,
-            quizId: quizId,
-            examTitle: examTitle,
-            attempt: attempt,
-            startTime: new Date().toLocaleString("vi-VN")
-        };
-
-        fetch(gasUrl, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payload),
-            keepalive: true
-        }).catch(() => null);
-    } catch(e) {}
-}
-
-// ĐĂNG KÝ PHIÊN LÀM BÀI ĐỘ TIN CẬY CAO (XỬ LÝ count === null, upErr & TRÙNG KHÓA 23505)
-async function registerActiveSessionReliable(client, currentQuizId, cleanSbd, sessionPayload) {
-    if (!client || !currentQuizId || !cleanSbd) return false;
-    try {
-        const updateFields = {
-            name: sessionPayload.name,
-            class_name: sessionPayload.class_name,
-            category_id: sessionPayload.category_id,
-            is_free: sessionPayload.is_free,
-            ma_de: sessionPayload.ma_de,
-            exam_title: sessionPayload.exam_title,
-            start_time: sessionPayload.start_time,
-            last_ping: sessionPayload.last_ping
-        };
-
-        const { error: upErr, count } = await client
-            .from('active_sessions')
-            .update(updateFields, { count: 'exact' })
-            .match({ quiz_id: currentQuizId, sbd: cleanSbd });
-
-        if (!upErr && typeof count === 'number' && count > 0) {
-            window.__activeSessionConfirmed = true;
-            window.__lastPresencePingMs = Date.now();
-            return true;
-        }
-
-        const { error: insErr } = await client
-            .from('active_sessions')
-            .insert([sessionPayload]);
-
-        if (!insErr) {
-            window.__activeSessionConfirmed = true;
-            window.__lastPresencePingMs = Date.now();
-            return true;
-        }
-
-        const errCode = String(insErr.code || "");
-        const errMsg = String(insErr.message || "").toLowerCase();
-        if (errCode === '23505' || errMsg.includes('duplicate') || errMsg.includes('unique')) {
-            const { error: retryErr } = await client
-                .from('active_sessions')
-                .update(updateFields)
-                .match({ quiz_id: currentQuizId, sbd: cleanSbd });
-            if (!retryErr) {
-                window.__activeSessionConfirmed = true;
-                window.__lastPresencePingMs = Date.now();
-                return true;
-            }
-        }
-    } catch (e) {
-        console.warn("Lỗi đăng ký active_sessions:", e);
-    }
-    return false;
 }
 
 async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, isAutostart = false, isAdminMode = false) { 
@@ -1044,25 +470,39 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
 
     if (client && !effectiveAdmin) {
-        window.__activeSessionConfirmed = false;
-        window.__lastPresencePingMs = 0;
+        try {
+            const handshakeTask = async () => {
+                const sessionPayload = {
+                    quiz_id: currentQuizId,
+                    sbd: cleanSbd,
+                    name: sName,
+                    class_name: strictClassName,
+                    category_id: currentCat,
+                    is_free: isFreeStudent,
+                    ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                    exam_title: exactExamTitle,
+                    start_time: effectiveStartTime,
+                    last_ping: nowMs
+                };
 
-        const sessionPayload = {
-            quiz_id: currentQuizId,
-            sbd: cleanSbd,
-            name: sName,
-            class_name: strictClassName,
-            category_id: currentCat,
-            is_free: isFreeStudent,
-            ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
-            exam_title: exactExamTitle,
-            start_time: effectiveStartTime,
-            last_ping: nowMs
-        };
+                const { data: updated } = await client.from('active_sessions')
+                    .update({
+                        name: sName,
+                        class_name: strictClassName,
+                        category_id: currentCat,
+                        is_free: isFreeStudent,
+                        ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
+                        exam_title: exactExamTitle,
+                        start_time: effectiveStartTime,
+                        last_ping: nowMs
+                    })
+                    .match({ quiz_id: currentQuizId, sbd: cleanSbd })
+                    .select();
 
-        const handshakeTask = (async () => {
-            try {
-                const ok = await registerActiveSessionReliable(client, currentQuizId, cleanSbd, sessionPayload);
+                if (!updated || updated.length === 0) {
+                    await client.from('active_sessions').insert([sessionPayload]);
+                }
+
                 client.from('cheating_logs').insert([{
                     quiz_id: currentQuizId,
                     sbd: cleanSbd,
@@ -1073,14 +513,13 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                     duration_str: `Bắt đầu Lần ${currentAttempt}`,
                     duration_sec: 0
                 }]).then();
-                return ok;
-            } catch(err) {
-                return false;
-            }
-        })();
+            };
 
-        const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 2500));
-        await Promise.race([handshakeTask, timeoutTask]);
+            const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 1800));
+            await Promise.race([handshakeTask(), timeoutTask]);
+        } catch(err) {
+            console.warn("Handshake Supabase bị chậm, cho phép vào thi chế độ offline-first:", err);
+        }
     }
 
     if (!effectiveAdmin) {
@@ -1169,10 +608,7 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     return true;
 }
 
-function buildCompleteSubmissionPayload(submitReason = false) {
-    const isTimeoutSubmit = (submitReason === 'timeout');
-    const isForceSubmit = (submitReason === true || submitReason === 'force');
-
+function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "user";
     const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
     const sClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
@@ -1202,25 +638,19 @@ function buildCompleteSubmissionPayload(submitReason = false) {
 
     const maxAllowedSec = totalTimeSeconds || (TIME_LIMIT_MINUTES * 60) || 5400;
     let actualElapsedSec = lockedDurationSec || (reliableStartTime ? Math.round((Date.now() - reliableStartTime) / 1000) : 0);
-    if (isTimeoutSubmit && actualElapsedSec < maxAllowedSec) {
-        const trueElapsed = reliableStartTime ? Math.round((Date.now() - reliableStartTime) / 1000) : maxAllowedSec;
-        actualElapsedSec = Math.min(Math.max(actualElapsedSec, trueElapsed), maxAllowedSec);
-    }
     const durationSec = Math.min(Math.max(1, actualElapsedSec), maxAllowedSec);
     const spentMins = Math.floor(durationSec / 60);
     const spentSecs = durationSec % 60;
     
-    let completionTimeStr = `${spentMins} phút ${spentSecs} giây`;
-    if (isTimeoutSubmit) {
-        completionTimeStr = `${spentMins} phút ${spentSecs} giây (Hết giờ - Tự thu)`;
-    } else if (isForceSubmit) {
-        completionTimeStr = `Thu ép ${spentMins}p${spentSecs}s`;
-    }
+    const completionTimeStr = isForceSubmit 
+        ? `Thu ép ${spentMins}p${spentSecs}s` 
+        : `${spentMins} phút ${spentSecs} giây`;
 
     let uiAnswers = window.SECURE_VAULT.userAnswers || {};
     let origAnswers = uiAnswers;
     let scoreResult = null;
     
+    // TIẾN HÀNH PHIÊN DỊCH VỀ BẢN GỐC TRƯỚC KHI NỘP ĐỂ GIÁO VIÊN ĐỌC ĐƯỢC CHUẨN XÁC
     if (typeof translateUserAnswersToOriginal === 'function' && typeof examData !== 'undefined' && examData && examData.questions && window.ORIGINAL_EXAM_DATA) {
         origAnswers = translateUserAnswersToOriginal(uiAnswers, examData.questions);
         
@@ -1259,16 +689,12 @@ function buildCompleteSubmissionPayload(submitReason = false) {
 
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
     dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
-    if (isTimeoutSubmit) {
-        dataDetails.push(`[TỰ ĐỘNG NỘP KHI HẾT GIỜ]`);
-    } else if (isForceSubmit) {
+    if (isForceSubmit) {
         dataDetails.push(`[THU BÀI ÉP BUỘC TỪ XA]`);
     }
 
     const submissionTimestampMs = Date.now();
-    const submissionId = (isTimeoutSubmit && reliableStartTime)
-        ? `sub_${currentQuizId}_${cleanSbd}_ot_${reliableStartTime}`
-        : `sub_${currentQuizId}_${cleanSbd}_lan${currentAttempt}_${submissionTimestampMs}`;
+    const submissionId = `sub_${currentQuizId}_${cleanSbd}_lan${currentAttempt}_${submissionTimestampMs}`;
 
     const exactExamTitle = (typeof EXAM_NAME !== 'undefined' && EXAM_NAME && EXAM_NAME !== 'ĐỀ THI TRẮC NGHIỆM') 
         ? EXAM_NAME 
@@ -1541,19 +967,6 @@ function recordSubmissionToHistory(payload) {
         }
         if (!Array.isArray(history)) history = [];
 
-        const existingIdx = history.findIndex(h => h && h.payload && h.payload.id === payload.id);
-        if (existingIdx !== -1) {
-            history[existingIdx].payload = payload;
-            history[existingIdx].timestamp = Date.now();
-            history[existingIdx].dateStr = new Date().toLocaleString("vi-VN");
-            safeLocal.setItem(storageKey, JSON.stringify(history));
-            if (typeof examIndexedDB !== 'undefined') {
-                examIndexedDB.setItem('exam_history', history[existingIdx]).catch(() => {});
-            }
-            renderStudentSubmissionHistoryButtons();
-            return;
-        }
-
         const attemptIndex = history.length + 1;
         const historyItem = {
             id: `${storageKey}_attempt_${attemptIndex}`,
@@ -1658,106 +1071,40 @@ window.triggerShareFromHistory = function(attemptNumber) {
     } catch(e) {}
 };
 
-function stopAutoRetryPendingSubmission() {
-    if (autoRetrySubmitTimer) {
-        clearInterval(autoRetrySubmitTimer);
-        autoRetrySubmitTimer = null;
-    }
-}
-
-function startAutoRetryPendingSubmission(submitReason) {
-    stopAutoRetryPendingSubmission();
-    autoRetrySubmitTimer = setInterval(() => {
-        if (isSubmitted) {
-            stopAutoRetryPendingSubmission();
-            return;
-        }
-        if (!isSubmittingInProgress && navigator.onLine !== false) {
-            executeSubmitExam(submitReason, true);
-        }
-    }, 6000);
-}
-
-async function submitPayloadToSupabaseWithRetry(client, payload, currentAttemptNumber) {
-    let lastErrorMessage = "";
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            // Dùng upsert theo id để nếu Admin đã tự thu trước đó bằng ID deterministic `sub_..._ot_...`
-            // hoặc học sinh bấm lại thì chỉ cập nhật 1 dòng duy nhất, không bao giờ trùng lặp!
-            let { error: err1 } = await client.from('submissions').upsert([payload], { onConflict: 'id' });
-            if (!err1) {
-                return { ok: true, errorMessage: "" };
-            }
-
-            lastErrorMessage = err1.message || "";
-            const isConstraintError = String(lastErrorMessage).includes("idx_submissions_quiz_sbd") || 
-                                      String(lastErrorMessage).includes("unique constraint") ||
-                                      String(lastErrorMessage).includes("duplicate key");
-
-            if (isConstraintError) {
-                let { error: errUpdate } = await client.from('submissions')
-                    .update({
-                        score10: payload.score10,
-                        raw_score: payload.raw_score,
-                        max_scale: payload.max_scale,
-                        correct_count: payload.correct_count,
-                        wrong_count: payload.wrong_count,
-                        completion_time: payload.completion_time,
-                        spent_mins: payload.spent_mins,
-                        tab_switch_count: payload.tab_switch_count,
-                        data_string: payload.data_string + ` | [Lần ${currentAttemptNumber}]`,
-                        user_answers: payload.user_answers,
-                        created_at: payload.created_at
-                    })
-                    .eq('quiz_id', payload.quiz_id)
-                    .eq('sbd', payload.sbd);
-
-                if (!errUpdate) {
-                    return { ok: true, errorMessage: "" };
-                }
-
-                let fallbackPayload = {
-                    ...payload,
-                    sbd: `${payload.sbd}_lan${currentAttemptNumber}`
-                };
-                let { error: errBranch } = await client.from('submissions').upsert([fallbackPayload], { onConflict: 'id' });
-                if (!errBranch) {
-                    return { ok: true, errorMessage: "" };
-                }
-                lastErrorMessage = errBranch.message || errUpdate.message || lastErrorMessage;
-                break;
-            }
-        } catch(err) {
-            lastErrorMessage = (err && err.message) ? err.message : "Lỗi mạng";
-        }
-
-        if (attempt < 3) {
-            await new Promise(r => setTimeout(r, 1200 * attempt));
-        }
-    }
-
-    return { ok: false, errorMessage: lastErrorMessage };
-}
-
-async function executeSubmitExam(submitReason = false, isSilentRetry = false) { 
+async function executeSubmitExam(isForceSubmit = false) { 
     if (isSubmitted || isSubmittingInProgress) return; 
 
-    // KHÓA NGAY LẬP TỨC TRƯỚC MỌI LỆNH AWAIT ĐỂ CHỐNG GỌI TRÙNG
+    const confirmModal = document.getElementById("submit-confirm-modal");
+    const normalView = document.getElementById("modal-normal-submit-view");
+    const progressView = document.getElementById("modal-submitting-progress-view");
+    const actionsBox = document.getElementById("modal-actions-container");
+
+    if (confirmModal) confirmModal.style.display = "flex";
+    if (normalView) normalView.style.display = "none";
+    if (actionsBox) actionsBox.innerHTML = "";
+
+    if (isForceSubmit) {
+        const jitterDelayMs = Math.floor(Math.random() * 9500) + 500;
+        const waitSeconds = Math.round(jitterDelayMs / 1000);
+        
+        if (progressView) {
+            progressView.innerHTML = `
+                <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#10b981;"></div>
+                <div style="font-weight:900; color:#0f766e; font-size:1.1rem;">⏳ Đang xếp hàng nộp bài tự động (${waitSeconds}s)...</div>
+                <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">Hệ thống đang điều tiết nộp bài so le để tránh nghẽn mạng. Bài thi của em đã được bảo lưu an toàn 100%.</div>
+            `;
+            progressView.style.display = "block";
+        }
+        await new Promise(resolve => setTimeout(resolve, jitterDelayMs));
+    }
+
     isSubmittingInProgress = true;
-    window.__lastSubmitReason = submitReason;
-
-    const isTimeoutSubmit = (submitReason === 'timeout');
-    const isForceSubmit = (submitReason === true || submitReason === 'force');
-    const isAutoCollect = isTimeoutSubmit || isForceSubmit;
-
     if (typeof lockExamInteractions === 'function') lockExamInteractions();
     if (typeof saveExamStateToStorage === 'function') saveExamStateToStorage();
 
-    const payload = buildCompleteSubmissionPayload(submitReason);
+    const payload = buildCompleteSubmissionPayload(isForceSubmit);
     const currentAttemptNumber = window.currentStudentAttemptNumber || getRealStudentExamAttemptNumber(payload.quiz_id, payload.sbd);
 
-    // Bảo lưu ngay lập tức trước khi chờ mạng
     safeLocal.setItem(`exam_completed_backup_${payload.quiz_id}`, JSON.stringify(payload));
     safeLocal.setItem("pending_exam_submission", JSON.stringify(payload));
     pendingSubmissionPayload = payload;
@@ -1775,41 +1122,10 @@ async function executeSubmitExam(submitReason = false, isSilentRetry = false) {
         }).catch(() => {});
     }
 
-    if (!isSilentRetry) {
-        sendSubmissionJsonToGoogleDriveFolder(payload);
-    }
-
-    const confirmModal = document.getElementById("submit-confirm-modal");
-    const normalView = document.getElementById("modal-normal-submit-view");
-    const progressView = document.getElementById("modal-submitting-progress-view");
-    const actionsBox = document.getElementById("modal-actions-container");
-
-    if (!isSilentRetry) {
-        if (confirmModal) confirmModal.style.display = "flex";
-        if (normalView) normalView.style.display = "none";
-        if (actionsBox) actionsBox.innerHTML = "";
-    }
-
-    if (isAutoCollect && !isSilentRetry) {
-        // Jitter ngắn (0.3 - 1.5s cho hết giờ, 0.5 - 4s cho thu ép) để giảm nghẽn mà không làm học sinh kịp tắt tab
-        const jitterDelayMs = isTimeoutSubmit
-            ? (Math.floor(Math.random() * 1200) + 300)
-            : (Math.floor(Math.random() * 3500) + 500);
-        const waitSeconds = Math.max(1, Math.round(jitterDelayMs / 1000));
-        
-        if (progressView) {
-            progressView.innerHTML = `
-                <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#10b981;"></div>
-                <div style="font-weight:900; color:#0f766e; font-size:1.1rem;">${isTimeoutSubmit ? `⏰ Đã hết giờ! Đang tự động thu bài (${waitSeconds}s)...` : `⏳ Đang xếp hàng nộp bài tự động (${waitSeconds}s)...`}</div>
-                <div style="font-size:0.9rem; color:#64748b; margin-top:6px; font-weight:600;">Bài thi của em đã được bảo lưu an toàn 100% và đang gửi điểm về giáo viên.</div>
-            `;
-            progressView.style.display = "block";
-        }
-        await new Promise(resolve => setTimeout(resolve, jitterDelayMs));
-    }
+    sendSubmissionJsonToGoogleDriveFolder(payload);
 
     const updateProgressStatus = (text) => {
-        if (progressView && !isSilentRetry) {
+        if (progressView) {
             progressView.innerHTML = `
                 <div class="spinner" style="width:38px; height:38px; margin:0 auto 12px auto; border-top-color:#0284c7;"></div>
                 <div style="font-weight:900; color:#0284c7; font-size:1.1rem;">${text}</div>
@@ -1825,13 +1141,59 @@ async function executeSubmitExam(submitReason = false, isSilentRetry = false) {
     let serverErrorMessage = "";
 
     if (client) {
-        const res = await submitPayloadToSupabaseWithRetry(client, payload, currentAttemptNumber);
-        submitOk = res.ok;
-        serverErrorMessage = res.errorMessage;
+        try {
+            let { error: err1 } = await client.from('submissions').insert([payload]);
+            if (!err1) {
+                submitOk = true;
+            } else {
+                console.warn("Lệnh Insert thông thường gặp lỗi:", err1);
+                serverErrorMessage = err1.message || "";
+
+                const isConstraintError = String(serverErrorMessage).includes("idx_submissions_quiz_sbd") || 
+                                          String(serverErrorMessage).includes("unique constraint") ||
+                                          String(serverErrorMessage).includes("duplicate key");
+
+                if (isConstraintError) {
+                    let { error: errUpdate } = await client.from('submissions')
+                        .update({
+                            score10: payload.score10,
+                            raw_score: payload.raw_score,
+                            max_scale: payload.max_scale,
+                            correct_count: payload.correct_count,
+                            wrong_count: payload.wrong_count,
+                            completion_time: payload.completion_time,
+                            spent_mins: payload.spent_mins,
+                            tab_switch_count: payload.tab_switch_count,
+                            data_string: payload.data_string + ` | [Lần ${currentAttemptNumber}]`,
+                            user_answers: payload.user_answers,
+                            created_at: payload.created_at
+                        })
+                        .eq('quiz_id', payload.quiz_id)
+                        .eq('sbd', payload.sbd);
+
+                    if (!errUpdate) {
+                        submitOk = true;
+                    } else {
+                        let fallbackPayload = {
+                            ...payload,
+                            sbd: `${payload.sbd}_lan${currentAttemptNumber}`
+                        };
+                        let { error: errBranch } = await client.from('submissions').insert([fallbackPayload]);
+                        if (!errBranch) {
+                            submitOk = true;
+                        } else {
+                            serverErrorMessage = errBranch.message || errUpdate.message;
+                        }
+                    }
+                }
+            }
+        } catch(err) {
+            serverErrorMessage = err.message || "";
+            console.error("Lỗi gửi dữ liệu Supabase:", err);
+        }
     }
 
     if (submitOk) {
-        stopAutoRetryPendingSubmission();
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
             client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
@@ -1873,17 +1235,11 @@ async function executeSubmitExam(submitReason = false, isSilentRetry = false) {
     }
 
     isSubmittingInProgress = false;
-    let savedFileName = `${payload.sbd}_${payload.student_name}_lan${currentAttemptNumber}.json`;
-    if (!isSilentRetry) {
-        savedFileName = downloadSubmissionJsonSilently(payload, currentAttemptNumber);
-        recordSubmissionToHistory(payload);
-    }
+    const savedFileName = downloadSubmissionJsonSilently(payload, currentAttemptNumber);
+    recordSubmissionToHistory(payload);
     if (typeof updateTopBackupStatus === 'function') updateTopBackupStatus(false);
 
-    // Tự động thử nộp lại ngầm mỗi 6 giây cho đến khi gửi thành công về Admin
-    startAutoRetryPendingSubmission(submitReason);
-
-    if (!isSilentRetry && progressView) {
+    if (progressView) {
         progressView.innerHTML = `
             <div style="font-size:38px; margin-bottom:8px;">📶⚠️</div>
             <div style="font-weight:900; color:#ef4444; font-size:1.15rem;">CHƯA THỂ NỘP LÊN MÁY CHỦ!</div>
@@ -1892,16 +1248,15 @@ async function executeSubmitExam(submitReason = false, isSilentRetry = false) {
                 ✅ <b>ĐÃ BẢO LƯU BÀI THI LẦN ${currentAttemptNumber}:</b><br>
                 📁 Tên tệp: <b>${savedFileName}</b><br>
                 📍 Vị trí: Đã lưu trong mục <b>"Tải về" (Downloads)</b> trên máy của em.<br>
-                🔄 Hệ thống đang tự động thử gửi lại mỗi 6 giây...
+                ⚡ Điểm số và bài làm được bảo vệ nguyên vẹn 100%.
             </div>
         `;
     }
 
-    if (!isSilentRetry && actionsBox) {
-        const reasonArg = (typeof submitReason === 'string') ? `'${submitReason}'` : String(submitReason);
+    if (actionsBox) {
         actionsBox.innerHTML = `
             <div style="margin-top: 14px; width:100%; display:flex; flex-direction:column; gap:8px;">
-                <button type="button" onclick="executeSubmitExam(${reasonArg})" 
+                <button type="button" onclick="executeSubmitExam(${isForceSubmit})" 
                         style="width:100%; padding:12px; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color:#fff; border:none; border-radius:10px; font-weight:900; font-size:1rem; cursor:pointer;">
                     🔄 Bấm để nộp lại bài Lần ${currentAttemptNumber}
                 </button>
@@ -1926,7 +1281,6 @@ function viewResultOfflineFallback(payload) {
 
     isSubmitted = true;
     isSubmittingInProgress = false;
-    stopAutoRetryPendingSubmission();
 
     renderResultSummaryScreen(
         payload.correct_count, 
@@ -1948,7 +1302,7 @@ function showSubmitConfirmModal() {
     if (topDownloadBtn) topDownloadBtn.style.display = "inline-flex";
 
     if (typeof isExamLocked !== 'undefined' && isExamLocked) {
-        executeSubmitExam(window.__lastSubmitReason || 'timeout');
+        executeSubmitExam(false);
         return;
     }
 
@@ -1985,10 +1339,10 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
+// ĐĂNG KÝ TOÀN CỤC CÁC HÀM
 window.getStrictStandardClassName = getStrictStandardClassName;
 window.getRealStudentExamAttemptNumber = getRealStudentExamAttemptNumber;
 window.fetchStudentAttemptNumberFromCloud = fetchStudentAttemptNumberFromCloud;
-window.registerActiveSessionReliable = registerActiveSessionReliable;
 window.openStudentLoginModal = openStudentLoginModal;
 window.closeStudentLoginModal = closeStudentLoginModal;
 window.switchStudentLoginMode = switchStudentLoginMode;
