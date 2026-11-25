@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
-// ĐÃ TỐI ƯU HOÀN TOÀN CHO IPHONE TRONG TRÌNH DUYỆT NHÚNG MESSENGER & SAFARI (IOS WEBKIT)
+// TỐI ƯU BĂNG THÔNG SUPABASE CHO 225+ HS/NGÀY (PING 60s + SELECT NHẸ + CHỐNG TRÙNG)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -31,21 +31,23 @@ let realtimeConfigChannel = null;
 let onlineRealtimeChannel = null;
 let forceSubmitRealtimeChannel = null;
 
+let _lastPresencePingMs = 0;
+let _lastOnlineCountRefreshMs = 0;
+
 window.localOnlineCount = 1; 
 
-// Hàm nhận diện In-App Browser (Messenger, Facebook, Zalo, Instagram)
 function isMobileInAppBrowser() {
     const ua = navigator.userAgent || navigator.vendor || window.opera || '';
     return /FBAN|FBAV|Messenger|Instagram|Zalo|Line|Twitter|Kakaotalk/i.test(ua);
 }
 
-// CẤU HÌNH LẮNG NGHE REALTIME TOÀN CỤC
+// CẤU HÌNH LẮNG NGHE REALTIME TOÀN CỤC (MẶC ĐỊNH PING 60s TIẾT KIỆM 58% REQUEST)
 window.CURRENT_RT_CONFIG = {
     watchOnlineCount: true,
     watchForceSubmit: true,
     watchTimeConfig: true,
     watchImageSync: true,
-    pingIntervalSec: 25
+    pingIntervalSec: 60
 };
 
 async function loadRealtimeExamConfig() {
@@ -55,6 +57,12 @@ async function loadRealtimeExamConfig() {
             window.CURRENT_RT_CONFIG = { ...window.CURRENT_RT_CONFIG, ...JSON.parse(rawLocal) };
         }
 
+        // Chỉ fetch lại từ Supabase tối đa mỗi 2 phút/lần cho mỗi phiên trình duyệt
+        const lastCfgFetch = parseInt(safeSession.getItem("rt_cfg_fetched_at") || "0", 10);
+        if (lastCfgFetch > 0 && (Date.now() - lastCfgFetch) < 120000) {
+            return;
+        }
+
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (client) {
             const { data } = await client.from('app_key_values').select('value').eq('key', 'exam_realtime_config').maybeSingle();
@@ -62,13 +70,13 @@ async function loadRealtimeExamConfig() {
                 window.CURRENT_RT_CONFIG = { ...window.CURRENT_RT_CONFIG, ...data.value };
                 safeLocal.setItem("exam_realtime_config", JSON.stringify(window.CURRENT_RT_CONFIG));
             }
+            safeSession.setItem("rt_cfg_fetched_at", String(Date.now()));
         }
     } catch(e) {}
 }
 
 loadRealtimeExamConfig();
 
-// CHỦ ĐỘNG GỠ BỎ TOÀN BỘ SERVICE WORKER ĐỂ CHỐNG VĂNG VÀ TREO TRÊN IOS WEBKIT
 if ('serviceWorker' in navigator) {
     try {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -325,9 +333,15 @@ function triggerOnlineBoxAnimation() {
     }
 }
 
-async function refreshOnlineCount() {
+async function refreshOnlineCount(force = false) {
     const cfg = window.CURRENT_RT_CONFIG || {};
     if (cfg.watchOnlineCount === false) return;
+
+    const nowMs = Date.now();
+    if (!force && _lastOnlineCountRefreshMs > 0 && (nowMs - _lastOnlineCountRefreshMs) < 20000) {
+        return;
+    }
+    _lastOnlineCountRefreshMs = nowMs;
 
     try {
         const urlParams = new URLSearchParams(window.location.search); 
@@ -335,10 +349,10 @@ async function refreshOnlineCount() {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (!currentQuizId || !client) return;
 
-        const activeThreshold = Date.now() - (15 * 60 * 1000);
+        const activeThreshold = nowMs - (15 * 60 * 1000);
         let { count, error } = await client
             .from('active_sessions')
-            .select('*', { count: 'exact', head: true })
+            .select('sbd', { count: 'exact', head: true })
             .eq('quiz_id', currentQuizId)
             .gte('last_ping', activeThreshold);
 
@@ -367,7 +381,7 @@ async function handleOnlineCountClick() {
     if (isAdmin) {
         const box = document.getElementById("nav-online-box");
         if (box) box.style.opacity = "0.5";
-        await refreshOnlineCount();
+        await refreshOnlineCount(true);
         if (box) box.style.opacity = "1";
         triggerOnlineBoxAnimation();
         if (typeof showTimeChangeToast === 'function') {
@@ -382,9 +396,7 @@ async function handleOnlineCountClick() {
 
 function startOnlineRealtimeWatcher(quizId) {
     const cfg = window.CURRENT_RT_CONFIG || {};
-    if (cfg.watchOnlineCount === false) {
-        return;
-    }
+    if (cfg.watchOnlineCount === false) return;
 
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     if (!quizId || !client) return;
@@ -467,7 +479,7 @@ async function startPresenceSystem(sId) {
 
     if (cfg.watchOnlineCount !== false && currentQuizId) {
         startOnlineRealtimeWatcher(currentQuizId);
-        refreshOnlineCount();
+        refreshOnlineCount(false);
     } else {
         const onlineBox = document.getElementById("nav-online-box");
         if (onlineBox) onlineBox.style.display = "none";
@@ -477,32 +489,38 @@ async function startPresenceSystem(sId) {
         startForceSubmitWatcher(currentQuizId);
     }
 
-    const intervalSec = (cfg.pingIntervalSec !== undefined) ? parseInt(cfg.pingIntervalSec, 10) : 25;
+    const parsedInterval = parseInt(cfg.pingIntervalSec, 10);
+    const intervalSec = !isNaN(parsedInterval) ? parsedInterval : 60;
     if (presenceInterval) {
         clearInterval(presenceInterval);
         presenceInterval = null;
     }
 
     if (intervalSec > 0) {
-        updatePresence(cleanSbd);
+        updatePresence(cleanSbd, true);
         presenceInterval = setInterval(() => { 
-            updatePresence(cleanSbd); 
+            updatePresence(cleanSbd, false); 
         }, intervalSec * 1000);
     }
 }
 
-// BẢN FIX: GIỮ NGUYÊN START_TIME GỐC KHÔNG BAO GIỜ BỊ ĐÈ THỜI GIAN HIỆN TẠI
-async function updatePresence(cleanSbd) {
+// BẢN FIX: GIỮ NGUYÊN START_TIME GỐC + SELECT('sbd') SIÊU NHẸ + CHỐNG PING KÉP TRONG 15s
+async function updatePresence(cleanSbd, force = false) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         const urlParams = new URLSearchParams(window.location.search); 
         const currentQuizId = urlParams.get('id') || "";
         if (!currentQuizId || isSubmitted || !client) return;
 
+        const nowMs = Date.now();
+        if (!force && _lastPresencePingMs > 0 && (nowMs - _lastPresencePingMs) < 15000) {
+            return;
+        }
+        _lastPresencePingMs = nowMs;
+
         const sId = document.getElementById("student-id")?.value.trim() || cleanSbd;
         const sName = document.getElementById("student-name")?.value.trim() || "Thí sinh";
         const sClass = document.getElementById("student-class")?.value.trim() || "Lớp";
-        const nowMs = Date.now();
 
         const currentAttempt = window.currentStudentAttemptNumber || 1;
         const originStored = safeLocal.getItem(`exam_start_time_origin_${currentQuizId}_${cleanSbd}_lan${currentAttempt}`);
@@ -512,7 +530,7 @@ async function updatePresence(cleanSbd) {
         const { data: updated } = await client.from('active_sessions')
             .update({ last_ping: nowMs })
             .match({ quiz_id: currentQuizId, sbd: cleanSbd })
-            .select();
+            .select('sbd');
 
         if (!updated || updated.length === 0) {
             await client.from('active_sessions').insert([{
@@ -580,7 +598,6 @@ function startTimeWatcherRealtime(quizId) {
             const freshData = payload.new;
             if (!freshData || isSubmitted || !examStartTime) return;
 
-            // Cập nhật thời gian thi & đồng bộ ngay trên đồng hồ
             const freshMins = parseInt(freshData.time_limit_minutes, 10);
             if (!isNaN(freshMins) && freshMins > 0 && freshMins !== TIME_LIMIT_MINUTES) {
                 TIME_LIMIT_MINUTES = freshMins;
@@ -603,7 +620,6 @@ function startTimeWatcherRealtime(quizId) {
                 showTimeChangeToast(`⏱ Giáo viên vừa cập nhật thời gian: ${TIME_LIMIT_MINUTES} phút!`);
             }
 
-            // Cập nhật đồng bộ cả 2 trường khung giờ làm bài
             if (freshData.exam_start_time !== undefined || freshData.exam_end_time !== undefined) {
                 if (examData) {
                     if (freshData.exam_start_time !== undefined) {
@@ -625,13 +641,11 @@ function startTimeWatcherRealtime(quizId) {
                 showTimeChangeToast(`📅 Giáo viên vừa cập nhật lại khung giờ làm bài!`);
             }
 
-            // Cập nhật cấu hình hiển thị sĩ số
             if (freshData.show_online_count !== undefined) {
                 if (examData) examData.show_online_count = freshData.show_online_count;
                 applyOnlineCountVisibility();
             }
 
-            // ĐỒNG BỘ TIÊU ĐỀ NẾU ADMIN CẬP NHẬT TỪ SOI ĐỀ
             if (freshData.title && freshData.title !== EXAM_NAME) {
                 EXAM_NAME = freshData.title;
                 if (examData) examData.title = freshData.title;
@@ -641,7 +655,6 @@ function startTimeWatcherRealtime(quizId) {
         }).subscribe();
 }
 
-// BỘ CHỐNG THOÁT TRANG: ĐÃ FIX TRIỆT ĐỂ LỖI CRASH WEBKIT TRÊN IPHONE KHI VUỐT MÀN HÌNH
 function setupBackPrevention() { 
     try {
         window.history.pushState({ page: 'quiz' }, "", ""); 
@@ -662,7 +675,6 @@ function setupBackPrevention() {
             } 
         });
 
-        // Chuẩn hóa cho Safari iOS khi chuyển app hoặc đóng tab
         window.addEventListener('pagehide', function() {
             if (!isSubmitted && examStartTime) {
                 if (typeof window.__saveExamState === 'function') window.__saveExamState();
@@ -730,7 +742,6 @@ async function checkPendingSubmissionOnLoad() {
     updateTopBackupStatus(isSubmitted);
 }
 
-// BẢN FIX: KHI HỌC SINH TỪ ỨNG DỤNG KHÁC QUAY LẠI, PING NGAY LẬP TỨC ĐỂ ADMIN KHÔNG BỊ BÁO CHƯA THI
 document.addEventListener("visibilitychange", async function() { 
     if (wakeLockSentinel === null && !document.hidden) { 
         await requestWakeLock(); 
@@ -745,8 +756,7 @@ document.addEventListener("visibilitychange", async function() {
 
     if (!document.hidden) {
         if (!isAdminPreviewUrl) {
-            // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase!
-            updatePresence(cleanSbd);
+            updatePresence(cleanSbd, false);
 
             const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
             if (elapsedSec >= totalTimeSeconds) {
@@ -789,7 +799,7 @@ window.addEventListener("focus", function() {
     if (examStartTime && !isSubmitted) {
         const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
         const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-        updatePresence(cleanSbd);
+        updatePresence(cleanSbd, false);
     }
 });
 
