@@ -1,10 +1,10 @@
 // =========================================================
 // FILE: portal-results-core.js 
-// (BẢN FIX ĐỒNG BỘ 100%: REALTIME CHÍNH XÁC, KHÔNG BỊ MẤT ĐANG THI KHI RỜI APP)
+// (BẢN TỐI ƯU BĂNG THÔNG ~90% + CHẶN BÃO REALTIME + FIX TRÙNG TÊN LỚP 10P)
 // ĐÃ SỬA:
-// 1. LOẠI BỎ TRIỆT ĐỂ LOG "Bắt đầu Lần ..." KHỎI SỐ LẦN & THỜI GIAN CHUYỂN TAB
-// 2. SẮP XẾP LOG CHUYỂN TAB THEO THỜI GIAN TĂNG DẦN & TÁCH THEO TỪNG LẦN THI
-// 3. KHỚP SBD LINH HOẠT KỂ CẢ HẬU TỐ _lan2, _lan3
+// 1. LOẠI BỎ CỘT user_answers NẶNG KHI TẢI BẢNG TỔNG, BỎ TẢI THỪA live_drafts, LỌC active_sessions THEO quiz_id
+// 2. REALTIME CHỈ LẮNG NGHE INSERT/DELETE TRÊN active_sessions (BỎ UPDATE PING 60s), DEBOUNCE 1500ms
+// 3. FIX LỖI GHÉP NHẦM HỌC SINH TRÙNG TÊN KHI BÀI NỘP ĐÃ CÓ SBD HỢP LỆ
 // 4. GIỮ NGUYÊN MENU NỔI KHI BẢNG CẬP NHẬT NGẦM (isSilent)
 // =========================================================
 
@@ -19,13 +19,15 @@ const _examResultsCache = {};
 let _regradeFileParsedAnswers = null;
 let currentRankSortMode = 'default';
 
-// Bộ nhớ đệm lưu chỉ mục lần thi người dùng đang chọn xem theo SBD
 window._userSelectedAttemptsBySbd = window._userSelectedAttemptsBySbd || {};
 
 let realtimeSubmissionsChannel = null;
 let realtimeDebounceTimer = null;
 
-function debouncedRefreshResults(delayMs = 250) {
+const SUBMISSIONS_LITE_COLUMNS = 'id, quiz_id, sbd, student_name, class_name, score10, raw_score, correct_count, wrong_count, completion_time, spent_mins, tab_switch_count, data_string, created_at, is_free, category_id';
+const ACTIVE_SESSIONS_LITE_COLUMNS = 'sbd, name, class_name, start_time, last_ping, is_free, category_id, quiz_id, exam_title';
+
+function debouncedRefreshResults(delayMs = 1500) {
     if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
     realtimeDebounceTimer = setTimeout(() => {
         if (currentExamResultData.item) {
@@ -69,7 +71,6 @@ function isSbdMatchedFlexibly(sbd1, sbd2) {
     return v1.some(x => v2.includes(x));
 }
 
-// Sắp xếp chuỗi chi tiết đáp án theo thứ tự số câu (1, 2, ..., 10)
 function sortDataString(str) {
     if (!str) return "";
     let parts = str.split(/\s*\|\s*/);
@@ -123,7 +124,6 @@ function getSubmissionTimestamp(sub) {
     return 0;
 }
 
-// Chuẩn hóa thời gian chuyển tab ngắn gọn: "5 giây" -> "5s", "3 phút 50 giây" -> "3p50s"
 function formatShortCheatDuration(rawDur) {
     if (!rawDur) return "";
     const str = String(rawDur).trim();
@@ -134,7 +134,6 @@ function formatShortCheatDuration(rawDur) {
         .replace(/\s+/g, '');
 }
 
-// Tính chính xác Số lần chuyển tab & Thời gian chuyển tab (ví dụ: 2 lần | 5s | 10s) cho đúng lần thi đang xem
 function getAttemptCheatStats(row, targetSub = null) {
     const entries = Array.isArray(row?.cheatEntries) ? row.cheatEntries : [];
     const attempts = Array.isArray(row?.allAttempts) ? row.allAttempts : [];
@@ -171,7 +170,6 @@ function getAttemptCheatStats(row, targetSub = null) {
         const dataStrTab = extractTabCountFromDataString(sub.dataString);
         const subReported = Math.max(rawSubTab, dataStrTab);
 
-        // Nếu bài nộp ghi rõ 0 lần nhưng log chung (không có created_at) lại có dữ liệu của lần khác -> tránh gán nhầm
         let effectiveLogCount = Math.max(maxLogSwitch, durations.length);
         let effectiveDurations = durations;
         if (attempts.length > 1 && subReported === 0 && !entries.some(e => e.createdAtMs > 0)) {
@@ -196,7 +194,6 @@ function getAttemptCheatStats(row, targetSub = null) {
     return { tabCount: 0, timeString: "0s", durations: [] };
 }
 
-// BỘ LỌC CHỐNG SPAM CLICK KÉP (CHỈ LOẠI BỎ KHI NỘP TRÙNG TRONG VÒNG 2 GIÂY)
 function deduplicateAttempts(attempts) {
     if (!attempts || attempts.length <= 1) return attempts || [];
     let unique = [];
@@ -254,21 +251,23 @@ function startRealtimeSubmissionsListener(quizId) {
                 schema: 'public', 
                 table: 'submissions', 
                 filter: `quiz_id=eq.${id}` 
-            }, () => debouncedRefreshResults(250));
+            }, () => debouncedRefreshResults(1500));
 
+            // Chỉ lắng nghe INSERT (vào thi) & DELETE (nộp bài rời phòng), bỏ UPDATE ping 60s để chống bão Egress
             channel = channel.on('postgres_changes', { 
-                event: '*', 
+                event: 'INSERT', 
                 schema: 'public', 
                 table: 'active_sessions', 
                 filter: `quiz_id=eq.${id}` 
-            }, () => debouncedRefreshResults(350));
-        });
+            }, () => debouncedRefreshResults(1500));
 
-        channel = channel.on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'live_drafts' 
-        }, () => debouncedRefreshResults(350));
+            channel = channel.on('postgres_changes', { 
+                event: 'DELETE', 
+                schema: 'public', 
+                table: 'active_sessions', 
+                filter: `quiz_id=eq.${id}` 
+            }, () => debouncedRefreshResults(1500));
+        });
 
         channel.subscribe();
         realtimeSubmissionsChannel = channel;
@@ -290,9 +289,9 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
     let examTitle = item.title || "";
     let quizObj = item.quizObj || null;
 
-    if (quizId && !quizObj) {
+    if (quizId && !quizObj && !isSilent) {
         try {
-            const { data: qData } = await client.from('quizzes').select('*').eq('id', quizId).maybeSingle();
+            const { data: qData } = await client.from('quizzes').select('id, title, made, time_limit_minutes').eq('id', quizId).maybeSingle();
             if (qData) {
                 quizObj = qData;
                 if (!maDe && qData.made) maDe = qData.made;
@@ -315,37 +314,23 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             candidateCodes.push(String(quizId).trim());
         }
 
-        let [subRes, cheatRes, activeRes, draftRes] = await Promise.all([
-            client.from('submissions').select('*').in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
-            client.from('cheating_logs').select('*').in('quiz_id', candidateCodes),
-            client.from('active_sessions').select('*'),
-            client.from('live_drafts').select('*')
+        // Bỏ user_answers nặng và bỏ bảng live_drafts toàn trường để tiết kiệm ~90% băng thông
+        let [subRes, cheatRes, activeRes] = await Promise.all([
+            client.from('submissions').select(SUBMISSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
+            client.from('cheating_logs').select('id, sbd, student_name, duration_str, switch_count, created_at').in('quiz_id', candidateCodes),
+            client.from('active_sessions').select(ACTIVE_SESSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes)
         ]);
 
         let rawSubsData = subRes.data || [];
-        let allActiveData = activeRes.data || [];
-        let allDraftsData = draftRes.data || [];
+        let activeData = activeRes.data || [];
         let cheatData = cheatRes.data || [];
 
-        const candSet = new Set(candidateCodes.map(c => String(c).trim().toLowerCase()));
-        const cleanTitleNorm = normalizeName(examTitle);
-
-        let activeData = allActiveData.filter(a => {
-            if (!a) return false;
-            const qMatch = a.quiz_id && candSet.has(String(a.quiz_id).trim().toLowerCase());
-            const titleMatch = cleanTitleNorm && a.exam_title && normalizeName(a.exam_title).includes(cleanTitleNorm);
-            return qMatch || titleMatch;
-        });
-
-        let draftsData = allDraftsData.filter(d => {
-            if (!d) return false;
-            const qMatch = d.quiz_id && candSet.has(String(d.quiz_id).trim().toLowerCase());
-            const titleMatch = cleanTitleNorm && d.exam_title && normalizeName(d.exam_title).includes(cleanTitleNorm);
-            return qMatch || titleMatch;
-        });
-
         if (rawSubsData.length === 0 && examTitle && examTitle.trim() !== "") {
-            const { data: extraSubs } = await client.from('submissions').select('*').ilike('exam_title', `%${examTitle.trim()}%`).order('created_at', { ascending: true });
+            const { data: extraSubs } = await client
+                .from('submissions')
+                .select(SUBMISSIONS_LITE_COLUMNS)
+                .ilike('exam_title', `%${examTitle.trim()}%`)
+                .order('created_at', { ascending: true });
             if (extraSubs && extraSubs.length > 0) {
                 rawSubsData = extraSubs;
             }
@@ -367,7 +352,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
                 spentMins: r.spent_mins,
                 tabSwitchCount: r.tab_switch_count,
                 dataString: r.data_string,
-                userAnswers: r.user_answers,
                 timestamp: (typeof formatDateTimeFull === 'function' && tMs > 0) ? formatDateTimeFull(tMs) : (r.timestamp || r.created_at || "---"),
                 createdAt: tMs > 0 ? tMs : Date.now(),
                 isFree: r.is_free,
@@ -375,7 +359,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             };
         });
 
-        // Sắp xếp cheating_logs theo thứ tự thời gian tăng dần trong JS (an toàn kể cả nếu thiếu created_at)
         const sortedCheatRows = [...cheatData].sort((a, b) => {
             const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
             const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
@@ -401,7 +384,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             const rawKey = String(a.sbd).trim();
             const cleanKey = cleanSbdStandard(a.sbd);
             const sessObj = {
-                id: a.id,
                 sbd: a.sbd,
                 name: a.name || a.student_name,
                 className: a.class_name,
@@ -416,25 +398,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             if (cleanKey) activeSessionsMap[cleanKey] = sessObj;
         });
 
-        const liveDraftsMap = {};
-        draftsData.forEach(d => {
-            if (!d || !d.sbd) return;
-            const cleanKey = cleanSbdStandard(d.sbd);
-            liveDraftsMap[cleanKey] = {
-                id: d.id,
-                sbd: d.sbd,
-                name: d.student_name,
-                className: d.class_name,
-                userAnswers: d.user_answers || {},
-                score10: d.score10,
-                correctCount: d.correct_count,
-                lastUpdated: d.last_updated,
-                categoryId: d.category_id,
-                quizId: d.quiz_id,
-                examTitle: d.exam_title
-            };
-        });
-
         const targetCatId = item.categoryId || currentExamResultData.categoryId || "them-11";
         const examMeta = { quizId, maDe, examTitle, quizObj };
 
@@ -442,11 +405,11 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             submissionsListRaw: rawSubs,
             cheatingLogsData: cheatingLogsList,
             activeSessionsData: activeSessionsMap,
-            liveDraftsData: liveDraftsMap,
+            liveDraftsData: {},
             examMeta: examMeta
         };
 
-        renderExamResultTable(targetCatId, rawSubs, cheatingLogsList, activeSessionsMap, liveDraftsMap, item, examMeta, { isSilent });
+        renderExamResultTable(targetCatId, rawSubs, cheatingLogsList, activeSessionsMap, {}, item, examMeta, { isSilent });
 
     } catch(err) {
         console.error("❌ Lỗi nạp bảng điểm Supabase:", err);
@@ -474,7 +437,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
         const dur = String(log.durationStr || "").trim();
         const sCount = parseInt(log.switchCount, 10) || 0;
 
-        // LỌC BỎ TRIỆT ĐỂ "Bắt đầu", "Bắt đầu Lần 1", "Bắt đầu Lần 2"... và các dòng không có chuyển tab thực tế
         if (!dur || /^bắt\s*đầu/i.test(dur) || dur === "---") return;
         if (sCount <= 0 && !/\d+\s*(?:giây|phút|s|p|m)/i.test(dur)) return;
 
@@ -526,9 +488,14 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
 
         let matchedSubs = [];
         for (let sub of submissionsList) {
-            let isSbdMatch = isSbdMatchedFlexibly(acc.sbd, sub.sbd || sub.studentId);
+            if (usedSubIds.has(sub.id)) continue;
+            const subSbdRaw = sub.sbd || sub.studentId || "";
+            const hasValidSubSbd = Boolean(subSbdRaw && String(subSbdRaw).trim() !== "" && String(subSbdRaw).trim() !== "---");
+
+            let isSbdMatch = hasValidSubSbd && isSbdMatchedFlexibly(acc.sbd, subSbdRaw);
             let subNameNorm = typeof normalizeName === 'function' ? normalizeName(sub.studentName || sub.name) : "";
-            let isNameMatch = (accNameNorm && subNameNorm && accNameNorm === subNameNorm);
+            // Chỉ khớp theo tên khi bài nộp thiếu SBD (tránh ghép nhầm giữa 2 học sinh trùng tên cùng lớp)
+            let isNameMatch = (!hasValidSubSbd && accNameNorm && subNameNorm && accNameNorm === subNameNorm);
 
             if (isSbdMatch || isNameMatch) {
                 matchedSubs.push(sub);
