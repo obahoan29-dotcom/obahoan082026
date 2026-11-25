@@ -2,7 +2,7 @@
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
 // ĐÃ TỐI ƯU BĂNG THÔNG: BỎ .select() THỪA KHI PING & CHỐNG PING KÉP
-// ĐÃ TỐI ƯU HOÀN TOÀN CHO IPHONE TRONG TRÌNH DUYỆT NHÚNG MESSENGER & SAFARI (IOS WEBKIT)
+// ĐÃ FIX: BẢO ĐẢM GHI NHẬN active_sessions 100% KỂ CẢ KHI MẠNG CHẬM HOẶC TẮT PING
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -28,6 +28,7 @@ let totalQuestionsCount = 0;
 let currentActiveQId = null;
 let pendingSubmissionPayload = null;
 let presenceInterval = null;
+let presenceConfirmRetryTimer = null;
 let realtimeConfigChannel = null;
 let onlineRealtimeChannel = null;
 let forceSubmitRealtimeChannel = null;
@@ -483,20 +484,34 @@ async function startPresenceSystem(sId) {
         clearInterval(presenceInterval);
         presenceInterval = null;
     }
+    if (presenceConfirmRetryTimer) {
+        clearTimeout(presenceConfirmRetryTimer);
+        presenceConfirmRetryTimer = null;
+    }
+
+    // Bảo đảm luôn ghi nhận được ít nhất 1 lần lên active_sessions ngay cả khi tắt ping định kỳ (intervalSec === 0)
+    if (!window.__activeSessionConfirmed) {
+        if (!window.__lastPresencePingMs || (Date.now() - window.__lastPresencePingMs) > 4000) {
+            updatePresence(cleanSbd, true);
+        }
+        presenceConfirmRetryTimer = setTimeout(() => {
+            if (!isSubmitted && !window.__activeSessionConfirmed) {
+                updatePresence(cleanSbd, true);
+            }
+        }, 4000);
+    } else if (intervalSec > 0 && (!window.__lastPresencePingMs || (Date.now() - window.__lastPresencePingMs) > 5000)) {
+        updatePresence(cleanSbd, false);
+    }
 
     if (intervalSec > 0) {
-        // Nếu executeStartExamAPI vừa mới ghi danh cách đây < 5s -> không cần ping lặp lại ở giây 0
-        if (!window.__lastPresencePingMs || (Date.now() - window.__lastPresencePingMs) > 5000) {
-            updatePresence(cleanSbd);
-        }
         presenceInterval = setInterval(() => { 
-            updatePresence(cleanSbd); 
+            updatePresence(cleanSbd, false); 
         }, intervalSec * 1000);
     }
 }
 
-// BẢN TỐI ƯU ĐIỂM 2: BỎ .select() THỪA KHI PING (GIẢM RESPONSE TỪ ~1KB XUỐNG 0 BYTE) + CHỐNG PING KÉP 3S
-async function updatePresence(cleanSbd) {
+// BẢN TỐI ƯU: BỎ .select() THỪA KHI PING (0 BYTE BODY) + XỬ LÝ count === null + TRÙNG KHÓA 23505
+async function updatePresence(cleanSbd, forceImmediate = false) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         const urlParams = new URLSearchParams(window.location.search); 
@@ -504,10 +519,9 @@ async function updatePresence(cleanSbd) {
         if (!currentQuizId || isSubmitted || !client) return;
 
         const nowMs = Date.now();
-        if (window.__lastPresencePingMs && (nowMs - window.__lastPresencePingMs) < 3000) {
+        if (!forceImmediate && window.__lastPresencePingMs && (nowMs - window.__lastPresencePingMs) < 3000) {
             return;
         }
-        window.__lastPresencePingMs = nowMs;
 
         // Chỉ update last_ping với count: 'exact' và KHÔNG gọi .select() -> returning minimal (0 byte body)
         const { error: upErr, count } = await client
@@ -515,7 +529,13 @@ async function updatePresence(cleanSbd) {
             .update({ last_ping: nowMs }, { count: 'exact' })
             .match({ quiz_id: currentQuizId, sbd: cleanSbd });
 
-        if (!upErr && count === 0) {
+        if (!upErr && typeof count === 'number' && count > 0) {
+            window.__activeSessionConfirmed = true;
+            window.__lastPresencePingMs = nowMs;
+            return;
+        }
+
+        if (upErr || count === null || count === 0) {
             const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || cleanSbd;
             const sName = document.getElementById("student-name")?.value.trim() || safeLocal.getItem("saved_student_name") || "Thí sinh";
             const rawClass = document.getElementById("student-class")?.value.trim() || safeLocal.getItem("saved_student_class") || "Lớp";
@@ -530,7 +550,7 @@ async function updatePresence(cleanSbd) {
             const reliableStartTime = (!isNaN(parsedOrigin) && parsedOrigin > 0) ? parsedOrigin : (examStartTime || nowMs);
             const isFree = !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, currentCat));
 
-            await client.from('active_sessions').insert([{
+            const { error: insErr } = await client.from('active_sessions').insert([{
                 quiz_id: currentQuizId,
                 sbd: cleanSbd,
                 name: sName,
@@ -542,6 +562,24 @@ async function updatePresence(cleanSbd) {
                 start_time: reliableStartTime,
                 last_ping: nowMs
             }]);
+
+            if (!insErr) {
+                window.__activeSessionConfirmed = true;
+                window.__lastPresencePingMs = nowMs;
+            } else {
+                const errCode = String(insErr.code || "");
+                const errMsg = String(insErr.message || "").toLowerCase();
+                if (errCode === '23505' || errMsg.includes('duplicate') || errMsg.includes('unique')) {
+                    const { error: retryErr } = await client
+                        .from('active_sessions')
+                        .update({ last_ping: nowMs })
+                        .match({ quiz_id: currentQuizId, sbd: cleanSbd });
+                    if (!retryErr) {
+                        window.__activeSessionConfirmed = true;
+                        window.__lastPresencePingMs = nowMs;
+                    }
+                }
+            }
         }
     } catch(e) {}
 }
@@ -551,6 +589,12 @@ function clearPresence(sId) {
         clearInterval(presenceInterval);
         presenceInterval = null;
     }
+    if (presenceConfirmRetryTimer) {
+        clearTimeout(presenceConfirmRetryTimer);
+        presenceConfirmRetryTimer = null;
+    }
+    window.__activeSessionConfirmed = false;
+
     const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
     
     if (onlineRealtimeChannel && client) {
@@ -595,7 +639,6 @@ function startTimeWatcherRealtime(quizId) {
             const freshData = payload.new;
             if (!freshData || isSubmitted || !examStartTime) return;
 
-            // Cập nhật thời gian thi & đồng bộ ngay trên đồng hồ
             const freshMins = parseInt(freshData.time_limit_minutes, 10);
             if (!isNaN(freshMins) && freshMins > 0 && freshMins !== TIME_LIMIT_MINUTES) {
                 TIME_LIMIT_MINUTES = freshMins;
@@ -618,7 +661,6 @@ function startTimeWatcherRealtime(quizId) {
                 showTimeChangeToast(`⏱ Giáo viên vừa cập nhật thời gian: ${TIME_LIMIT_MINUTES} phút!`);
             }
 
-            // Cập nhật đồng bộ cả 2 trường khung giờ làm bài
             if (freshData.exam_start_time !== undefined || freshData.exam_end_time !== undefined) {
                 if (examData) {
                     if (freshData.exam_start_time !== undefined) {
@@ -640,13 +682,11 @@ function startTimeWatcherRealtime(quizId) {
                 showTimeChangeToast(`📅 Giáo viên vừa cập nhật lại khung giờ làm bài!`);
             }
 
-            // Cập nhật cấu hình hiển thị sĩ số
             if (freshData.show_online_count !== undefined) {
                 if (examData) examData.show_online_count = freshData.show_online_count;
                 applyOnlineCountVisibility();
             }
 
-            // ĐỒNG BỘ TIÊU ĐỀ NẾU ADMIN CẬP NHẬT TỪ SOI ĐỀ
             if (freshData.title && freshData.title !== EXAM_NAME) {
                 EXAM_NAME = freshData.title;
                 if (examData) examData.title = freshData.title;
@@ -656,7 +696,6 @@ function startTimeWatcherRealtime(quizId) {
         }).subscribe();
 }
 
-// BỘ CHỐNG THOÁT TRANG: ĐÃ FIX TRIỆT ĐỂ LỖI CRASH WEBKIT TRÊN IPHONE KHI VUỐT MÀN HÌNH
 function setupBackPrevention() { 
     try {
         window.history.pushState({ page: 'quiz' }, "", ""); 
@@ -677,7 +716,6 @@ function setupBackPrevention() {
             } 
         });
 
-        // Chuẩn hóa cho Safari iOS khi chuyển app hoặc đóng tab
         window.addEventListener('pagehide', function() {
             if (!isSubmitted && examStartTime) {
                 if (typeof window.__saveExamState === 'function') window.__saveExamState();
@@ -689,6 +727,10 @@ function setupBackPrevention() {
         const banner = document.getElementById("net-status-banner");
         if (banner) banner.style.display = "none"; 
         checkPendingSubmissionOnLoad(); 
+        if (examStartTime && !isSubmitted && !window.__activeSessionConfirmed) {
+            const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
+            if (sId) updatePresence(sId.replace(/[^a-zA-Z0-9]/g, '_'), true);
+        }
     }); 
     window.addEventListener('offline', function() { 
         const banner = document.getElementById("net-status-banner");
@@ -745,7 +787,6 @@ async function checkPendingSubmissionOnLoad() {
     updateTopBackupStatus(isSubmitted);
 }
 
-// BẢN FIX: KHI HỌC SINH TỪ ỨNG DỤNG KHÁC QUAY LẠI, PING NGAY LẬP TỨC ĐỂ ADMIN KHÔNG BỊ BÁO CHƯA THI
 document.addEventListener("visibilitychange", async function() { 
     if (wakeLockSentinel === null && !document.hidden) { 
         await requestWakeLock(); 
@@ -760,8 +801,7 @@ document.addEventListener("visibilitychange", async function() {
 
     if (!document.hidden) {
         if (!isAdminPreviewUrl) {
-            // Học sinh vừa quay lại bài thi: lập tức ping ngay lên Supabase (có cooldown chống dội 3s)!
-            updatePresence(cleanSbd);
+            updatePresence(cleanSbd, !window.__activeSessionConfirmed);
 
             const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
             if (elapsedSec >= totalTimeSeconds) {
@@ -804,7 +844,7 @@ window.addEventListener("focus", function() {
     if (examStartTime && !isSubmitted) {
         const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
         const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
-        updatePresence(cleanSbd);
+        updatePresence(cleanSbd, !window.__activeSessionConfirmed);
     }
 });
 
@@ -836,6 +876,7 @@ window.refreshOnlineCount = refreshOnlineCount;
 window.applyOnlineCountVisibility = applyOnlineCountVisibility;
 window.handleOnlineCountClick = handleOnlineCountClick;
 window.startPresenceSystem = startPresenceSystem;
+window.updatePresence = updatePresence;
 window.clearPresence = clearPresence;
 window.checkPendingSubmissionOnLoad = checkPendingSubmissionOnLoad;
 window.getStorageKey = getStorageKey;
