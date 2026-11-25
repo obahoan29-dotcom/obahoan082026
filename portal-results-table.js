@@ -563,7 +563,6 @@ let _fitResizeTimer = null;
         }
         .attempt-picker-wrapper { position: relative !important; display: inline-block !important; }
 
-        /* Không dùng !important cho position/top/left ở đây để Portal định vị fixed chuẩn xác */
         .attempt-dropdown-menu {
             display: none;
             position: absolute;
@@ -586,7 +585,6 @@ let _fitResizeTimer = null;
         .attempt-menu-item:hover { background: #f1f5f9 !important; }
         .attempt-menu-item.selected { background: #ede9fe !important; color: #6d28d9 !important; font-weight: 900 !important; }
 
-        /* PORTAL GẮN TRỰC TIẾP VÀO DOCUMENT.BODY: LUÔN NỔI TRÊN CÙNG MỌI DÒNG & MỌI ZOOM */
         #result-floating-dropdown-portal {
             position: fixed !important;
             inset: 0 !important;
@@ -626,9 +624,6 @@ let _fitResizeTimer = null;
     document.head.appendChild(style);
 })();
 
-// ============================================================================
-// BỘ PORTAL FLOATING DROPDOWN: GẮN VÀO DOCUMENT.BODY, THOÁT MỌI STACKING CONTEXT
-// ============================================================================
 function ensureResultFloatingPortal() {
     let portal = document.getElementById("result-floating-dropdown-portal");
     if (!portal) {
@@ -873,7 +868,6 @@ function computeAndApplyFitAllRows() {
         const availW = scrollWrap.clientWidth;
         if (availH <= 0 || availW <= 0) return;
 
-        // Cỡ chữ tối đa phù hợp chiều ngang 17 cột (trên màn 1536px -> ~14px, 1920px -> ~16px, 1280px -> ~12px)
         const maxFsByWidth = Math.min(18, Math.max(9.5, Math.floor((availW / 106) * 2) / 2));
 
         let chosenFs = 9.0;
@@ -908,7 +902,6 @@ function computeAndApplyFitAllRows() {
         table.style.fontSize = chosenFs + "px";
         applyModalZoomLevel(chosenZoom);
 
-        // Tinh chỉnh thêm nếu vẫn còn dư 1-2px cuộn dọc hoặc ngang
         let guard = 0;
         while (
             (scrollWrap.scrollHeight > scrollWrap.clientHeight + 2 || scrollWrap.scrollWidth > scrollWrap.clientWidth + 2) &&
@@ -1505,7 +1498,8 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     initTableSettings();
     attachTableScrollCloseListener();
 
-    const cacheKey = `${catId}_${item.firebaseId || item.id || item.title}`;
+    const effectiveQuizId = extractQuizIdFromItem(item) || item.firebaseId || item.id || item.title;
+    const cacheKey = `${catId}_${effectiveQuizId}`;
     if (_examResultsCache[cacheKey]) {
         const cached = _examResultsCache[cacheKey];
         renderExamResultTable(catId, cached.submissionsListRaw || cached.submissionsMap || [], cached.cheatingLogsData, cached.activeSessionsData, {}, item, cached.examMeta);
@@ -1516,7 +1510,6 @@ async function openExamResultModal(item, categoryIdOrEvent, maybeEvent) {
     renderExamPickerDropdown();
     setTimeout(initTableResizable, 50);
 
-    const effectiveQuizId = extractQuizIdFromItem(item) || item.firebaseId || item.id;
     if (typeof startRealtimeSubmissionsListener === 'function') {
         startRealtimeSubmissionsListener(effectiveQuizId);
     }
@@ -1692,8 +1685,15 @@ function ensureActionColumnHeaders() {
     }
 }
 
+function stopLiveDoingTicker() {
+    if (_liveDoingTickerInterval) {
+        clearInterval(_liveDoingTickerInterval);
+        _liveDoingTickerInterval = null;
+    }
+}
+
 function startLiveDoingTicker() {
-    if (_liveDoingTickerInterval) clearInterval(_liveDoingTickerInterval);
+    stopLiveDoingTicker();
     _liveDoingTickerInterval = setInterval(() => {
         const timerEls = document.querySelectorAll(".live-doing-timer-val");
         if (!timerEls || timerEls.length === 0) return;
@@ -2007,6 +2007,7 @@ document.addEventListener("click", function(event) {
 
 window.closeAllResultFloatingDropdowns = closeAllResultFloatingDropdowns;
 window.resetResultModalZoomOnClose = resetResultModalZoomOnClose;
+window.stopLiveDoingTicker = stopLiveDoingTicker;
 window.handleClickStudentDetails = handleClickStudentDetails;
 window.toggleAttemptMenu = toggleAttemptMenu;
 window.selectStudentAttempt = selectStudentAttempt;
