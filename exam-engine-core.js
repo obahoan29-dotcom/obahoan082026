@@ -1,7 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ: CHỐNG TỰ THOÁT RA TRANG CHỦ, ĐỒNG HỒ LUÔN ĐẾM LÙI CHUẨN XÁC,
-//  HỖ TRỢ ID CHUỖI, ĐỒNG BỘ HẠN THI, BẢO VỆ F5 KHI KHÔNG CÓ LOCALSTORAGE)
+// (BẢN FIX TRIỆT ĐỂ + CACHE ĐỀ THI 5 PHÚT CHO HỌC SINH GIẢM BĂNG THÔNG KHI F5)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -12,7 +11,6 @@ window.SECURE_VAULT = window.SECURE_VAULT || {
     questionData: {}
 };
 
-// BẢO LƯU TOÀN BỘ CẤU TRÚC ĐỀ GỐC CHƯA XÁO TRỘN ĐỂ DÙNG CHẤM ĐIỂM
 window.ORIGINAL_EXAM_DATA = null;
 
 let hasInitExamEngine = false;
@@ -145,7 +143,7 @@ async function ensureActiveSessionAndDraft() {
                     last_ping: nowMs
                 })
                 .match({ quiz_id: quizId, sbd: cleanSbd })
-                .select();
+                .select('sbd');
 
             if (!updatedAct || updatedAct.length === 0) {
                 await client.from('active_sessions').insert([{
@@ -165,7 +163,6 @@ async function ensureActiveSessionAndDraft() {
     } catch(err) {}
 }
 
-// BỘ PHIÊN DỊCH TỪ ĐÁP ÁN UI (BỊ TRỘN) SANG ĐÁP ÁN GỐC CỦA ĐỀ (HỖ TRỢ CẢ ID SỐ VÀ ID CHUỖI qb_...)
 function translateUserAnswersToOriginal(uiAnswers, shuffledQuestions) {
     if (!window.ORIGINAL_EXAM_DATA || !Array.isArray(shuffledQuestions)) return uiAnswers;
     let origAnswers = {};
@@ -450,6 +447,45 @@ function parseUniversalDate(str) {
     return null;
 }
 
+async function fetchQuizWithSmartCache(client, quizId, isAdminMode, isReview) {
+    const cacheKey = `exam_quiz_cache_${quizId}`;
+    const QUIZ_CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+    const META_COLS = 'id, title, made, time_limit_minutes, exam_start_time, exam_end_time, allow_free, result_mode, allow_review_original, show_online_count, allow_export_exam, is_shuffled, scoring_config';
+
+    if (!isAdminMode && !isReview) {
+        try {
+            const rawCache = safeLocal.getItem(cacheKey);
+            if (rawCache) {
+                const parsedCache = JSON.parse(rawCache);
+                if (parsedCache && parsedCache.data && Array.isArray(parsedCache.data.questions) && parsedCache.data.questions.length > 0) {
+                    if ((Date.now() - (Number(parsedCache.cachedAt) || 0)) < QUIZ_CACHE_TTL_MS) {
+                        // Chỉ fetch phần metadata cấu hình (~400 bytes) để cập nhật giờ thi / chế độ mới nhất của Thầy
+                        const metaPromise = client.from('quizzes').select(META_COLS).eq('id', quizId).single();
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
+                        const { data: freshMeta, error: metaErr } = await Promise.race([metaPromise, timeoutPromise]);
+                        if (!metaErr && freshMeta) {
+                            return { ...parsedCache.data, ...freshMeta };
+                        }
+                        return parsedCache.data;
+                    }
+                }
+            }
+        } catch(e) {}
+    }
+
+    const fetchPromise = client.from('quizzes').select('*').eq('id', quizId).single();
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Mạng kết nối tới máy chủ quá thời gian")), 8000));
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+    if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
+
+    if (!isAdminMode && Array.isArray(data.questions) && data.questions.length > 0) {
+        try {
+            safeLocal.setItem(cacheKey, JSON.stringify({ cachedAt: Date.now(), data: data }));
+        } catch(e) {}
+    }
+    return data;
+}
+
 async function initExamEngine() {
     if (hasInitExamEngine) return;
     hasInitExamEngine = true;
@@ -460,6 +496,7 @@ async function initExamEngine() {
     const quizId = urlParams.get('id');
     const isAdminPreviewUrl = (urlParams.get('admin') === '1');
     const isAdminMode = isAdminPreviewUrl || (typeof checkIsAdminPreviewMode === 'function' && checkIsAdminPreviewMode());
+    const isReviewMode = (urlParams.get('review') === "1");
     const isAutostart = (urlParams.get('autostart') === "1") || isAdminPreviewUrl;
 
     const hideLoading = () => {
@@ -477,11 +514,7 @@ async function initExamEngine() {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
         if (!client) throw new Error("Chưa khởi tạo được Supabase Client");
 
-        const fetchPromise = client.from('quizzes').select('*').eq('id', quizId).single();
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Mạng kết nối tới máy chủ quá thời gian")), 8000));
-        
-        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
-        if (error || !data) throw new Error("Mã đề thi không tồn tại trên hệ thống!");
+        const data = await fetchQuizWithSmartCache(client, quizId, isAdminMode, isReviewMode);
 
         const rawQuestions = Array.isArray(data.questions) ? data.questions : [];
         const rawImages = (data.images && typeof data.images === 'object') ? { ...data.images } : {};
@@ -504,10 +537,9 @@ async function initExamEngine() {
             scoringConfig: data.scoring_config
         };
 
-        // BẢO LƯU ĐỀ GỐC TRƯỚC KHI TRỘN VÀ HIỂN THỊ UI
         window.ORIGINAL_EXAM_DATA = JSON.parse(JSON.stringify(examData));
 
-        if (urlParams.get('review') === "1") {
+        if (isReviewMode) {
             if (examData.allowReviewOriginal !== true && !isAdminMode) {
                 hideLoading();
                 showError("Bị Khóa", "Giáo viên đã tắt tính năng xem đáp án gốc của đề thi này.");
@@ -537,7 +569,7 @@ async function initExamEngine() {
         }
 
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
-        if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
+        if (typeof refreshOnlineCount === 'function') refreshOnlineCount(false);
 
         fetchExamQuestions(isAutostart);
         setupBackPrevention();
@@ -581,14 +613,12 @@ function shuffleArray(arr) {
     return array;
 }
 
-// BỘ TRỘN CÂU HỎI & PHƯƠNG ÁN A,B,C,D (ĐÃ FIX TẠO MAP ÁNH XẠ originalLettersMap)
 function shuffleExamData(data) {
     if (!data || !data.questions) return;
     const isP4 = typeof isPart4Question === 'function' ? isPart4Question : (q => (q.part === 4 || q.isPart4 === true || q.type === "essay" || q.type === "essay_answer"));
     const letters = ["A", "B", "C", "D"];
     const tfLetters = ['a', 'b', 'c', 'd'];
     
-    // 1. TRỘN ĐÁP ÁN TRONG TỪNG CÂU HỎI TRƯỚC
     data.questions.forEach(q => {
         if (q.type === "multiple_choice" && !isP4(q) && Array.isArray(q.options) && q.options.length > 0) {
             let originalCorrectIdx = 0;
@@ -628,7 +658,6 @@ function shuffleExamData(data) {
         }
     });
 
-    // 2. TRỘN THỨ TỰ CÂU HỎI TRONG TỪNG PHẦN
     let p1 = shuffleArray(data.questions.filter(q => q.type === "multiple_choice" && !isP4(q)));
     let p2 = shuffleArray(data.questions.filter(q => q.type === "true_false" && !isP4(q)));
     let p3 = shuffleArray(data.questions.filter(q => (q.type === "short_answer") && !isP4(q)));
@@ -691,7 +720,6 @@ function resetToFreshLoginScreen() {
         return;
     }
 
-    // Chuyển về Modal đăng nhập mới trên trang chủ (không còn bảng đăng nhập cũ)
     redirectToPortalNewLogin(quizId, cat);
 }
 
@@ -741,7 +769,6 @@ async function checkSessionStatus(isAutostart = false) {
         return;
     }
 
-    // Nếu Admin bấm "View đề & Đổi ảnh" (admin=1&autostart=1) thì luôn mở phiên mới để đồng hồ đếm lùi đủ từ đầu
     if (isAdminPreviewUrl && isAutostart) {
         try {
             const cleanSbd = String(sId || "Trying").replace(/[^a-zA-Z0-9]/g, '_');
@@ -811,7 +838,7 @@ async function checkSessionStatus(isAutostart = false) {
         updateProgress(); 
         
         if (typeof applyOnlineCountVisibility === 'function') applyOnlineCountVisibility();
-        if (typeof refreshOnlineCount === 'function') refreshOnlineCount();
+        if (typeof refreshOnlineCount === 'function') refreshOnlineCount(false);
         if (typeof checkAndDisplayAdminSoiDeButton === 'function') checkAndDisplayAdminSoiDeButton();
 
         const elapsedTimeSec = Math.max(0, Math.floor((Date.now() - examStartTime) / 1000)); 
@@ -840,7 +867,6 @@ async function checkSessionStatus(isAutostart = false) {
     if (document.getElementById("student-name")) document.getElementById("student-name").value = sNameVal;
     if (document.getElementById("student-class")) document.getElementById("student-class").value = sClassVal;
 
-    // Cho phép vào thẳng đề khi có autostart, admin=1, HOẶC đã có sẵn thông tin thí sinh hợp lệ (chống đá ra trang chủ khi F5 trên iOS/in-app browser)
     if (isAutostart || isAdminPreviewUrl || (sIdVal && sNameVal && !isCleared)) {
         if (sIdVal && sNameVal) {
             if (typeof startExamAction === 'function') {
@@ -851,7 +877,6 @@ async function checkSessionStatus(isAutostart = false) {
                         hideLoading();
                         return;
                     }
-                    // Nếu startExamAction trả về false nhưng đang có thông tin hoặc ở chế độ Admin: báo lỗi thay vì tự thoát về trang chủ
                     if (isAdminPreviewUrl) {
                         hideLoading();
                         showError("Không thể khởi tạo chế độ xem thử Admin", "Vui lòng bấm tải lại trang hoặc kiểm tra lại mã đề.");
@@ -871,7 +896,6 @@ async function checkSessionStatus(isAutostart = false) {
         }
     }
 
-    // Chỉ chuyển về Modal đăng nhập mới trên trang chủ khi thực sự chưa có thông tin đăng nhập (và không phải Admin xem thử)
     hideLoading();
     if (!isAdminPreviewUrl) {
         redirectToPortalNewLogin(quizId, cat);
@@ -1129,7 +1153,6 @@ function formatHHMMSS(totalSecs) {
     return `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`; 
 }
 
-// BỘ ĐẾM NGƯỢC ĐÃ FIX: LUÔN CHẠY ĐẾM LÙI TỪNG GIÂY Ở MỌI CHẾ ĐỘ (KỂ CẢ ADMIN TEST & HỌC SINH)
 function startCountdownTimer() { 
     if (isExamLocked) return;
     const timerVal = document.getElementById("nav-timer-val"); 
@@ -1204,7 +1227,6 @@ function startCountdownTimer() {
         else if (timerBox) timerBox.classList.remove("timer-warning");
     };
 
-    // Cập nhật ngay ở giây 0 để tránh chớp 00:45:00 mặc định trong HTML
     tickCountdown();
     if (!isExamLocked && !isSubmitted) {
         timerInterval = setInterval(tickCountdown, 1000); 
