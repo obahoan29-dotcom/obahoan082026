@@ -3,9 +3,11 @@
 // BẢNG KẾT QUẢ THI: ĐÃ BỔ SUNG CẢM ỨNG 2 NGÓN TAY PHÓNG TO THU NHỎ
 // ĐÃ FIX TRIỆT ĐỂ:
 // 1. VỪA MÀN HIỂN THỊ ĐỦ 100% CẢ 17 CỘT TRÊN 1 MÀN HÌNH (KHÔNG TRÀN PHẢI)
-// 2. PHÓNG TO CỠ CHỮ TỐI ĐA CÓ THỂ KHI Ở CHẾ ĐỘ VỪA MÀN (TỰ CẬP NHẬT KHI LỌC/RESIZE)
-// 3. PORTAL MENU LẦN THI / XẾP HẠNG / SỐ ĐỀ THI RA DOCUMENT.BODY NỔI TRÊN CÙNG,
-//    KHÔNG BAO GIỜ BỊ CHÌM SAU CÁC DÒNG HAY LỆCH VỊ TRÍ KHI BẬT VỪA MÀN / ZOOM
+// 2. MENU LẦN THI (2 LẦN), XẾP HẠNG & SỐ ĐỀ THI LUÔN NỔI TRÊN CÙNG (z-index: 2147483647)
+//    BÊN TRONG #result-floating-dropdown-portal ĐỘC LẬP TRÊN DOCUMENT.BODY
+// 3. TÍNH TỌA ĐỘ CHUẨN XÁC BẤT CHẤP CSS ZOOM (CHROME/EDGE/SAFARI/FIREFOX)
+// 4. KHÔNG TỰ ĐÓNG MENU KHI BẢNG CẬP NHẬT NGẦM (REALTIME / AUTO-REFRESH)
+// 5. HIỂN THỊ CHUẨN SỐ LẦN & THỜI GIAN CHUYỂN TAB (5s | 10s, KHÔNG CÓ "Bắt đầuLần1")
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -14,6 +16,7 @@ let _liveDoingTickerInterval = null;
 let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 let _fitResizeTimer = null;
+let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key: string }
 
 (function injectAttemptDropdownStyles() {
     const styleId = "status-attempt-dropdown-styles";
@@ -185,27 +188,29 @@ let _fitResizeTimer = null;
         }
 
         .result-modal-stats-bar {
-            padding: 1px 8px !important;
+            padding: 2px 8px !important;
             font-size: 10px !important;
-            min-height: 20px !important;
-            height: 22px !important;
+            min-height: 22px !important;
+            height: auto !important;
             gap: 3px !important;
             background: #f8fafc !important;
             border-bottom: 1px solid #e2e8f0 !important;
             box-sizing: border-box !important;
+            justify-content: flex-start !important;
         }
 
         .result-modal-stats-bar .stat-badge-item {
-            padding: 0px 4px !important;
+            padding: 0px 5px !important;
             font-size: 9.5px !important;
-            border-radius: 4px !important;
+            border-radius: 5px !important;
             height: 18px !important;
             display: inline-flex !important;
             align-items: center !important;
+            flex-shrink: 0 !important;
         }
 
         #btn-view-detailed-stats {
-            padding: 1px 6px !important;
+            padding: 1px 7px !important;
             font-size: 9.5px !important;
             height: 18px !important;
             border-radius: 9px !important;
@@ -343,10 +348,10 @@ let _fitResizeTimer = null;
         .result-table.table-fitted-compact th:nth-child(1) { width: 2.5% !important; }
         .result-table.table-fitted-compact th.td-exam-col,
         .result-table.table-fitted-compact th:nth-child(2) { width: 9.0% !important; }
-        .result-table.table-fitted-compact th:nth-child(3) { width: 4.7% !important; }
+        .result-table.table-fitted-compact th:nth-child(3) { width: 4.8% !important; }
         .result-table.table-fitted-compact th:nth-child(4) { width: 8.2% !important; }
         .result-table.table-fitted-compact th:nth-child(5) { width: 6.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(6) { width: 10.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(6) { width: 10.7% !important; }
         .result-table.table-fitted-compact th:nth-child(7) { width: 3.3% !important; }
         .result-table.table-fitted-compact th:nth-child(8) { width: 4.3% !important; }
         .result-table.table-fitted-compact th:nth-child(9) { width: 6.6% !important; }
@@ -532,10 +537,11 @@ let _fitResizeTimer = null;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
+            gap: 3px !important;
             background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
             color: #ffffff !important;
             border: none !important;
-            padding: 3px 12px !important;
+            padding: 3px 10px !important;
             border-radius: 14px !important;
             font-size: 12px !important;
             font-weight: 800 !important;
@@ -545,6 +551,8 @@ let _fitResizeTimer = null;
             user-select: none !important;
             white-space: nowrap !important;
         }
+        .btn-attempt-badge-multi:hover { filter: brightness(1.1); transform: scale(1.04); }
+
         .btn-attempt-badge-single {
             display: inline-flex !important;
             align-items: center !important;
@@ -552,7 +560,7 @@ let _fitResizeTimer = null;
             background: #ffffff !important;
             color: #1e293b !important;
             border: 1.2px solid #cbd5e1 !important;
-            padding: 3px 12px !important;
+            padding: 3px 10px !important;
             border-radius: 14px !important;
             font-size: 12px !important;
             font-weight: 800 !important;
@@ -561,73 +569,114 @@ let _fitResizeTimer = null;
             transition: all 0.15s ease !important;
             white-space: nowrap !important;
         }
+        .btn-attempt-badge-single:hover { border-color: #0284c7 !important; color: #0284c7 !important; }
+
         .attempt-picker-wrapper { position: relative !important; display: inline-block !important; }
 
-        /* Không dùng !important cho position/top/left ở đây để Portal định vị fixed chuẩn xác */
-        .attempt-dropdown-menu {
-            display: none;
-            position: absolute;
-            top: calc(100% + 4px);
-            left: 0;
-            min-width: 255px;
-            background: #ffffff;
-            border-radius: 12px;
-            box-shadow: 0 14px 35px rgba(15, 23, 42, 0.28), 0 0 0 1.5px #cbd5e1;
-            border: 1.5px solid #cbd5e1;
-            padding: 8px 10px;
-            z-index: 2147483641;
-            animation: popInBadge 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-            text-align: left;
-            white-space: nowrap;
-        }
-        .attempt-dropdown-menu.show { display: flex; flex-direction: column; gap: 4px; }
-        .attempt-dropdown-header { font-size: 11px !important; font-weight: 900 !important; color: #334155 !important; text-align: center !important; margin-bottom: 5px !important; }
-        .attempt-menu-item { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 10px !important; padding: 6px 10px !important; border-radius: 8px !important; font-size: 12px !important; font-weight: 700 !important; cursor: pointer !important; color: #0f172a !important; }
-        .attempt-menu-item:hover { background: #f1f5f9 !important; }
-        .attempt-menu-item.selected { background: #ede9fe !important; color: #6d28d9 !important; font-weight: 900 !important; }
-
-        /* PORTAL GẮN TRỰC TIẾP VÀO DOCUMENT.BODY: LUÔN NỔI TRÊN CÙNG MỌI DÒNG & MỌI ZOOM */
+        /* PORTAL ĐỘC LẬP GẮN TRỰC TIẾP VÀO DOCUMENT.BODY (KHÔNG BAO GIỜ BỊ CHÌM SAU DÒNG HAY BỊ ZOOM CẮT) */
         #result-floating-dropdown-portal {
             position: fixed !important;
             inset: 0 !important;
             pointer-events: none !important;
-            z-index: 2147483640 !important;
+            z-index: 2147483647 !important;
             zoom: 1 !important;
             transform: none !important;
-        }
-        #result-floating-dropdown-portal > * {
-            pointer-events: auto !important;
-            box-sizing: border-box !important;
-            position: fixed !important;
-            z-index: 2147483641 !important;
-            transform: none !important;
-            margin: 0 !important;
-            right: auto !important;
-            bottom: auto !important;
-            font-family: 'Be Vietnam Pro', sans-serif !important;
-        }
-        #result-floating-dropdown-portal .exam-picker-menu {
-            display: flex !important;
-            flex-direction: column !important;
-            gap: 3px !important;
-            max-width: min(380px, calc(100vw - 16px)) !important;
-        }
-        #result-floating-dropdown-portal .rank-picker-menu {
             display: block !important;
-            max-width: min(230px, calc(100vw - 16px)) !important;
         }
-        #result-floating-dropdown-portal .attempt-dropdown-menu {
+        .floating-portal-card {
+            position: fixed !important;
+            pointer-events: auto !important;
+            background: #ffffff !important;
+            border-radius: 14px !important;
+            border: 2px solid #0284c7 !important;
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.42), 0 0 0 1px rgba(2, 132, 199, 0.2) !important;
+            padding: 8px !important;
+            z-index: 2147483647 !important;
+            font-family: 'Be Vietnam Pro', sans-serif !important;
             display: flex !important;
             flex-direction: column !important;
             gap: 4px !important;
-            max-width: min(320px, calc(100vw - 16px)) !important;
+            overflow-y: auto !important;
+            animation: popInBadge 0.14s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            box-sizing: border-box !important;
+        }
+        .floating-portal-card.rank-theme {
+            border-color: #f59e0b !important;
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.42), 0 0 0 1px rgba(245, 158, 11, 0.25) !important;
+        }
+        .floating-portal-card.attempt-theme {
+            border-color: #e11d48 !important;
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.44), 0 0 0 1px rgba(225, 29, 72, 0.22) !important;
+        }
+        .floating-portal-header {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+            padding: 4px 8px 6px 8px !important;
+            border-bottom: 1.5px solid #f1f5f9 !important;
+            font-size: 11.5px !important;
+            font-weight: 900 !important;
+            color: #0f172a !important;
+            text-transform: uppercase !important;
+        }
+        .floating-portal-close {
+            border: none !important;
+            background: #f1f5f9 !important;
+            color: #64748b !important;
+            width: 22px !important;
+            height: 22px !important;
+            border-radius: 50% !important;
+            font-size: 12px !important;
+            font-weight: 900 !important;
+            cursor: pointer !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .floating-portal-close:hover { background: #fee2e2 !important; color: #dc2626 !important; }
+        .floating-portal-option {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            padding: 8px 10px !important;
+            border-radius: 9px !important;
+            font-size: 12.5px !important;
+            font-weight: 700 !important;
+            color: #1e293b !important;
+            cursor: pointer !important;
+            transition: background 0.12s ease, transform 0.1s ease !important;
+            border: 1px solid transparent !important;
+            text-align: left !important;
+        }
+        .floating-portal-option:hover {
+            background: #f0f9ff !important;
+            border-color: #bae6fd !important;
+            color: #0369a1 !important;
+        }
+        .floating-portal-option.selected {
+            background: #ede9fe !important;
+            border-color: #c4b5fd !important;
+            color: #5b21b6 !important;
+            font-weight: 900 !important;
+        }
+        .floating-portal-score-pill {
+            font-size: 12px !important;
+            font-weight: 900 !important;
+            padding: 2px 8px !important;
+            border-radius: 8px !important;
+            background: #f0fdf4 !important;
+            color: #15803d !important;
+            border: 1px solid #86efac !important;
+            white-space: nowrap !important;
         }
     `;
     document.head.appendChild(style);
 })();
 
 // ============================================================================
-// BỘ PORTAL FLOATING DROPDOWN: GẮN VÀO DOCUMENT.BODY, THOÁT MỌI STACKING CONTEXT
+// BỘ PORTAL FLOATING DROPDOWN ĐỘC LẬP & CHỐNG LỆCH TỌA ĐỘ KHI CSS ZOOM
 // ============================================================================
 function ensureResultFloatingPortal() {
     let portal = document.getElementById("result-floating-dropdown-portal");
@@ -641,40 +690,46 @@ function ensureResultFloatingPortal() {
     return portal;
 }
 
-function restorePortaledDropdownElement(menu) {
-    if (!menu) return;
-    menu.classList.remove("show");
+// Tính tọa độ màn hình thật sự của phần tử bất chấp trình duyệt có scale getBoundingClientRect() theo CSS zoom hay không
+function getZoomSafeViewportRect(el) {
+    const raw = el.getBoundingClientRect();
+    const mainView = document.getElementById("result-modal-main-view");
+    if (!mainView || !mainView.contains(el)) return raw;
 
-    if (menu.dataset.origStyle !== undefined) {
-        menu.setAttribute("style", menu.dataset.origStyle);
-        delete menu.dataset.origStyle;
-    } else {
-        menu.removeAttribute("style");
-    }
+    const currentZoom = (typeof modalCustomZoomLevel === "number" && modalCustomZoomLevel > 0) ? modalCustomZoomLevel : 1;
+    if (Math.abs(currentZoom - 1) < 0.01) return raw;
 
-    if (menu.id === "rank-sort-dropdown-menu") {
-        menu.style.display = "none";
-    }
+    // Nếu trình duyệt dùng transform: scale(...) thay cho CSS zoom (Firefox), getBoundingClientRect() đã chuẩn xác 100%
+    if (!mainView.style.zoom) return raw;
 
-    const origParent = menu._origParent;
-    if (origParent && document.body.contains(origParent)) {
-        if (menu._origNextSibling && menu._origNextSibling.parentNode === origParent) {
-            origParent.insertBefore(menu, menu._origNextSibling);
-        } else {
-            origParent.appendChild(menu);
-        }
-    } else {
-        menu.remove();
-    }
-    menu._origParent = null;
-    menu._origNextSibling = null;
+    const statsBar = document.getElementById("result-modal-stats-bar");
+    const headerBar = document.querySelector("#result-fullscreen-modal .result-modal-header");
+    const refEl = (statsBar && statsBar.offsetHeight > 0) ? statsBar : headerBar;
+    if (!refEl) return raw;
+
+    const refBottom = refEl.getBoundingClientRect().bottom;
+    const mainTop = mainView.getBoundingClientRect().top;
+
+    // Trong Chrome 128+: mainTop ≈ refBottom -> scaleFactor = 1
+    // Trong Chromium < 128 / WebView / Safari cũ: mainTop ≈ refBottom / currentZoom -> scaleFactor = currentZoom
+    const diffDirect = Math.abs(mainTop - refBottom);
+    const diffScaled = Math.abs(mainTop * currentZoom - refBottom);
+    const scaleFactor = (diffScaled + 2 < diffDirect) ? currentZoom : 1;
+
+    return {
+        left: raw.left * scaleFactor,
+        right: raw.right * scaleFactor,
+        top: raw.top * scaleFactor,
+        bottom: raw.bottom * scaleFactor,
+        width: raw.width * scaleFactor,
+        height: raw.height * scaleFactor
+    };
 }
 
 function closeAllResultFloatingDropdowns() {
+    _activeFloatingMenuMeta = null;
     const portal = document.getElementById("result-floating-dropdown-portal");
-    if (portal) {
-        Array.from(portal.children).forEach(child => restorePortaledDropdownElement(child));
-    }
+    if (portal) portal.innerHTML = "";
 
     document.querySelectorAll('.attempt-dropdown-menu.show').forEach(m => m.classList.remove('show'));
     document.querySelectorAll('.exam-picker-menu.show').forEach(m => m.classList.remove('show'));
@@ -687,66 +742,65 @@ function closeAllResultFloatingDropdowns() {
     document.querySelectorAll('th.has-active-header-menu').forEach(th => th.classList.remove('has-active-header-menu'));
 }
 
-function portalAndPositionFloatingMenu(menu, anchorEl, opts = {}) {
-    if (!menu || !anchorEl) return;
+function openPortalMenuCard(anchorEl, opts = {}) {
     const portal = ensureResultFloatingPortal();
-    if (!portal) return;
+    if (!portal || !anchorEl) return null;
 
-    if (menu.dataset.origStyle === undefined) {
-        menu.dataset.origStyle = menu.getAttribute("style") || "";
-    }
-    if (menu.parentNode !== portal) {
-        menu._origParent = menu.parentNode;
-        menu._origNextSibling = menu.nextSibling;
-        portal.appendChild(menu);
-    }
+    portal.innerHTML = "";
 
-    const maxH = Math.min(340, Math.max(150, window.innerHeight - 24));
-    const displayVal = (menu.id === "rank-sort-dropdown-menu") ? "block" : "flex";
+    const card = document.createElement("div");
+    card.className = "floating-portal-card" + (opts.themeClass ? ` ${opts.themeClass}` : "");
+    card.onclick = (e) => e.stopPropagation();
 
-    menu.style.setProperty("display", displayVal, "important");
-    menu.style.setProperty("position", "fixed", "important");
-    menu.style.setProperty("margin", "0", "important");
-    menu.style.setProperty("transform", "none", "important");
-    menu.style.setProperty("right", "auto", "important");
-    menu.style.setProperty("bottom", "auto", "important");
-    menu.style.setProperty("z-index", "2147483641", "important");
-    menu.style.setProperty("max-height", maxH + "px", "important");
-    menu.style.setProperty("overflow-y", "auto", "important");
-    if (opts.minWidth) {
-        menu.style.setProperty("min-width", Math.min(opts.minWidth, window.innerWidth - 16) + "px", "important");
-    }
+    const maxH = Math.min(360, Math.max(150, window.innerHeight - 24));
+    const minW = Math.min(opts.minWidth || 240, window.innerWidth - 16);
+    const maxW = Math.min(opts.maxWidth || 380, window.innerWidth - 16);
 
-    menu.style.setProperty("top", "0px", "important");
-    menu.style.setProperty("left", "0px", "important");
+    card.style.minWidth = minW + "px";
+    card.style.maxWidth = maxW + "px";
+    card.style.maxHeight = maxH + "px";
+    card.style.top = "0px";
+    card.style.left = "0px";
+    card.innerHTML = opts.html || "";
 
-    const anchorRect = anchorEl.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-    const menuW = menuRect.width || opts.minWidth || 220;
-    const menuH = Math.min(menuRect.height || 180, maxH);
+    portal.appendChild(card);
+
+    const anchorRect = getZoomSafeViewportRect(anchorEl);
+    const cardRect = card.getBoundingClientRect();
+    const cardW = cardRect.width || minW;
+    const cardH = Math.min(cardRect.height || 180, maxH);
 
     const spaceBelow = window.innerHeight - anchorRect.bottom - 8;
     const spaceAbove = anchorRect.top - 8;
 
     let top;
-    if (spaceBelow >= menuH || spaceBelow >= spaceAbove) {
-        top = Math.min(anchorRect.bottom + 4, window.innerHeight - menuH - 8);
+    if (opts.preferAbove) {
+        if (spaceAbove >= cardH || spaceAbove >= spaceBelow) {
+            top = Math.max(8, anchorRect.top - cardH - 5);
+        } else {
+            top = Math.min(anchorRect.bottom + 5, window.innerHeight - cardH - 8);
+        }
     } else {
-        top = Math.max(8, anchorRect.top - menuH - 4);
+        if (spaceBelow >= cardH || spaceBelow >= spaceAbove) {
+            top = Math.min(anchorRect.bottom + 5, window.innerHeight - cardH - 8);
+        } else {
+            top = Math.max(8, anchorRect.top - cardH - 5);
+        }
     }
 
     let left;
     if (opts.align === "center") {
-        left = anchorRect.left + (anchorRect.width - menuW) / 2;
+        left = anchorRect.left + (anchorRect.width - cardW) / 2;
     } else if (opts.align === "right") {
-        left = anchorRect.right - menuW;
+        left = anchorRect.right - cardW;
     } else {
         left = anchorRect.left;
     }
-    left = Math.max(8, Math.min(left, window.innerWidth - menuW - 8));
+    left = Math.max(8, Math.min(left, window.innerWidth - cardW - 8));
 
-    menu.style.setProperty("top", Math.round(top) + "px", "important");
-    menu.style.setProperty("left", Math.round(left) + "px", "important");
+    card.style.top = Math.round(top) + "px";
+    card.style.left = Math.round(left) + "px";
+    return card;
 }
 
 function attachTableScrollCloseListener() {
@@ -858,7 +912,6 @@ function resetResultModalZoomOnClose() {
     applyModalZoomLevel(1.0);
 }
 
-// TÍNH TOÁN CHÍNH XÁC ĐỂ VỪA 100% CẢ 17 CỘT + TOÀN BỘ DÒNG VỚI CỠ CHỮ LỚN NHẤT CÓ THỂ
 function computeAndApplyFitAllRows() {
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
     const table = document.getElementById("admin-result-table");
@@ -873,7 +926,6 @@ function computeAndApplyFitAllRows() {
         const availW = scrollWrap.clientWidth;
         if (availH <= 0 || availW <= 0) return;
 
-        // Cỡ chữ tối đa phù hợp chiều ngang 17 cột (trên màn 1536px -> ~14px, 1920px -> ~16px, 1280px -> ~12px)
         const maxFsByWidth = Math.min(18, Math.max(9.5, Math.floor((availW / 106) * 2) / 2));
 
         let chosenFs = 9.0;
@@ -908,7 +960,6 @@ function computeAndApplyFitAllRows() {
         table.style.fontSize = chosenFs + "px";
         applyModalZoomLevel(chosenZoom);
 
-        // Tinh chỉnh thêm nếu vẫn còn dư 1-2px cuộn dọc hoặc ngang
         let guard = 0;
         while (
             (scrollWrap.scrollHeight > scrollWrap.clientHeight + 2 || scrollWrap.scrollWidth > scrollWrap.clientWidth + 2) &&
@@ -973,7 +1024,6 @@ window.addEventListener("resize", () => {
     }, 150);
 });
 
-// BỔ SUNG NÚT "THU TẠM" & CÁC NÚT ĐIỀU KHIỂN VÀO HEADER MODAL
 function ensureModalZoomControlsInHeader() {
     const toolsWrap = document.querySelector(".result-modal-tools");
     if (!toolsWrap) return;
@@ -988,11 +1038,8 @@ function ensureModalZoomControlsInHeader() {
         tempBtn.onclick = (e) => triggerCollectTempDraftsToDrive(e);
 
         const excelBtn = toolsWrap.querySelector(".btn-export-excel");
-        if (excelBtn) {
-            toolsWrap.insertBefore(tempBtn, excelBtn);
-        } else {
-            toolsWrap.appendChild(tempBtn);
-        }
+        if (excelBtn) toolsWrap.insertBefore(tempBtn, excelBtn);
+        else toolsWrap.appendChild(tempBtn);
     }
 
     if (!document.getElementById("btn-fit-all-rows")) {
@@ -1005,11 +1052,8 @@ function ensureModalZoomControlsInHeader() {
         fitBtn.onclick = (e) => fitAllRowsInView(e);
 
         const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
-        if (closeBtn) {
-            toolsWrap.insertBefore(fitBtn, closeBtn);
-        } else {
-            toolsWrap.appendChild(fitBtn);
-        }
+        if (closeBtn) toolsWrap.insertBefore(fitBtn, closeBtn);
+        else toolsWrap.appendChild(fitBtn);
     }
 
     if (!document.getElementById("modal-independent-zoom-control")) {
@@ -1024,11 +1068,8 @@ function ensureModalZoomControlsInHeader() {
         `;
 
         const closeBtn = toolsWrap.querySelector(".btn-close-result-modal");
-        if (closeBtn) {
-            toolsWrap.insertBefore(zoomDiv, closeBtn);
-        } else {
-            toolsWrap.appendChild(zoomDiv);
-        }
+        if (closeBtn) toolsWrap.insertBefore(zoomDiv, closeBtn);
+        else toolsWrap.appendChild(zoomDiv);
     }
 }
 
@@ -1124,7 +1165,6 @@ async function triggerCollectTempDraftsToDrive(event) {
     }
 }
 
-// BỘ NHẬN DIỆN ZOOM MỚI: HỖ TRỢ CẢ CTRL+WHEEL VÀ PINCH-TO-ZOOM (TOUCH 2 NGÓN TAY)
 (function setupIsolatedWheelAndTouchZoom() {
     window.addEventListener("wheel", function(e) {
         const modal = document.getElementById("result-fullscreen-modal");
@@ -1336,44 +1376,117 @@ function initTableResizable() {
     });
 }
 
+// MENU CHỌN ĐỀ THI (LUÔN NỔI TRÊN CÙNG TRONG PORTAL)
 function toggleExamPickerMenu(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const menu = document.getElementById("exam-picker-dropdown-list");
-    if (!menu) return;
-    const portal = ensureResultFloatingPortal();
-    const wasShown = (portal && menu.parentNode === portal) || menu.classList.contains("show");
+    const isSame = (_activeFloatingMenuMeta && _activeFloatingMenuMeta.type === 'exam');
 
     closeAllResultFloatingDropdowns();
     closeTableSettingsPopover();
     if (typeof closeRegradeModal === "function") closeRegradeModal();
 
-    if (!wasShown) {
-        const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(".btn-exam-picker");
-        const th = btn ? btn.closest("th") : null;
-        if (th) th.classList.add("has-active-header-menu");
-        menu.classList.add("show");
-        if (btn) portalAndPositionFloatingMenu(menu, btn, { align: "left", minWidth: 280 });
+    if (isSame) return;
+
+    const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(".btn-exam-picker");
+    if (!btn) return;
+
+    const currentCatId = currentExamResultData.categoryId || "them-11";
+    const targetCat = DAY_THEM_CATEGORIES.find(c => c.id === currentCatId) || CHINH_KHOA_CATEGORIES.find(c => c.id === currentCatId);
+    const examList = targetCat ? (targetCat.links || []).filter(l => !l.isDoc) : [];
+
+    let itemsHtml = "";
+    if (examList.length === 0) {
+        itemsHtml = `<div style="padding:10px; color:#64748b; font-size:12px; font-style:italic;">Chưa có đề thi nào trong mục ${getCategoryDisplayName(currentCatId)}</div>`;
+    } else {
+        itemsHtml = examList.map((exam, idx) => {
+            const isCur = currentExamResultData.item && (currentExamResultData.item.firebaseId === exam.firebaseId || currentExamResultData.item.title === exam.title);
+            const safeTitle = String(exam.title || "Đề thi").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            return `
+                <div class="floating-portal-option ${isCur ? 'selected' : ''}" onclick="selectExamFromPortal(${idx}, event)">
+                    <span style="display:flex; align-items:flex-start; gap:6px; line-height:1.3;">
+                        <b>${idx + 1}.</b>
+                        <span>${safeTitle}</span>
+                    </span>
+                    ${isCur ? '<span>✓</span>' : ''}
+                </div>
+            `;
+        }).join('');
     }
+
+    _activeFloatingMenuMeta = { type: 'exam', key: currentCatId };
+    openPortalMenuCard(btn, {
+        align: "left",
+        minWidth: 290,
+        maxWidth: 390,
+        html: `
+            <div class="floating-portal-header">
+                <span>📑 CHỌN ĐỀ THI (${getCategoryDisplayName(currentCatId)})</span>
+                <button type="button" class="floating-portal-close" onclick="closeAllResultFloatingDropdowns()">✕</button>
+            </div>
+            ${itemsHtml}
+        `
+    });
 }
 
+window.selectExamFromPortal = async function(idx, event) {
+    if (event) { event.preventDefault(); event.stopPropagation(); }
+    const currentCatId = currentExamResultData.categoryId || "them-11";
+    const targetCat = DAY_THEM_CATEGORIES.find(c => c.id === currentCatId) || CHINH_KHOA_CATEGORIES.find(c => c.id === currentCatId);
+    const examList = targetCat ? (targetCat.links || []).filter(l => !l.isDoc) : [];
+    const exam = examList[idx];
+    closeAllResultFloatingDropdowns();
+    if (exam) await switchExamResult(exam);
+};
+
+// MENU XẾP HẠNG (LUÔN NỔI TRÊN CÙNG TRONG CHẾ ĐỘ VỪA MÀN)
 function toggleRankSortMenu(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
-    const menu = document.getElementById("rank-sort-dropdown-menu");
-    if (!menu) return;
-    const portal = ensureResultFloatingPortal();
-    const wasShown = (portal && menu.parentNode === portal) || menu.classList.contains("show");
+    const isSame = (_activeFloatingMenuMeta && _activeFloatingMenuMeta.type === 'rank');
 
     closeAllResultFloatingDropdowns();
     closeTableSettingsPopover();
     if (typeof closeRegradeModal === "function") closeRegradeModal();
 
-    if (!wasShown) {
-        const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(".btn-rank-picker");
-        const th = btn ? btn.closest("th") : null;
-        if (th) th.classList.add("has-active-header-menu");
-        menu.classList.add("show");
-        if (btn) portalAndPositionFloatingMenu(menu, btn, { align: "center", minWidth: 195 });
-    }
+    if (isSame) return;
+
+    const btn = (event && event.currentTarget) ? event.currentTarget : document.querySelector(".btn-rank-picker");
+    if (!btn) return;
+
+    const sortOptions = [
+        { mode: 'desc',          icon: '⬇️', label: 'Điểm từ cao xuống thấp' },
+        { mode: 'asc',           icon: '⬆️', label: 'Điểm từ thấp đến cao' },
+        { mode: 'default',       icon: '🔢', label: 'Theo STT cột thứ tự' },
+        { mode: 'tabs_desc',     icon: '⚠️', label: 'Chuyển tab nhiều nhất' },
+        { mode: 'attempts_desc', icon: '🔁', label: 'Thi nhiều lần nhất' }
+    ];
+
+    const optionsHtml = sortOptions.map(opt => {
+        const isSel = (currentRankSortMode === opt.mode);
+        return `
+            <div class="floating-portal-option ${isSel ? 'selected' : ''}" onclick="changeRankSort('${opt.mode}', event)">
+                <span style="display:flex; align-items:center; gap:7px;">
+                    <span>${opt.icon}</span>
+                    <span>${opt.label}</span>
+                </span>
+                ${isSel ? '<span>✓</span>' : ''}
+            </div>
+        `;
+    }).join('');
+
+    _activeFloatingMenuMeta = { type: 'rank', key: 'rank' };
+    openPortalMenuCard(btn, {
+        align: "center",
+        minWidth: 230,
+        maxWidth: 270,
+        themeClass: "rank-theme",
+        html: `
+            <div class="floating-portal-header" style="color:#b45309;">
+                <span>🏅 SẮP XẾP BẢNG KẾT QUẢ</span>
+                <button type="button" class="floating-portal-close" onclick="closeAllResultFloatingDropdowns()">✕</button>
+            </div>
+            ${optionsHtml}
+        `
+    });
 }
 
 function changeRankSort(mode, event) {
@@ -1382,42 +1495,19 @@ function changeRankSort(mode, event) {
     closeAllResultFloatingDropdowns();
     const btnText = document.getElementById("rank-header-btn-text");
     if (btnText) {
-        if (mode === 'desc') btnText.innerHTML = "🏅 Hạng: Cao ➔ Thấp";
-        else if (mode === 'asc') btnText.innerHTML = "🏅 Hạng: Thấp ➔ Cao";
+        if (mode === 'desc') btnText.innerHTML = "🏅 Cao ➔ Thấp";
+        else if (mode === 'asc') btnText.innerHTML = "🏅 Thấp ➔ Cao";
+        else if (mode === 'tabs_desc') btnText.innerHTML = "⚠️ Nhiều tab";
+        else if (mode === 'attempts_desc') btnText.innerHTML = "🔁 Nhiều lần";
         else btnText.innerHTML = "🏅 Xếp hạng ▾";
     }
-    filterResultTable();
+    filterResultTable({ keepFloatingMenu: false });
 }
 
 function renderExamPickerDropdown() {
-    closeAllResultFloatingDropdowns();
     const menu = document.getElementById("exam-picker-dropdown-list");
     if (!menu) return;
     menu.innerHTML = "";
-
-    const currentCatId = currentExamResultData.categoryId || "them-11";
-    let targetCat = DAY_THEM_CATEGORIES.find(c => c.id === currentCatId) || CHINH_KHOA_CATEGORIES.find(c => c.id === currentCatId);
-    const examList = targetCat ? (targetCat.links || []).filter(l => !l.isDoc) : [];
-
-    if (examList.length === 0) {
-        menu.innerHTML = `<div style="padding:8px; color:#64748b; font-size:12px; font-style:italic;">Chưa có đề thi nào trong mục ${getCategoryDisplayName(currentCatId)}</div>`;
-        return;
-    }
-
-    examList.forEach((exam, idx) => {
-        const itemEl = document.createElement("div");
-        itemEl.className = "exam-picker-item";
-        const isCur = currentExamResultData.item && (currentExamResultData.item.firebaseId === exam.firebaseId || currentExamResultData.item.title === exam.title);
-        if (isCur) itemEl.classList.add("selected");
-
-        itemEl.innerHTML = `<span>${idx + 1}.</span> <span style="flex:1;">${exam.title}</span>`;
-        itemEl.onclick = async (e) => {
-            e.stopPropagation();
-            closeAllResultFloatingDropdowns();
-            await switchExamResult(exam);
-        };
-        menu.appendChild(itemEl);
-    });
 }
 
 async function switchExamResult(examItem) {
@@ -1555,26 +1645,70 @@ function calculateRanksForRows(rows) {
     });
 }
 
+// MENU CHỌN LẦN THI (LUÔN NỔI PHÍA TRÊN / PHÍA TRƯỚC CÁC DÒNG TRONG CHẾ ĐỘ VỪA MÀN)
 function toggleAttemptMenu(rowUid, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
-    const targetMenu = document.getElementById(`attempt-menu-${rowUid}`);
-    if (!targetMenu) return;
-    const portal = ensureResultFloatingPortal();
-    const isShown = (portal && targetMenu.parentNode === portal) || targetMenu.classList.contains("show");
+    const isSame = (_activeFloatingMenuMeta && _activeFloatingMenuMeta.type === 'attempt' && _activeFloatingMenuMeta.key === rowUid);
 
     closeAllResultFloatingDropdowns();
     closeTableSettingsPopover();
     if (typeof closeRegradeModal === "function") closeRegradeModal();
 
-    if (!isShown) {
-        const triggerBtn = (event && event.currentTarget) ? event.currentTarget : targetMenu.previousElementSibling;
-        const tr = triggerBtn ? triggerBtn.closest('tr') : targetMenu.closest('tr');
-        if (tr) tr.classList.add('has-active-attempt-menu');
-        targetMenu.classList.add("show");
-        if (triggerBtn) {
-            portalAndPositionFloatingMenu(targetMenu, triggerBtn, { align: "left", minWidth: 255 });
-        }
-    }
+    if (isSame) return;
+
+    const row = (currentExamResultData.rawRows || []).find(r => r._rowUid === rowUid);
+    if (!row || !Array.isArray(row.allAttempts) || row.allAttempts.length === 0) return;
+
+    const triggerBtn = (event && event.currentTarget)
+        ? event.currentTarget
+        : document.querySelector(`[data-attempt-btn-uid="${rowUid}"]`);
+    if (!triggerBtn) return;
+
+    const studentName = String(row.account?.name || row.allAttempts[0]?.studentName || "Học sinh")
+        .replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const escUid = String(rowUid).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+    const itemsHtml = row.allAttempts.map((at, aIdx) => {
+        const isSelected = (aIdx === row.selectedAttemptIndex);
+        const subDateMs = getSubmissionTimestamp(at);
+        const timeFormatted = formatAttemptDateTime(subDateMs);
+        const scoreNum = (at.score10 !== undefined && at.score10 !== null) ? Number(at.score10) : null;
+        const scoreText = scoreNum !== null && !isNaN(scoreNum) ? `${scoreNum}đ` : "--đ";
+        const correctTxt = (at.correctCount !== undefined) ? `Đúng ${at.correctCount} câu` : "";
+        const spentTxt = at.completionTime ? ` • ${at.completionTime}` : "";
+
+        return `
+            <div class="floating-portal-option ${isSelected ? 'selected' : ''}" onclick="selectStudentAttempt('${escUid}', ${aIdx}, event)">
+                <div style="display:flex; flex-direction:column; gap:2px; min-width:0;">
+                    <span style="display:flex; align-items:center; gap:5px;">
+                        <span>${isSelected ? '✓' : '○'}</span>
+                        <b>Lần ${aIdx + 1}</b>
+                        <span style="font-size:11px; color:#64748b; font-weight:600;">(${timeFormatted})</span>
+                    </span>
+                    <span style="font-size:11px; color:#475569; font-weight:600; padding-left:16px;">${correctTxt}${spentTxt}</span>
+                </div>
+                <span class="floating-portal-score-pill" style="${scoreNum !== null && scoreNum < 5 ? 'background:#fef2f2 !important; color:#dc2626 !important; border-color:#fca5a5 !important;' : (scoreNum !== null && scoreNum < 8 ? 'background:#fffbeb !important; color:#b45309 !important; border-color:#fde68a !important;' : '')}">
+                    ${scoreText}
+                </span>
+            </div>
+        `;
+    }).join('');
+
+    _activeFloatingMenuMeta = { type: 'attempt', key: rowUid };
+    openPortalMenuCard(triggerBtn, {
+        align: "left",
+        minWidth: 295,
+        maxWidth: 360,
+        preferAbove: true,
+        themeClass: "attempt-theme",
+        html: `
+            <div class="floating-portal-header" style="color:#be123c;">
+                <span>🔁 CHỌN LẦN THI: ${studentName}</span>
+                <button type="button" class="floating-portal-close" onclick="closeAllResultFloatingDropdowns()">✕</button>
+            </div>
+            ${itemsHtml}
+        `
+    });
 }
 
 function selectStudentAttempt(rowUid, attemptIdx, event) {
@@ -1719,8 +1853,14 @@ function handleClickStudentDetails(rowUid, event) {
     }
 }
 
-function renderFilteredResultTable(rows) {
-    closeAllResultFloatingDropdowns();
+function renderFilteredResultTable(rows, opts = {}) {
+    const keepMenu = Boolean(opts.keepFloatingMenu || window.__preserveFloatingMenuDuringSilentRefresh);
+    window.__preserveFloatingMenuDuringSilentRefresh = false;
+
+    if (!keepMenu) {
+        closeAllResultFloatingDropdowns();
+    }
+
     ensureActionColumnHeaders();
     ensureModalZoomControlsInHeader();
     attachTableScrollCloseListener();
@@ -1743,6 +1883,12 @@ function renderFilteredResultTable(rows) {
 
     const currentExamTitle = (currentExamResultData.item && currentExamResultData.item.title) ? currentExamResultData.item.title : "Đề thi";
 
+    const getRowTabCount = (r) => {
+        const sub = (r.allAttempts && r.allAttempts.length > 0) ? r.allAttempts[r.selectedAttemptIndex || 0] : null;
+        if (typeof getAttemptCheatStats === "function") return getAttemptCheatStats(r, sub).tabCount;
+        return r.cheatLogsTabCount || 0;
+    };
+
     let sortedRows = [...rows];
     if (currentRankSortMode === 'desc') {
         sortedRows.sort((a, b) => {
@@ -1756,7 +1902,23 @@ function renderFilteredResultTable(rows) {
             let scB = (b.rank !== null && b.rank !== undefined) ? (b.allAttempts[b.selectedAttemptIndex]?.score10 ?? 999) : 9999;
             if (scA !== scB) return scA - scB; return a.stt - b.stt;
         });
-    } else { sortedRows.sort((a, b) => a.stt - b.stt); }
+    } else if (currentRankSortMode === 'tabs_desc') {
+        sortedRows.sort((a, b) => {
+            const tA = getRowTabCount(a);
+            const tB = getRowTabCount(b);
+            if (tB !== tA) return tB - tA;
+            return a.stt - b.stt;
+        });
+    } else if (currentRankSortMode === 'attempts_desc') {
+        sortedRows.sort((a, b) => {
+            const cA = (a.allAttempts || []).length;
+            const cB = (b.allAttempts || []).length;
+            if (cB !== cA) return cB - cA;
+            return a.stt - b.stt;
+        });
+    } else {
+        sortedRows.sort((a, b) => a.stt - b.stt);
+    }
 
     const escJs = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;");
 
@@ -1780,6 +1942,10 @@ function renderFilteredResultTable(rows) {
             tr.classList.add("row-student-is-doing");
         }
 
+        const cheatStats = (typeof getAttemptCheatStats === "function")
+            ? getAttemptCheatStats(row, currentSub)
+            : { tabCount: row.cheatLogsTabCount || 0, timeString: row.cheatTimeString || "0s" };
+
         let col1_stt = row.stt;
         let col_examName = `<div class="td-exam-text" title="${currentExamTitle.replace(/"/g, '&quot;')}">${currentExamTitle}</div>`;
         let col_attemptCount = `<span class="status-not-submitted">---</span>`;
@@ -1795,35 +1961,13 @@ function renderFilteredResultTable(rows) {
         } else {
             const isMulti = attCount >= 2;
             const btnClass = isMulti ? 'btn-attempt-badge-multi' : 'btn-attempt-badge-single';
-            const btnText = `${attCount} lần`;
-
-            let dropdownItemsHtml = "";
-            row.allAttempts.forEach((at, aIdx) => {
-                const isSelected = (aIdx === row.selectedAttemptIndex);
-                const subDateMs = getSubmissionTimestamp(at);
-                const timeFormatted = formatAttemptDateTime(subDateMs);
-                let scoreText = (at.score10 !== undefined && at.score10 !== null) ? `${Number(at.score10)}đ` : "--đ";
-
-                dropdownItemsHtml += `
-                    <div class="attempt-menu-item ${isSelected ? 'selected' : ''}" onclick="selectStudentAttempt('${escJs(uid)}', ${aIdx}, event)">
-                        <span class="attempt-item-left">
-                            <span class="attempt-check-icon">${isSelected ? '✓' : ''}</span>
-                            <span>Lần ${aIdx + 1} (${timeFormatted})</span>
-                        </span>
-                        <span class="attempt-item-score">${scoreText}</span>
-                    </div>
-                `;
-            });
+            const btnText = isMulti ? `${attCount} lần (L${row.selectedAttemptIndex + 1}) ▾` : `1 lần`;
 
             col_attemptCount = `
                 <div class="attempt-picker-wrapper">
-                    <button type="button" class="${btnClass}" onclick="toggleAttemptMenu('${escJs(uid)}', event)" title="Bấm để chọn xem lần thi">
+                    <button type="button" class="${btnClass}" data-attempt-btn-uid="${uid.replace(/"/g, '&quot;')}" onclick="toggleAttemptMenu('${escJs(uid)}', event)" title="Bấm để chọn xem lần thi (${attCount} lần)">
                         ${btnText}
                     </button>
-                    <div class="attempt-dropdown-menu" id="attempt-menu-${uid}" onclick="event.stopPropagation()">
-                        <div class="attempt-dropdown-header">CHỌN LẦN THI:</div>
-                        ${dropdownItemsHtml}
-                    </div>
                 </div>
             `;
         }
@@ -1866,13 +2010,9 @@ function renderFilteredResultTable(rows) {
                 col_rank = rankBadge;
             }
 
-            let rawSubTab = parseInt(currentSub.tabSwitchCount, 10) || 0;
-            let dataStringTab = extractTabCountFromDataString(currentSub.dataString);
-            let logTab = row.cheatLogsTabCount || 0;
-            let finalTabCount = Math.max(rawSubTab, dataStringTab, logTab);
-
+            const finalTabCount = cheatStats.tabCount;
             col9_tabs = finalTabCount > 0 ? `<span class="tabs-warn">⚠️ ${finalTabCount} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
-            col10_cheatTime = row.cheatTimeString;
+            col10_cheatTime = cheatStats.timeString;
 
             if (currentSub.dataString) {
                 let safeText = (currentSub.dataString || "").replace(/"/g, '&quot;');
@@ -1896,15 +2036,18 @@ function renderFilteredResultTable(rows) {
                 } else {
                     col6_status = `<span class="status-doing-heartbeat"><span class="heartbeat-icon">💓</span> Đang thi</span>`;
                 }
+
+                const doingStats = (typeof getAttemptCheatStats === "function")
+                    ? getAttemptCheatStats(row, null)
+                    : { tabCount: row.cheatLogsTabCount || 0, timeString: row.cheatTimeString || "0s" };
+
+                col9_tabs = doingStats.tabCount > 0 ? `<span class="tabs-warn">⚠️ ${doingStats.tabCount} lần</span>` : `<span class="tabs-ok">0 lần</span>`;
+                col10_cheatTime = doingStats.timeString;
             } else {
                 col6_status = row.isAwayApp 
                     ? `<span class="status-doing-heartbeat is-away" title="Học sinh đang mở app khác"><span class="heartbeat-icon">📱</span> Đang thi Lần ${attCount + 1}</span>`
                     : `<span class="status-doing-heartbeat" title="Đang làm bài lần ${attCount + 1}"><span class="heartbeat-icon">💓</span> Đang thi Lần ${attCount + 1}</span>`;
             }
-
-            let doingTabs = row.cheatLogsTabCount || 0;
-            if (doingTabs > 0) col9_tabs = `<span class="tabs-warn">⚠️ ${doingTabs} lần</span>`;
-            if (row.cheatTimeString !== "0s") col10_cheatTime = row.cheatTimeString;
         }
 
         let rawName = acc.name || (currentSub ? currentSub.studentName : "---");
@@ -1956,7 +2099,7 @@ function renderFilteredResultTable(rows) {
     reapplyFitAllRowsIfActive();
 }
 
-function filterResultTable() {
+function filterResultTable(opts = {}) {
     const query = (document.getElementById("result-search-input")?.value || "").trim().toLowerCase();
     let filtered = currentExamResultData.rawRows || [];
 
@@ -1975,7 +2118,7 @@ function filterResultTable() {
         filtered = window.applyResultEnhancementFilter(filtered);
     }
 
-    renderFilteredResultTable(filtered);
+    renderFilteredResultTable(filtered, opts);
 }
 
 document.addEventListener("click", function(event) {
