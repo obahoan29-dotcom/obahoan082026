@@ -1,8 +1,8 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// BẢNG KẾT QUẢ THI: NÂNG CẤP CHẾ ĐỘ "VỪA MÀN" CÁC HÀNG DÃN HẾT 100% MÀN HÌNH
-// CHỮ HIỆN TO RÕ NÉT NHẤT, KHÔNG CÒN KHOẢNG TRẮNG THỪA Ở NỬA DƯỚI MÀN HÌNH
-// HIỂN THỊ ĐỦ TRỌN VẸN TỪ DÒNG 1 ĐẾN DÒNG 46 (KHÔNG CẦN CUỘN CHUỘT)
+// BẢNG KẾT QUẢ THI: NÂNG CẤP CHẾ ĐỘ "VỪA MÀN" CÁC HÀNG VỪA KHÍT 100% MÀN HÌNH
+// HIỂN THỊ ĐỦ TRỌN VẸN TẤT CẢ CÁC DÒNG (KHÔNG BỊ TRÀN XUỐNG DƯỚI, KHÔNG CẦN CUỘN)
+// CÁC CỘT GIỮ NGUYÊN VẸN, CHỮ TO RÕ NÉT NHẤT VÀ VẪN CHO PHÉP KÉO CỘT TÙY Ý
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -325,7 +325,7 @@ let _userCustomColWidths = {}; // Lưu trữ độ rộng cột tùy chỉnh do 
         /* BẢNG CHẾ ĐỘ VỪA MÀN: CÁC HÀNG VỪA KHÍT 100% CHIỀU CAO & RỘNG */
         /* ========================================================= */
         .result-table.table-fitted-compact {
-            --table-row-padding-y: 1.5px !important;
+            --table-row-padding-y: 1px !important;
             --table-row-padding-x: 3px !important;
             width: 100% !important;
             height: auto !important;
@@ -357,7 +357,7 @@ let _userCustomColWidths = {}; // Lưu trữ độ rộng cột tùy chỉnh do 
 
         /* THU GỌN CHIỀU CAO Ô ĐỂ CÁC DÒNG SIÊU GỌN VÀ CHỮ TO RÕ NHẤT */
         .result-table.table-fitted-compact tbody td {
-            padding: var(--table-row-padding-y, 1.5px) var(--table-row-padding-x, 3px) !important;
+            padding: var(--table-row-padding-y, 1px) var(--table-row-padding-x, 3px) !important;
             font-size: var(--table-font-size, 13px) !important;
             line-height: 1.15 !important;
             border-right: 1px solid #cbd5e1 !important;
@@ -998,8 +998,8 @@ function resetResultModalZoomOnClose() {
 }
 
 // ============================================================================
-// NÂNG CẤP ĐỘT PHÁ: THUẬT TOÁN "VỪA MÀN" CÁC HÀNG VỪA KHÍT 100% VÀO MÀN HÌNH
-// TOÀN BỘ 46 DÒNG HIỆN ĐỦ 100% TỪ DÒNG 1 ĐẾN 46, CHỮ TO NHẤT, KHÔNG THỪA KHOẢNG TRẮNG
+// NÂNG CẤP ĐỘT PHÁ: THUẬT TOÁN "VỪA MÀN" CÁC HÀNG VỪA ĐỦ 100% MÀN HÌNH (NO SCROLL)
+// TOÀN BỘ CÁC DÒNG HIỆN ĐỦ 100% TỪ DÒNG 1 ĐẾN CUỐI CÙNG, CHỮ TO RÕ NHẤT
 // ============================================================================
 function computeAndApplyFitAllRows() {
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
@@ -1010,7 +1010,7 @@ function computeAndApplyFitAllRows() {
     // 1. Kích hoạt class Vừa màn
     table.classList.add("table-fitted-compact");
 
-    // 2. Tạm đưa zoom về 1.0 để đo đạc kích thước thật không bị méo toạ độ
+    // 2. Tạm đưa zoom về 1.0 để đo đạc chính xác kích thước gốc
     applyModalZoomLevel(1.0);
 
     requestAnimationFrame(() => {
@@ -1033,7 +1033,7 @@ function computeAndApplyFitAllRows() {
 
             const unscaledH = Math.max(1, table.scrollHeight);
             const reqZoomH = (availH - 2) / unscaledH;
-            let chosenZoom = Math.min(1.0, Math.max(0.88, Math.floor(reqZoomH * 100) / 100));
+            let chosenZoom = Math.min(1.0, Math.max(0.70, Math.floor(reqZoomH * 100) / 100));
             applyModalZoomLevel(chosenZoom);
 
             isFitAllRowsActive = true;
@@ -1047,49 +1047,47 @@ function computeAndApplyFitAllRows() {
         }
 
         // =========================================================
-        // TRÊN MÁY TÍNH / LAPTOP (DÃN TOÀN BỘ 46 DÒNG KHÍT 100% MÀN HÌNH)
+        // TRÊN MÁY TÍNH / LAPTOP (CÁC DÒNG HIỆN VỪA ĐỦ CẢ MÀN HÌNH - KHÔNG CUỘN)
         // =========================================================
 
-        // Đặt font cơ sở to, nét, đậm đà (13.5px)
+        // Đặt font chữ cơ sở to rõ, nét căng
         const baseFs = 13.5;
         table.style.setProperty("--table-font-size", baseFs + "px");
         table.style.fontSize = baseFs + "px";
 
-        // Gỡ bỏ chiều cao ép thủ công để lấy chiều cao tự nhiên gọn nhất
+        // Gỡ bỏ chiều cao ép thủ công để lấy kích thước tự nhiên
         rows.forEach(tr => {
             tr.style.removeProperty("height");
         });
 
-        const unscaledTableH = Math.max(1, table.offsetHeight || table.scrollHeight);
-        const unscaledTableW = Math.max(1, table.offsetWidth || table.scrollWidth);
-
-        // Tính tỷ lệ zoom cần thiết để TOÀN BỘ DÒNG nằm khít 100% trong chiều cao availH
-        const scaleH = (availH - 2) / unscaledTableH;
+        // Đo chiều cao thực tế của toàn bộ các dòng
+        const unscaledTableH = Math.max(1, table.scrollHeight || table.offsetHeight);
 
         if (unscaledTableH <= availH) {
-            // Khi số học sinh ít (15 - 25 em): Tự dãn đều chiều cao các dòng để chiếm kín đáy màn hình
+            // Nếu số học sinh ít (15 - 25 em): Tự dãn đều chiều cao các dòng để chạm kín đáy màn hình
             const targetRowH = Math.max(18, Math.floor((availH - headerH - 4) / rowCount));
             rows.forEach(tr => {
                 tr.style.setProperty("height", `${targetRowH}px`, "important");
             });
             applyModalZoomLevel(1.0);
         } else {
-            // Khi số học sinh đông (46 em như trong ảnh):
-            // Tính zoom dọc chính xác để dòng 1 đến dòng 46 hiện trọn vẹn 100%
-            let optimalZoom = Math.min(1.0, Math.floor(scaleH * 100) / 100);
+            // Khi số học sinh đông (từ 35 đến 46 em):
+            // Tính toán tỷ lệ zoom để VỪA KHÍT 100% CẢ CHIỀU DỌC
+            let optimalZoom = (availH - 4) / unscaledTableH;
+            optimalZoom = Math.min(1.0, Math.max(0.45, Math.floor(optimalZoom * 100) / 100));
 
-            // Bù trừ font chữ to nhất có thể: Nếu zoom nhỏ, tăng font cơ sở lên để bù đắp
-            if (optimalZoom < 0.85) {
-                const compensatedFs = Math.min(15.0, Math.max(13.0, Math.round((10.5 / optimalZoom) * 10) / 10));
-                table.style.setProperty("--table-font-size", compensatedFs + "px");
-                table.style.fontSize = compensatedFs + "px";
-
-                const newTableH = Math.max(1, table.offsetHeight || table.scrollHeight);
-                optimalZoom = Math.min(1.0, Math.floor(((availH - 2) / newTableH) * 100) / 100);
-            }
-
-            // Áp dụng mức zoom tối ưu nhất
+            // Áp dụng mức zoom tối ưu
             applyModalZoomLevel(optimalZoom);
+
+            // BƯỚC VI CHỈNH TỰ ĐỘNG (AUTO-TUNING LOOP):
+            // Đảm bảo sau khi render, không bị dư dù chỉ 1 dòng làm xuất hiện thanh cuộn dọc
+            requestAnimationFrame(() => {
+                if (scrollWrap.scrollHeight > scrollWrap.clientHeight + 1 && modalCustomZoomLevel > 0.45) {
+                    const fineTuneRatio = scrollWrap.clientHeight / scrollWrap.scrollHeight;
+                    const finalZoom = Math.floor(modalCustomZoomLevel * fineTuneRatio * 100) / 100;
+                    applyModalZoomLevel(finalZoom);
+                }
+            });
         }
 
         scrollWrap.scrollTop = 0;
@@ -1099,7 +1097,7 @@ function computeAndApplyFitAllRows() {
         if (fitBtn) {
             fitBtn.classList.add("is-fitted");
             fitBtn.innerHTML = "↺ 100%";
-            fitBtn.title = `Đang bật Vừa màn (Đã dãn đủ ${rowCount} dòng khít 100% màn hình) — Bấm để quay lại chế độ thường`;
+            fitBtn.title = `Đang bật Vừa màn (Đã hiện đủ ${rowCount} dòng khít 100% màn hình) — Bấm để quay lại chế độ thường`;
         }
 
         initTableResizable();
