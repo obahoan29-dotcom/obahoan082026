@@ -1,13 +1,11 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// BẢNG KẾT QUẢ THI: ĐÃ BỔ SUNG CẢM ỨNG 2 NGÓN TAY PHÓNG TO THU NHỎ
-// ĐÃ FIX TRIỆT ĐỂ:
-// 1. VỪA MÀN HIỂN THỊ ĐỦ 100% CẢ 17 CỘT TRÊN 1 MÀN HÌNH (KHÔNG TRÀN PHẢI)
-// 2. MENU LẦN THI (2 LẦN), XẾP HẠNG & SỐ ĐỀ THI LUÔN NỔI TRÊN CÙNG (z-index: 2147483647)
-//    BÊN TRONG #result-floating-dropdown-portal ĐỘC LẬP TRÊN DOCUMENT.BODY
-// 3. TÍNH TỌA ĐỘ CHUẨN XÁC BẤT CHẤP CSS ZOOM (CHROME/EDGE/SAFARI/FIREFOX)
-// 4. KHÔNG TỰ ĐÓNG MENU KHI BẢNG CẬP NHẬT NGẦM (REALTIME / AUTO-REFRESH)
-// 5. HIỂN THỊ CHUẨN SỐ LẦN & THỜI GIAN CHUYỂN TAB (5s | 10s, KHÔNG CÓ "Bắt đầuLần1")
+// BẢNG KẾT QUẢ THI: HỖ TRỢ KÉO ĐỘ RỘNG CỘT TRONG CHẾ ĐỘ VỪA MÀN (PC & MOBILE)
+// HIỂN THỊ CHỮ TO RÕ NHẤT TRÊN ĐIỆN THOẠI KHÔNG BỊ MẤT CHỮ TRONG Ô
+// ĐÃ TỐI ƯU TOÀN DIỆN:
+// 1. KÉO ĐỘ RỘNG CỘT (HỌ TÊN, ĐIỂM, XẾP HẠNG,...) MƯỢT MÀ CẢ BẰNG CHUỘT LẪN CẢM ỨNG
+// 2. TRÊN ĐIỆN THOẠI KHI BẤM "VỪA MÀN" CHỮ HIỂN THỊ TO NHẤT (13px - 14px) KHÔNG BỊ MẤT CHỮ
+// 3. MENU NỔI (LẦN THI, XẾP HẠNG, SỐ ĐỀ) LUÔN NỔI TRÊN CÙNG TRONG PORTAL ĐỘC LẬP
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -17,6 +15,7 @@ let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 let _fitResizeTimer = null;
 let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key: string }
+let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do người dùng kéo dãn
 
 (function injectAttemptDropdownStyles() {
     const styleId = "status-attempt-dropdown-styles";
@@ -235,8 +234,7 @@ let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key:
             font-size: 10.5px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
+            display: inline-flex !align-items: center !important;
             gap: 3px !important;
             box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25) !important;
             transition: all 0.15s ease !important;
@@ -298,75 +296,88 @@ let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key:
         }
 
         /* ========================================================= */
-        /* CHẾ ĐỘ VỪA MÀN: TỔNG 17 CỘT = ĐÚNG 100% CHIỀU RỘNG BẢNG  */
+        /* CHẾ ĐỘ VỪA MÀN: CHO PHÉP KÉO ĐỘ RỘNG CỘT & CHỮ TO TRÊN MOBILE */
         /* ========================================================= */
         .result-table.table-fitted-compact {
-            --table-row-padding-y: 0px !important;
-            --table-row-padding-x: 2px !important;
+            --table-row-padding-y: 1px !important;
+            --table-row-padding-x: 3px !important;
             width: 100% !important;
-            max-width: 100% !important;
             table-layout: fixed !important;
         }
         .result-table.table-fitted-compact thead th {
-            padding: 2px 2px !important;
+            padding: 3px 4px !important;
             font-size: max(9px, calc(var(--table-font-size, 12px) - 1px)) !important;
             line-height: 1.15 !important;
             border-right: 1px solid #334155 !important;
             border-bottom: 1.5px solid #0284c7 !important;
             white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            min-width: 0 !important;
-            max-width: none !important;
-        }
-        .result-table.table-fitted-compact thead th > *,
-        .result-table.table-fitted-compact tbody td > * {
-            max-width: 100% !important;
-            min-width: 0 !important;
+            overflow: visible !important;
+            box-sizing: border-box !important;
         }
         .result-table.table-fitted-compact tbody tr {
             height: auto !important;
         }
         .result-table.table-fitted-compact tbody td {
-            padding: 1px 2px !important;
+            padding: 2px 4px !important;
             font-size: var(--table-font-size, 12px) !important;
-            line-height: 1.16 !important;
+            line-height: 1.2 !important;
             border-right: 1px solid #cbd5e1 !important;
             border-bottom: 1px solid #cbd5e1 !important;
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            min-width: 0 !important;
-            max-width: none !important;
+            box-sizing: border-box !important;
         }
         .result-table.table-fitted-compact tbody td.td-attempt-cell-wrap {
-            padding: 1px 2px !important;
+            padding: 1px 3px !important;
         }
 
-        /* Phân bổ chuẩn 100% cho toàn bộ 17 cột (tổng = 100.0%) */
-        .result-table.table-fitted-compact th.td-stt,
-        .result-table.table-fitted-compact th:nth-child(1) { width: 2.5% !important; }
-        .result-table.table-fitted-compact th.td-exam-col,
-        .result-table.table-fitted-compact th:nth-child(2) { width: 9.0% !important; }
-        .result-table.table-fitted-compact th:nth-child(3) { width: 4.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(4) { width: 8.2% !important; }
-        .result-table.table-fitted-compact th:nth-child(5) { width: 6.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(6) { width: 10.7% !important; }
-        .result-table.table-fitted-compact th:nth-child(7) { width: 3.3% !important; }
-        .result-table.table-fitted-compact th:nth-child(8) { width: 4.3% !important; }
-        .result-table.table-fitted-compact th:nth-child(9) { width: 6.6% !important; }
-        .result-table.table-fitted-compact th:nth-child(10) { width: 4.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(11) { width: 3.4% !important; }
-        .result-table.table-fitted-compact th:nth-child(12) { width: 5.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(13) { width: 5.2% !important; }
-        .result-table.table-fitted-compact th:nth-child(14) { width: 5.2% !important; }
-        .result-table.table-fitted-compact th:nth-child(15) { width: 11.6% !important; }
-        .result-table.table-fitted-compact th.th-force-submit-col,
-        .result-table.table-fitted-compact th:nth-child(16) { width: 4.8% !important; }
-        .result-table.table-fitted-compact th.th-row-action-col,
-        .result-table.table-fitted-compact th:nth-child(17) { width: 3.0% !important; }
+        /* Phân bổ tỷ lệ % ban đầu - Chỉ áp dụng khi cột chưa bị kéo dãn bằng tay (:not([data-user-resized])) */
+        .result-table.table-fitted-compact th:nth-child(1):not([data-user-resized]) { width: 3.0% !important; }
+        .result-table.table-fitted-compact th:nth-child(2):not([data-user-resized]) { width: 9.5% !important; }
+        .result-table.table-fitted-compact th:nth-child(3):not([data-user-resized]) { width: 5.0% !important; }
+        .result-table.table-fitted-compact th:nth-child(4):not([data-user-resized]) { width: 8.5% !important; }
+        .result-table.table-fitted-compact th:nth-child(5):not([data-user-resized]) { width: 6.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(6):not([data-user-resized]) { width: 11.5% !important; }
+        .result-table.table-fitted-compact th:nth-child(7):not([data-user-resized]) { width: 4.0% !important; }
+        .result-table.table-fitted-compact th:nth-child(8):not([data-user-resized]) { width: 4.5% !important; }
+        .result-table.table-fitted-compact th:nth-child(9):not([data-user-resized]) { width: 6.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(10):not([data-user-resized]) { width: 4.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(11):not([data-user-resized]) { width: 3.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(12):not([data-user-resized]) { width: 5.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(13):not([data-user-resized]) { width: 5.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(14):not([data-user-resized]) { width: 5.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(15):not([data-user-resized]) { width: 10.0% !important; }
+        .result-table.table-fitted-compact th:nth-child(16):not([data-user-resized]) { width: 4.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(17):not([data-user-resized]) { width: 3.0% !important; }
 
-        /* Thu gọn các pill/nút bên trong ô khi bật Vừa màn để chữ phóng to được tối đa */
+        /* NÂNG CẤP ĐẶC BIỆT CHO ĐIỆN THOẠI DI ĐỘNG (MÀN HÌNH NHỎ) */
+        @media (max-width: 768px) {
+            .result-table.table-fitted-compact {
+                table-layout: auto !important;
+                min-width: 820px !important;
+            }
+            .result-table.table-fitted-compact thead th {
+                font-size: 11.5px !important;
+                padding: 4px 6px !important;
+            }
+            .result-table.table-fitted-compact tbody td {
+                font-size: var(--table-font-size, 13px) !important;
+                padding: 3px 5px !important;
+            }
+            .result-table.table-fitted-compact .td-name,
+            .result-table.table-fitted-compact .td-exam-text {
+                white-space: normal !important;
+                word-break: break-word !important;
+                max-width: 220px !important;
+                text-overflow: clip !important;
+            }
+            .result-table.table-fitted-compact .resizer {
+                width: 16px !important;
+                right: -8px !important;
+            }
+        }
+
         .result-table.table-fitted-compact .btn-exam-picker,
         .result-table.table-fitted-compact .btn-rank-picker {
             padding: 1px 3px !important;
@@ -573,7 +584,24 @@ let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key:
 
         .attempt-picker-wrapper { position: relative !important; display: inline-block !important; }
 
-        /* PORTAL ĐỘC LẬP GẮN TRỰC TIẾP VÀO DOCUMENT.BODY (KHÔNG BAO GIỜ BỊ CHÌM SAU DÒNG HAY BỊ ZOOM CẮT) */
+        /* THANH RESIZER KÉO CỘT NÂNG CẤP VÙNG CHẠM DỄ DÀNG */
+        .resizer {
+            position: absolute !important;
+            top: 0 !important;
+            right: -5px !important;
+            width: 14px !important;
+            cursor: col-resize !important;
+            user-select: none !important;
+            height: 100% !important;
+            z-index: 50 !important;
+            touch-action: none !important;
+            background: transparent !important;
+        }
+        .resizer:hover, .resizer.resizing {
+            background: #38bdf8 !important;
+            opacity: 0.9 !important;
+        }
+
         #result-floating-dropdown-portal {
             position: fixed !important;
             inset: 0 !important;
@@ -690,7 +718,6 @@ function ensureResultFloatingPortal() {
     return portal;
 }
 
-// Tính tọa độ màn hình thật sự của phần tử bất chấp trình duyệt có scale getBoundingClientRect() theo CSS zoom hay không
 function getZoomSafeViewportRect(el) {
     const raw = el.getBoundingClientRect();
     const mainView = document.getElementById("result-modal-main-view");
@@ -699,7 +726,6 @@ function getZoomSafeViewportRect(el) {
     const currentZoom = (typeof modalCustomZoomLevel === "number" && modalCustomZoomLevel > 0) ? modalCustomZoomLevel : 1;
     if (Math.abs(currentZoom - 1) < 0.01) return raw;
 
-    // Nếu trình duyệt dùng transform: scale(...) thay cho CSS zoom (Firefox), getBoundingClientRect() đã chuẩn xác 100%
     if (!mainView.style.zoom) return raw;
 
     const statsBar = document.getElementById("result-modal-stats-bar");
@@ -710,8 +736,6 @@ function getZoomSafeViewportRect(el) {
     const refBottom = refEl.getBoundingClientRect().bottom;
     const mainTop = mainView.getBoundingClientRect().top;
 
-    // Trong Chrome 128+: mainTop ≈ refBottom -> scaleFactor = 1
-    // Trong Chromium < 128 / WebView / Safari cũ: mainTop ≈ refBottom / currentZoom -> scaleFactor = currentZoom
     const diffDirect = Math.abs(mainTop - refBottom);
     const diffScaled = Math.abs(mainTop * currentZoom - refBottom);
     const scaleFactor = (diffScaled + 2 < diffDirect) ? currentZoom : 1;
@@ -912,6 +936,9 @@ function resetResultModalZoomOnClose() {
     applyModalZoomLevel(1.0);
 }
 
+// ============================================================================
+// NÂNG CẤP BỘ ĐIỀU KHIỂN VỪA MÀN (TỐI ƯU CHO CẢ MÁY TÍNH VÀ ĐIỆN THOẠI)
+// ============================================================================
 function computeAndApplyFitAllRows() {
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
     const table = document.getElementById("admin-result-table");
@@ -926,8 +953,32 @@ function computeAndApplyFitAllRows() {
         const availW = scrollWrap.clientWidth;
         if (availH <= 0 || availW <= 0) return;
 
-        const maxFsByWidth = Math.min(18, Math.max(9.5, Math.floor((availW / 106) * 2) / 2));
+        const isMobile = window.innerWidth <= 768;
 
+        if (isMobile) {
+            // TRÊN ĐIỆN THOẠI: GIỮ CHỮ TO RÕ NHẤT (13px - 14px), KHÔNG BỊ CO NHỎ MẤT CHỮ
+            const chosenFs = Math.max(12.5, Math.min(14, Math.floor(availW / 26)));
+            table.style.setProperty("--table-font-size", chosenFs + "px");
+            table.style.fontSize = chosenFs + "px";
+
+            const unscaledH = Math.max(1, table.scrollHeight);
+            const reqZoomH = (availH - 2) / unscaledH;
+            // Không bóp zoom xuống quá 88% trên điện thoại để chữ luôn sắc nét
+            let chosenZoom = Math.min(1.0, Math.max(0.88, Math.floor(reqZoomH * 100) / 100));
+            applyModalZoomLevel(chosenZoom);
+
+            isFitAllRowsActive = true;
+            if (fitBtn) {
+                fitBtn.classList.add("is-fitted");
+                fitBtn.innerHTML = "↺ 100%";
+                fitBtn.title = `Đang bật Vừa màn di động (Chữ ${chosenFs}px) — Chạm kéo mép cột để chỉnh to/nhỏ`;
+            }
+            initTableResizable();
+            return;
+        }
+
+        // TRÊN MÁY TÍNH / LAPTOP
+        const maxFsByWidth = Math.min(18, Math.max(9.5, Math.floor((availW / 106) * 2) / 2));
         let chosenFs = 9.0;
         let chosenZoom = 1.0;
         let foundPerfect = false;
@@ -979,6 +1030,8 @@ function computeAndApplyFitAllRows() {
             fitBtn.innerHTML = "↺ 100%";
             fitBtn.title = `Đang bật Vừa màn (Chữ ${chosenFs}px • Tỷ lệ ${Math.round(modalCustomZoomLevel * 100)}%) — Bấm để quay lại chế độ thường`;
         }
+
+        initTableResizable();
     });
 }
 
@@ -1010,6 +1063,7 @@ function fitAllRowsInView(event) {
         table.style.fontSize = "";
         initTableSettings();
         applyModalZoomLevel(1.0);
+        initTableResizable();
         return;
     }
 
@@ -1341,38 +1395,104 @@ function applyFontSizePreset(size) { exitFitModeForManualSettings(); tableDispla
 function applyRowPaddingPreset(pad) { exitFitModeForManualSettings(); tableDisplaySettings.rowPadding = pad; applyTableSettings(); }
 function resetTableSettings() { exitFitModeForManualSettings(); tableDisplaySettings.fontSize = 13; tableDisplaySettings.rowPadding = 9; applyTableSettings(); }
 
+// ============================================================================
+// BỘ ĐIỀU KHIỂN KÉO CỘT NÂNG CẤP (HỖ TRỢ MƯỢT CẢ MÁY TÍNH VÀ ĐIỆN THOẠI CẢM ỨNG)
+// ============================================================================
 function initTableResizable() {
     const table = document.getElementById("admin-result-table");
     if (!table) return;
     const headers = table.querySelectorAll("thead th");
     
-    headers.forEach(th => {
+    headers.forEach((th, colIdx) => {
+        // Áp dụng lại độ rộng đã kéo tùy chỉnh trước đó nếu có
+        if (_userCustomColWidths[colIdx]) {
+            th.dataset.userResized = "true";
+            th.style.setProperty("width", _userCustomColWidths[colIdx] + "px", "important");
+            th.style.setProperty("min-width", _userCustomColWidths[colIdx] + "px", "important");
+            th.style.setProperty("max-width", _userCustomColWidths[colIdx] + "px", "important");
+        }
+
         const oldResizer = th.querySelector(".resizer");
         if (oldResizer) oldResizer.remove();
 
         const resizer = document.createElement("div");
         resizer.className = "resizer";
+        resizer.title = "Kéo để chỉnh độ rộng cột này (Nhấp đúp để đặt lại mặc định)";
         th.appendChild(resizer);
 
+        // Nhấp đúp vào mép cột để khôi phục độ rộng mặc định
+        resizer.addEventListener("dblclick", function(e) {
+            e.stopPropagation();
+            delete _userCustomColWidths[colIdx];
+            delete th.dataset.userResized;
+            th.style.removeProperty("width");
+            th.style.removeProperty("min-width");
+            th.style.removeProperty("max-width");
+        });
+
         let startX = 0, startWidth = 0;
+
+        function startDraggingCol(clientX) {
+            startX = clientX;
+            startWidth = th.offsetWidth;
+            resizer.classList.add("resizing");
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+        }
+
+        function moveDraggingCol(clientX) {
+            const zoom = (typeof modalCustomZoomLevel === "number" && modalCustomZoomLevel > 0) ? modalCustomZoomLevel : 1;
+            const diff = (clientX - startX) / zoom;
+            const newWidth = Math.max(30, Math.round(startWidth + diff));
+            
+            _userCustomColWidths[colIdx] = newWidth;
+            th.dataset.userResized = "true";
+            th.style.setProperty("width", newWidth + "px", "important");
+            th.style.setProperty("min-width", newWidth + "px", "important");
+            th.style.setProperty("max-width", newWidth + "px", "important");
+        }
+
+        function endDraggingCol() {
+            resizer.classList.remove("resizing");
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+        }
+
+        // Sự kiện chuột máy tính
         resizer.addEventListener("mousedown", function(e) {
             e.preventDefault(); e.stopPropagation();
-            startX = e.pageX; startWidth = th.offsetWidth;
-            resizer.classList.add("resizing");
+            startDraggingCol(e.pageX);
 
             function onMouseMove(moveEvent) {
-                const diff = moveEvent.pageX - startX;
-                const newWidth = Math.max(40, startWidth + diff);
-                th.style.width = newWidth + "px"; th.style.minWidth = newWidth + "px";
+                moveDraggingCol(moveEvent.pageX);
             }
             function onMouseUp() {
-                resizer.classList.remove("resizing");
+                endDraggingCol();
                 document.removeEventListener("mousemove", onMouseMove);
                 document.removeEventListener("mouseup", onMouseUp);
             }
             document.addEventListener("mousemove", onMouseMove);
             document.addEventListener("mouseup", onMouseUp);
         });
+
+        // Sự kiện cảm ứng chạm trên điện thoại di động / Máy tính bảng
+        resizer.addEventListener("touchstart", function(e) {
+            if (!e.touches || e.touches.length === 0) return;
+            e.preventDefault(); e.stopPropagation();
+            startDraggingCol(e.touches[0].pageX);
+
+            function onTouchMove(touchEvent) {
+                if (!touchEvent.touches || touchEvent.touches.length === 0) return;
+                moveDraggingCol(touchEvent.touches[0].pageX);
+            }
+            function onTouchEnd() {
+                endDraggingCol();
+                document.removeEventListener("touchmove", onTouchMove);
+                document.removeEventListener("touchend", onTouchEnd);
+            }
+            document.addEventListener("touchmove", onTouchMove, { passive: false });
+            document.addEventListener("touchend", onTouchEnd);
+        }, { passive: false });
     });
 }
 
@@ -1645,7 +1765,7 @@ function calculateRanksForRows(rows) {
     });
 }
 
-// MENU CHỌN LẦN THI (LUÔN NỔI PHÍA TRÊN / PHÍA TRƯỚC CÁC DÒNG TRONG CHẾ ĐỘ VỪA MÀN)
+// MENU CHỌN LẦN THI (LUÔN NỔI PHÍA TRÊN TRONG PORTAL)
 function toggleAttemptMenu(rowUid, event) {
     if (event) { event.stopPropagation(); event.preventDefault(); }
     const isSame = (_activeFloatingMenuMeta && _activeFloatingMenuMeta.type === 'attempt' && _activeFloatingMenuMeta.key === rowUid);
@@ -2097,6 +2217,7 @@ function renderFilteredResultTable(rows, opts = {}) {
         window.syncResultEnhancementUI();
     }
     reapplyFitAllRowsIfActive();
+    initTableResizable();
 }
 
 function filterResultTable(opts = {}) {
@@ -2165,3 +2286,4 @@ window.renderFilteredResultTable = renderFilteredResultTable;
 window.filterResultTable = filterResultTable;
 window.sendForceSubmitCommand = sendForceSubmitCommand;
 window.triggerCollectTempDraftsToDrive = triggerCollectTempDraftsToDrive;
+window.initTableResizable = initTableResizable;
