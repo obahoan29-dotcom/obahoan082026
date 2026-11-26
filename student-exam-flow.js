@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: ĐỒNG BỘ CHÍNH XÁC SỐ LẦN & THỜI GIAN CHUYỂN TAB KHI NỘP BÀI)
+// (BẢN FIX TRIỆT ĐỂ: ĐỒNG BỘ CHÍNH XÁC SỐ LẦN & THỜI GIAN CHUYỂN TAB KHI NỘP BÀI, KHÔNG SINH ?s)
 // =========================================================
 
 let submissionCountdownTimer = null;
@@ -680,12 +680,12 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
 
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
 
-    const safeDurations = (typeof tabSwitchDurations !== 'undefined' && Array.isArray(tabSwitchDurations))
-        ? [...tabSwitchDurations] : [];
+    const rawDurations = (typeof tabSwitchDurations !== 'undefined' && Array.isArray(tabSwitchDurations))
+        ? tabSwitchDurations : [];
+    const safeDurations = rawDurations
+        .map(d => String(d || "").trim())
+        .filter(d => d && d !== "?s" && d !== "0s");
     const finalTabCount = Math.max(Number(tabSwitchCount) || 0, safeDurations.length);
-    while (finalTabCount > 0 && safeDurations.length < finalTabCount) {
-        safeDurations.push("?s");
-    }
 
     dataDetails.push(`Tab Switch: ${finalTabCount}`);
     if (safeDurations.length > 0) {
@@ -1197,7 +1197,10 @@ async function executeSubmitExam(isForceSubmit = false) {
 
     if (submitOk) {
         if (typeof flushPendingTabLogs === 'function') {
-            flushPendingTabLogs().catch(() => {});
+            await Promise.race([
+                flushPendingTabLogs(),
+                new Promise(r => setTimeout(r, 1200))
+            ]).catch(() => {});
         }
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
