@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: qbank-tree-questions.js
 // MODULE 2/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
-// - CỘT 1: CÂY THƯ MỤC KIẾN THỨC & MA TRẬN 16 Ô KÉO THẢ
+// - CỘT 1: CÂY THƯ MỤC KIẾN THỨC, NÚT SIÊU NHỎ ẨN/HIỆN NÚT CHỨC NĂNG & MA TRẬN 16 Ô KÉO THẢ
 // - CỘT 2:
 //   + NÚT "📥 Upload file JSON đề" XÒE RA 4 KHO CHỜ XẾP (10, 11, 12, HSG 11)
 //   + DUYỆT THƯ MỤC 3 CẤP (THƯ MỤC GỐC 4 KHO -> KHO LỚP -> CHI TIẾT ĐỀ) + NÚT BACK
@@ -14,12 +14,154 @@
 let _qbankLeafHoverTimer = null;
 let _qbankLeafHoverFolderId = null;
 
+const QBANK_TREE_VIS_STORAGE_KEY = "qbank_tree_vis_prefs_v1";
+let _qbankTreeVisPrefs = null;
+
 function cancelLeafAutoExpandTimer() {
     if (_qbankLeafHoverTimer) {
         clearTimeout(_qbankLeafHoverTimer);
         _qbankLeafHoverTimer = null;
     }
     _qbankLeafHoverFolderId = null;
+}
+
+// ============================================================================
+// 0. TÙY CHỌN ẨN/HIỆN CÁC NÚT CHỨC NĂNG CUỐI MỖI THƯ MỤC (CỘT TRÁI)
+// ============================================================================
+function getQbankTreeVisPrefs() {
+    if (_qbankTreeVisPrefs) return _qbankTreeVisPrefs;
+    const prefs = { hideEditTools: false, hideMatrixBtn: false };
+    try {
+        const raw = localStorage.getItem(QBANK_TREE_VIS_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object") {
+                prefs.hideEditTools = Boolean(parsed.hideEditTools);
+                prefs.hideMatrixBtn = Boolean(parsed.hideMatrixBtn);
+            }
+        }
+    } catch (e) {}
+    _qbankTreeVisPrefs = prefs;
+    return _qbankTreeVisPrefs;
+}
+
+function saveQbankTreeVisPrefs(prefs) {
+    _qbankTreeVisPrefs = {
+        hideEditTools: Boolean(prefs && prefs.hideEditTools),
+        hideMatrixBtn: Boolean(prefs && prefs.hideMatrixBtn)
+    };
+    try {
+        localStorage.setItem(QBANK_TREE_VIS_STORAGE_KEY, JSON.stringify(_qbankTreeVisPrefs));
+    } catch (e) {}
+}
+
+function ensureQbankTreeVisMenuInDOM() {
+    let menu = document.getElementById("qbank-tree-vis-menu");
+    if (menu) return menu;
+
+    const host = document.getElementById("modal-qbank-creator") || document.body;
+    if (!host) return null;
+
+    menu = document.createElement("div");
+    menu.id = "qbank-tree-vis-menu";
+    menu.className = "qbank-tree-vis-menu";
+    menu.onclick = function(e) { e.stopPropagation(); };
+    menu.innerHTML = `
+        <div class="qbank-tree-vis-header">
+            <span>👁️ ẨN NÚT CUỐI THƯ MỤC</span>
+            <button type="button" class="qbank-tree-vis-close" onclick="closeQbankTreeVisMenu()" title="Đóng">✕</button>
+        </div>
+        <label class="qbank-tree-vis-opt">
+            <input type="checkbox" id="chk-tree-hide-edit-tools" onchange="setQbankTreeVisOption('hideEditTools', this.checked)">
+            <div>
+                <b>Ẩn Đổi màu, Sửa (✏️), +, Xóa (✕)</b>
+                <small>Giúp tên chương / bài hiển thị rộng tối đa</small>
+            </div>
+        </label>
+        <label class="qbank-tree-vis-opt">
+            <input type="checkbox" id="chk-tree-hide-matrix-btn" onchange="setQbankTreeVisOption('hideMatrixBtn', this.checked)">
+            <div>
+                <b>Ẩn nút Ma trận 16 ô (⊞)</b>
+                <small>Bấm vào tên bài hoặc kéo câu qua vẫn tự mở</small>
+            </div>
+        </label>
+        <div class="qbank-tree-vis-footer">
+            <button type="button" class="qbank-tree-vis-quick" onclick="setAllQbankTreeVisOptions(true)">🙈 Ẩn tất cả</button>
+            <button type="button" class="qbank-tree-vis-quick is-show" onclick="setAllQbankTreeVisOptions(false)">👁️ Hiện tất cả</button>
+        </div>
+    `;
+    host.appendChild(menu);
+    return menu;
+}
+
+function syncQbankTreeVisMenuCheckboxes() {
+    const prefs = getQbankTreeVisPrefs();
+    const chkEdit = document.getElementById("chk-tree-hide-edit-tools");
+    const chkMatrix = document.getElementById("chk-tree-hide-matrix-btn");
+    if (chkEdit) chkEdit.checked = Boolean(prefs.hideEditTools);
+    if (chkMatrix) chkMatrix.checked = Boolean(prefs.hideMatrixBtn);
+}
+
+function closeQbankTreeVisMenu() {
+    const menu = document.getElementById("qbank-tree-vis-menu");
+    const btn = document.getElementById("btn-qbank-tree-vis-toggle");
+    if (menu) menu.classList.remove("show");
+    if (btn) btn.classList.remove("is-open");
+}
+
+function toggleQbankTreeVisMenu(event) {
+    const ev = event || window.event;
+    if (ev) {
+        if (ev.preventDefault) ev.preventDefault();
+        if (ev.stopPropagation) ev.stopPropagation();
+    }
+    const menu = ensureQbankTreeVisMenuInDOM();
+    const btn = document.getElementById("btn-qbank-tree-vis-toggle");
+    if (!menu || !btn) return;
+
+    if (menu.classList.contains("show")) {
+        closeQbankTreeVisMenu();
+        return;
+    }
+
+    closeQbankDeleteMultiMenu();
+    closeQbankUploadMenu();
+    if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
+
+    syncQbankTreeVisMenuCheckboxes();
+    menu.classList.add("show");
+    btn.classList.add("is-open");
+
+    const rect = btn.getBoundingClientRect();
+    const menuW = Math.min(268, window.innerWidth - 20);
+    const approxH = menu.offsetHeight || 160;
+    let left = Math.max(10, Math.min(rect.left, window.innerWidth - menuW - 10));
+    let top = rect.bottom + 5;
+    if (top + approxH > window.innerHeight - 10 && rect.top > approxH + 10) {
+        top = rect.top - approxH - 5;
+    }
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+}
+
+function setQbankTreeVisOption(key, isChecked) {
+    const prefs = { ...getQbankTreeVisPrefs() };
+    prefs[key] = Boolean(isChecked);
+    saveQbankTreeVisPrefs(prefs);
+    syncQbankTreeVisMenuCheckboxes();
+    renderQbankTree();
+    const btn = document.getElementById("btn-qbank-tree-vis-toggle");
+    const menu = document.getElementById("qbank-tree-vis-menu");
+    if (btn && menu && menu.classList.contains("show")) btn.classList.add("is-open");
+}
+
+function setAllQbankTreeVisOptions(hideAll) {
+    saveQbankTreeVisPrefs({ hideEditTools: Boolean(hideAll), hideMatrixBtn: Boolean(hideAll) });
+    syncQbankTreeVisMenuCheckboxes();
+    renderQbankTree();
+    const btn = document.getElementById("btn-qbank-tree-vis-toggle");
+    const menu = document.getElementById("qbank-tree-vis-menu");
+    if (btn && menu && menu.classList.contains("show")) btn.classList.add("is-open");
 }
 
 // ============================================================================
@@ -375,6 +517,7 @@ function toggleQbankUploadMenu(e) {
     }
 
     closeQbankDeleteMultiMenu();
+    closeQbankTreeVisMenu();
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
     updateQbankUploadMenuCounts();
 
@@ -853,6 +996,9 @@ function renderQbankTree() {
     const rootEl = document.getElementById("qbank-tree-root");
     if (!rootEl) return;
 
+    const visPrefs = getQbankTreeVisPrefs();
+    const hasAnyHidden = Boolean(visPrefs.hideEditTools || visPrefs.hideMatrixBtn);
+
     const directFolderCounts = {};
     (qbankState.rawQuestions || []).forEach(q => {
         if (q && q.folderId) directFolderCounts[q.folderId] = (directFolderCounts[q.folderId] || 0) + 1;
@@ -865,9 +1011,12 @@ function renderQbankTree() {
     }
 
     let html = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding-bottom:4px; border-bottom:1.5px solid #e2e8f0;">
-            <b style="font-size:11.5px; color:#334155;">🌳 THƯ MỤC KIẾN THỨC:</b>
-            <button class="btn-qbank btn-qbank-primary" style="padding:2px 7px; font-size:10.5px;" onclick="promptAddRootFolder()">+ Thư mục gốc</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; padding-bottom:4px; border-bottom:1.5px solid #e2e8f0; gap:4px;">
+            <b style="font-size:11.5px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🌳 THƯ MỤC KIẾN THỨC:</b>
+            <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
+                <button type="button" id="btn-qbank-tree-vis-toggle" class="btn-qbank-tree-vis-mini ${hasAnyHidden ? "has-hidden-active" : ""}" onclick="toggleQbankTreeVisMenu(event)" title="${hasAnyHidden ? "Đang ẩn bớt nút ở cuối thư mục — Nhấp để bật/tắt" : "Tùy chọn ẩn các nút cuối mỗi thư mục"}">${hasAnyHidden ? "🙈" : "⚙️"}</button>
+                <button class="btn-qbank btn-qbank-primary" style="padding:2px 7px; font-size:10.5px;" onclick="promptAddRootFolder()">+ Thư mục gốc</button>
+            </div>
         </div>
     `;
 
@@ -878,6 +1027,20 @@ function renderQbankTree() {
         const subtreeCount = getSubtreeQuestionCount(node);
         const subHtml = !isLeaf ? `<div class="tree-children">${node.children.map(c => buildNodeHtml(c, depth + 1)).join("")}</div>` : "";
         const safeNodeId = safeQbankJsArg(node.id);
+
+        const showMatrixBtn = isLeaf && !visPrefs.hideMatrixBtn;
+        const showEditBtns = !visPrefs.hideEditTools;
+        const rightActionsHtml = (showMatrixBtn || showEditBtns) ? `
+            <div style="display:flex; align-items:center; gap:2px; flex-shrink:0;" onclick="event.stopPropagation()">
+                ${showMatrixBtn ? `<button class="btn-matrix-toggle ${qbankState.expandedLeafMatrixIds.has(node.id) ? "is-open" : ""}" onclick="toggleLeafMatrixDisplay('${safeNodeId}', event)" title="Mở/Đóng ma trận 16 ô">⊞</button>` : ""}
+                ${showEditBtns ? `
+                    <div class="tree-color-picker-dot" style="background:${nodeColor};" onclick="promptChangeFolderColor('${safeNodeId}')" title="Đổi màu"></div>
+                    <button class="btn-rename-tree" onclick="promptRenameFolder('${safeNodeId}')" title="Đổi tên">✏️</button>
+                    ${!isLeaf || depth < 2 ? `<button class="btn-add-tree" onclick="promptAddChildFolder('${safeNodeId}')" title="Thêm mục con">+</button>` : ""}
+                    <button class="btn-add-tree" style="color:#ef4444;" onclick="promptDeleteFolder('${safeNodeId}')" title="Xóa">✕</button>
+                ` : ""}
+            </div>
+        ` : "";
 
         let matrixDropHtml = "";
         const isMatrixOpen = isLeaf && qbankState.expandedLeafMatrixIds.has(node.id);
@@ -921,13 +1084,7 @@ function renderQbankTree() {
                         <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12.5px; color:${nodeColor}; font-weight:800;" title="${escapeQbankHtml(node.name)}">${escapeQbankHtml(node.name)}</span>
                         ${subtreeCount > 0 ? `<span class="tree-q-count">${subtreeCount}</span>` : ""}
                     </div>
-                    <div style="display:flex; align-items:center; gap:2px;" onclick="event.stopPropagation()">
-                        ${isLeaf ? `<button class="btn-matrix-toggle ${isMatrixOpen ? "is-open" : ""}" onclick="toggleLeafMatrixDisplay('${safeNodeId}', event)" title="Mở/Đóng ma trận 16 ô">⊞</button>` : ""}
-                        <div class="tree-color-picker-dot" style="background:${nodeColor};" onclick="promptChangeFolderColor('${safeNodeId}')" title="Đổi màu"></div>
-                        <button class="btn-rename-tree" onclick="promptRenameFolder('${safeNodeId}')" title="Đổi tên">✏️</button>
-                        ${!isLeaf || depth < 2 ? `<button class="btn-add-tree" onclick="promptAddChildFolder('${safeNodeId}')" title="Thêm mục con">+</button>` : ""}
-                        <button class="btn-add-tree" style="color:#ef4444;" onclick="promptDeleteFolder('${safeNodeId}')" title="Xóa">✕</button>
-                    </div>
+                    ${rightActionsHtml}
                 </div>
                 ${matrixDropHtml}
                 ${subHtml}
@@ -1426,6 +1583,7 @@ function toggleQbankDeleteMultiMenu(event) {
     }
 
     closeQbankUploadMenu();
+    closeQbankTreeVisMenu();
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
     updateQbankDeleteMenuCounts();
 
@@ -1565,6 +1723,14 @@ document.addEventListener("click", function(e) {
             closeQbankUploadMenu();
         }
     }
+
+    const visMenu = document.getElementById("qbank-tree-vis-menu");
+    if (visMenu && visMenu.classList.contains("show")) {
+        const visBtn = document.getElementById("btn-qbank-tree-vis-toggle");
+        if (!(visBtn && visBtn.contains(e.target)) && !visMenu.contains(e.target)) {
+            closeQbankTreeVisMenu();
+        }
+    }
 });
 
 document.addEventListener("keydown", function(e) {
@@ -1573,6 +1739,8 @@ document.addEventListener("keydown", function(e) {
         if (delMenu && delMenu.classList.contains("show")) closeQbankDeleteMultiMenu();
         const upMenu = document.getElementById("qbank-upload-menu");
         if (upMenu && upMenu.classList.contains("show")) closeQbankUploadMenu();
+        const visMenu = document.getElementById("qbank-tree-vis-menu");
+        if (visMenu && visMenu.classList.contains("show")) closeQbankTreeVisMenu();
         closeClassTransferKhoPopover();
     }
 });
@@ -2076,7 +2244,6 @@ function triggerQBankPaste(qId, imgKey) {
 function compressQbankImageToBase64(file, maxDimension = 1600, quality = 0.86) {
     return new Promise((resolve, reject) => {
         if (!file) return reject(new Error("Không có file ảnh!"));
-        // Ảnh nhỏ dưới 750KB giữ nguyên định dạng gốc (PNG/JPG) cho sắc nét nhất
         if (file.size && file.size <= 750 * 1024) {
             const reader = new FileReader();
             reader.onload = () => {
@@ -2143,7 +2310,6 @@ async function uploadImageToHostOrDrive(file, filenamePrefix = "qbank_img") {
 
     let directUrl = "";
 
-    // 1. Ưu tiên gửi ImgBB (tối đa 6.5 giây)
     if (typeof IMGBB_API_KEY !== "undefined" && IMGBB_API_KEY && !IMGBB_API_KEY.includes("THAY_")) {
         const fd = new FormData();
         fd.append("image", b64);
@@ -2161,7 +2327,6 @@ async function uploadImageToHostOrDrive(file, filenamePrefix = "qbank_img") {
         }
     }
 
-    // 2. Dự phòng Google Drive 5TB qua GAS (thử tối đa 2 lần, timeout 45s)
     if (!directUrl && typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" && GOOGLE_DRIVE_UPLOAD_GAS_URL && !GOOGLE_DRIVE_UPLOAD_GAS_URL.includes("DÁN_URL")) {
         for (let attempt = 1; attempt <= 2 && !directUrl; attempt++) {
             const controller = new AbortController();
@@ -2191,7 +2356,6 @@ async function uploadImageToHostOrDrive(file, filenamePrefix = "qbank_img") {
         }
     }
 
-    // 3. CHẶN TUYỆT ĐỐI LỌT CHUỖI BASE64 VÀO SUPABASE / WORKSPACE JSON
     if (!directUrl || isBase64DataUrl(directUrl)) {
         throw new Error("Không thể tải ảnh lên ImgBB và Google Drive (mạng bận hoặc quá giờ). Đã chặn lưu Base64 để bảo vệ dung lượng Database! Vui lòng thử dán lại.");
     }
@@ -2256,6 +2420,10 @@ function deleteQBankImg(qId, imgKey) {
 }
 
 // Xuất ra window scope
+window.toggleQbankTreeVisMenu = toggleQbankTreeVisMenu;
+window.closeQbankTreeVisMenu = closeQbankTreeVisMenu;
+window.setQbankTreeVisOption = setQbankTreeVisOption;
+window.setAllQbankTreeVisOptions = setAllQbankTreeVisOptions;
 window.normalizeQuestionAnswerOnTransfer = normalizeQuestionAnswerOnTransfer;
 window.closeClassTransferKhoPopover = closeClassTransferKhoPopover;
 window.transferClassExamToQBank = transferClassExamToQBank;
