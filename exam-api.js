@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
-// TỐI ƯU BĂNG THÔNG SUPABASE & ĐỒNG BỘ CHÍNH XÁC 100% LOG CHUYỂN TAB (RETRY + QUEUE)
+// TỐI ƯU BĂNG THÔNG SUPABASE & ĐỒNG BỘ CHÍNH XÁC 100% LOG CHUYỂN TAB (RETRY + FALLBACK SCHEMA)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -762,7 +762,7 @@ async function checkPendingSubmissionOnLoad() {
 }
 
 // =========================================================================
-// HÀNG ĐỢI GỬI LOG CHUYỂN TAB CÓ RETRY CHỐNG RỚT MẠNG KHI VỪA QUAY LẠI TAB
+// HÀNG ĐỢI GỬI LOG CHUYỂN TAB CÓ RETRY + FALLBACK SCHEMA KHÔNG CẦN duration_sec
 // =========================================================================
 function readPendingTabLogsQueue() {
     try {
@@ -783,13 +783,27 @@ function writePendingTabLogsQueue(arr) {
 
 async function insertTabLogWithRetry(client, row) {
     const delays = [0, 1500, 4000];
+    let payloadToSend = { ...row };
+
     for (let i = 0; i < delays.length; i++) {
         if (delays[i] > 0) {
             await new Promise(r => setTimeout(r, delays[i]));
         }
         try {
-            const { error } = await client.from('cheating_logs').insert([row]);
+            const { error } = await client.from('cheating_logs').insert([payloadToSend]);
             if (!error) return true;
+
+            const errMsg = String(error.message || "").toLowerCase();
+            const errCode = String(error.code || "");
+            if (
+                payloadToSend.duration_sec !== undefined &&
+                (errCode === "42703" || errCode === "PGRST204" || errMsg.includes("duration_sec") || errMsg.includes("column"))
+            ) {
+                const { duration_sec, ...fallbackRow } = payloadToSend;
+                payloadToSend = fallbackRow;
+                const { error: errFallback } = await client.from('cheating_logs').insert([payloadToSend]);
+                if (!errFallback) return true;
+            }
         } catch(e) {}
     }
     return false;
