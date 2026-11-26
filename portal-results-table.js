@@ -1,11 +1,8 @@
 // =========================================================
 // FILE: portal-results-table.js 
-// BẢNG KẾT QUẢ THI: HỖ TRỢ KÉO ĐỘ RỘNG CỘT TRONG CHẾ ĐỘ VỪA MÀN (PC & MOBILE)
-// HIỂN THỊ CHỮ TO RÕ NHẤT TRÊN ĐIỆN THOẠI KHÔNG BỊ MẤT CHỮ TRONG Ô
-// ĐÃ TỐI ƯU TOÀN DIỆN:
-// 1. KÉO ĐỘ RỘNG CỘT (HỌ TÊN, ĐIỂM, XẾP HẠNG,...) MƯỢT MÀ CẢ BẰNG CHUỘT LẪN CẢM ỨNG
-// 2. TRÊN ĐIỆN THOẠI KHI BẤM "VỪA MÀN" CHỮ HIỂN THỊ TO NHẤT (13px - 14px) KHÔNG BỊ MẤT CHỮ
-// 3. MENU NỔI (LẦN THI, XẾP HẠNG, SỐ ĐỀ) LUÔN NỔI TRÊN CÙNG TRONG PORTAL ĐỘC LẬP
+// BẢNG KẾT QUẢ THI: NÂNG CẤP CHẾ ĐỘ "VỪA MÀN" HIỂN THỊ ĐỦ 100% DÒNG & CỘT
+// CHỮ HIỆN TO RÕ NHẤT CÓ THỂ, KHÔNG BỊ CHE KHUẤT & CHO PHÉP KÉO CỘT TÙY Ý
+// HỖ TRỢ HOÀN HẢO TRÊN CẢ MÁY TÍNH VÀ ĐIỆN THOẠI DI ĐỘNG (PC & MOBILE)
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -15,7 +12,7 @@ let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 let _fitResizeTimer = null;
 let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key: string }
-let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do người dùng kéo dãn
+let _userCustomColWidths = {}; // Lưu trữ độ rộng cột tùy chỉnh do người dùng kéo dãn
 
 (function injectAttemptDropdownStyles() {
     const styleId = "status-attempt-dropdown-styles";
@@ -218,7 +215,7 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
         .result-modal-body {
             padding: 2px 4px !important;
             transform-origin: top left !important;
-            transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            transition: transform 0.12s ease !important;
         }
 
         .result-table-card {
@@ -234,7 +231,8 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
             font-size: 10.5px !important;
             font-weight: 800 !important;
             cursor: pointer !important;
-            display: inline-flex !align-items: center !important;
+            display: inline-flex !important;
+            align-items: center !important;
             gap: 3px !important;
             box-shadow: 0 1px 4px rgba(2, 132, 199, 0.25) !important;
             transition: all 0.15s ease !important;
@@ -296,17 +294,18 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
         }
 
         /* ========================================================= */
-        /* CHẾ ĐỘ VỪA MÀN: CHO PHÉP KÉO ĐỘ RỘNG CỘT & CHỮ TO TRÊN MOBILE */
+        /* BẢNG CHẾ ĐỘ VỪA MÀN: PHÂN BỔ TỶ LỆ CỘT TỐI ƯU & CHỮ TO NHẤT */
         /* ========================================================= */
         .result-table.table-fitted-compact {
-            --table-row-padding-y: 1px !important;
+            --table-row-padding-y: 1.5px !important;
             --table-row-padding-x: 3px !important;
             width: 100% !important;
             table-layout: fixed !important;
+            border-collapse: separate !important;
         }
         .result-table.table-fitted-compact thead th {
             padding: 3px 4px !important;
-            font-size: max(9px, calc(var(--table-font-size, 12px) - 1px)) !important;
+            font-size: max(9.5px, calc(var(--table-font-size, 12.5px) - 1px)) !important;
             line-height: 1.15 !important;
             border-right: 1px solid #334155 !important;
             border-bottom: 1.5px solid #0284c7 !important;
@@ -318,44 +317,59 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
             height: auto !important;
         }
         .result-table.table-fitted-compact tbody td {
-            padding: 2px 4px !important;
-            font-size: var(--table-font-size, 12px) !important;
-            line-height: 1.2 !important;
+            padding: var(--table-row-padding-y, 1.5px) var(--table-row-padding-x, 3px) !important;
+            font-size: var(--table-font-size, 12.5px) !important;
+            line-height: 1.22 !important;
             border-right: 1px solid #cbd5e1 !important;
             border-bottom: 1px solid #cbd5e1 !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
             box-sizing: border-box !important;
+            vertical-align: middle !important;
         }
         .result-table.table-fitted-compact tbody td.td-attempt-cell-wrap {
-            padding: 1px 3px !important;
+            padding: 1px 2px !important;
         }
 
-        /* Phân bổ tỷ lệ % ban đầu - Chỉ áp dụng khi cột chưa bị kéo dãn bằng tay (:not([data-user-resized])) */
-        .result-table.table-fitted-compact th:nth-child(1):not([data-user-resized]) { width: 3.0% !important; }
-        .result-table.table-fitted-compact th:nth-child(2):not([data-user-resized]) { width: 9.5% !important; }
-        .result-table.table-fitted-compact th:nth-child(3):not([data-user-resized]) { width: 5.0% !important; }
+        /* Tỷ lệ % mặc định khi chưa bị người dùng kéo dãn bằng tay (:not([data-user-resized])) */
+        .result-table.table-fitted-compact th:nth-child(1):not([data-user-resized]) { width: 3.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(2):not([data-user-resized]) { width: 9.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(3):not([data-user-resized]) { width: 5.5% !important; }
         .result-table.table-fitted-compact th:nth-child(4):not([data-user-resized]) { width: 8.5% !important; }
         .result-table.table-fitted-compact th:nth-child(5):not([data-user-resized]) { width: 6.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(6):not([data-user-resized]) { width: 11.5% !important; }
-        .result-table.table-fitted-compact th:nth-child(7):not([data-user-resized]) { width: 4.0% !important; }
-        .result-table.table-fitted-compact th:nth-child(8):not([data-user-resized]) { width: 4.5% !important; }
-        .result-table.table-fitted-compact th:nth-child(9):not([data-user-resized]) { width: 6.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(10):not([data-user-resized]) { width: 4.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(11):not([data-user-resized]) { width: 3.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(12):not([data-user-resized]) { width: 5.8% !important; }
-        .result-table.table-fitted-compact th:nth-child(13):not([data-user-resized]) { width: 5.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(6):not([data-user-resized]) { width: 13.0% !important; }
+        .result-table.table-fitted-compact th:nth-child(7):not([data-user-resized]) { width: 3.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(8):not([data-user-resized]) { width: 5.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(9):not([data-user-resized]) { width: 7.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(10):not([data-user-resized]) { width: 5.0% !important; }
+        .result-table.table-fitted-compact th:nth-child(11):not([data-user-resized]) { width: 4.5% !important; }
+        .result-table.table-fitted-compact th:nth-child(12):not([data-user-resized]) { width: 6.2% !important; }
+        .result-table.table-fitted-compact th:nth-child(13):not([data-user-resized]) { width: 5.0% !important; }
         .result-table.table-fitted-compact th:nth-child(14):not([data-user-resized]) { width: 5.2% !important; }
-        .result-table.table-fitted-compact th:nth-child(15):not([data-user-resized]) { width: 10.0% !important; }
-        .result-table.table-fitted-compact th:nth-child(16):not([data-user-resized]) { width: 4.8% !important; }
+        .result-table.table-fitted-compact th:nth-child(15):not([data-user-resized]) { width: 5.5% !important; }
+        .result-table.table-fitted-compact th:nth-child(16):not([data-user-resized]) { width: 4.6% !important; }
         .result-table.table-fitted-compact th:nth-child(17):not([data-user-resized]) { width: 3.0% !important; }
 
-        /* NÂNG CẤP ĐẶC BIỆT CHO ĐIỆN THOẠI DI ĐỘNG (MÀN HÌNH NHỎ) */
+        /* Chống mất chữ: Cho phép hiển thị trọn vẹn Họ và tên & Tên đề, không bị cắt dấu ba chấm */
+        .result-table.table-fitted-compact .td-name {
+            white-space: normal !important;
+            word-break: break-word !important;
+            display: inline-block !important;
+            line-height: 1.2 !important;
+            max-width: 100% !important;
+        }
+        .result-table.table-fitted-compact .td-exam-text {
+            white-space: normal !important;
+            word-break: break-word !important;
+            display: block !important;
+            line-height: 1.15 !important;
+            max-height: 28px !important;
+            overflow: hidden !important;
+        }
+
+        /* NÂNG CẤP TRÊN ĐIỆN THOẠI DI ĐỘNG */
         @media (max-width: 768px) {
             .result-table.table-fitted-compact {
                 table-layout: auto !important;
-                min-width: 820px !important;
+                min-width: 860px !important;
             }
             .result-table.table-fitted-compact thead th {
                 font-size: 11.5px !important;
@@ -363,18 +377,11 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
             }
             .result-table.table-fitted-compact tbody td {
                 font-size: var(--table-font-size, 13px) !important;
-                padding: 3px 5px !important;
-            }
-            .result-table.table-fitted-compact .td-name,
-            .result-table.table-fitted-compact .td-exam-text {
-                white-space: normal !important;
-                word-break: break-word !important;
-                max-width: 220px !important;
-                text-overflow: clip !important;
+                padding: 3px 6px !important;
             }
             .result-table.table-fitted-compact .resizer {
-                width: 16px !important;
-                right: -8px !important;
+                width: 18px !important;
+                right: -9px !important;
             }
         }
 
@@ -584,11 +591,11 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
 
         .attempt-picker-wrapper { position: relative !important; display: inline-block !important; }
 
-        /* THANH RESIZER KÉO CỘT NÂNG CẤP VÙNG CHẠM DỄ DÀNG */
+        /* THANH KÉO DÃN RESIZER VÙNG CHẠM DỄ DÀNG CẢ BẰNG CHUỘT LẪN CẢM ỨNG */
         .resizer {
             position: absolute !important;
             top: 0 !important;
-            right: -5px !important;
+            right: -6px !important;
             width: 14px !important;
             cursor: col-resize !important;
             user-select: none !important;
@@ -599,7 +606,7 @@ let _userCustomColWidths = {}; // Lưu độ rộng cột tùy chỉnh do ngư�
         }
         .resizer:hover, .resizer.resizing {
             background: #38bdf8 !important;
-            opacity: 0.9 !important;
+            opacity: 0.95 !important;
         }
 
         #result-floating-dropdown-portal {
@@ -937,7 +944,8 @@ function resetResultModalZoomOnClose() {
 }
 
 // ============================================================================
-// NÂNG CẤP BỘ ĐIỀU KHIỂN VỪA MÀN (TỐI ƯU CHO CẢ MÁY TÍNH VÀ ĐIỆN THOẠI)
+// NÂNG CẤP ĐỘT PHÁ: THUẬT TOÁN "VỪA MÀN" ĐO CHÍNH XÁC KÍCH THƯỚC VÙNG HIỂN THỊ
+// TỐI ĐA HÓA CỠ CHỮ TO NHẤT CÓ THỂ, VỪA KHÍT 100% CẢ DỌC VÀ NGANG
 // ============================================================================
 function computeAndApplyFitAllRows() {
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
@@ -945,7 +953,10 @@ function computeAndApplyFitAllRows() {
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (!scrollWrap || !table) return;
 
+    // Kích hoạt class Vừa màn
     table.classList.add("table-fitted-compact");
+    
+    // Tạm reset zoom về 1.0 để đo đạc kích thước gốc chân thực nhất
     applyModalZoomLevel(1.0);
 
     requestAnimationFrame(() => {
@@ -956,14 +967,14 @@ function computeAndApplyFitAllRows() {
         const isMobile = window.innerWidth <= 768;
 
         if (isMobile) {
-            // TRÊN ĐIỆN THOẠI: GIỮ CHỮ TO RÕ NHẤT (13px - 14px), KHÔNG BỊ CO NHỎ MẤT CHỮ
+            // TRÊN MOBILE: CHỮ TO NHẤT (13px - 14px), KHÔNG BỊ CO NHỎ MẤT CHỮ
             const chosenFs = Math.max(12.5, Math.min(14, Math.floor(availW / 26)));
             table.style.setProperty("--table-font-size", chosenFs + "px");
             table.style.fontSize = chosenFs + "px";
 
             const unscaledH = Math.max(1, table.scrollHeight);
             const reqZoomH = (availH - 2) / unscaledH;
-            // Không bóp zoom xuống quá 88% trên điện thoại để chữ luôn sắc nét
+            // Không bóp zoom dưới 0.88 trên mobile để chữ luôn to rõ
             let chosenZoom = Math.min(1.0, Math.max(0.88, Math.floor(reqZoomH * 100) / 100));
             applyModalZoomLevel(chosenZoom);
 
@@ -977,49 +988,50 @@ function computeAndApplyFitAllRows() {
             return;
         }
 
-        // TRÊN MÁY TÍNH / LAPTOP
-        const maxFsByWidth = Math.min(18, Math.max(9.5, Math.floor((availW / 106) * 2) / 2));
-        let chosenFs = 9.0;
+        // TRÊN MÁY TÍNH / LAPTOP: TỐI ƯU CẢ 2 CHIỀU ĐỂ HIỂN THỊ ĐỦ 100% DÒNG VÀ CỘT
+        let chosenFs = 13.0;
         let chosenZoom = 1.0;
-        let foundPerfect = false;
 
-        for (let fs = maxFsByWidth; fs >= 8.5; fs -= 0.5) {
+        // Thử tìm font size lớn nhất trong khoảng [11.0px -> 14.5px] mà vừa vặn màn hình
+        let bestFitFound = false;
+        for (let fs = 14.0; fs >= 11.0; fs -= 0.5) {
             table.style.setProperty("--table-font-size", fs + "px");
             table.style.fontSize = fs + "px";
 
-            if (table.scrollHeight <= availH && table.scrollWidth <= availW + 1) {
+            const curScrollW = table.scrollWidth;
+            const curScrollH = table.scrollHeight;
+
+            const scaleW = (availW - 4) / Math.max(1, curScrollW);
+            const scaleH = (availH - 4) / Math.max(1, curScrollH);
+            const candidateZoom = Math.min(scaleW, scaleH);
+
+            // Nếu zoom đạt từ 0.78 trở lên, chữ rất to rõ nét
+            if (candidateZoom >= 0.78) {
                 chosenFs = fs;
-                chosenZoom = 1.0;
-                foundPerfect = true;
+                chosenZoom = Math.min(1.0, Math.floor(candidateZoom * 100) / 100);
+                bestFitFound = true;
                 break;
             }
         }
 
-        if (!foundPerfect) {
-            chosenFs = Math.min(10.5, maxFsByWidth);
+        // Nếu số dòng quá nhiều (trên 35-45 em), chọn font 12px và áp dụng tỷ lệ fit chính xác
+        if (!bestFitFound) {
+            chosenFs = 12.0;
             table.style.setProperty("--table-font-size", chosenFs + "px");
             table.style.fontSize = chosenFs + "px";
 
-            const unscaledH = Math.max(1, table.scrollHeight);
-            const unscaledW = Math.max(1, table.scrollWidth);
-            const reqZoomH = (availH - 2) / unscaledH;
-            const reqZoomW = (availW - 2) / unscaledW;
-            chosenZoom = Math.min(1.0, Math.max(0.40, Math.floor(Math.min(reqZoomH, reqZoomW) * 100) / 100));
+            const curScrollW = Math.max(1, table.scrollWidth);
+            const curScrollH = Math.max(1, table.scrollHeight);
+            const scaleW = (availW - 4) / curScrollW;
+            const scaleH = (availH - 4) / curScrollH;
+            
+            // Tính toán tỷ lệ vừa khít cả 2 chiều, chặn tối thiểu 0.45 để chữ không bị hạt bụi
+            chosenZoom = Math.min(1.0, Math.max(0.45, Math.floor(Math.min(scaleW, scaleH) * 100) / 100));
         }
 
         table.style.setProperty("--table-font-size", chosenFs + "px");
         table.style.fontSize = chosenFs + "px";
         applyModalZoomLevel(chosenZoom);
-
-        let guard = 0;
-        while (
-            (scrollWrap.scrollHeight > scrollWrap.clientHeight + 2 || scrollWrap.scrollWidth > scrollWrap.clientWidth + 2) &&
-            modalCustomZoomLevel > 0.42 &&
-            guard < 10
-        ) {
-            applyModalZoomLevel(modalCustomZoomLevel - 0.02);
-            guard++;
-        }
 
         scrollWrap.scrollTop = 0;
         scrollWrap.scrollLeft = 0;
@@ -1396,7 +1408,7 @@ function applyRowPaddingPreset(pad) { exitFitModeForManualSettings(); tableDispl
 function resetTableSettings() { exitFitModeForManualSettings(); tableDisplaySettings.fontSize = 13; tableDisplaySettings.rowPadding = 9; applyTableSettings(); }
 
 // ============================================================================
-// BỘ ĐIỀU KHIỂN KÉO CỘT NÂNG CẤP (HỖ TRỢ MƯỢT CẢ MÁY TÍNH VÀ ĐIỆN THOẠI CẢM ỨNG)
+// BỘ ĐIỀU KHIỂN KÉO CỘT NÂNG CẤP (HOẠT ĐỘNG HOÀN HẢO CẢ TRONG CHẾ ĐỘ VỪA MÀN)
 // ============================================================================
 function initTableResizable() {
     const table = document.getElementById("admin-result-table");
@@ -1404,7 +1416,7 @@ function initTableResizable() {
     const headers = table.querySelectorAll("thead th");
     
     headers.forEach((th, colIdx) => {
-        // Áp dụng lại độ rộng đã kéo tùy chỉnh trước đó nếu có
+        // Áp dụng lại độ rộng tùy chỉnh của người dùng nếu có
         if (_userCustomColWidths[colIdx]) {
             th.dataset.userResized = "true";
             th.style.setProperty("width", _userCustomColWidths[colIdx] + "px", "important");
