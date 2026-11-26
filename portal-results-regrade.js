@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: portal-results-regrade.js (BẢN TỐI ƯU HỖ TRỢ CHẤM LẠI THEO LÔ & FILE DỰ PHÒNG)
-// ĐÃ BỔ SUNG: CHẤM LẠI NHANH THEO BATCH 10 BÀI + TÌM ĐỦ candidateCodes + TRÁNH TRÙNG ID NHÁP
+// ĐÃ BỔ SUNG: BẢO TOÀN NGUYÊN VẸN THÔNG TIN CHUYỂN TAB (Tab Switch & TabTimes) KHI CHẤM LẠI
 // =========================================================
 
 function closeResultModal(triggerHistoryBack = true) {
@@ -117,6 +117,19 @@ async function previewRegradeFile(input) {
     }
 }
 
+function extractPreservedLogTokens(oldDataString) {
+    if (!oldDataString) return [];
+    return String(oldDataString)
+        .split(/\s*\|\s*/)
+        .map(s => s.trim())
+        .filter(tok => tok && (
+            /^tab\s*switch\s*:/i.test(tok) ||
+            /^tabtimes\s*:/i.test(tok) ||
+            tok.includes("[THU BÀI ÉP BUỘC TỪ XA]") ||
+            /^\[Lần\s*\d+\]/i.test(tok)
+        ));
+}
+
 async function processRegradeWithAnswers() {
     const btn = document.getElementById("btn-confirm-regrade");
     const currentItem = currentExamResultData.item;
@@ -160,7 +173,7 @@ async function processRegradeWithAnswers() {
         btn.innerText = "⏳ Đang chấm lại...";
         const { data: subs } = await client
             .from('submissions')
-            .select('id, user_answers')
+            .select('id, user_answers, data_string')
             .in('quiz_id', candidateCodes);
 
         let updatedCount = 0;
@@ -172,19 +185,21 @@ async function processRegradeWithAnswers() {
                 await Promise.all(batch.map(async (sub) => {
                     const userAns = sub.user_answers || {};
                     const scoreRes = calculateExamScoreWithConfig(quizObj.questions, userAns, newAnswerKey, scoringConfig);
+                    const preservedLogs = extractPreservedLogTokens(sub.data_string);
+                    const finalDetails = [...scoreRes.dataDetails, ...preservedLogs];
                     const { error: upErr } = await client.from('submissions').update({
                         score10: scoreRes.finalScore,
                         raw_score: scoreRes.totalRawScore,
                         correct_count: scoreRes.correctCount,
                         wrong_count: scoreRes.wrongCount,
-                        data_string: scoreRes.dataDetails.join(" | ")
+                        data_string: finalDetails.join(" | ")
                     }).match({ id: sub.id });
                     if (!upErr) updatedCount++;
                 }));
             }
         }
 
-        alert(`🎉 CHẤM LẠI THÀNH CÔNG!\nĐã tính lại điểm chính xác cho ${updatedCount} bài làm.`);
+        alert(`🎉 CHẤM LẠI THÀNH CÔNG!\nĐã tính lại điểm chính xác cho ${updatedCount} bài làm (đã bảo toàn nguyên vẹn log chuyển tab).`);
         closeRegradeModal(); 
         await refreshCurrentExamResults();
     } catch(err) {
@@ -277,7 +292,8 @@ async function handleBackupJsonFileInput(input) {
                         maxScale = scoreRes.maxScale;
                         correctCount = scoreRes.correctCount;
                         wrongCount = scoreRes.wrongCount;
-                        dataString = scoreRes.dataDetails.join(" | ") + " | [TỰ ĐỘNG CHẤM TỪ BẢN LƯU NHÁP]";
+                        const preservedLogs = extractPreservedLogTokens(dataString);
+                        dataString = [...scoreRes.dataDetails, ...preservedLogs, "[TỰ ĐỘNG CHẤM TỪ BẢN LƯU NHÁP]"].join(" | ");
                     }
                 } catch(calcErr) {
                     console.warn("Không thể tính điểm tự động:", calcErr);
