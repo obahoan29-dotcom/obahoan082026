@@ -1,7 +1,7 @@
 // =========================================================
 // FILE: exam-api.js
 // QUẢN LÝ KẾT NỐI REALTIME, ĐỒNG BỘ THỜI GIAN, PHÒNG THI & SĨ SỐ
-// TỐI ƯU BĂNG THÔNG SUPABASE CHO 225+ HS/NGÀY (PING 60s + SELECT NHẸ + CHỐNG TRÙNG)
+// TỐI ƯU BĂNG THÔNG SUPABASE & ĐỒNG BỘ CHÍNH XÁC 100% LOG CHUYỂN TAB (RETRY + QUEUE)
 // =========================================================
 
 const URL1_TAB_CHEATING = "https://script.google.com/macros/s/AKfycbzAPaLBO8gjPdbzrXOhvChUMzBHsnrhIMbJQIsDhqFtNfsW2Rf1Dki-bYJf-YCM-CCU/exec";
@@ -13,6 +13,7 @@ let EXAM_PASSWORD = "";
 let TIME_LIMIT_MINUTES = 45;  
 
 let tabSwitchCount = 0;
+let tabSwitchDurations = [];
 let leaveTime = 0;
 let isTabHidden = false;
 let timerInterval = null;
@@ -33,12 +34,29 @@ let forceSubmitRealtimeChannel = null;
 
 let _lastPresencePingMs = 0;
 let _lastOnlineCountRefreshMs = 0;
+let _isFlushingTabLogs = false;
 
 window.localOnlineCount = 1; 
+
+const PENDING_TAB_LOGS_KEY = "pending_tab_cheating_logs_v1";
 
 function isMobileInAppBrowser() {
     const ua = navigator.userAgent || navigator.vendor || window.opera || '';
     return /FBAN|FBAV|Messenger|Instagram|Zalo|Line|Twitter|Kakaotalk/i.test(ua);
+}
+
+function formatShortTabDuration(durationSec) {
+    const s = Math.max(1, Math.round(Number(durationSec) || 1));
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return mins > 0 ? `${mins}p${secs}s` : `${secs}s`;
+}
+
+function formatFullTabDuration(durationSec) {
+    const s = Math.max(1, Math.round(Number(durationSec) || 1));
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return mins > 0 ? `${mins} phút ${secs} giây` : `${secs} giây`;
 }
 
 // CẤU HÌNH LẮNG NGHE REALTIME TOÀN CỤC (MẶC ĐỊNH PING 60s TIẾT KIỆM 58% REQUEST)
@@ -57,7 +75,6 @@ async function loadRealtimeExamConfig() {
             window.CURRENT_RT_CONFIG = { ...window.CURRENT_RT_CONFIG, ...JSON.parse(rawLocal) };
         }
 
-        // Chỉ fetch lại từ Supabase tối đa mỗi 2 phút/lần cho mỗi phiên trình duyệt
         const lastCfgFetch = parseInt(safeSession.getItem("rt_cfg_fetched_at") || "0", 10);
         if (lastCfgFetch > 0 && (Date.now() - lastCfgFetch) < 120000) {
             return;
@@ -502,9 +519,10 @@ async function startPresenceSystem(sId) {
             updatePresence(cleanSbd, false); 
         }, intervalSec * 1000);
     }
+
+    flushPendingTabLogs();
 }
 
-// BẢN FIX: GIỮ NGUYÊN START_TIME GỐC + SELECT('sbd') SIÊU NHẸ + CHỐNG PING KÉP TRONG 15s
 async function updatePresence(cleanSbd, force = false) {
     try {
         const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
@@ -539,7 +557,7 @@ async function updatePresence(cleanSbd, force = false) {
                 name: sName,
                 class_name: sClass,
                 category_id: typeof getExamCategory === 'function' ? getExamCategory() : "them-11",
-                is_free: false,
+                is_free: !(typeof findStudentFromDatabase === 'function' && findStudentFromDatabase(sId, typeof getExamCategory === 'function' ? getExamCategory() : "them-11")),
                 ma_de: typeof getMaDe === 'function' ? getMaDe() : "101",
                 exam_title: typeof EXAM_NAME !== 'undefined' ? EXAM_NAME : "Đề thi",
                 start_time: reliableStartTime,
@@ -685,7 +703,8 @@ function setupBackPrevention() {
     window.addEventListener('online', function() { 
         const banner = document.getElementById("net-status-banner");
         if (banner) banner.style.display = "none"; 
-        checkPendingSubmissionOnLoad(); 
+        checkPendingSubmissionOnLoad();
+        flushPendingTabLogs();
     }); 
     window.addEventListener('offline', function() { 
         const banner = document.getElementById("net-status-banner");
@@ -742,6 +761,108 @@ async function checkPendingSubmissionOnLoad() {
     updateTopBackupStatus(isSubmitted);
 }
 
+// =========================================================================
+// HÀNG ĐỢI GỬI LOG CHUYỂN TAB CÓ RETRY CHỐNG RỚT MẠNG KHI VỪA QUAY LẠI TAB
+// =========================================================================
+function readPendingTabLogsQueue() {
+    try {
+        const raw = safeLocal.getItem(PENDING_TAB_LOGS_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+    } catch(e) {
+        return [];
+    }
+}
+
+function writePendingTabLogsQueue(arr) {
+    try {
+        if (!arr || arr.length === 0) safeLocal.removeItem(PENDING_TAB_LOGS_KEY);
+        else safeLocal.setItem(PENDING_TAB_LOGS_KEY, JSON.stringify(arr.slice(-30)));
+    } catch(e) {}
+}
+
+async function insertTabLogWithRetry(client, row) {
+    const delays = [0, 1500, 4000];
+    for (let i = 0; i < delays.length; i++) {
+        if (delays[i] > 0) {
+            await new Promise(r => setTimeout(r, delays[i]));
+        }
+        try {
+            const { error } = await client.from('cheating_logs').insert([row]);
+            if (!error) return true;
+        } catch(e) {}
+    }
+    return false;
+}
+
+async function flushPendingTabLogs() {
+    if (_isFlushingTabLogs) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
+    if (!client) return;
+
+    const queue = readPendingTabLogsQueue();
+    if (queue.length === 0) return;
+
+    _isFlushingTabLogs = true;
+    try {
+        const remaining = [];
+        for (let i = 0; i < queue.length; i++) {
+            const ok = await insertTabLogWithRetry(client, queue[i]);
+            if (!ok) {
+                remaining.push(...queue.slice(i));
+                break;
+            }
+        }
+        writePendingTabLogsQueue(remaining);
+    } finally {
+        _isFlushingTabLogs = false;
+    }
+}
+
+function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) { 
+    let sId = document.getElementById("student-id") ? document.getElementById("student-id").value.trim() : (safeLocal.getItem("saved_student_sbd") || ""); 
+    let sName = document.getElementById("student-name") ? document.getElementById("student-name").value.trim() : (safeLocal.getItem("saved_student_name") || ""); 
+    let sClass = document.getElementById("student-class") ? document.getElementById("student-class").value.trim() : (safeLocal.getItem("saved_student_class") || ""); 
+    const currentCat = getExamCategory(); 
+    const urlParams = new URLSearchParams(window.location.search); 
+    const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData ? examData.id : "") || "";
+
+    const row = {
+        quiz_id: currentQuizId,
+        sbd: (sId || "user").replace(/[^a-zA-Z0-9]/g, '_'),
+        student_name: sName || "Chưa nhập",
+        student_class: sClass || "Chưa nhập",
+        category_id: currentCat,
+        switch_count: switchCount,
+        duration_str: durationStr,
+        duration_sec: durationSec
+    };
+
+    const queue = readPendingTabLogsQueue();
+    queue.push(row);
+    writePendingTabLogsQueue(queue);
+    flushPendingTabLogs();
+}
+
+function finalizePendingTabLeaveIfAny(isAdminPreviewUrl = false) {
+    if (isTabHidden && leaveTime > 0) {
+        isTabHidden = false;
+        const durationSec = Math.max(1, Math.round((Date.now() - leaveTime) / 1000));
+        leaveTime = 0;
+        const durationStr = formatFullTabDuration(durationSec);
+        const shortDur = formatShortTabDuration(durationSec);
+        if (!Array.isArray(tabSwitchDurations)) tabSwitchDurations = [];
+        tabSwitchDurations.push(shortDur);
+        tabSwitchCount = Math.max(tabSwitchCount, tabSwitchDurations.length);
+        if (!isAdminPreviewUrl) {
+            sendTabSwitchLog(tabSwitchCount, durationStr, durationSec);
+        }
+        return { durationSec, durationStr, shortDur };
+    }
+    return null;
+}
+
 document.addEventListener("visibilitychange", async function() { 
     if (wakeLockSentinel === null && !document.hidden) { 
         await requestWakeLock(); 
@@ -760,6 +881,8 @@ document.addEventListener("visibilitychange", async function() {
 
             const elapsedSec = Math.floor((Date.now() - examStartTime) / 1000);
             if (elapsedSec >= totalTimeSeconds) {
+                finalizePendingTabLeaveIfAny(false);
+                if (typeof window.__saveExamState === 'function') window.__saveExamState();
                 if (typeof window.executeSubmitExam === 'function') {
                     window.executeSubmitExam(true);
                     return;
@@ -772,24 +895,22 @@ document.addEventListener("visibilitychange", async function() {
         if (!isTabHidden) { 
             isTabHidden = true; 
             leaveTime = Date.now(); 
-            tabSwitchCount++; 
+            if (!Array.isArray(tabSwitchDurations)) tabSwitchDurations = [];
+            tabSwitchCount = Math.max(tabSwitchCount, tabSwitchDurations.length) + 1; 
             if (!isAdminPreviewUrl && typeof window.__saveExamState === 'function') window.__saveExamState();
         } 
     } else { 
         if (isTabHidden && leaveTime > 0) { 
-            isTabHidden = false; 
-            let durationSec = Math.max(1, Math.round((Date.now() - leaveTime) / 1000)); 
-            leaveTime = 0; 
-            let mins = Math.floor(durationSec / 60); 
-            let secs = durationSec % 60; 
-            let durationStr = mins > 0 ? `${mins} phút ${secs} giây` : `${secs} giây`; 
-            if (!isAdminPreviewUrl) {
-                sendTabSwitchLog(tabSwitchCount, durationStr, durationSec); 
+            const finalized = finalizePendingTabLeaveIfAny(isAdminPreviewUrl);
+            if (!isAdminPreviewUrl && typeof window.__saveExamState === 'function') {
+                window.__saveExamState();
             }
-            if (typeof showTimeChangeToast === 'function') {
-                showTimeChangeToast(`⚠️ Bạn vừa rời bài thi ${durationStr} (Lần ${tabSwitchCount})!`);
+            if (finalized && typeof showTimeChangeToast === 'function') {
+                showTimeChangeToast(`⚠️ Bạn vừa rời bài thi ${finalized.durationStr} (Lần ${tabSwitchCount})!`);
             }
-        } 
+        } else if (!isAdminPreviewUrl) {
+            flushPendingTabLogs();
+        }
     } 
 });
 
@@ -800,30 +921,9 @@ window.addEventListener("focus", function() {
         const sId = document.getElementById("student-id")?.value.trim() || safeLocal.getItem("saved_student_sbd") || "";
         const cleanSbd = (sId || "user").replace(/[^a-zA-Z0-9]/g, '_');
         updatePresence(cleanSbd, false);
+        flushPendingTabLogs();
     }
 });
-
-function sendTabSwitchLog(switchCount, durationStr, durationSec = 0) { 
-    let sId = document.getElementById("student-id") ? document.getElementById("student-id").value.trim() : ""; 
-    let sName = document.getElementById("student-name") ? document.getElementById("student-name").value.trim() : ""; 
-    let sClass = document.getElementById("student-class") ? document.getElementById("student-class").value.trim() : ""; 
-    const currentCat = getExamCategory(); 
-    const urlParams = new URLSearchParams(window.location.search); 
-    const currentQuizId = urlParams.get('id') || "";
-    const client = (typeof getSupabaseClient === 'function') ? getSupabaseClient() : supabaseClient;
-    if (!client) return;
-
-    client.from('cheating_logs').insert([{
-        quiz_id: currentQuizId,
-        sbd: (sId || "user").replace(/[^a-zA-Z0-9]/g, '_'),
-        student_name: sName || "Chưa nhập",
-        student_class: sClass || "Chưa nhập",
-        category_id: currentCat,
-        switch_count: switchCount,
-        duration_str: durationStr,
-        duration_sec: durationSec
-    }]).then();
-}
 
 window.startForceSubmitWatcher = startForceSubmitWatcher;
 window.updateTopBackupStatus = updateTopBackupStatus;
@@ -836,3 +936,6 @@ window.checkPendingSubmissionOnLoad = checkPendingSubmissionOnLoad;
 window.getStorageKey = getStorageKey;
 window.checkAndDisplayAttemptNoticeOnStudentCard = checkAndDisplayAttemptNoticeOnStudentCard;
 window.loadRealtimeExamConfig = loadRealtimeExamConfig;
+window.finalizePendingTabLeaveIfAny = finalizePendingTabLeaveIfAny;
+window.flushPendingTabLogs = flushPendingTabLogs;
+window.formatShortTabDuration = formatShortTabDuration;
