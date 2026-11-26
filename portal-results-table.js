@@ -2,14 +2,15 @@
 // FILE: portal-results-table.js 
 // BẢNG KẾT QUẢ THI: ĐÃ BỔ SUNG CẢM ỨNG 2 NGÓN TAY PHÓNG TO THU NHỎ
 // ĐÃ FIX TRIỆT ĐỂ:
-// 1. VỪA MÀN HIỂN THỊ ĐỦ 100% CẢ 17 CỘT TRÊN 1 MÀN HÌNH (KHÔNG TRÀN PHẢI)
-// 2. CHO PHÉP KÉO ĐỘ RỘNG TỪNG CỘT (CẢ PC & CẢM ỨNG) NGAY TRONG CHẾ ĐỘ VỪA MÀN
-// 3. CHẾ ĐỘ VỪA MÀN TRÊN ĐIỆN THOẠI HIỂN THỊ CHỮ TO NHẤT & KHÔNG BỊ MẤT CHỮ TRONG Ô
-// 4. MENU LẦN THI (2 LẦN), XẾP HẠNG & SỐ ĐỀ THI LUÔN NỔI TRÊN CÙNG (z-index: 2147483647)
+// 1. VỪA MÀN HIỂN THỊ ĐỦ 100% CẢ 17 CỘT TRÊN 1 MÀN HÌNH (PC)
+//    VÀ CHO PHÉP KÉO ĐỘ RỘNG TỪNG CỘT NGAY TRONG CHẾ ĐỘ VỪA MÀN (CHUỘT + CẢM ỨNG)
+// 2. TRÊN ĐIỆN THOẠI KHI BẤM VỪA MÀN: HIỂN THỊ CỠ CHỮ TO NHẤT CÓ THỂ
+//    VÀ KHÔNG BỊ MẤT CHỮ TRONG Ô (KHÔNG CẮT DẤU ...)
+// 3. MENU LẦN THI (2 LẦN), XẾP HẠNG & SỐ ĐỀ THI LUÔN NỔI TRÊN CÙNG (z-index: 2147483647)
 //    BÊN TRONG #result-floating-dropdown-portal ĐỘC LẬP TRÊN DOCUMENT.BODY
-// 5. TÍNH TỌA ĐỘ CHUẨN XÁC BẤT CHẤP CSS ZOOM (CHROME/EDGE/SAFARI/FIREFOX)
-// 6. KHÔNG TỰ ĐÓNG MENU KHI BẢNG CẬP NHẬT NGẦM (REALTIME / AUTO-REFRESH)
-// 7. HIỂN THỊ CHUẨN SỐ LẦN & THỜI GIAN CHUYỂN TAB (5s | 10s, KHÔNG CÓ "Bắt đầuLần1")
+// 4. TÍNH TỌA ĐỘ CHUẨN XÁC BẤT CHẤP CSS ZOOM (CHROME/EDGE/SAFARI/FIREFOX)
+// 5. KHÔNG TỰ ĐÓNG MENU KHI BẢNG CẬP NHẬT NGẦM (REALTIME / AUTO-REFRESH)
+// 6. HIỂN THỊ CHUẨN SỐ LẦN & THỜI GIAN CHUYỂN TAB (5s | 10s, KHÔNG CÓ "Bắt đầuLần1")
 // =========================================================
 
 let tableDisplaySettings = { fontSize: 13, rowPadding: 9 };
@@ -19,27 +20,6 @@ let modalCustomZoomLevel = 1.0;
 let isFitAllRowsActive = false;
 let _fitResizeTimer = null;
 let _activeFloatingMenuMeta = null; // { type: 'attempt' | 'rank' | 'exam', key: string }
-let _fittedCustomColWidths = null;  // Lưu độ rộng cột (px) do người dùng tự kéo trong chế độ Vừa màn
-
-const FIT_DEFAULT_COL_PCTS = [
-    2.6,  // 1. STT
-    9.2,  // 2. Số đề thi
-    5.4,  // 3. Số lần thi
-    8.2,  // 4. Thời gian vào thi
-    6.8,  // 5. Thời gian thi
-    11.6, // 6. Họ và tên
-    3.6,  // 7. Lớp
-    4.6,  // 8. SBD
-    6.8,  // 9. Tình trạng
-    4.6,  // 10. Số câu đúng
-    3.6,  // 11. Điểm
-    6.0,  // 12. Xếp hạng
-    5.0,  // 13. Số lần chuyển tab
-    5.4,  // 14. Thời gian chuyển tab
-    8.8,  // 15. Chi tiết bài làm
-    4.8,  // 16. Thu ép
-    3.0   // 17. Xóa
-];
 
 (function injectAttemptDropdownStyles() {
     const styleId = "status-attempt-dropdown-styles";
@@ -242,6 +222,7 @@ const FIT_DEFAULT_COL_PCTS = [
         .result-modal-body {
             padding: 2px 4px !important;
             transform-origin: top left !important;
+            transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
 
         .result-table-card {
@@ -320,173 +301,248 @@ const FIT_DEFAULT_COL_PCTS = [
         }
 
         /* ========================================================= */
-        /* THANH KÉO CỘT (.resizer): DỄ BẤM TRÊN CẢ PC & ĐIỆN THOẠI  */
+        /* THANH KÉO ĐỘ RỘNG CỘT (CHUỘT + CẢM ỨNG TRÊN MỌI CHẾ ĐỘ) */
         /* ========================================================= */
-        #admin-result-table thead th .resizer {
-            width: 9px !important;
-            right: -3px !important;
-            touch-action: none !important;
-            cursor: col-resize !important;
-            z-index: 45 !important;
+        .result-table thead th .resizer {
+            width: 9px;
+            right: 0;
+            z-index: 45;
+            touch-action: none;
         }
         @media (pointer: coarse) {
-            #admin-result-table thead th .resizer {
-                width: 14px !important;
-                right: -5px !important;
+            .result-table thead th .resizer {
+                width: 15px;
+                right: 0;
             }
         }
-        #admin-result-table.table-fitted-compact thead th .resizer {
-            border-right: 1.5px dashed rgba(56, 189, 248, 0.5) !important;
+        .result-table thead th .resizer::after {
+            content: "";
+            position: absolute;
+            top: 20%;
+            bottom: 20%;
+            right: 2px;
+            width: 2px;
+            border-radius: 2px;
+            background: rgba(148, 163, 184, 0.38);
+            transition: background 0.15s ease;
         }
-        #admin-result-table.table-fitted-compact thead th .resizer:hover,
-        #admin-result-table.table-fitted-compact thead th .resizer.resizing {
-            background: rgba(56, 189, 248, 0.75) !important;
-            border-right-color: #ffffff !important;
+        .result-table thead th .resizer:hover::after,
+        .result-table thead th .resizer.resizing::after {
+            background: #38bdf8;
+        }
+        #col-resize-live-badge {
+            position: fixed;
+            top: 34px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2147483647;
+            background: rgba(15, 23, 42, 0.92);
+            color: #38bdf8;
+            border: 1.5px solid #0284c7;
+            border-radius: 999px;
+            padding: 4px 12px;
+            font-size: 11.5px;
+            font-weight: 800;
+            pointer-events: none;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35);
+            white-space: nowrap;
         }
 
         /* ========================================================= */
-        /* CHẾ ĐỘ VỪA MÀN: HIỂN THỊ ĐỦ CHỮ (KHÔNG CẮT ...) & KÉO ĐƯỢC CỘT */
+        /* CHẾ ĐỘ VỪA MÀN: HỖ TRỢ KÉO ĐỘ RỘNG CỘT + CHỐNG MẤT CHỮ    */
         /* ========================================================= */
-        #admin-result-table.table-fitted-compact {
-            --table-row-padding-y: 1px !important;
-            --table-row-padding-x: 3px !important;
-            table-layout: fixed !important;
-            min-width: 100%;
-            transform-origin: top left !important;
+        .result-table.table-fitted-compact {
+            --table-row-padding-y: 0px !important;
+            --table-row-padding-x: 2px !important;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
-        #admin-result-table.table-fitted-compact thead th {
-            padding: 3px 3px !important;
-            font-size: max(9px, calc(var(--table-font-size, 12px) - 0.5px)) !important;
-            line-height: 1.18 !important;
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) {
+            width: 100%;
+            max-width: 100%;
+            table-layout: fixed;
+        }
+        .result-table.table-fitted-compact thead th {
+            padding: 2px 3px !important;
+            font-size: max(9px, calc(var(--table-font-size, 12px) - 1px)) !important;
+            line-height: 1.15 !important;
             border-right: 1px solid #334155 !important;
             border-bottom: 1.5px solid #0284c7 !important;
-            white-space: normal !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
-            word-break: break-word !important;
-            overflow-wrap: break-word !important;
-            min-width: 24px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
             max-width: none !important;
-            vertical-align: middle !important;
         }
-        #admin-result-table.table-fitted-compact thead th > *,
-        #admin-result-table.table-fitted-compact tbody td > * {
-            max-width: 100% !important;
-            min-width: 0 !important;
+        .result-table.table-fitted-compact:not(.has-custom-widths) thead th {
+            min-width: 0;
         }
-        #admin-result-table.table-fitted-compact tbody tr {
+        .result-table.table-fitted-compact thead th > *,
+        .result-table.table-fitted-compact tbody td > * {
+            max-width: 100%;
+            min-width: 0;
+        }
+        .result-table.table-fitted-compact tbody tr {
             height: auto !important;
         }
-        #admin-result-table.table-fitted-compact tbody td {
-            padding: 2px 3px !important;
+        .result-table.table-fitted-compact tbody td {
+            padding: 1px 3px !important;
             font-size: var(--table-font-size, 12px) !important;
-            line-height: 1.2 !important;
+            line-height: 1.16 !important;
             border-right: 1px solid #cbd5e1 !important;
             border-bottom: 1px solid #cbd5e1 !important;
-            white-space: normal !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
-            word-break: break-word !important;
-            overflow-wrap: break-word !important;
-            min-width: 24px !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
             max-width: none !important;
-            vertical-align: middle !important;
         }
-        #admin-result-table.table-fitted-compact td.td-exam-col,
-        #admin-result-table.table-fitted-compact td.td-truncate,
-        #admin-result-table.table-fitted-compact .td-exam-text,
-        #admin-result-table.table-fitted-compact .td-details {
-            white-space: normal !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
-            max-width: none !important;
-            word-break: break-word !important;
-            overflow-wrap: break-word !important;
+        .result-table.table-fitted-compact:not(.has-custom-widths) tbody td {
+            min-width: 0;
         }
-        #admin-result-table.table-fitted-compact .td-details {
-            font-size: 0.86em !important;
-            line-height: 1.18 !important;
-            display: inline-block !important;
-        }
-        #admin-result-table.table-fitted-compact tbody td.td-attempt-cell-wrap {
-            padding: 2px 3px !important;
-            overflow: visible !important;
+        .result-table.table-fitted-compact tbody td.td-attempt-cell-wrap {
+            padding: 1px 2px !important;
         }
 
-        /* Không cắt chữ trong các pill/nút khi bật Vừa màn */
-        #admin-result-table.table-fitted-compact .btn-exam-picker,
-        #admin-result-table.table-fitted-compact .btn-rank-picker {
-            padding: 2px 3px !important;
-            font-size: 0.9em !important;
-            line-height: 1.18 !important;
-            border-radius: 5px !important;
-            white-space: normal !important;
-            overflow: visible !important;
-            gap: 2px !important;
-            justify-content: center !important;
-            text-align: center !important;
+        /* Phân bổ mặc định 100% cho toàn bộ 17 cột trên PC (KHÔNG dùng !important để kéo chỉnh độ rộng tự do) */
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th.td-stt,
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(1) { width: 2.5%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th.td-exam-col,
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(2) { width: 9.0%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(3) { width: 4.8%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(4) { width: 8.2%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(5) { width: 6.8%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(6) { width: 10.7%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(7) { width: 3.3%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(8) { width: 4.3%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(9) { width: 6.6%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(10) { width: 4.8%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(11) { width: 3.4%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(12) { width: 5.8%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(13) { width: 5.2%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(14) { width: 5.2%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(15) { width: 11.6%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th.th-force-submit-col,
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(16) { width: 4.8%; }
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th.th-row-action-col,
+        .result-table.table-fitted-compact:not(.has-custom-widths):not(.table-fitted-mobile-fulltext) th:nth-child(17) { width: 3.0%; }
+
+        /* Khi đã kéo chỉnh độ rộng cột trong chế độ Vừa màn */
+        .result-table.table-fitted-compact.has-custom-widths {
+            table-layout: fixed;
+            min-width: 100%;
+            max-width: none;
         }
-        #admin-result-table.table-fitted-compact .btn-exam-picker-text {
-            white-space: normal !important;
+        .result-table.table-fitted-compact.has-custom-widths tbody td.td-exam-col {
+            max-width: none !important;
+        }
+
+        /* ========================================================= */
+        /* CHẾ ĐỘ VỪA MÀN TRÊN ĐIỆN THOẠI: CHỮ TO NHẤT & KHÔNG MẤT CHỮ */
+        /* ========================================================= */
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) {
+            width: max-content;
+            min-width: 100%;
+            max-width: none;
+            table-layout: auto;
+        }
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) thead th,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) tbody td,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) tbody td.td-exam-col,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) tbody td.td-truncate {
+            width: auto !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            white-space: nowrap !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            padding: 2px 7px !important;
+        }
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) thead th {
+            padding-right: 16px !important;
+            font-size: max(10px, calc(var(--table-font-size, 13px) - 0.5px)) !important;
+        }
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) thead th > *,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) tbody td > *,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) tbody td.td-exam-col .td-exam-text,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) .btn-exam-picker,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) .btn-exam-picker-text,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) .btn-rank-picker,
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext:not(.has-custom-widths) td:nth-child(12) span {
+            width: auto !important;
+            max-width: none !important;
             overflow: visible !important;
             text-overflow: clip !important;
         }
-        #admin-result-table.table-fitted-compact .btn-force-submit-all-header {
+
+        /* Thu gọn các pill/nút bên trong ô khi bật Vừa màn để chữ phóng to được tối đa */
+        .result-table.table-fitted-compact .btn-exam-picker,
+        .result-table.table-fitted-compact .btn-rank-picker {
             padding: 1px 4px !important;
-            font-size: 0.8em !important;
-            line-height: 1.18 !important;
-            margin-top: 2px !important;
+            font-size: 0.92em !important;
+            line-height: 1.15 !important;
+            border-radius: 5px !important;
+            gap: 2px !important;
+        }
+        .result-table.table-fitted-compact:not(.table-fitted-mobile-fulltext) .btn-exam-picker,
+        .result-table.table-fitted-compact:not(.table-fitted-mobile-fulltext) .btn-rank-picker {
+            overflow: hidden !important;
+        }
+        .result-table.table-fitted-compact .btn-force-submit-all-header {
+            padding: 0px 3px !important;
+            font-size: 0.78em !important;
+            line-height: 1.15 !important;
+            margin-top: 1px !important;
             border-radius: 4px !important;
-            white-space: normal !important;
         }
-        #admin-result-table.table-fitted-compact .btn-attempt-badge-multi,
-        #admin-result-table.table-fitted-compact .btn-attempt-badge-single {
-            padding: 1px 5px !important;
+        .result-table.table-fitted-compact .btn-attempt-badge-multi,
+        .result-table.table-fitted-compact .btn-attempt-badge-single {
+            padding: 0px 5px !important;
             font-size: 0.9em !important;
-            line-height: 1.2 !important;
+            line-height: 1.22 !important;
             border-radius: 9px !important;
-            white-space: normal !important;
         }
-        #admin-result-table.table-fitted-compact .status-pill,
-        #admin-result-table.table-fitted-compact .status-doing-heartbeat,
-        #admin-result-table.table-fitted-compact .class-badge,
-        #admin-result-table.table-fitted-compact .score-pill-high,
-        #admin-result-table.table-fitted-compact .score-pill-mid,
-        #admin-result-table.table-fitted-compact .score-pill-low,
-        #admin-result-table.table-fitted-compact .tabs-warn,
-        #admin-result-table.table-fitted-compact .live-doing-timer-pill {
-            padding: 1px 4px !important;
+        .result-table.table-fitted-compact .status-pill,
+        .result-table.table-fitted-compact .status-doing-heartbeat,
+        .result-table.table-fitted-compact .class-badge,
+        .result-table.table-fitted-compact .score-pill-high,
+        .result-table.table-fitted-compact .score-pill-mid,
+        .result-table.table-fitted-compact .score-pill-low,
+        .result-table.table-fitted-compact .tabs-warn,
+        .result-table.table-fitted-compact .live-doing-timer-pill {
+            padding: 0px 4px !important;
             font-size: 0.9em !important;
-            line-height: 1.2 !important;
+            line-height: 1.22 !important;
             border-width: 1px !important;
-            white-space: normal !important;
-            text-align: center !important;
         }
-        #admin-result-table.table-fitted-compact .status-doing-heartbeat .heartbeat-icon {
+        .result-table.table-fitted-compact .status-doing-heartbeat .heartbeat-icon {
             font-size: 0.95em !important;
         }
-        #admin-result-table.table-fitted-compact .btn-force-submit-item,
-        #admin-result-table.table-fitted-compact .btn-delete-result-row {
-            padding: 1px 4px !important;
+        .result-table.table-fitted-compact .btn-force-submit-item,
+        .result-table.table-fitted-compact .btn-delete-result-row {
+            padding: 0px 4px !important;
             font-size: 0.88em !important;
-            line-height: 1.2 !important;
+            line-height: 1.22 !important;
             border-radius: 4px !important;
-            white-space: normal !important;
         }
-        #admin-result-table.table-fitted-compact .tag-free-student {
+        .result-table.table-fitted-compact .tag-free-student {
             font-size: 0.78em !important;
             padding: 0px 3px !important;
             margin-left: 2px !important;
         }
-        #admin-result-table.table-fitted-compact td:nth-child(12) span {
-            padding: 1px 4px !important;
+        .result-table.table-fitted-compact:not(.table-fitted-mobile-fulltext) td:nth-child(12) span {
+            padding: 0px 4px !important;
             font-size: 0.9em !important;
-            line-height: 1.2 !important;
+            line-height: 1.22 !important;
             display: inline-block !important;
             max-width: 100% !important;
-            white-space: normal !important;
-            overflow: visible !important;
-            text-overflow: clip !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            vertical-align: middle !important;
+        }
+        .result-table.table-fitted-compact.table-fitted-mobile-fulltext td:nth-child(12) span {
+            padding: 0px 5px !important;
+            font-size: 0.92em !important;
+            line-height: 1.22 !important;
+            display: inline-block !important;
             vertical-align: middle !important;
         }
 
@@ -754,30 +810,34 @@ function ensureResultFloatingPortal() {
 // Tính tọa độ màn hình thật sự của phần tử bất chấp trình duyệt có scale getBoundingClientRect() theo CSS zoom hay không
 function getZoomSafeViewportRect(el) {
     const raw = el.getBoundingClientRect();
-    const tableEl = document.getElementById("admin-result-table");
-    const detailView = document.getElementById("result-detailed-stats-view");
+    const mainView = document.getElementById("result-modal-main-view");
+    if (!mainView || !mainView.contains(el)) return raw;
 
     const currentZoom = (typeof modalCustomZoomLevel === "number" && modalCustomZoomLevel > 0) ? modalCustomZoomLevel : 1;
     if (Math.abs(currentZoom - 1) < 0.01) return raw;
 
-    const isInsideZoomedTable = Boolean(tableEl && tableEl.contains(el) && tableEl.style.zoom);
-    const isInsideZoomedDetail = Boolean(detailView && detailView.contains(el) && detailView.style.zoom);
-    if (!isInsideZoomedTable && !isInsideZoomedDetail) return raw;
+    if (!mainView.style.zoom) return raw;
 
-    if (el.offsetWidth > 0) {
-        const measuredRatio = raw.width / el.offsetWidth;
-        const scaleFactor = (Math.abs(measuredRatio - 1) < Math.abs(measuredRatio - currentZoom)) ? currentZoom : 1;
-        return {
-            left: raw.left * scaleFactor,
-            right: raw.right * scaleFactor,
-            top: raw.top * scaleFactor,
-            bottom: raw.bottom * scaleFactor,
-            width: raw.width * scaleFactor,
-            height: raw.height * scaleFactor
-        };
-    }
+    const statsBar = document.getElementById("result-modal-stats-bar");
+    const headerBar = document.querySelector("#result-fullscreen-modal .result-modal-header");
+    const refEl = (statsBar && statsBar.offsetHeight > 0) ? statsBar : headerBar;
+    if (!refEl) return raw;
 
-    return raw;
+    const refBottom = refEl.getBoundingClientRect().bottom;
+    const mainTop = mainView.getBoundingClientRect().top;
+
+    const diffDirect = Math.abs(mainTop - refBottom);
+    const diffScaled = Math.abs(mainTop * currentZoom - refBottom);
+    const scaleFactor = (diffScaled + 2 < diffDirect) ? currentZoom : 1;
+
+    return {
+        left: raw.left * scaleFactor,
+        right: raw.right * scaleFactor,
+        top: raw.top * scaleFactor,
+        bottom: raw.bottom * scaleFactor,
+        width: raw.width * scaleFactor,
+        height: raw.height * scaleFactor
+    };
 }
 
 function closeAllResultFloatingDropdowns() {
@@ -885,40 +945,28 @@ function formatAttemptDateTime(timestamp) {
 }
 
 function applyModalZoomLevel(newLevel) {
-    modalCustomZoomLevel = Math.min(1.8, Math.max(0.35, Math.round(newLevel * 100) / 100));
-
+    modalCustomZoomLevel = Math.min(1.8, Math.max(0.40, Math.round(newLevel * 100) / 100));
+    
     const mainView = document.getElementById("result-modal-main-view");
-    const tableEl = document.getElementById("admin-result-table");
     const detailView = document.getElementById("result-detailed-stats-view");
-
-    // Xóa zoom cũ trên mainView nếu có, áp dụng zoom trực tiếp lên #admin-result-table để vùng cuộn luôn chiếm đủ 100% khung hình
-    if (mainView) {
-        mainView.style.zoom = "";
-        mainView.style.transform = "";
-        mainView.style.width = "";
-    }
-
-    if (tableEl) {
-        if ('zoom' in tableEl.style) {
-            tableEl.style.zoom = modalCustomZoomLevel !== 1 ? String(modalCustomZoomLevel) : "";
-            tableEl.style.transform = "";
+    
+    const applyToEl = (el) => {
+        if (!el) return;
+        if ('zoom' in el.style) {
+            el.style.zoom = modalCustomZoomLevel !== 1 ? String(modalCustomZoomLevel) : "";
+            el.style.width = "";
+            el.style.height = "";
+            el.style.transform = "";
         } else {
-            tableEl.style.transform = modalCustomZoomLevel !== 1 ? `scale(${modalCustomZoomLevel})` : "";
-            tableEl.style.transformOrigin = "top left";
+            el.style.transform = modalCustomZoomLevel !== 1 ? `scale(${modalCustomZoomLevel})` : "";
+            el.style.transformOrigin = "top left";
+            el.style.width = modalCustomZoomLevel !== 1 ? `${(100 / modalCustomZoomLevel).toFixed(3)}%` : "";
+            el.style.height = modalCustomZoomLevel !== 1 ? `${(100 / modalCustomZoomLevel).toFixed(3)}%` : "";
         }
-    }
+    };
 
-    if (detailView) {
-        if ('zoom' in detailView.style) {
-            detailView.style.zoom = modalCustomZoomLevel !== 1 ? String(modalCustomZoomLevel) : "";
-            detailView.style.width = "";
-            detailView.style.transform = "";
-        } else {
-            detailView.style.transform = modalCustomZoomLevel !== 1 ? `scale(${modalCustomZoomLevel})` : "";
-            detailView.style.transformOrigin = "top left";
-            detailView.style.width = modalCustomZoomLevel !== 1 ? `${(100 / modalCustomZoomLevel).toFixed(3)}%` : "";
-        }
-    }
+    applyToEl(mainView);
+    applyToEl(detailView);
 
     const badge = document.getElementById("modal-zoom-display-val");
     if (badge) {
@@ -927,69 +975,39 @@ function applyModalZoomLevel(newLevel) {
     }
 }
 
-function clearFittedCustomColumnWidths() {
-    _fittedCustomColWidths = null;
-}
-
-function restoreHeaderDefaultColumnWidths() {
+function resetTableColumnWidths() {
     const table = document.getElementById("admin-result-table");
     if (!table) return;
-    const defaultPx = [50, 175, 105, 155, 125, 175, 90, 85, 135, 110, 120, 125, 145, 175, 250, 72, 42];
+    table.classList.remove("has-custom-widths");
+    table.style.width = "";
+    table.style.maxWidth = "";
+    table.style.tableLayout = "";
+
     const headers = table.querySelectorAll("thead th");
-    headers.forEach((th, idx) => {
-        th.style.width = (defaultPx[idx] || 110) + "px";
+    headers.forEach(th => {
+        th.style.width = th.dataset.origStyleWidth !== undefined ? th.dataset.origStyleWidth : "";
         th.style.minWidth = "";
     });
-    table.style.width = "";
-    table.style.minWidth = "";
 }
 
-function applyFittedColumnWidths(targetTableW) {
+function clearFitClassesAndWidths() {
     const table = document.getElementById("admin-result-table");
     if (!table) return;
-    const headers = Array.from(table.querySelectorAll("thead th"));
-    if (headers.length === 0) return;
-
-    if (Array.isArray(_fittedCustomColWidths) && _fittedCustomColWidths.length === headers.length) {
-        let sumW = 0;
-        headers.forEach((th, idx) => {
-            const w = Math.max(24, Number(_fittedCustomColWidths[idx]) || 40);
-            th.style.width = w + "px";
-            th.style.minWidth = "24px";
-            sumW += w;
-        });
-        table.style.width = Math.max(targetTableW, sumW) + "px";
-        return;
-    }
-
-    const totalPct = FIT_DEFAULT_COL_PCTS.slice(0, headers.length).reduce((s, v) => s + v, 0) || 100;
-    let sumW = 0;
-    headers.forEach((th, idx) => {
-        const pct = FIT_DEFAULT_COL_PCTS[idx] || (100 / headers.length);
-        const w = Math.max(24, Math.round((targetTableW * pct) / totalPct));
-        th.style.width = w + "px";
-        th.style.minWidth = "24px";
-        sumW += w;
-    });
-    table.style.width = Math.max(targetTableW, sumW) + "px";
+    table.classList.remove("table-fitted-compact", "table-fitted-mobile-fulltext");
+    table.style.fontSize = "";
+    resetTableColumnWidths();
 }
 
 function adjustModalZoomStep(step) {
     closeAllResultFloatingDropdowns();
     isFitAllRowsActive = false;
-    clearFittedCustomColumnWidths();
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
         fitBtn.innerHTML = "📐 Vừa màn";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ 17 cột & học sinh trên 1 màn hình";
     }
-    const table = document.getElementById("admin-result-table");
-    if (table) {
-        table.classList.remove("table-fitted-compact");
-        table.style.fontSize = "";
-        restoreHeaderDefaultColumnWidths();
-    }
+    clearFitClassesAndWidths();
     applyTableSettings();
     applyModalZoomLevel(modalCustomZoomLevel + step);
 }
@@ -997,19 +1015,13 @@ function adjustModalZoomStep(step) {
 function resetModalZoom() {
     closeAllResultFloatingDropdowns();
     isFitAllRowsActive = false;
-    clearFittedCustomColumnWidths();
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
         fitBtn.innerHTML = "📐 Vừa màn";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ 17 cột & học sinh trên 1 màn hình";
     }
-    const table = document.getElementById("admin-result-table");
-    if (table) {
-        table.classList.remove("table-fitted-compact");
-        table.style.fontSize = "";
-        restoreHeaderDefaultColumnWidths();
-    }
+    clearFitClassesAndWidths();
     applyTableSettings();
     applyModalZoomLevel(1.0);
 }
@@ -1017,19 +1029,13 @@ function resetModalZoom() {
 function resetResultModalZoomOnClose() {
     closeAllResultFloatingDropdowns();
     isFitAllRowsActive = false;
-    clearFittedCustomColumnWidths();
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
         fitBtn.innerHTML = "📐 Vừa màn";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ 17 cột & học sinh trên 1 màn hình";
     }
-    const table = document.getElementById("admin-result-table");
-    if (table) {
-        table.classList.remove("table-fitted-compact");
-        table.style.fontSize = "";
-        restoreHeaderDefaultColumnWidths();
-    }
+    clearFitClassesAndWidths();
     applyModalZoomLevel(1.0);
 }
 
@@ -1037,7 +1043,9 @@ function computeAndApplyFitAllRows() {
     const scrollWrap = document.querySelector(".result-table-scroll-wrap");
     const table = document.getElementById("admin-result-table");
     const fitBtn = document.getElementById("btn-fit-all-rows");
-    if (!scrollWrap || !table) return;
+    if (!scrollWrap || !table || !table.isConnected) return;
+
+    const hasCustomWidths = table.classList.contains("has-custom-widths");
 
     table.classList.add("table-fitted-compact");
     applyModalZoomLevel(1.0);
@@ -1047,74 +1055,109 @@ function computeAndApplyFitAllRows() {
         const availW = scrollWrap.clientWidth;
         if (availH <= 0 || availW <= 0) return;
 
-        const isMobile = (availW <= 768);
-        const headers = Array.from(table.querySelectorAll("thead th"));
-        const hasCustomWidths = Array.isArray(_fittedCustomColWidths) && _fittedCustomColWidths.length === headers.length;
+        const isMobileFit = (availW < 950 || window.innerWidth <= 900);
+        table.classList.toggle("table-fitted-mobile-fulltext", isMobileFit);
 
-        // Trên điện thoại (~360-430px), dựng bảng ở bề rộng cơ sở hợp lý (~760px) để chữ không bị bẻ gãy từng ký tự, rồi thu zoom vừa khít 100% chiều ngang
-        const defaultBaseW = isMobile ? Math.max(availW - 2, 760) : (availW - 2);
-        const baseTableW = hasCustomWidths
-            ? Math.max(availW - 2, _fittedCustomColWidths.reduce((s, v) => s + Math.max(24, Number(v) || 40), 0))
-            : defaultBaseW;
+        let chosenFs = 12.0;
+        let chosenZoom = 1.0;
 
-        applyFittedColumnWidths(baseTableW);
-
-        let bestFs = isMobile ? 14 : 11;
-        let bestZoom = Math.min(1.0, (availW - 2) / Math.max(1, baseTableW));
-        let bestEffectiveFs = -1;
-
-        const fsStart = isMobile ? 18 : 17;
-        const fsMin = isMobile ? 11 : 8.5;
-
-        for (let fs = fsStart; fs >= fsMin; fs -= 0.5) {
-            table.style.setProperty("--table-font-size", fs + "px");
-            table.style.fontSize = fs + "px";
-
-            const realW = Math.max(1, table.scrollWidth);
-            const realH = Math.max(1, table.scrollHeight);
-
-            const zoomW = (availW - 2) / realW;
-            const zoomH = (availH - 2) / realH;
-
-            let z;
-            if (isMobile) {
-                // Trên điện thoại: ưu tiên vừa 100% chiều ngang (đủ 17 cột) để chữ hiển thị TO NHẤT có thể và không bị mất chữ; nếu danh sách ít dòng thì tự vừa cả chiều dọc
-                z = (realH * zoomW <= availH - 2) ? Math.min(1.0, zoomW) : Math.min(1.0, zoomW);
-                z = Math.max(0.35, z);
-            } else {
-                // Trên PC: vừa khít cả 2 chiều (17 cột + tất cả học sinh), giữ ngưỡng đọc tối thiểu
-                z = Math.min(1.0, zoomW, zoomH);
-                if (z < 0.42 && zoomW >= 0.45) {
-                    z = Math.min(1.0, zoomW, Math.max(z, 0.42));
+        if (isMobileFit) {
+            // TRÊN ĐIỆN THOẠI: TỐI ĐA HÓA CỠ CHỮ HIỂN THỊ & KHÔNG BỊ MẤT CHỮ TRONG Ô
+            let foundUnzoomed = false;
+            for (let fs = 18; fs >= 11; fs -= 0.5) {
+                table.style.setProperty("--table-font-size", fs + "px");
+                table.style.fontSize = fs + "px";
+                if (table.scrollHeight <= availH) {
+                    chosenFs = fs;
+                    chosenZoom = 1.0;
+                    foundUnzoomed = true;
+                    break;
                 }
             }
 
-            // Phạt nhẹ nếu font quá to làm các cột bị phình rộng vượt mức nhiều so với baseTableW
-            const overflowRatio = realW / Math.max(1, baseTableW);
-            if (overflowRatio > 1.08 && fs > fsMin + 1) continue;
+            if (!foundUnzoomed) {
+                // Chọn cặp (fs, zoom) sao cho kích thước chữ thực tế (fs * zoom) LỚN NHẤT nhưng vẫn vừa chiều cao
+                let bestEffectiveFs = -1;
+                let bestCandFs = 14;
+                let bestCandZoom = 1.0;
+                const minMobileZoom = 0.56;
 
-            const effectiveFs = fs * z;
-            if (effectiveFs > bestEffectiveFs + 0.01) {
-                bestEffectiveFs = effectiveFs;
-                bestFs = fs;
-                bestZoom = Math.floor(z * 100) / 100;
+                [16, 15, 14, 13, 12, 11].forEach(candFs => {
+                    table.style.setProperty("--table-font-size", candFs + "px");
+                    table.style.fontSize = candFs + "px";
+                    const h = Math.max(1, table.scrollHeight);
+                    const rawZ = (availH - 2) / h;
+                    const clampedZ = Math.min(1.0, Math.max(minMobileZoom, Math.floor(rawZ * 100) / 100));
+                    const effectiveFs = candFs * clampedZ;
+                    if (effectiveFs > bestEffectiveFs) {
+                        bestEffectiveFs = effectiveFs;
+                        bestCandFs = candFs;
+                        bestCandZoom = clampedZ;
+                    }
+                });
+
+                chosenFs = bestCandFs;
+                chosenZoom = bestCandZoom;
             }
-        }
 
-        table.style.setProperty("--table-font-size", bestFs + "px");
-        table.style.fontSize = bestFs + "px";
-        applyModalZoomLevel(Math.min(1.0, Math.max(0.35, bestZoom)));
+            table.style.setProperty("--table-font-size", chosenFs + "px");
+            table.style.fontSize = chosenFs + "px";
+            applyModalZoomLevel(chosenZoom);
 
-        // Tinh chỉnh nhẹ nếu bảng vẫn nhô nhẹ khỏi mép ngang
-        let guard = 0;
-        while (
-            !hasCustomWidths &&
-            (scrollWrap.scrollWidth > scrollWrap.clientWidth + 3) &&
-            modalCustomZoomLevel > 0.36 &&
-            guard < 10
-        ) {
-            applyModalZoomLevel(modalCustomZoomLevel - 0.02);
-            guard++;
+            let guard = 0;
+            while (
+                scrollWrap.scrollHeight > scrollWrap.clientHeight + 2 &&
+                modalCustomZoomLevel > 0.56 &&
+                guard < 14
+            ) {
+                applyModalZoomLevel(modalCustomZoomLevel - 0.02);
+                guard++;
+            }
+        } else {
+            // TRÊN PC / MÀN HÌNH RỘNG (>= 950px): KHÍT CẢ 17 CỘT VÀ TOÀN BỘ DÒNG
+            const maxFsByWidth = Math.min(18, Math.max(9.5, Math.floor((availW / 106) * 2) / 2));
+            chosenFs = 9.0;
+            chosenZoom = 1.0;
+            let foundPerfect = false;
+
+            for (let fs = maxFsByWidth; fs >= 8.5; fs -= 0.5) {
+                table.style.setProperty("--table-font-size", fs + "px");
+                table.style.fontSize = fs + "px";
+
+                const fitsWidth = hasCustomWidths ? true : (table.scrollWidth <= availW + 1);
+                if (table.scrollHeight <= availH && fitsWidth) {
+                    chosenFs = fs;
+                    chosenZoom = 1.0;
+                    foundPerfect = true;
+                    break;
+                }
+            }
+
+            if (!foundPerfect) {
+                chosenFs = Math.min(10.5, maxFsByWidth);
+                table.style.setProperty("--table-font-size", chosenFs + "px");
+                table.style.fontSize = chosenFs + "px";
+
+                const unscaledH = Math.max(1, table.scrollHeight);
+                const unscaledW = Math.max(1, table.scrollWidth);
+                const reqZoomH = (availH - 2) / unscaledH;
+                const reqZoomW = hasCustomWidths ? 1.0 : ((availW - 2) / unscaledW);
+                chosenZoom = Math.min(1.0, Math.max(0.40, Math.floor(Math.min(reqZoomH, reqZoomW) * 100) / 100));
+            }
+
+            table.style.setProperty("--table-font-size", chosenFs + "px");
+            table.style.fontSize = chosenFs + "px";
+            applyModalZoomLevel(chosenZoom);
+
+            let guard = 0;
+            while (
+                (scrollWrap.scrollHeight > scrollWrap.clientHeight + 2 || (!hasCustomWidths && scrollWrap.scrollWidth > scrollWrap.clientWidth + 2)) &&
+                modalCustomZoomLevel > 0.42 &&
+                guard < 10
+            ) {
+                applyModalZoomLevel(modalCustomZoomLevel - 0.02);
+                guard++;
+            }
         }
 
         scrollWrap.scrollTop = 0;
@@ -1124,10 +1167,10 @@ function computeAndApplyFitAllRows() {
         if (fitBtn) {
             fitBtn.classList.add("is-fitted");
             fitBtn.innerHTML = "↺ 100%";
-            fitBtn.title = `Đang bật Vừa màn (Chữ ${bestFs}px • Tỷ lệ ${Math.round(modalCustomZoomLevel * 100)}% • Kéo vạch cột để chỉnh độ rộng) — Bấm để quay lại chế độ thường`;
+            fitBtn.title = isMobileFit
+                ? `Đang bật Vừa màn Mobile (Chữ ${chosenFs}px • Tỷ lệ ${Math.round(modalCustomZoomLevel * 100)}%, hiển thị đủ chữ mọi ô) — Kéo mép tiêu đề cột để chỉnh độ rộng`
+                : `Đang bật Vừa màn (Chữ ${chosenFs}px • Tỷ lệ ${Math.round(modalCustomZoomLevel * 100)}%) — Kéo mép tiêu đề cột để chỉnh độ rộng`;
         }
-
-        initTableResizable();
     });
 }
 
@@ -1150,20 +1193,18 @@ function fitAllRowsInView(event) {
 
     if (isFitAllRowsActive) {
         isFitAllRowsActive = false;
-        clearFittedCustomColumnWidths();
         if (fitBtn) {
             fitBtn.classList.remove("is-fitted");
             fitBtn.innerHTML = "📐 Vừa màn";
             fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ 17 cột & học sinh trên 1 màn hình";
         }
-        table.classList.remove("table-fitted-compact");
-        table.style.fontSize = "";
-        restoreHeaderDefaultColumnWidths();
+        clearFitClassesAndWidths();
         initTableSettings();
         applyModalZoomLevel(1.0);
         return;
     }
 
+    resetTableColumnWidths();
     computeAndApplyFitAllRows();
 }
 
@@ -1360,22 +1401,16 @@ async function triggerCollectTempDraftsToDrive(event) {
             );
             const scale = currentDist / initialPinchDist;
             let newZoom = initialZoom * scale;
-            newZoom = Math.min(1.8, Math.max(0.35, newZoom));
+            newZoom = Math.min(1.8, Math.max(0.40, newZoom));
             applyModalZoomLevel(newZoom);
 
             isFitAllRowsActive = false;
-            clearFittedCustomColumnWidths();
             const fitBtn = document.getElementById("btn-fit-all-rows");
             if (fitBtn) {
                 fitBtn.classList.remove("is-fitted");
                 fitBtn.innerHTML = "📐 Vừa màn";
             }
-            const table = document.getElementById("admin-result-table");
-            if (table) {
-                table.classList.remove("table-fitted-compact");
-                table.style.fontSize = "";
-                restoreHeaderDefaultColumnWidths();
-            }
+            clearFitClassesAndWidths();
         }
     }, { passive: false });
 
@@ -1431,19 +1466,13 @@ function applyTableSettings() {
 function exitFitModeForManualSettings() {
     if (!isFitAllRowsActive) return;
     isFitAllRowsActive = false;
-    clearFittedCustomColumnWidths();
     const fitBtn = document.getElementById("btn-fit-all-rows");
     if (fitBtn) {
         fitBtn.classList.remove("is-fitted");
         fitBtn.innerHTML = "📐 Vừa màn";
         fitBtn.title = "Tự động co tỷ lệ để hiển thị trọn vẹn toàn bộ 17 cột & học sinh trên 1 màn hình";
     }
-    const table = document.getElementById("admin-result-table");
-    if (table) {
-        table.classList.remove("table-fitted-compact");
-        table.style.fontSize = "";
-        restoreHeaderDefaultColumnWidths();
-    }
+    clearFitClassesAndWidths();
     applyModalZoomLevel(1.0);
 }
 
@@ -1496,113 +1525,133 @@ function applyFontSizePreset(size) { exitFitModeForManualSettings(); tableDispla
 function applyRowPaddingPreset(pad) { exitFitModeForManualSettings(); tableDisplaySettings.rowPadding = pad; applyTableSettings(); }
 function resetTableSettings() { exitFitModeForManualSettings(); tableDisplaySettings.fontSize = 13; tableDisplaySettings.rowPadding = 9; applyTableSettings(); }
 
-// KÉO ĐỘ RỘNG TỪNG CỘT (CHUỘT + CẢM ỨNG + HỖ TRỢ ĐẦY ĐỦ KHI ĐANG BẬT VỪA MÀN & ZOOM)
+function showColResizeLiveBadge(label, widthPx) {
+    let badge = document.getElementById("col-resize-live-badge");
+    if (!badge) {
+        badge = document.createElement("div");
+        badge.id = "col-resize-live-badge";
+        document.body.appendChild(badge);
+    }
+    badge.textContent = `↔ ${label}: ${widthPx}px`;
+}
+
+function hideColResizeLiveBadge() {
+    const badge = document.getElementById("col-resize-live-badge");
+    if (badge) badge.remove();
+}
+
 function initTableResizable() {
     const table = document.getElementById("admin-result-table");
     if (!table) return;
-    const headers = Array.from(table.querySelectorAll("thead th"));
+    const headers = table.querySelectorAll("thead th");
 
-    headers.forEach((th) => {
-        const oldResizer = th.querySelector(".resizer");
-        if (oldResizer && th.dataset.hasResizer === "1") return;
-        if (oldResizer) oldResizer.remove();
+    headers.forEach(th => {
+        if (th.dataset.origStyleWidth === undefined) {
+            th.dataset.origStyleWidth = th.style.width || "";
+        }
+        if (th.querySelector(".resizer")) return;
 
-        th.dataset.hasResizer = "1";
         const resizer = document.createElement("div");
         resizer.className = "resizer";
-        resizer.title = "Kéo trái/phải để chỉnh độ rộng cột (Nhấp đúp để đặt lại mặc định)";
+        resizer.title = "Kéo để chỉnh độ rộng cột (Nhấp đúp để đặt lại mặc định)";
         th.appendChild(resizer);
 
-        const getClientX = (ev) => (ev.touches && ev.touches.length > 0)
-            ? ev.touches[0].clientX
-            : (ev.changedTouches && ev.changedTouches.length > 0 ? ev.changedTouches[0].clientX : ev.clientX);
+        let startX = 0;
+        let startWidth = 0;
+        let startTotalWidth = 0;
+        let visualScale = 1;
+        let colLabel = "Cột";
 
-        let startClientX = 0;
-        let startColW = 0;
-        let startTableW = 0;
-        let zoomScale = 1;
-        let isDragging = false;
-
-        function startResize(e) {
-            if (e.touches && e.touches.length > 1) return;
-            e.preventDefault();
-            e.stopPropagation();
-
-            const curHeaders = Array.from(table.querySelectorAll("thead th"));
+        const beginResize = (clientX) => {
+            const allThs = Array.from(table.querySelectorAll("thead th"));
+            const startWidths = allThs.map(h => Math.max(22, Math.round(h.offsetWidth)));
             const rect = th.getBoundingClientRect();
-            zoomScale = (th.offsetWidth > 0 && rect.width > 0) ? (rect.width / th.offsetWidth) : 1;
-            if (!zoomScale || isNaN(zoomScale)) zoomScale = 1;
+            visualScale = (rect.width > 0 && th.offsetWidth > 0) ? (rect.width / th.offsetWidth) : 1;
 
-            // Khóa độ rộng px hiện tại của toàn bộ các cột để kéo mượt mà không làm nhảy các cột khác
-            let totalLockedW = 0;
-            curHeaders.forEach((h) => {
-                const hRect = h.getBoundingClientRect();
-                const wPx = Math.max(24, Math.round((h.offsetWidth > 0 && hRect.width > 0) ? (hRect.width / zoomScale) : (h.offsetWidth || 60)));
-                h.style.width = wPx + "px";
-                h.style.minWidth = "24px";
-                totalLockedW += wPx;
+            startX = clientX;
+            startWidth = Math.max(22, Math.round(th.offsetWidth));
+            startTotalWidth = startWidths.reduce((a, b) => a + b, 0);
+
+            table.classList.add("has-custom-widths");
+            table.style.tableLayout = "fixed";
+            table.style.maxWidth = "none";
+
+            allThs.forEach((h, idx) => {
+                h.style.width = startWidths[idx] + "px";
+                h.style.minWidth = startWidths[idx] + "px";
             });
+            table.style.width = startTotalWidth + "px";
 
-            startClientX = getClientX(e);
-            startColW = parseFloat(th.style.width) || th.offsetWidth || 60;
-            startTableW = totalLockedW;
-            table.style.width = startTableW + "px";
-
-            isDragging = true;
+            const rawLbl = (th.textContent || "").replace(/▾|⚡|Thu hết/g, "").trim();
+            colLabel = rawLbl || "Cột";
             resizer.classList.add("resizing");
+            showColResizeLiveBadge(colLabel, startWidth);
+        };
 
-            document.addEventListener("mousemove", onResizeMove);
-            document.addEventListener("mouseup", onResizeEnd);
-            document.addEventListener("touchmove", onResizeMove, { passive: false });
-            document.addEventListener("touchend", onResizeEnd);
-        }
-
-        function onResizeMove(moveEvent) {
-            if (!isDragging) return;
-            if (moveEvent.cancelable) moveEvent.preventDefault();
-
-            const diff = (getClientX(moveEvent) - startClientX) / zoomScale;
-            const minColW = table.classList.contains("table-fitted-compact") ? 24 : 36;
-            const newWidth = Math.max(minColW, Math.round(startColW + diff));
-            const delta = newWidth - startColW;
-
+        const updateResize = (clientX) => {
+            const dx = (clientX - startX) / (visualScale || 1);
+            const newWidth = Math.max(22, Math.round(startWidth + dx));
+            const delta = newWidth - startWidth;
             th.style.width = newWidth + "px";
-            th.style.minWidth = minColW + "px";
-            table.style.width = Math.max(minColW, startTableW + delta) + "px";
-        }
+            th.style.minWidth = newWidth + "px";
+            table.style.width = Math.max(120, startTotalWidth + delta) + "px";
+            showColResizeLiveBadge(colLabel, newWidth);
+        };
 
-        function onResizeEnd() {
-            if (!isDragging) return;
-            isDragging = false;
-            resizer.classList.remove("resizing");
-
-            document.removeEventListener("mousemove", onResizeMove);
-            document.removeEventListener("mouseup", onResizeEnd);
-            document.removeEventListener("touchmove", onResizeMove);
-            document.removeEventListener("touchend", onResizeEnd);
-
-            if (isFitAllRowsActive) {
-                const curHeaders = Array.from(table.querySelectorAll("thead th"));
-                _fittedCustomColWidths = curHeaders.map(h => parseFloat(h.style.width) || h.offsetWidth || 40);
-            }
-        }
-
-        resizer.addEventListener("mousedown", startResize);
-        resizer.addEventListener("touchstart", startResize, { passive: false });
-        resizer.addEventListener("click", (e) => { e.stopPropagation(); });
-        resizer.addEventListener("dblclick", (e) => {
+        resizer.addEventListener("click", function(e) {
             e.preventDefault();
             e.stopPropagation();
+        });
+
+        resizer.addEventListener("dblclick", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            resetTableColumnWidths();
             if (isFitAllRowsActive) {
-                clearFittedCustomColumnWidths();
                 computeAndApplyFitAllRows();
-                if (typeof showTimeChangeToast === "function") {
-                    showTimeChangeToast("↺ Đã khôi phục độ rộng cột mặc định của chế độ Vừa màn!");
-                }
-            } else {
-                restoreHeaderDefaultColumnWidths();
             }
         });
+
+        resizer.addEventListener("mousedown", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            beginResize(e.clientX);
+
+            function onMouseMove(moveEvent) {
+                updateResize(moveEvent.clientX);
+            }
+            function onMouseUp() {
+                resizer.classList.remove("resizing");
+                hideColResizeLiveBadge();
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+            }
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        });
+
+        resizer.addEventListener("touchstart", function(e) {
+            if (!e.touches || e.touches.length !== 1) return;
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            beginResize(e.touches[0].clientX);
+
+            function onTouchMove(moveEvent) {
+                if (!moveEvent.touches || moveEvent.touches.length !== 1) return;
+                if (moveEvent.cancelable) moveEvent.preventDefault();
+                updateResize(moveEvent.touches[0].clientX);
+            }
+            function onTouchEnd() {
+                resizer.classList.remove("resizing");
+                hideColResizeLiveBadge();
+                document.removeEventListener("touchmove", onTouchMove);
+                document.removeEventListener("touchend", onTouchEnd);
+                document.removeEventListener("touchcancel", onTouchEnd);
+            }
+            document.addEventListener("touchmove", onTouchMove, { passive: false });
+            document.addEventListener("touchend", onTouchEnd);
+            document.addEventListener("touchcancel", onTouchEnd);
+        }, { passive: false });
     });
 }
 
@@ -2030,7 +2079,8 @@ function ensureActionColumnHeaders() {
     const theadTr = table.querySelector("thead tr"); 
     if (!theadTr) return;
 
-    let added = false;
+    let addedHeader = false;
+
     let thForce = theadTr.querySelector(".th-force-submit-col");
     if (!thForce) {
         thForce = document.createElement("th");
@@ -2044,7 +2094,7 @@ function ensureActionColumnHeaders() {
             </button>
         `;
         theadTr.appendChild(thForce);
-        added = true;
+        addedHeader = true;
     }
 
     let thDel = theadTr.querySelector(".th-row-action-col");
@@ -2055,10 +2105,10 @@ function ensureActionColumnHeaders() {
         thDel.style.textAlign = "center";
         thDel.innerText = "XÓA";
         theadTr.appendChild(thDel);
-        added = true;
+        addedHeader = true;
     }
 
-    if (added) {
+    if (addedHeader || Array.from(theadTr.querySelectorAll("th")).some(th => !th.querySelector(".resizer"))) {
         initTableResizable();
     }
 }
@@ -2109,6 +2159,10 @@ function renderFilteredResultTable(rows, opts = {}) {
 
     if (isFitAllRowsActive) {
         table.classList.add("table-fitted-compact");
+        const scrollWrap = document.querySelector(".result-table-scroll-wrap");
+        const availW = scrollWrap ? scrollWrap.clientWidth : window.innerWidth;
+        const isMobileFit = (availW < 950 || window.innerWidth <= 900);
+        table.classList.toggle("table-fitted-mobile-fulltext", isMobileFit);
     }
 
     if (!rows || rows.length === 0) {
@@ -2387,6 +2441,7 @@ document.addEventListener("click", function(event) {
 
 window.closeAllResultFloatingDropdowns = closeAllResultFloatingDropdowns;
 window.resetResultModalZoomOnClose = resetResultModalZoomOnClose;
+window.resetTableColumnWidths = resetTableColumnWidths;
 window.handleClickStudentDetails = handleClickStudentDetails;
 window.toggleAttemptMenu = toggleAttemptMenu;
 window.selectStudentAttempt = selectStudentAttempt;
