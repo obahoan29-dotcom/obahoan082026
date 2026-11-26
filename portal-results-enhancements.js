@@ -543,7 +543,6 @@ window.switchInspectorAttempt = function(attIdx) {
     if (row) renderStudentInspectorContent(row);
 };
 
-// Lazy-load user_answers từ Supabase khi giáo viên thực sự bấm tải JSON 1 bài làm
 window.downloadStudentAttemptJson = async function() {
     if (!_inspectorCurrentRowUid) return;
     const row = (currentExamResultData.rawRows || []).find(r => r._rowUid === _inspectorCurrentRowUid);
@@ -648,6 +647,9 @@ window.deleteSingleAttemptFromCloud = async function(subId) {
 
 document.addEventListener("keydown", function(e) {
     if (e.key !== "Escape") return;
+    const cheatModal = document.getElementById("cheat-inspector-modal");
+    if (cheatModal && cheatModal.classList.contains("show")) return;
+
     const insModal = document.getElementById("student-detail-inspector-modal");
     if (insModal && insModal.classList.contains("show")) {
         closeStudentDetailInspector();
