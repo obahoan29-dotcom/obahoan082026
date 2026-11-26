@@ -113,11 +113,22 @@ function extractTabTimesFromDataString(dataStr) {
         .split(/\s*[;,]\s*/)
         .map(tok => {
             const t = String(tok || "").trim();
-            if (!t) return "";
-            if (t === "?s") return "?s";
+            if (!t || t === "?s" || t === "0s") return "";
             return formatShortCheatDuration(t) || t;
         })
         .filter(Boolean);
+}
+
+function parseDurationTokenToSeconds(token) {
+    if (!token) return 0;
+    const s = String(token).trim().toLowerCase();
+    const mFull = s.match(/(\d+)\s*(?:p|phút)\s*(\d+)\s*(?:s|giây)?/);
+    if (mFull) return (parseInt(mFull[1], 10) || 0) * 60 + (parseInt(mFull[2], 10) || 0);
+    const mMinOnly = s.match(/^(\d+)\s*(?:p|phút)$/);
+    if (mMinOnly) return (parseInt(mMinOnly[1], 10) || 0) * 60;
+    const mSecOnly = s.match(/(\d+)\s*(?:s|giây)/);
+    if (mSecOnly) return parseInt(mSecOnly[1], 10) || 0;
+    return 0;
 }
 
 function parseCompletionTimeSeconds(compStr, fallbackSpentMins = 0) {
@@ -157,29 +168,28 @@ function getSubmissionTimestamp(sub) {
 function formatShortCheatDuration(rawDur) {
     if (!rawDur) return "";
     const str = String(rawDur).trim();
-    if (!str || /^bắt\s*đầu/i.test(str) || str === "---") return "";
+    if (!str || /^bắt\s*đầu/i.test(str) || str === "---" || str === "?s") return "";
     return str
         .replace(/phút/gi, 'p')
         .replace(/giây/gi, 's')
         .replace(/\s+/g, '');
 }
 
-function formatAlignedCheatTimeString(durations, tabCount) {
+function formatAlignedCheatTimeString(durations, tabCount, isDoing = false) {
     if (tabCount <= 0) return "0s";
-    const list = Array.isArray(durations) ? durations.filter(Boolean) : [];
+    const list = Array.isArray(durations)
+        ? durations.map(d => String(d || "").trim()).filter(d => d && d !== "?s" && d !== "0s")
+        : [];
+
+    if (list.length === 0) {
+        return isDoing ? "Đang rời tab..." : "Chưa lưu giây";
+    }
     if (list.length >= tabCount) {
         return list.join(" | ");
     }
     const missing = tabCount - list.length;
-    const out = [...list];
-    if (missing === 1) {
-        out.push("?s");
-    } else if (missing === 2) {
-        out.push("?s", "?s");
-    } else {
-        out.push(`?s (×${missing})`);
-    }
-    return out.join(" | ");
+    const suffix = missing === 1 ? "1 lần chưa rõ" : `${missing} lần chưa rõ`;
+    return `${list.join(" | ")} | (${suffix})`;
 }
 
 function findCheatEntriesForSbd(cheatEntriesBySbd, rawSbd) {
@@ -207,11 +217,11 @@ function getAttemptCheatStats(row, targetSub = null) {
         if (row?.isDoing && !sub) {
             const lastSubMs = attempts.length > 0 ? getSubmissionTimestamp(attempts[attempts.length - 1]) : 0;
             const doingStartMs = Number(row.doingStartTime) || 0;
-            const winStart = Math.max(lastSubMs, doingStartMs > 0 ? (doingStartMs - 20000) : 0);
+            const winStart = Math.max(lastSubMs, doingStartMs > 0 ? (doingStartMs - 120000) : 0);
             if (winStart > 0) {
                 scopedEntries = entries.filter(e => e.createdAtMs > 0 && e.createdAtMs >= winStart);
             }
-        } else if (sub) {
+        } else if (sub && attempts.length > 1) {
             const attIdx = attempts.indexOf(sub);
             const subEndMs = getSubmissionTimestamp(sub);
             const prevEndMs = (attIdx > 0) ? getSubmissionTimestamp(attempts[attIdx - 1]) : 0;
@@ -220,16 +230,17 @@ function getAttemptCheatStats(row, targetSub = null) {
             if (subEndMs > 0) {
                 let winStart = prevEndMs;
                 if (spentSec > 0) {
-                    const estStart = subEndMs - (spentSec * 1000) - 20000;
+                    const estStart = subEndMs - (spentSec * 1000) - 180000;
                     winStart = Math.max(winStart, estStart);
                 }
-                const winEnd = subEndMs + 20000;
+                const winEnd = subEndMs + 180000;
                 scopedEntries = entries.filter(e => {
                     if (!e.createdAtMs) return false;
                     return e.createdAtMs >= winStart && e.createdAtMs <= winEnd;
                 });
             }
         }
+        // Khi attempts.length === 1: giữ nguyên toàn bộ entries của bài thi đó, không cắt theo đồng hồ máy học sinh
     }
 
     const logDurations = scopedEntries.map(e => e.durationShort).filter(Boolean);
@@ -246,22 +257,35 @@ function getAttemptCheatStats(row, targetSub = null) {
             durations = [];
         }
 
-        // Nếu bài nộp đã ghi nhận số lần chuyển tab > 0, ưu tiên số lần khớp với bài nộp và số log thực tế thu được
         const tabCount = subReported > 0
             ? Math.max(subReported, durations.length)
             : Math.max(maxLogSwitch, durations.length);
 
-        const timeString = formatAlignedCheatTimeString(durations, tabCount);
-        return { tabCount, timeString, durations };
+        const timeString = formatAlignedCheatTimeString(durations, tabCount, false);
+        const totalSeconds = durations.reduce((sum, tok) => sum + parseDurationTokenToSeconds(tok), 0);
+        return {
+            tabCount,
+            timeString,
+            durations,
+            totalSeconds,
+            hasMissingDuration: (tabCount > durations.length)
+        };
     }
 
     if (row?.isDoing) {
         const tabCount = Math.max(maxLogSwitch, logDurations.length);
-        const timeString = formatAlignedCheatTimeString(logDurations, tabCount);
-        return { tabCount, timeString, durations: logDurations };
+        const timeString = formatAlignedCheatTimeString(logDurations, tabCount, true);
+        const totalSeconds = logDurations.reduce((sum, tok) => sum + parseDurationTokenToSeconds(tok), 0);
+        return {
+            tabCount,
+            timeString,
+            durations: logDurations,
+            totalSeconds,
+            hasMissingDuration: (tabCount > logDurations.length)
+        };
     }
 
-    return { tabCount: 0, timeString: "0s", durations: [] };
+    return { tabCount: 0, timeString: "0s", durations: [], totalSeconds: 0, hasMissingDuration: false };
 }
 
 function deduplicateAttempts(attempts) {
@@ -384,9 +408,9 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
         }
 
         let [subRes, cheatRes, activeRes] = await Promise.all([
-            client.from('submissions').select(SUBMISSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
-            client.from('cheating_logs').select('id, sbd, student_name, duration_str, switch_count, created_at').in('quiz_id', candidateCodes),
-            client.from('active_sessions').select(ACTIVE_SESSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes)
+            client.from('submissions').select(SUBMISSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes).order('created_at', { ascending: true }).limit(5000),
+            client.from('cheating_logs').select('id, sbd, student_name, duration_str, switch_count, created_at').in('quiz_id', candidateCodes).order('created_at', { ascending: true }).limit(5000),
+            client.from('active_sessions').select(ACTIVE_SESSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes).limit(1000)
         ]);
 
         let rawSubsData = subRes.data || [];
@@ -398,7 +422,8 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
                 .from('submissions')
                 .select(SUBMISSIONS_LITE_COLUMNS)
                 .ilike('exam_title', `%${examTitle.trim()}%`)
-                .order('created_at', { ascending: true });
+                .order('created_at', { ascending: true })
+                .limit(5000);
             if (extraSubs && extraSubs.length > 0) {
                 rawSubsData = extraSubs;
             }
@@ -771,6 +796,9 @@ async function getQuizObjectSafely(client, candidateCodes) {
 window.cleanSbdStandard = cleanSbdStandard;
 window.getSbdVariations = getSbdVariations;
 window.isSbdMatchedFlexibly = isSbdMatchedFlexibly;
+window.extractTabCountFromDataString = extractTabCountFromDataString;
+window.extractTabTimesFromDataString = extractTabTimesFromDataString;
+window.parseDurationTokenToSeconds = parseDurationTokenToSeconds;
 window.getAttemptCheatStats = getAttemptCheatStats;
 window.startRealtimeSubmissionsListener = startRealtimeSubmissionsListener;
 window.stopRealtimeSubmissionsListener = stopRealtimeSubmissionsListener;
