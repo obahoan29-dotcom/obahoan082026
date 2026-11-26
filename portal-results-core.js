@@ -1,11 +1,6 @@
 // =========================================================
 // FILE: portal-results-core.js 
-// (BẢN TỐI ƯU BĂNG THÔNG ~90% + CHẶN BÃO REALTIME + FIX TRÙNG TÊN LỚP 10P)
-// ĐÃ SỬA:
-// 1. LOẠI BỎ CỘT user_answers NẶNG KHI TẢI BẢNG TỔNG, BỎ TẢI THỪA live_drafts, LỌC active_sessions THEO quiz_id
-// 2. REALTIME CHỈ LẮNG NGHE INSERT/DELETE TRÊN active_sessions (BỎ UPDATE PING 60s), DEBOUNCE 1500ms
-// 3. FIX LỖI GHÉP NHẦM HỌC SINH TRÙNG TÊN KHI BÀI NỘP ĐÃ CÓ SBD HỢP LỆ
-// 4. GIỮ NGUYÊN MENU NỔI KHI BẢNG CẬP NHẬT NGẦM (isSilent)
+// (BẢN TỐI ƯU BĂNG THÔNG + LỌC ĐÚNG KHUNG GIỜ PHIÊN THI + ĐỒNG BỘ 100% 2 CỘT CHUYỂN TAB)
 // =========================================================
 
 let currentExamResultData = {
@@ -76,8 +71,8 @@ function sortDataString(str) {
     let parts = str.split(/\s*\|\s*/);
     
     parts.sort((a, b) => {
-        let isLogA = a.startsWith("[") || a.toLowerCase().includes("tab switch");
-        let isLogB = b.startsWith("[") || b.toLowerCase().includes("tab switch");
+        let isLogA = a.startsWith("[") || /^tab\s*(?:switch|times)/i.test(a);
+        let isLogB = b.startsWith("[") || /^tab\s*(?:switch|times)/i.test(b);
         
         if (isLogA && !isLogB) return 1;
         if (!isLogA && isLogB) return -1;
@@ -110,6 +105,41 @@ function extractTabCountFromDataString(dataStr) {
     return m ? (parseInt(m[1], 10) || 0) : 0;
 }
 
+function extractTabTimesFromDataString(dataStr) {
+    if (!dataStr) return [];
+    const m = String(dataStr).match(/(?:^|\|)\s*TabTimes\s*:\s*([^|]+)/i);
+    if (!m || !m[1]) return [];
+    return m[1]
+        .split(/\s*[;,]\s*/)
+        .map(tok => {
+            const t = String(tok || "").trim();
+            if (!t) return "";
+            if (t === "?s") return "?s";
+            return formatShortCheatDuration(t) || t;
+        })
+        .filter(Boolean);
+}
+
+function parseCompletionTimeSeconds(compStr, fallbackSpentMins = 0) {
+    const s = String(compStr || "").trim();
+    if (s) {
+        const mFull = s.match(/(\d+)\s*phút(?:\s*(\d+)\s*giây)?/i);
+        if (mFull) {
+            return (parseInt(mFull[1], 10) || 0) * 60 + (parseInt(mFull[2] || "0", 10) || 0);
+        }
+        const mShort = s.match(/(\d+)\s*p(?:\s*(\d+)\s*s)?/i);
+        if (mShort) {
+            return (parseInt(mShort[1], 10) || 0) * 60 + (parseInt(mShort[2] || "0", 10) || 0);
+        }
+        const mSecOnly = s.match(/(\d+)\s*(?:giây|s)\b/i);
+        if (mSecOnly) {
+            return parseInt(mSecOnly[1], 10) || 0;
+        }
+    }
+    const mins = Number(fallbackSpentMins) || 0;
+    return mins > 0 ? mins * 60 : 0;
+}
+
 function getSubmissionTimestamp(sub) {
     if (!sub) return 0;
     if (sub.createdAt && !isNaN(Number(sub.createdAt))) return Number(sub.createdAt);
@@ -134,6 +164,38 @@ function formatShortCheatDuration(rawDur) {
         .replace(/\s+/g, '');
 }
 
+function formatAlignedCheatTimeString(durations, tabCount) {
+    if (tabCount <= 0) return "0s";
+    const list = Array.isArray(durations) ? durations.filter(Boolean) : [];
+    if (list.length >= tabCount) {
+        return list.join(" | ");
+    }
+    const missing = tabCount - list.length;
+    const out = [...list];
+    if (missing === 1) {
+        out.push("?s");
+    } else if (missing === 2) {
+        out.push("?s", "?s");
+    } else {
+        out.push(`?s (×${missing})`);
+    }
+    return out.join(" | ");
+}
+
+function findCheatEntriesForSbd(cheatEntriesBySbd, rawSbd) {
+    if (!cheatEntriesBySbd || !rawSbd) return [];
+    const cleanKey = cleanSbdStandard(rawSbd);
+    if (cleanKey && Array.isArray(cheatEntriesBySbd[cleanKey])) {
+        return cheatEntriesBySbd[cleanKey];
+    }
+    for (const k in cheatEntriesBySbd) {
+        if (isSbdMatchedFlexibly(rawSbd, k) && Array.isArray(cheatEntriesBySbd[k])) {
+            return cheatEntriesBySbd[k];
+        }
+    }
+    return [];
+}
+
 function getAttemptCheatStats(row, targetSub = null) {
     const entries = Array.isArray(row?.cheatEntries) ? row.cheatEntries : [];
     const attempts = Array.isArray(row?.allAttempts) ? row.allAttempts : [];
@@ -142,53 +204,61 @@ function getAttemptCheatStats(row, targetSub = null) {
     let scopedEntries = entries;
 
     if (entries.length > 0 && entries.some(e => e.createdAtMs > 0)) {
-        if (row?.isDoing && !sub && attempts.length > 0) {
-            const lastSubMs = getSubmissionTimestamp(attempts[attempts.length - 1]);
-            if (lastSubMs > 0) {
-                scopedEntries = entries.filter(e => e.createdAtMs > lastSubMs);
+        if (row?.isDoing && !sub) {
+            const lastSubMs = attempts.length > 0 ? getSubmissionTimestamp(attempts[attempts.length - 1]) : 0;
+            const doingStartMs = Number(row.doingStartTime) || 0;
+            const winStart = Math.max(lastSubMs, doingStartMs > 0 ? (doingStartMs - 20000) : 0);
+            if (winStart > 0) {
+                scopedEntries = entries.filter(e => e.createdAtMs > 0 && e.createdAtMs >= winStart);
             }
-        } else if (sub && attempts.length > 1) {
+        } else if (sub) {
             const attIdx = attempts.indexOf(sub);
-            if (attIdx !== -1) {
-                const winStart = attIdx === 0 ? 0 : getSubmissionTimestamp(attempts[attIdx - 1]);
-                const winEnd = getSubmissionTimestamp(sub) + 10000;
-                if (winEnd > 10000) {
-                    scopedEntries = entries.filter(e => {
-                        if (!e.createdAtMs) return false;
-                        return e.createdAtMs > winStart && e.createdAtMs <= winEnd;
-                    });
+            const subEndMs = getSubmissionTimestamp(sub);
+            const prevEndMs = (attIdx > 0) ? getSubmissionTimestamp(attempts[attIdx - 1]) : 0;
+            const spentSec = parseCompletionTimeSeconds(sub.completionTime, sub.spentMins);
+
+            if (subEndMs > 0) {
+                let winStart = prevEndMs;
+                if (spentSec > 0) {
+                    const estStart = subEndMs - (spentSec * 1000) - 20000;
+                    winStart = Math.max(winStart, estStart);
                 }
+                const winEnd = subEndMs + 20000;
+                scopedEntries = entries.filter(e => {
+                    if (!e.createdAtMs) return false;
+                    return e.createdAtMs >= winStart && e.createdAtMs <= winEnd;
+                });
             }
         }
     }
 
-    const durations = scopedEntries.map(e => e.durationShort).filter(Boolean);
+    const logDurations = scopedEntries.map(e => e.durationShort).filter(Boolean);
     const maxLogSwitch = scopedEntries.reduce((mx, e) => Math.max(mx, e.switchCount || 0), 0);
 
     if (sub) {
         const rawSubTab = parseInt(sub.tabSwitchCount, 10) || 0;
         const dataStrTab = extractTabCountFromDataString(sub.dataString);
         const subReported = Math.max(rawSubTab, dataStrTab);
+        const dataStrTimes = extractTabTimesFromDataString(sub.dataString);
 
-        let effectiveLogCount = Math.max(maxLogSwitch, durations.length);
-        let effectiveDurations = durations;
+        let durations = dataStrTimes.length >= logDurations.length ? [...dataStrTimes] : [...logDurations];
         if (attempts.length > 1 && subReported === 0 && !entries.some(e => e.createdAtMs > 0)) {
-            effectiveLogCount = 0;
-            effectiveDurations = [];
+            durations = [];
         }
 
-        const tabCount = Math.max(subReported, effectiveLogCount);
-        const timeString = effectiveDurations.length > 0
-            ? effectiveDurations.join(" | ")
-            : (tabCount > 0 ? "---" : "0s");
+        // Nếu bài nộp đã ghi nhận số lần chuyển tab > 0, ưu tiên số lần khớp với bài nộp và số log thực tế thu được
+        const tabCount = subReported > 0
+            ? Math.max(subReported, durations.length)
+            : Math.max(maxLogSwitch, durations.length);
 
-        return { tabCount, timeString, durations: effectiveDurations };
+        const timeString = formatAlignedCheatTimeString(durations, tabCount);
+        return { tabCount, timeString, durations };
     }
 
     if (row?.isDoing) {
-        const tabCount = Math.max(maxLogSwitch, durations.length);
-        const timeString = durations.length > 0 ? durations.join(" | ") : "0s";
-        return { tabCount, timeString, durations };
+        const tabCount = Math.max(maxLogSwitch, logDurations.length);
+        const timeString = formatAlignedCheatTimeString(logDurations, tabCount);
+        return { tabCount, timeString, durations: logDurations };
     }
 
     return { tabCount: 0, timeString: "0s", durations: [] };
@@ -253,7 +323,6 @@ function startRealtimeSubmissionsListener(quizId) {
                 filter: `quiz_id=eq.${id}` 
             }, () => debouncedRefreshResults(1500));
 
-            // Chỉ lắng nghe INSERT (vào thi) & DELETE (nộp bài rời phòng), bỏ UPDATE ping 60s để chống bão Egress
             channel = channel.on('postgres_changes', { 
                 event: 'INSERT', 
                 schema: 'public', 
@@ -314,7 +383,6 @@ async function fetchAndRenderExamResults(item, isSilent = false) {
             candidateCodes.push(String(quizId).trim());
         }
 
-        // Bỏ user_answers nặng và bỏ bảng live_drafts toàn trường để tiết kiệm ~90% băng thông
         let [subRes, cheatRes, activeRes] = await Promise.all([
             client.from('submissions').select(SUBMISSIONS_LITE_COLUMNS).in('quiz_id', candidateCodes).order('created_at', { ascending: true }),
             client.from('cheating_logs').select('id, sbd, student_name, duration_str, switch_count, created_at').in('quiz_id', candidateCodes),
@@ -422,9 +490,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(categoryId) : [];
 
     const cheatEntriesBySbd = {};
-    const cheatHistoryBySbd = {};
-    const maxCheatCountBySbd = {};
-
     const cheatList = Array.isArray(cheatingInput)
         ? cheatingInput
         : Object.values(cheatingInput || {});
@@ -449,10 +514,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             switchCount: sCount,
             createdAtMs: Number(log.createdAtMs) || 0
         });
-
-        if (!cheatHistoryBySbd[sbdKey]) cheatHistoryBySbd[sbdKey] = [];
-        cheatHistoryBySbd[sbdKey].push(shortDur);
-        maxCheatCountBySbd[sbdKey] = Math.max(maxCheatCountBySbd[sbdKey] || 0, sCount);
     });
 
     let submissionsList = [];
@@ -494,7 +555,6 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
 
             let isSbdMatch = hasValidSubSbd && isSbdMatchedFlexibly(acc.sbd, subSbdRaw);
             let subNameNorm = typeof normalizeName === 'function' ? normalizeName(sub.studentName || sub.name) : "";
-            // Chỉ khớp theo tên khi bài nộp thiếu SBD (tránh ghép nhầm giữa 2 học sinh trùng tên cùng lớp)
             let isNameMatch = (!hasValidSubSbd && accNameNorm && subNameNorm && accNameNorm === subNameNorm);
 
             if (isSbdMatch || isNameMatch) {
@@ -546,18 +606,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             }
         }
 
-        let cheatEntries = cheatEntriesBySbd[accSbdClean] || [];
-        let cheatDurations = cheatHistoryBySbd[accSbdClean] || [];
-        let cheatLogsTabCount = maxCheatCountBySbd[accSbdClean] || cheatDurations.length;
-        let cheatTimeString = cheatDurations.length > 0 ? cheatDurations.join(" | ") : "0s";
-
         let selectedAttemptIndex = 0;
         const savedAttemptIdx = window._userSelectedAttemptsBySbd[accSbdClean];
         if (savedAttemptIdx !== undefined && savedAttemptIdx >= 0 && savedAttemptIdx < matchedSubs.length) {
             selectedAttemptIndex = savedAttemptIdx;
         }
 
-        finalRows.push({
+        const rowObj = {
             _rowUid: 'row_cls_' + (acc.sbd || idx),
             stt: acc.stt || (idx + 1),
             isClassStudent: true,
@@ -568,10 +623,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             isAwayApp: isAwayApp,
             doingStartTime: doingStartTime,
             isFreeDoing: false,
-            cheatEntries: cheatEntries,
-            cheatTimeString: cheatTimeString,
-            cheatLogsTabCount: cheatLogsTabCount
-        });
+            cheatEntries: findCheatEntriesForSbd(cheatEntriesBySbd, acc.sbd)
+        };
+        const initialCheat = getAttemptCheatStats(rowObj, matchedSubs[selectedAttemptIndex] || null);
+        rowObj.cheatTimeString = initialCheat.timeString;
+        rowObj.cheatLogsTabCount = initialCheat.tabCount;
+
+        finalRows.push(rowObj);
     });
 
     let freeSttCounter = classAccounts.length + 1;
@@ -606,10 +664,7 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             className: sess.className || "Tự do"
         };
 
-        const freeCheatEntries = cheatEntriesBySbd[cleanKey] || [];
-        const freeCheatDurations = cheatHistoryBySbd[cleanKey] || [];
-
-        finalRows.push({
+        const rowObj = {
             _rowUid: 'row_free_doing_' + cleanKey,
             stt: freeSttCounter++,
             isClassStudent: false,
@@ -620,10 +675,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             isAwayApp: !isPingFresh,
             doingStartTime: rawStartTime > 0 ? rawStartTime : sessPingTime,
             isFreeDoing: true,
-            cheatEntries: freeCheatEntries,
-            cheatTimeString: freeCheatDurations.length > 0 ? freeCheatDurations.join(" | ") : "0s",
-            cheatLogsTabCount: maxCheatCountBySbd[cleanKey] || freeCheatDurations.length
-        });
+            cheatEntries: findCheatEntriesForSbd(cheatEntriesBySbd, sess.sbd || sessKey)
+        };
+        const initialCheat = getAttemptCheatStats(rowObj, null);
+        rowObj.cheatTimeString = initialCheat.timeString;
+        rowObj.cheatLogsTabCount = initialCheat.tabCount;
+
+        finalRows.push(rowObj);
     }
 
     for (let sub of submissionsList) {
@@ -646,6 +704,9 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             } else {
                 existingFreeRow.selectedAttemptIndex = 0;
             }
+            const curCheat = getAttemptCheatStats(existingFreeRow, existingFreeRow.allAttempts[existingFreeRow.selectedAttemptIndex] || null);
+            existingFreeRow.cheatTimeString = curCheat.timeString;
+            existingFreeRow.cheatLogsTabCount = curCheat.tabCount;
             usedSubIds.add(sub.id);
             continue;
         }
@@ -656,12 +717,9 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             className: sub.studentClass || "Tự do"
         };
 
-        const freeCheatEntries = cheatEntriesBySbd[cleanKey] || [];
-        const freeCheatDurations = cheatHistoryBySbd[cleanKey] || [];
-
         usedSubIds.add(sub.id);
 
-        finalRows.push({
+        const rowObj = {
             _rowUid: 'row_free_' + cleanKey,
             stt: freeSttCounter++,
             isClassStudent: false,
@@ -672,10 +730,13 @@ function renderExamResultTable(categoryId, submissionsListRaw, cheatingInput, ac
             isAwayApp: false,
             doingStartTime: null,
             isFreeDoing: false,
-            cheatEntries: freeCheatEntries,
-            cheatTimeString: freeCheatDurations.length > 0 ? freeCheatDurations.join(" | ") : "0s",
-            cheatLogsTabCount: maxCheatCountBySbd[cleanKey] || freeCheatDurations.length
-        });
+            cheatEntries: findCheatEntriesForSbd(cheatEntriesBySbd, rawSbd)
+        };
+        const initialCheat = getAttemptCheatStats(rowObj, sub);
+        rowObj.cheatTimeString = initialCheat.timeString;
+        rowObj.cheatLogsTabCount = initialCheat.tabCount;
+
+        finalRows.push(rowObj);
     }
 
     if (typeof calculateRanksForRows === 'function') calculateRanksForRows(finalRows);
