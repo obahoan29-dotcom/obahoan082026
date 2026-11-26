@@ -1,6 +1,6 @@
 // =========================================================
 // FILE: exam-engine-core.js 
-// (BẢN FIX TRIỆT ĐỂ + CACHE ĐỀ THI 5 PHÚT CHO HỌC SINH GIẢM BĂNG THÔNG KHI F5)
+// (BẢN FIX TRIỆT ĐỂ + CACHE ĐỀ THI 5 PHÚT + LƯU/KHÔI PHỤC LOG CHUYỂN TAB BỀN VỮNG)
 // =========================================================
 
 window.SECURE_VAULT = window.SECURE_VAULT || {
@@ -459,7 +459,6 @@ async function fetchQuizWithSmartCache(client, quizId, isAdminMode, isReview) {
                 const parsedCache = JSON.parse(rawCache);
                 if (parsedCache && parsedCache.data && Array.isArray(parsedCache.data.questions) && parsedCache.data.questions.length > 0) {
                     if ((Date.now() - (Number(parsedCache.cachedAt) || 0)) < QUIZ_CACHE_TTL_MS) {
-                        // Chỉ fetch phần metadata cấu hình (~400 bytes) để cập nhật giờ thi / chế độ mới nhất của Thầy
                         const metaPromise = client.from('quizzes').select(META_COLS).eq('id', quizId).single();
                         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
                         const { data: freshMeta, error: metaErr } = await Promise.race([metaPromise, timeoutPromise]);
@@ -1246,11 +1245,17 @@ function saveExamStateToStorage() {
         safeLocal.setItem(originKey, String(examStartTime));
     }
 
+    const durationsCopy = (typeof tabSwitchDurations !== 'undefined' && Array.isArray(tabSwitchDurations))
+        ? [...tabSwitchDurations] : [];
+
     const dataToSave = { 
         userAnswers: window.SECURE_VAULT.userAnswers, 
         padletClickedMap: window.SECURE_VAULT.padletClicked, 
         examStartTime: examStartTime, 
         tabSwitchCount: tabSwitchCount, 
+        tabSwitchDurations: durationsCopy,
+        isTabHidden: Boolean(typeof isTabHidden !== 'undefined' ? isTabHidden : false),
+        leaveTime: Number(typeof leaveTime !== 'undefined' ? leaveTime : 0),
         timeLimitMinutes: TIME_LIMIT_MINUTES, 
         studentId: sbd, 
         studentName: document.getElementById("student-name")?.value?.trim() || safeLocal.getItem("saved_student_name") || "", 
@@ -1314,7 +1319,8 @@ function restoreExamStateFromStorage() {
 
             window.SECURE_VAULT.userAnswers = parsed.userAnswers || {}; 
             window.SECURE_VAULT.padletClicked = parsed.padletClickedMap || {}; 
-            tabSwitchCount = parsed.tabSwitchCount || 0; 
+            tabSwitchDurations = Array.isArray(parsed.tabSwitchDurations) ? [...parsed.tabSwitchDurations] : [];
+            tabSwitchCount = Math.max(Number(parsed.tabSwitchCount) || 0, tabSwitchDurations.length); 
             examStartTime = savedStartTime; 
             
             if (parsed.timeLimitMinutes && !isNaN(parseInt(parsed.timeLimitMinutes, 10)) && parseInt(parsed.timeLimitMinutes, 10) > 0) {
@@ -1327,6 +1333,19 @@ function restoreExamStateFromStorage() {
             
             isExamLocked = false;
             lockedDurationSec = 0;
+
+            if (parsed.isTabHidden && parsed.leaveTime > 0 && !isAdminPreviewUrl) {
+                isTabHidden = true;
+                leaveTime = Number(parsed.leaveTime);
+                if (typeof finalizePendingTabLeaveIfAny === 'function') {
+                    finalizePendingTabLeaveIfAny(false);
+                    saveExamStateToStorage();
+                }
+            } else {
+                isTabHidden = false;
+                leaveTime = 0;
+            }
+
             return true; 
         } 
     } catch(e) {} 
