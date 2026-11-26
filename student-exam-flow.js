@@ -1,12 +1,10 @@
 // =========================================================
 // FILE: student-exam-flow.js 
-// (BẢN FIX TRIỆT ĐỂ: SẠCH 100% LỖI CÚ PHÁP, TÁCH CHẾ ĐỘ ADMIN & HỌC SINH,
-//  KHÔNG GHI RÁC "Bắt đầu Lần ..." VÀO cheating_logs GÂY SAI CỘT CHUYỂN TAB)
+// (BẢN FIX TRIỆT ĐỂ: ĐỒNG BỘ CHÍNH XÁC SỐ LẦN & THỜI GIAN CHUYỂN TAB KHI NỘP BÀI)
 // =========================================================
 
 let submissionCountdownTimer = null;
 
-// HÀM GIẢI MÃ THAM SỐ URL AN TOÀN TRÊN IOS SAFARI/MESSENGER (CHỐNG LỖI KÝ TỰ VIỆT)
 function safeDecodeParam(val) {
     if (!val) return "";
     try {
@@ -16,9 +14,6 @@ function safeDecodeParam(val) {
     }
 }
 
-// =========================================================================
-// HÀM ÁNH XẠ CHÍNH XÁC TÊN LỚP DỰA TRÊN SỐ BÁO DANH (ƯU TIÊN TUYỆT ĐỐI)
-// =========================================================================
 function getStrictStandardClassName(rawClass, rawSbd) {
     const sbd = String(rawSbd || "").trim().toLowerCase();
     const s = String(rawClass || "").trim().toLowerCase();
@@ -501,7 +496,6 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
                 if (!updated || updated.length === 0) {
                     await client.from('active_sessions').insert([sessionPayload]);
                 }
-                // Không ghi dòng "Bắt đầu Lần ..." vào cheating_logs để cột chuyển tab luôn sạch và chính xác 100%
             };
 
             const timeoutTask = new Promise(resolve => setTimeout(() => resolve('timeout'), 1800));
@@ -547,6 +541,9 @@ async function executeStartExamAPI(sId, sName, sClass, isFreeStudent = false, is
     }
 
     tabSwitchCount = 0;
+    if (typeof tabSwitchDurations !== 'undefined') tabSwitchDurations = [];
+    if (typeof isTabHidden !== 'undefined') isTabHidden = false;
+    if (typeof leaveTime !== 'undefined') leaveTime = 0;
     isExamLocked = false;
     lockedDurationSec = 0;
     isSubmitted = false;
@@ -606,7 +603,13 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     const strictClassName = getStrictStandardClassName(sClass || currentCat, sId);
 
     const urlParams = new URLSearchParams(window.location.search);
+    const isAdminPreviewUrl = (urlParams.get('admin') === '1');
     const currentQuizId = urlParams.get('id') || (typeof examData !== 'undefined' && examData && examData.id) || "exam";
+
+    // Nếu học sinh đang rời tab (chưa quay lại) mà hết giờ / bị thu ép -> chốt khoảng thời gian cuối cùng ngay!
+    if (!isAdminPreviewUrl && typeof finalizePendingTabLeaveIfAny === 'function') {
+        finalizePendingTabLeaveIfAny(false);
+    }
 
     const classAccounts = typeof getAccountsForCategory === 'function' ? getAccountsForCategory(currentCat) : [];
     const isClassAcc = classAccounts.some(acc => String(acc.sbd || "").trim().toLowerCase() === sId.toLowerCase());
@@ -676,7 +679,18 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
     }
 
     const { correctCount, wrongCount, totalRawScore, finalScore, maxScale, dataDetails } = scoreResult;
-    dataDetails.push(`Tab Switch: ${tabSwitchCount}`);
+
+    const safeDurations = (typeof tabSwitchDurations !== 'undefined' && Array.isArray(tabSwitchDurations))
+        ? [...tabSwitchDurations] : [];
+    const finalTabCount = Math.max(Number(tabSwitchCount) || 0, safeDurations.length);
+    while (finalTabCount > 0 && safeDurations.length < finalTabCount) {
+        safeDurations.push("?s");
+    }
+
+    dataDetails.push(`Tab Switch: ${finalTabCount}`);
+    if (safeDurations.length > 0) {
+        dataDetails.push(`TabTimes: ${safeDurations.join(" ; ")}`);
+    }
     if (isForceSubmit) {
         dataDetails.push(`[THU BÀI ÉP BUỘC TỪ XA]`);
     }
@@ -701,7 +715,7 @@ function buildCompleteSubmissionPayload(isForceSubmit = false) {
         wrong_count: isNaN(wrongCount) ? 0 : parseInt(wrongCount, 10),
         completion_time: completionTimeStr,
         spent_mins: isNaN(spentMins) ? 0 : parseInt(spentMins, 10),
-        tab_switch_count: `${tabSwitchCount} lần`,
+        tab_switch_count: `${finalTabCount} lần`,
         data_string: dataDetails.join(" | "),
         user_answers: origAnswers,
         category_id: currentCat,
@@ -1182,6 +1196,9 @@ async function executeSubmitExam(isForceSubmit = false) {
     }
 
     if (submitOk) {
+        if (typeof flushPendingTabLogs === 'function') {
+            flushPendingTabLogs().catch(() => {});
+        }
         if (client) {
             client.from('live_drafts').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
             client.from('active_sessions').delete().match({ quiz_id: payload.quiz_id, sbd: payload.sbd }).then();
@@ -1327,7 +1344,6 @@ function closeSubmitConfirmModal() {
     document.getElementById("submit-confirm-modal").style.display = "none"; 
 }
 
-// ĐĂNG KÝ TOÀN CỤC CÁC HÀM
 window.getStrictStandardClassName = getStrictStandardClassName;
 window.getRealStudentExamAttemptNumber = getRealStudentExamAttemptNumber;
 window.fetchStudentAttemptNumberFromCloud = fetchStudentAttemptNumberFromCloud;
