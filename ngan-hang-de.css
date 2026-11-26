@@ -2,6 +2,7 @@
    FILE: ngan-hang-de.css
    GIAO DIỆN NÚT TRIGGER, DROPDOWN & MA TRẬN 3 CỘT CO GIÃN (HOÀN CHỈNH 100%)
    ĐÃ BỔ SUNG:
+   - NÚT SIÊU NHỎ & MENU TÙY CHỌN ẨN CÁC NÚT CUỐI MỖI THƯ MỤC CỘT TRÁI
    - MENU XÒE 4 KHO CHỜ XẾP Ở NÚT UPLOAD FILE JSON ĐỀ
    - POPUP CHỌN 4 KHO KHI CHUYỂN ĐỀ TỪ 8 LỚP NGOÀI TRANG CHỦ
    - BỘ DUYỆT THƯ MỤC 3 CẤP + THANH BACK + BREADCRUMB + THẺ ĐỀ THU GỌN
@@ -301,6 +302,145 @@
 }
 .qbank-tree-container::-webkit-scrollbar { width: 5px; }
 .qbank-tree-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* NÚT SIÊU NHỎ & MENU TÙY CHỌN ẨN CÁC NÚT CUỐI THƯ MỤC */
+.btn-qbank-tree-vis-mini {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border-radius: 5px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.14s ease;
+    user-select: none;
+}
+.btn-qbank-tree-vis-mini:hover,
+.btn-qbank-tree-vis-mini.is-open {
+    background: #e0f2fe;
+    border-color: #38bdf8;
+    color: #0284c7;
+}
+.btn-qbank-tree-vis-mini.has-hidden-active {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #b45309;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25);
+}
+
+.qbank-tree-vis-menu {
+    display: none;
+    position: fixed !important;
+    width: 268px;
+    max-width: 90vw;
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1.6px solid #0284c7;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.36), 0 0 0 1px rgba(2, 132, 199, 0.14);
+    padding: 7px;
+    z-index: 10000089 !important;
+    animation: popInQbank 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+    font-family: 'Be Vietnam Pro', sans-serif;
+}
+.qbank-tree-vis-menu.show {
+    display: flex !important;
+    flex-direction: column;
+    gap: 5px;
+}
+.qbank-tree-vis-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    font-weight: 900;
+    color: #0369a1;
+    padding: 2px 4px 5px 4px;
+    border-bottom: 1px solid #e0f2fe;
+    letter-spacing: 0.2px;
+}
+.qbank-tree-vis-close {
+    border: none;
+    background: #f1f5f9;
+    color: #64748b;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 900;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.qbank-tree-vis-close:hover { background: #ef4444; color: #ffffff; }
+.qbank-tree-vis-opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 6px 7px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.12s ease;
+}
+.qbank-tree-vis-opt:hover {
+    background: #f0f9ff;
+    border-color: #7dd3fc;
+}
+.qbank-tree-vis-opt input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    margin-top: 2px;
+    accent-color: #0284c7;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.qbank-tree-vis-opt b {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.25;
+}
+.qbank-tree-vis-opt small {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 1px;
+    line-height: 1.2;
+}
+.qbank-tree-vis-footer {
+    display: flex;
+    gap: 5px;
+    padding-top: 4px;
+    border-top: 1px dashed #cbd5e1;
+}
+.qbank-tree-vis-quick {
+    flex: 1;
+    padding: 4px 6px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 10.5px;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s ease;
+}
+.qbank-tree-vis-quick:hover { background: #fef3c7; border-color: #f59e0b; color: #b45309; }
+.qbank-tree-vis-quick.is-show:hover { background: #dcfce7; border-color: #22c55e; color: #15803d; }
 
 .tree-item-wrapper { display: flex; flex-direction: column; margin-bottom: 2px; }
 .tree-item { 
