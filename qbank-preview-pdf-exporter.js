@@ -1,23 +1,76 @@
 // =========================================================
-// FILE: qbank-preview-pdf-exporter.js (FILE MỚI TINH)
+// FILE: qbank-preview-pdf-exporter.js
 // QUẢN LÝ ĐỘC LẬP CHỨC NĂNG XUẤT PDF TRONG MODAL "XEM THỬ ĐỀ":
 // 1. MENU XÒE 4 CHẾ ĐỘ XUẤT PDF + CHỌN SỐ TRANG & CỠ CHỮ:
 //    (1) Xuất đề PDF (chỉ đề)
 //    (2) Đề PDF kèm lời giải & bảng đáp án
 //    (3) Xuất PDF đề kèm khoảng trống dưới mỗi câu (dòng kẻ chấm .... hợp lý theo độ khó)
 //    (4) Xuất PDF chia 2 cột: Trái 40% Đề | Phải 60% Khoảng trống trình bày (dòng kẻ chấm ....)
-// 2. NẾU KHÔNG CHỌN SỐ TRANG / CỠ CHỮ -> XUẤT THEO MẶC ĐỊNH CHUẨN ĐẸP
+// 2. Ô CHỌN "✨ TRANG TRÍ" XÒE RA ĐẦY ĐỦ TÙY CHỌN:
+//    - 2 dòng kẻ trang trí trên cùng & dưới cùng mỗi trang
+//    - Tên tác giả lề trên & dưới (kèm logo, ô nhập tên, chọn bo viền nhãn)
+//    - Bo viền 4 cạnh từng trang
+//    - Bo viền luân phiên 3 cạnh (Trang lẻ: Trên-Dưới-Trái | Trang chẵn: Trên-Dưới-Phải)
+//    - Chọn 4 kiểu nét viền (Đôi cổ điển, Bo góc thanh lịch, Góc chữ L, Nét đứt), 5 màu, số trang, watermark
 // 3. TẶNG MỖI ĐỀ XUẤT RA 1 LOGO SVG NGHỆ THUẬT SINH NGẪU NHIÊN
-// 4. THUẬT TOÁN CO GIÃN ĐO TRANG THỰC TẾ SAU KHI MATHJAX RENDER ĐỂ KHỚP ĐÚNG N TRANG A4
+// 4. PHÂN TRANG TỪNG TỜ A4 THỰC TẾ KHI BẬT TRANG TRÍ & CO GIÃN ĐO TRANG SAU KHI MATHJAX RENDER
 // =========================================================
 
 (function initQbankPreviewPdfExporter() {
     if (typeof window === "undefined") return;
 
     const DEFAULT_FONT_PT = 10.5;
+    const DECOR_PREFS_STORAGE_KEY = "qb_pdf_decor_prefs_v1";
+
+    const DEFAULT_DECOR_PREFS = {
+        twoLines: false,
+        showAuthor: false,
+        authorName: "Thầy Phạm Công Hoan",
+        authorWithLogo: true,
+        authorBorder: "rounded", // none | rounded | double | pill
+        pageBorderMode: "none",  // none | all4 | alt3
+        borderStyle: "double",   // double | rounded | corner | dashed
+        borderColor: "#1e293b",  // #1e293b | #0369a1 | #0f766e | #6d28d9 | #b91c1c
+        showPageNum: true,
+        watermark: false
+    };
+
+    const DECOR_COLOR_SWATCHES = [
+        { hex: "#1e293b", name: "Đen mực in (Sắc nét khi photo)" },
+        { hex: "#0369a1", name: "Xanh dương học thuật" },
+        { hex: "#0f766e", name: "Xanh ngọc thanh lịch" },
+        { hex: "#6d28d9", name: "Tím hoàng gia" },
+        { hex: "#b91c1c", name: "Đỏ đô nổi bật" }
+    ];
+
+    let _decorPrefs = null;
+
+    function loadDecorPrefs() {
+        if (_decorPrefs) return _decorPrefs;
+        let loaded = { ...DEFAULT_DECOR_PREFS };
+        try {
+            const raw = localStorage.getItem(DECOR_PREFS_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object") {
+                    loaded = { ...DEFAULT_DECOR_PREFS, ...parsed };
+                }
+            }
+        } catch (e) {}
+        _decorPrefs = loaded;
+        return _decorPrefs;
+    }
+
+    function saveDecorPrefs(nextPrefs) {
+        _decorPrefs = { ...DEFAULT_DECOR_PREFS, ...nextPrefs };
+        try {
+            localStorage.setItem(DECOR_PREFS_STORAGE_KEY, JSON.stringify(_decorPrefs));
+        } catch (e) {}
+        updateDecorTriggerSummaryUI();
+    }
 
     // =========================================================================
-    // 1. TIÊM CSS CHO MENU XÒE XUẤT PDF TRONG MODAL XEM THỬ ĐỀ
+    // 1. TIÊM CSS CHO MENU XÒE XUẤT PDF & PANEL TRANG TRÍ
     // =========================================================================
     function injectPreviewPdfExporterStyles() {
         const styleId = "qb-preview-pdf-exporter-styles";
@@ -28,9 +81,9 @@
             .qb-pdf-export-popover {
                 display: none;
                 position: fixed !important;
-                width: 390px;
-                max-width: 94vw;
-                max-height: 84vh;
+                width: 418px;
+                max-width: 95vw;
+                max-height: 88vh;
                 overflow-y: auto;
                 background: #ffffff;
                 border-radius: 14px;
@@ -57,6 +110,9 @@
                 font-weight: 900;
                 letter-spacing: 0.2px;
                 flex-shrink: 0;
+                position: sticky;
+                top: 0;
+                z-index: 5;
             }
             .qb-pdf-pop-close {
                 background: rgba(255, 255, 255, 0.2);
@@ -113,6 +169,220 @@
                 border-color: #0d9488;
                 box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18);
             }
+
+            /* Ô CHỌN TRANG TRÍ */
+            .qb-pdf-decor-wrap {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .qb-pdf-decor-trigger {
+                width: 100%;
+                padding: 6px 9px;
+                border-radius: 8px;
+                border: 1.4px solid #5eead4;
+                background: #ffffff;
+                color: #0f766e;
+                font-size: 11.5px;
+                font-weight: 800;
+                font-family: inherit;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                text-align: left;
+                transition: all 0.14s ease;
+            }
+            .qb-pdf-decor-trigger:hover {
+                border-color: #0d9488;
+                background: #ffffff;
+                box-shadow: 0 2px 7px rgba(13, 148, 136, 0.14);
+            }
+            .qb-pdf-decor-trigger.is-active {
+                background: linear-gradient(135deg, #ecfdf5 0%, #eff6ff 100%);
+                border-color: #0284c7;
+                color: #0369a1;
+            }
+            .qb-pdf-decor-trigger-left {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                min-width: 0;
+                flex: 1;
+            }
+            .qb-pdf-decor-summary-text {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-weight: 800;
+            }
+            .qb-pdf-decor-caret {
+                font-size: 10px;
+                transition: transform 0.16s ease;
+                flex-shrink: 0;
+            }
+            .qb-pdf-decor-trigger.is-open .qb-pdf-decor-caret {
+                transform: rotate(180deg);
+            }
+
+            /* PANEL XÒE RA CỦA TRANG TRÍ */
+            .qb-pdf-decor-panel {
+                display: none;
+                background: #ffffff;
+                border: 1.4px solid #7dd3fc;
+                border-radius: 10px;
+                padding: 9px 10px;
+                flex-direction: column;
+                gap: 7px;
+                box-shadow: 0 6px 18px rgba(2, 132, 199, 0.12);
+                animation: popInQbank 0.15s ease-out;
+            }
+            .qb-pdf-decor-panel.show {
+                display: flex;
+            }
+            .qb-decor-check-row {
+                display: flex;
+                align-items: flex-start;
+                gap: 7px;
+                font-size: 11.5px;
+                font-weight: 700;
+                color: #0f172a;
+                cursor: pointer;
+                user-select: none;
+                padding: 4px 6px;
+                border-radius: 7px;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                transition: background 0.12s, border-color 0.12s;
+            }
+            .qb-decor-check-row:hover {
+                background: #f0f9ff;
+                border-color: #bae6fd;
+            }
+            .qb-decor-check-row input[type="checkbox"],
+            .qb-decor-check-row input[type="radio"] {
+                width: 15px;
+                height: 15px;
+                margin-top: 1px;
+                accent-color: #0284c7;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+            .qb-decor-sub-box {
+                margin-left: 10px;
+                padding: 7px 8px;
+                background: #f0f9ff;
+                border: 1px dashed #7dd3fc;
+                border-radius: 8px;
+                display: none;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .qb-decor-sub-box.show {
+                display: flex;
+            }
+            .qb-decor-sub-box input[type="text"],
+            .qb-decor-sub-box select {
+                width: 100%;
+                padding: 5px 7px;
+                border: 1.2px solid #93c5fd;
+                border-radius: 6px;
+                background: #ffffff;
+                font-size: 11.5px;
+                font-weight: 700;
+                color: #0f172a;
+                font-family: inherit;
+                outline: none;
+                box-sizing: border-box;
+            }
+            .qb-decor-sub-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            .qb-decor-section-title {
+                font-size: 10.5px;
+                font-weight: 900;
+                color: #0369a1;
+                text-transform: uppercase;
+                letter-spacing: 0.25px;
+                margin-top: 2px;
+            }
+            .qb-decor-radio-pills {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 4px;
+            }
+            .qb-decor-radio-pill {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                padding: 5px 4px;
+                border-radius: 7px;
+                border: 1.3px solid #cbd5e1;
+                background: #f8fafc;
+                cursor: pointer;
+                font-size: 10.5px;
+                font-weight: 800;
+                color: #334155;
+                user-select: none;
+                transition: all 0.13s;
+                line-height: 1.25;
+            }
+            .qb-decor-radio-pill input {
+                display: none;
+            }
+            .qb-decor-radio-pill:hover {
+                border-color: #38bdf8;
+                background: #f0f9ff;
+            }
+            .qb-decor-radio-pill.active {
+                border-color: #0284c7;
+                background: #e0f2fe;
+                color: #0369a1;
+                box-shadow: 0 0 0 1px #0284c7;
+            }
+            .qb-decor-alt3-hint {
+                font-size: 10px;
+                font-weight: 700;
+                color: #0369a1;
+                background: #eff6ff;
+                border: 1px solid #bfdbfe;
+                border-radius: 6px;
+                padding: 4px 7px;
+                line-height: 1.35;
+                display: none;
+            }
+            .qb-decor-alt3-hint.show {
+                display: block;
+            }
+            .qb-decor-color-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+            .qb-decor-swatch {
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                border: 2px solid #ffffff;
+                box-shadow: 0 0 0 1.5px #cbd5e1;
+                cursor: pointer;
+                transition: transform 0.13s;
+                padding: 0;
+            }
+            .qb-decor-swatch:hover {
+                transform: scale(1.15);
+            }
+            .qb-decor-swatch.active {
+                box-shadow: 0 0 0 2.5px #0f172a;
+                transform: scale(1.14);
+            }
+
             .qb-pdf-config-hint-row {
                 display: flex;
                 align-items: center;
@@ -243,7 +513,6 @@
 
     function buildRandomExamLogosBank() {
         return [
-            // 0: Khối lập phương Toán học 3D & Đỉnh sáng
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -259,7 +528,6 @@
                     <circle cx="50" cy="14" r="5" fill="${p.accent}" stroke="${p.c2}" stroke-width="2"/>
                     <circle cx="50" cy="50" r="4.5" fill="${p.accent}" stroke="${p.c2}" stroke-width="2"/>
                 </svg>`,
-            // 1: Vòng nguyệt quế Pi Tri thức
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -274,7 +542,6 @@
                     <path d="M32,37 L68,37 M41,37 L38,67 M58,37 L58,61 C58,66 64,67 67,63" fill="none" stroke="#ffffff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
                     <polygon points="50,11 53,18 60,18 54,22 56,29 50,25 44,29 46,22 40,18 47,18" fill="${p.accent}"/>
                 </svg>`,
-            // 2: Compa & Đồ thị Parabol
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -291,7 +558,6 @@
                     <circle cx="29" cy="40" r="4" fill="${p.c1}"/>
                     <circle cx="71" cy="40" r="4" fill="${p.c1}"/>
                 </svg>`,
-            // 3: Khiên học thuật Sigma
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -304,7 +570,6 @@
                     <path d="M64,31 L36,31 L54,50 L36,69 L65,69" fill="none" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
                     <circle cx="50" cy="17" r="3.5" fill="${p.accent}"/>
                 </svg>`,
-            // 4: Quyển sách mở & Ngọn lửa tri thức
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -318,7 +583,6 @@
                     <line x1="50" y1="46" x2="50" y2="74" stroke="url(#lg_${uid})" stroke-width="3"/>
                     <path d="M50,15 C58,24 60,33 50,39 C40,33 42,24 50,15 Z" fill="${p.accent}" stroke="${p.c1}" stroke-width="2.5"/>
                 </svg>`,
-            // 5: Bông hoa toán học 6 cánh & Tâm sao
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -335,7 +599,6 @@
                     </g>
                     <circle cx="50" cy="50" r="9" fill="${p.accent}" stroke="#ffffff" stroke-width="2.5"/>
                 </svg>`,
-            // 6: Vương miện & Tam giác vàng
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -348,7 +611,6 @@
                     <polygon points="22,64 26,34 40,48 50,26 60,48 74,34 78,64" fill="url(#lg_${uid})" stroke="${p.c2}" stroke-width="2.5" stroke-linejoin="round"/>
                     <rect x="24" y="68" width="52" height="7" rx="3.5" fill="${p.accent}" stroke="${p.c2}" stroke-width="2"/>
                 </svg>`,
-            // 7: La bàn định hướng & Tích phân
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -363,7 +625,6 @@
                     <circle cx="62" cy="26" r="4.5" fill="${p.accent}" stroke="${p.c2}" stroke-width="1.8"/>
                     <circle cx="38" cy="74" r="4.5" fill="${p.accent}" stroke="${p.c2}" stroke-width="1.8"/>
                 </svg>`,
-            // 8: Tên lửa chinh phục điểm 10
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -378,7 +639,6 @@
                     <path d="M40,56 L27,68 L39,69 Z M60,56 L73,68 L61,69 Z" fill="${p.accent}"/>
                     <path d="M45,70 L50,86 L55,70 Z" fill="${p.accent}"/>
                 </svg>`,
-            // 9: Hình học không gian & Tinh cầu vàng
             (p, uid) => `
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="exam-random-logo-svg">
                     <defs>
@@ -409,12 +669,89 @@
     }
 
     // =========================================================================
-    // 3. UI MENU XÒE CỦA NÚT "📄 Xuất PDF ▾" TRONG MODAL XEM THỬ ĐỀ
+    // 3. UI MENU XÒE CỦA NÚT "📄 Xuất PDF ▾" & Ô CHỌN "✨ TRANG TRÍ"
     // =========================================================================
+    function syncDecorControlsWithPrefs() {
+        const prefs = loadDecorPrefs();
+
+        const chkTwoLines = document.getElementById("qb-decor-two-lines");
+        const chkAuthor = document.getElementById("qb-decor-show-author");
+        const subAuthorBox = document.getElementById("qb-decor-author-sub");
+        const inAuthorName = document.getElementById("qb-decor-author-name");
+        const chkAuthorLogo = document.getElementById("qb-decor-author-logo");
+        const selAuthorBorder = document.getElementById("qb-decor-author-border");
+        const selBorderStyle = document.getElementById("qb-decor-border-style");
+        const chkPageNum = document.getElementById("qb-decor-page-num");
+        const chkWatermark = document.getElementById("qb-decor-watermark");
+        const alt3Hint = document.getElementById("qb-decor-alt3-hint");
+        const styleColorWrap = document.getElementById("qb-decor-style-color-wrap");
+
+        if (chkTwoLines) chkTwoLines.checked = !!prefs.twoLines;
+        if (chkAuthor) chkAuthor.checked = !!prefs.showAuthor;
+        if (subAuthorBox) subAuthorBox.classList.toggle("show", !!prefs.showAuthor);
+        if (inAuthorName) inAuthorName.value = prefs.authorName || "";
+        if (chkAuthorLogo) chkAuthorLogo.checked = prefs.authorWithLogo !== false;
+        if (selAuthorBorder) selAuthorBorder.value = prefs.authorBorder || "rounded";
+        if (selBorderStyle) selBorderStyle.value = prefs.borderStyle || "double";
+        if (chkPageNum) chkPageNum.checked = prefs.showPageNum !== false;
+        if (chkWatermark) chkWatermark.checked = !!prefs.watermark;
+
+        document.querySelectorAll('input[name="qb-decor-border-mode"]').forEach(r => {
+            const matched = (r.value === (prefs.pageBorderMode || "none"));
+            r.checked = matched;
+            const pill = r.closest(".qb-decor-radio-pill");
+            if (pill) pill.classList.toggle("active", matched);
+        });
+
+        if (alt3Hint) alt3Hint.classList.toggle("show", prefs.pageBorderMode === "alt3");
+        if (styleColorWrap) {
+            const needStyle = !!prefs.twoLines || (prefs.pageBorderMode && prefs.pageBorderMode !== "none") || !!prefs.showAuthor;
+            styleColorWrap.style.display = needStyle ? "flex" : "none";
+        }
+
+        document.querySelectorAll(".qb-decor-swatch").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.color === prefs.borderColor);
+        });
+
+        updateDecorTriggerSummaryUI();
+    }
+
+    function updateDecorTriggerSummaryUI() {
+        const prefs = loadDecorPrefs();
+        const trigger = document.getElementById("qb-pdf-decor-trigger");
+        const sumEl = document.getElementById("qb-pdf-decor-summary");
+        if (!trigger || !sumEl) return;
+
+        const tags = [];
+        if (prefs.twoLines) tags.push("2 dòng kẻ");
+        if (prefs.showAuthor) tags.push(`Tác giả`);
+        if (prefs.pageBorderMode === "all4") tags.push("Viền 4 cạnh");
+        else if (prefs.pageBorderMode === "alt3") tags.push("Viền 3 cạnh luân phiên");
+        if (prefs.watermark) tags.push("Watermark");
+
+        const hasDecor = tags.length > 0;
+        trigger.classList.toggle("is-active", hasDecor);
+        sumEl.textContent = hasDecor ? `Đã chọn: ${tags.join(" • ")}` : "Mặc định (Không trang trí)";
+    }
+
+    function hasAnyPageDecorationActive(prefs) {
+        const p = prefs || loadDecorPrefs();
+        return Boolean(
+            p.twoLines ||
+            p.showAuthor ||
+            (p.pageBorderMode && p.pageBorderMode !== "none") ||
+            p.watermark
+        );
+    }
+
     function ensurePreviewPdfExporterMenuDOM() {
         injectPreviewPdfExporterStyles();
         let pop = document.getElementById("qb-pdf-export-popover");
         if (pop) return pop;
+
+        const colorSwatchesHtml = DECOR_COLOR_SWATCHES.map(c =>
+            `<button type="button" class="qb-decor-swatch" data-color="${escapePdfAttr(c.hex)}" style="background:${escapePdfAttr(c.hex)};" title="${escapePdfAttr(c.name)}" onclick="onQbDecorColorSelect('${escapePdfAttr(c.hex)}')"></button>`
+        ).join("");
 
         pop = document.createElement("div");
         pop.id = "qb-pdf-export-popover";
@@ -465,6 +802,102 @@
                         <input type="number" id="qb-pdf-custom-font" min="6.5" max="18" step="0.5" placeholder="VD: 9.2" style="display:none; margin-top:4px;">
                     </div>
                 </div>
+
+                <!-- Ô CHỌN TRANG TRÍ XÒE RA -->
+                <div class="qb-pdf-decor-wrap">
+                    <button type="button" class="qb-pdf-decor-trigger" id="qb-pdf-decor-trigger" onclick="toggleQbPdfDecorPanel(event)" title="Bấm để xòe ra các tùy chọn trang trí: 2 dòng kẻ, tên tác giả + logo, bo viền 4 cạnh hoặc luân phiên 3 cạnh">
+                        <span class="qb-pdf-decor-trigger-left">
+                            <span>✨</span>
+                            <span>Trang trí:</span>
+                            <span class="qb-pdf-decor-summary-text" id="qb-pdf-decor-summary">Mặc định (Không trang trí)</span>
+                        </span>
+                        <span class="qb-pdf-decor-caret">▾</span>
+                    </button>
+
+                    <div class="qb-pdf-decor-panel" id="qb-pdf-decor-panel">
+                        <label class="qb-decor-check-row">
+                            <input type="checkbox" id="qb-decor-two-lines" onchange="onQbDecorFieldChange()">
+                            <span>1. Thêm <b>2 dòng kẻ trang trí</b> trên cùng &amp; dưới cùng mỗi trang</span>
+                        </label>
+
+                        <label class="qb-decor-check-row">
+                            <input type="checkbox" id="qb-decor-show-author" onchange="onQbDecorFieldChange()">
+                            <span>2. Thêm <b>tên tác giả</b> vào lề trên &amp; lề dưới (kèm logo &amp; bo viền)</span>
+                        </label>
+
+                        <div class="qb-decor-sub-box" id="qb-decor-author-sub">
+                            <div>
+                                <label style="display:block; font-size:10px; font-weight:800; color:#0369a1; margin-bottom:2px;">✏️ Nhập tên tác giả / đơn vị:</label>
+                                <input type="text" id="qb-decor-author-name" placeholder="VD: Thầy Phạm Công Hoan • Toán THPT" oninput="onQbDecorFieldChange()">
+                            </div>
+                            <div class="qb-decor-sub-grid">
+                                <div>
+                                    <label style="display:block; font-size:10px; font-weight:800; color:#0369a1; margin-bottom:2px;">🖼️ Bo viền tên tác giả:</label>
+                                    <select id="qb-decor-author-border" onchange="onQbDecorFieldChange()">
+                                        <option value="rounded">Bo góc thanh lịch</option>
+                                        <option value="double">Viền đôi cổ điển</option>
+                                        <option value="pill">Nhãn viên thuốc (Pill)</option>
+                                        <option value="none">Không bo viền</option>
+                                    </select>
+                                </div>
+                                <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:800; color:#0f172a; padding-top:14px; cursor:pointer;">
+                                    <input type="checkbox" id="qb-decor-author-logo" checked onchange="onQbDecorFieldChange()" style="width:14px; height:14px; accent-color:#0284c7;">
+                                    <span>Kèm logo đi kèm</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="qb-decor-section-title">🖼️ Bo viền khung từng trang A4:</div>
+                        <div class="qb-decor-radio-pills">
+                            <label class="qb-decor-radio-pill" onclick="onQbDecorBorderModeClick('none', event)">
+                                <input type="radio" name="qb-decor-border-mode" value="none">
+                                <span>⬜ Không viền</span>
+                            </label>
+                            <label class="qb-decor-radio-pill" onclick="onQbDecorBorderModeClick('all4', event)">
+                                <input type="radio" name="qb-decor-border-mode" value="all4">
+                                <span>🔲 3. Bo viền 4 cạnh</span>
+                            </label>
+                            <label class="qb-decor-radio-pill" onclick="onQbDecorBorderModeClick('alt3', event)">
+                                <input type="radio" name="qb-decor-border-mode" value="alt3">
+                                <span>📖 4. Luân phiên 3 cạnh</span>
+                            </label>
+                        </div>
+
+                        <div class="qb-decor-alt3-hint" id="qb-decor-alt3-hint">
+                            📖 <b>Luân phiên 3 cạnh:</b> Trang 1, 3, 5... bo <b>Trên - Dưới - Trái</b> | Trang 2, 4, 6... bo <b>Trên - Dưới - Phải</b> (ghép 2 trang / 1 mặt giấy thành 1 khung lớn cực đẹp!).
+                        </div>
+
+                        <div id="qb-decor-style-color-wrap" style="display:none; flex-direction:column; gap:6px; padding-top:2px; border-top:1px dashed #e2e8f0;">
+                            <div class="qb-decor-sub-grid" style="align-items:center;">
+                                <div>
+                                    <label style="display:block; font-size:10px; font-weight:800; color:#334155; margin-bottom:2px;">✨ Kiểu nét viền:</label>
+                                    <select id="qb-decor-border-style" onchange="onQbDecorFieldChange()" style="width:100%; padding:4px 6px; border:1.2px solid #cbd5e1; border-radius:6px; font-size:11px; font-weight:800; font-family:inherit; background:#fff;">
+                                        <option value="double">Đôi cổ điển (Double)</option>
+                                        <option value="rounded">Bo góc thanh lịch</option>
+                                        <option value="corner">4 góc chữ L học thuật</option>
+                                        <option value="dashed">Nét đứt mỹ thuật</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display:block; font-size:10px; font-weight:800; color:#334155; margin-bottom:4px;">🎨 Màu sắc viền:</label>
+                                    <div class="qb-decor-color-row">${colorSwatchesHtml}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding-top:3px; border-top:1px dashed #e2e8f0;">
+                            <label style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#334155; cursor:pointer;">
+                                <input type="checkbox" id="qb-decor-page-num" checked onchange="onQbDecorFieldChange()" style="width:14px; height:14px; accent-color:#0284c7;">
+                                <span>🔢 Đánh số trang (Trang i/N)</span>
+                            </label>
+                            <label style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:#334155; cursor:pointer;">
+                                <input type="checkbox" id="qb-decor-watermark" onchange="onQbDecorFieldChange()" style="width:14px; height:14px; accent-color:#0284c7;">
+                                <span>💧 Chữ chìm (Watermark)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="qb-pdf-config-hint-row">
                     <span>💡 Không chọn gì = xuất chuẩn mặc định.</span>
                     <button type="button" class="qb-pdf-reset-btn" onclick="resetPreviewPdfOptions()">↺ Mặc định</button>
@@ -506,7 +939,57 @@
             </div>
         `;
         document.body.appendChild(pop);
+        syncDecorControlsWithPrefs();
         return pop;
+    }
+
+    function toggleQbPdfDecorPanel(event) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        const panel = document.getElementById("qb-pdf-decor-panel");
+        const trigger = document.getElementById("qb-pdf-decor-trigger");
+        if (!panel || !trigger) return;
+        const willShow = !panel.classList.contains("show");
+        panel.classList.toggle("show", willShow);
+        trigger.classList.toggle("is-open", willShow);
+        if (willShow) syncDecorControlsWithPrefs();
+    }
+
+    function onQbDecorBorderModeClick(mode, event) {
+        if (event) event.stopPropagation();
+        const cur = loadDecorPrefs();
+        saveDecorPrefs({ ...cur, pageBorderMode: mode });
+        syncDecorControlsWithPrefs();
+    }
+
+    function onQbDecorColorSelect(hex) {
+        const cur = loadDecorPrefs();
+        saveDecorPrefs({ ...cur, borderColor: hex });
+        syncDecorControlsWithPrefs();
+    }
+
+    function onQbDecorFieldChange() {
+        const cur = loadDecorPrefs();
+        const chkTwoLines = document.getElementById("qb-decor-two-lines");
+        const chkAuthor = document.getElementById("qb-decor-show-author");
+        const inAuthorName = document.getElementById("qb-decor-author-name");
+        const chkAuthorLogo = document.getElementById("qb-decor-author-logo");
+        const selAuthorBorder = document.getElementById("qb-decor-author-border");
+        const selBorderStyle = document.getElementById("qb-decor-border-style");
+        const chkPageNum = document.getElementById("qb-decor-page-num");
+        const chkWatermark = document.getElementById("qb-decor-watermark");
+
+        saveDecorPrefs({
+            ...cur,
+            twoLines: chkTwoLines ? !!chkTwoLines.checked : cur.twoLines,
+            showAuthor: chkAuthor ? !!chkAuthor.checked : cur.showAuthor,
+            authorName: inAuthorName ? inAuthorName.value : cur.authorName,
+            authorWithLogo: chkAuthorLogo ? !!chkAuthorLogo.checked : cur.authorWithLogo,
+            authorBorder: selAuthorBorder ? selAuthorBorder.value : cur.authorBorder,
+            borderStyle: selBorderStyle ? selBorderStyle.value : cur.borderStyle,
+            showPageNum: chkPageNum ? !!chkPageNum.checked : cur.showPageNum,
+            watermark: chkWatermark ? !!chkWatermark.checked : cur.watermark
+        });
+        syncDecorControlsWithPrefs();
     }
 
     function onQbPdfPagesSelectChange(val) {
@@ -532,6 +1015,9 @@
         if (cusPages) { cusPages.value = ""; cusPages.style.display = "none"; }
         if (selFont) selFont.value = "";
         if (cusFont) { cusFont.value = ""; cusFont.style.display = "none"; }
+
+        saveDecorPrefs({ ...DEFAULT_DECOR_PREFS });
+        syncDecorControlsWithPrefs();
     }
 
     function getConfiguredPreviewPdfOptions() {
@@ -562,7 +1048,7 @@
             }
         }
 
-        return { targetPages, fontSizePt };
+        return { targetPages, fontSizePt, decorPrefs: { ...loadDecorPrefs() } };
     }
 
     function closePreviewPdfExporterMenu(event) {
@@ -584,12 +1070,13 @@
             return;
         }
 
+        syncDecorControlsWithPrefs();
         pop.classList.add("show");
         btn.classList.add("is-open");
 
         const rect = btn.getBoundingClientRect();
-        const popW = Math.min(390, window.innerWidth - 16);
-        const popH = Math.min(pop.offsetHeight || 420, window.innerHeight - 20);
+        const popW = Math.min(418, window.innerWidth - 16);
+        const popH = Math.min(pop.offsetHeight || 480, window.innerHeight - 20);
         let left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
         let top = rect.bottom + 8;
         if (top + popH > window.innerHeight - 8) {
@@ -613,7 +1100,7 @@
     // 4. CHUẨN HÓA DỮ LIỆU ĐỀ & TÍNH KHOẢNG TRỐNG HỢP LÝ THEO ĐỘ KHÓ
     // =========================================================================
     function collectPreviewQuestionsSafely() {
-        if (typeof qbankState === "undefined") return [];
+        if (typeof qbankState === "undefined") return { imagesMap: {}, questions: [] };
         const pickedRaw = (qbankState.rawQuestions || []).filter(q => q && qbankState.selectedQuestionIds.has(String(q.id)));
         const { orderMap } = (typeof buildTreeOrderMap === "function") ? buildTreeOrderMap() : { orderMap: {} };
         const levelOrder = { nb: 1, th: 2, vdt: 3, vdc: 4 };
@@ -703,7 +1190,6 @@
         return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, (m, p, c) => p + '<span style="color:#78350f; font-weight:800;">// ' + c.trim() + "</span>");
     }
 
-    // Tính số dòng kẻ chấm .... hợp lý theo Độ khó (NB / TH / VD / VDC) & Loại câu (P1..P4)
     function computeBlankLinesCount(q, mode) {
         const lvl = (q && q.level) || "nb";
         const p = (q && q.part) || 1;
@@ -716,7 +1202,6 @@
             return lines;
         }
 
-        // mode === "blank_below"
         const belowMap = { nb: 3, th: 4, vdt: 6, vdc: 9 };
         let lines = belowMap[lvl] || 4;
         if (p === 2) lines += 1;
@@ -920,7 +1405,7 @@
     }
 
     // =========================================================================
-    // 5. MỞ CỬA SỔ XUẤT PDF KÈM THUẬT TOÁN TỰ ĐỘNG CO GIÃN ĐÚNG N TRANG A4
+    // 5. MỞ CỬA SỔ XUẤT PDF (HỖ TRỢ ĐẦY ĐỦ TRANG TRÍ TỪNG TRANG A4 & CO GIÃN ĐÚNG N TRANG)
     // =========================================================================
     function openPreviewPdfWindow(mode) {
         const collected = collectPreviewQuestionsSafely();
@@ -930,7 +1415,9 @@
             return;
         }
 
-        const { targetPages, fontSizePt } = getConfiguredPreviewPdfOptions();
+        const { targetPages, fontSizePt, decorPrefs } = getConfiguredPreviewPdfOptions();
+        const useDecorSheets = hasAnyPageDecorationActive(decorPrefs);
+
         const titleInp = document.getElementById("qbank-exam-name");
         const gradeSel = document.getElementById("qbank-exam-grade");
         const examTitle = (titleInp && titleInp.value.trim()) ? titleInp.value.trim() : `ĐỀ KIỂM TRA (${questions.length} CÂU)`;
@@ -939,22 +1426,20 @@
         const timeLimit = 90;
 
         const logoInfo = generateRandomExamLogoSvg();
-        const logosBankJson = JSON.stringify(
-            buildRandomExamLogosBank().map((fn, idx) => {
-                const pal = LOGO_PALETTES[idx % LOGO_PALETTES.length];
-                return fn(pal, "preset_" + idx);
-            })
-        );
         const allLogoComboBuilder = `
             const _PALETTES = ${JSON.stringify(LOGO_PALETTES)};
             const _TEMPLATES = [${buildRandomExamLogosBank().map(fn => fn.toString()).join(",")}];
+            let currentLogoSvg = ${JSON.stringify(logoInfo.svg)};
             function changeRandomExamLogo() {
-                const slot = document.getElementById("exam-logo-slot");
-                if (!slot) return;
                 const tIdx = Math.floor(Math.random() * _TEMPLATES.length);
                 const pIdx = Math.floor(Math.random() * _PALETTES.length);
                 const uid = Date.now().toString(36) + "_" + Math.floor(Math.random() * 9999);
-                slot.innerHTML = _TEMPLATES[tIdx](_PALETTES[pIdx], uid);
+                currentLogoSvg = _TEMPLATES[tIdx](_PALETTES[pIdx], uid);
+                const slot = document.getElementById("exam-logo-slot");
+                if (slot) slot.innerHTML = currentLogoSvg;
+                document.querySelectorAll(".js-mini-logo-slot, .a4-page-body #exam-logo-slot").forEach(el => {
+                    el.innerHTML = currentLogoSvg;
+                });
             }
         `;
 
@@ -972,7 +1457,7 @@
         closePreviewPdfExporterMenu();
 
         const initialPt = fontSizePt || DEFAULT_FONT_PT;
-        const pageWidthCss = mode === "two_col_40_60" ? "210mm" : "210mm";
+        const safeDecorColor = /^#[0-9a-f]{3,8}$/i.test(decorPrefs.borderColor || "") ? decorPrefs.borderColor : "#1e293b";
 
         win.document.open();
         win.document.write(`<!DOCTYPE html>
@@ -992,7 +1477,7 @@
     <\/script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"><\/script>
     <style id="dynamic-page-style">
-        @page { size: A4; margin: 12mm 12mm 12mm 12mm; }
+        @page { size: A4; margin: ${useDecorSheets ? "0" : "12mm 12mm 12mm 12mm"}; }
     </style>
     <style>
         :root {
@@ -1004,6 +1489,11 @@
             --doc-header-pad: 6px;
             --doc-part-gap: 10px;
             --doc-logo-size: 48px;
+            --decor-color: ${safeDecorColor};
+            --sheet-margin-v: 10mm;
+            --sheet-margin-h: 10mm;
+            --frame-pad-v: 5mm;
+            --frame-pad-h: 6mm;
         }
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -1016,13 +1506,297 @@
             padding: 54px 12px 30px 12px;
         }
         .exam-doc-page {
-            width: ${pageWidthCss};
+            width: 210mm;
             max-width: 100%;
             margin: 0 auto;
             background: #ffffff;
             padding: 12mm;
             box-shadow: 0 10px 35px rgba(15, 23, 42, 0.22);
             border-radius: 6px;
+        }
+
+        /* CHẾ ĐỘ PHÂN TRANG A4 THỰC TẾ KHI BẬT TRANG TRÍ */
+        body.use-a4-sheets .exam-doc-page.is-staging-hidden {
+            position: fixed !important;
+            left: -99999px !important;
+            top: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        #a4-sheets-output {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+        }
+        .a4-sheet {
+            width: 210mm;
+            height: 296.4mm;
+            background: #ffffff;
+            padding: var(--sheet-margin-v) var(--sheet-margin-h);
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.24);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+        .a4-frame-outer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            position: relative;
+        }
+        .a4-frame-inner {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            position: relative;
+            padding: var(--frame-pad-v) var(--frame-pad-h);
+            overflow: hidden;
+        }
+        .a4-sheet.border-mode-none .a4-frame-inner {
+            padding: 0;
+        }
+
+        /* 1. VIỀN 4 CẠNH */
+        .a4-sheet.border-mode-all4.border-style-double .a4-frame-outer {
+            border: 2px solid var(--decor-color);
+            padding: 3px;
+        }
+        .a4-sheet.border-mode-all4.border-style-double .a4-frame-inner {
+            border: 0.85px solid var(--decor-color);
+        }
+        .a4-sheet.border-mode-all4.border-style-rounded .a4-frame-outer {
+            border: 1.6px solid var(--decor-color);
+            border-radius: 10px;
+        }
+        .a4-sheet.border-mode-all4.border-style-dashed .a4-frame-outer {
+            border: 1.5px dashed var(--decor-color);
+            border-radius: 6px;
+        }
+        .a4-sheet.border-mode-all4.border-style-corner .a4-frame-outer {
+            border: 0.85px solid var(--decor-color);
+        }
+
+        /* 2. VIỀN LUÂN PHIÊN 3 CẠNH: TRANG LẺ (1,3,5...) TRÊN-DƯỚI-TRÁI | TRANG CHẴN (2,4,6...) TRÊN-DƯỚI-PHẢI */
+        .a4-sheet.border-mode-alt3.is-odd.border-style-double .a4-frame-outer {
+            border-top: 2px solid var(--decor-color);
+            border-bottom: 2px solid var(--decor-color);
+            border-left: 2px solid var(--decor-color);
+            border-right: none;
+            padding: 3px 0 3px 3px;
+        }
+        .a4-sheet.border-mode-alt3.is-odd.border-style-double .a4-frame-inner {
+            border-top: 0.85px solid var(--decor-color);
+            border-bottom: 0.85px solid var(--decor-color);
+            border-left: 0.85px solid var(--decor-color);
+            border-right: none;
+            padding-right: 2mm;
+        }
+        .a4-sheet.border-mode-alt3.is-even.border-style-double .a4-frame-outer {
+            border-top: 2px solid var(--decor-color);
+            border-bottom: 2px solid var(--decor-color);
+            border-right: 2px solid var(--decor-color);
+            border-left: none;
+            padding: 3px 3px 3px 0;
+        }
+        .a4-sheet.border-mode-alt3.is-even.border-style-double .a4-frame-inner {
+            border-top: 0.85px solid var(--decor-color);
+            border-bottom: 0.85px solid var(--decor-color);
+            border-right: 0.85px solid var(--decor-color);
+            border-left: none;
+            padding-left: 2mm;
+        }
+
+        .a4-sheet.border-mode-alt3.is-odd.border-style-rounded .a4-frame-outer {
+            border-top: 1.7px solid var(--decor-color);
+            border-bottom: 1.7px solid var(--decor-color);
+            border-left: 1.7px solid var(--decor-color);
+            border-right: none;
+            border-radius: 11px 0 0 11px;
+        }
+        .a4-sheet.border-mode-alt3.is-even.border-style-rounded .a4-frame-outer {
+            border-top: 1.7px solid var(--decor-color);
+            border-bottom: 1.7px solid var(--decor-color);
+            border-right: 1.7px solid var(--decor-color);
+            border-left: none;
+            border-radius: 0 11px 11px 0;
+        }
+
+        .a4-sheet.border-mode-alt3.is-odd.border-style-dashed .a4-frame-outer {
+            border-top: 1.5px dashed var(--decor-color);
+            border-bottom: 1.5px dashed var(--decor-color);
+            border-left: 1.5px dashed var(--decor-color);
+            border-right: none;
+            border-radius: 6px 0 0 6px;
+        }
+        .a4-sheet.border-mode-alt3.is-even.border-style-dashed .a4-frame-outer {
+            border-top: 1.5px dashed var(--decor-color);
+            border-bottom: 1.5px dashed var(--decor-color);
+            border-right: 1.5px dashed var(--decor-color);
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .a4-sheet.border-mode-alt3.is-odd.border-style-corner .a4-frame-outer {
+            border-top: 0.85px solid var(--decor-color);
+            border-bottom: 0.85px solid var(--decor-color);
+            border-left: 0.85px solid var(--decor-color);
+            border-right: none;
+        }
+        .a4-sheet.border-mode-alt3.is-even.border-style-corner .a4-frame-outer {
+            border-top: 0.85px solid var(--decor-color);
+            border-bottom: 0.85px solid var(--decor-color);
+            border-right: 0.85px solid var(--decor-color);
+            border-left: none;
+        }
+
+        /* 4 GÓC HOA VĂN CHỮ L (CHỈ HIỆN KHI CHỌN BORDER STYLE = CORNER) */
+        .a4-corner {
+            display: none;
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            pointer-events: none;
+            z-index: 4;
+        }
+        .a4-sheet.border-mode-all4.border-style-corner .a4-corner { display: block; }
+        .a4-sheet.border-mode-alt3.is-odd.border-style-corner .a4-corner.c-tl,
+        .a4-sheet.border-mode-alt3.is-odd.border-style-corner .a4-corner.c-bl { display: block; }
+        .a4-sheet.border-mode-alt3.is-even.border-style-corner .a4-corner.c-tr,
+        .a4-sheet.border-mode-alt3.is-even.border-style-corner .a4-corner.c-br { display: block; }
+
+        .a4-corner.c-tl { top: 2px; left: 2px; border-top: 2.8px solid var(--decor-color); border-left: 2.8px solid var(--decor-color); }
+        .a4-corner.c-tr { top: 2px; right: 2px; border-top: 2.8px solid var(--decor-color); border-right: 2.8px solid var(--decor-color); }
+        .a4-corner.c-bl { bottom: 2px; left: 2px; border-bottom: 2.8px solid var(--decor-color); border-left: 2.8px solid var(--decor-color); }
+        .a4-corner.c-br { bottom: 2px; right: 2px; border-bottom: 2.8px solid var(--decor-color); border-right: 2.8px solid var(--decor-color); }
+
+        /* WATERMARK CHÌM */
+        .a4-watermark {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .a4-watermark span {
+            font-size: 40pt;
+            font-weight: 900;
+            color: var(--decor-color);
+            opacity: 0.055;
+            transform: rotate(-32deg);
+            text-transform: uppercase;
+            white-space: nowrap;
+            letter-spacing: 3px;
+            user-select: none;
+        }
+
+        /* DẢI LỀ TRÊN & LỀ DƯỚI (2 DÒNG KẺ + TÊN TÁC GIẢ + LOGO + SỐ TRANG) */
+        .a4-page-top-band,
+        .a4-page-bottom-band {
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+        .a4-page-top-band { margin-bottom: 6px; }
+        .a4-page-bottom-band { margin-top: auto; padding-top: 5px; }
+
+        .a4-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 8.8pt;
+            color: #334155;
+        }
+        .a4-sheet.border-mode-alt3.is-even .a4-meta-row {
+            flex-direction: row-reverse;
+        }
+
+        .a4-author-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 800;
+            color: var(--decor-color);
+            line-height: 1.2;
+        }
+        .a4-author-pill.author-border-rounded {
+            border: 1px solid var(--decor-color);
+            border-radius: 5px;
+            padding: 2px 7px;
+            background: rgba(248, 250, 252, 0.9);
+        }
+        .a4-author-pill.author-border-double {
+            border: 2.5px double var(--decor-color);
+            border-radius: 4px;
+            padding: 2px 8px;
+            background: rgba(248, 250, 252, 0.9);
+        }
+        .a4-author-pill.author-border-pill {
+            border: 1.1px solid var(--decor-color);
+            border-radius: 999px;
+            padding: 2px 9px;
+            background: rgba(248, 250, 252, 0.9);
+        }
+        .a4-mini-logo {
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .a4-mini-logo svg { width: 100%; height: 100%; display: block; }
+
+        .a4-exam-running-title {
+            font-size: 8.2pt;
+            font-weight: 700;
+            color: #64748b;
+            font-style: italic;
+            max-width: 55%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .a4-page-num-badge {
+            font-size: 8.6pt;
+            font-weight: 800;
+            color: var(--decor-color);
+            white-space: nowrap;
+        }
+
+        /* 2 DÒNG KẺ TRANG TRÍ TRÊN CÙNG & DƯỚI CÙNG MỖI TRANG */
+        .a4-double-rule {
+            width: 100%;
+            height: 4.5px;
+            margin: 3px 0 1px 0;
+        }
+        .a4-double-rule.top-rule {
+            border-top: 1.8px solid var(--decor-color);
+            border-bottom: 0.75px solid var(--decor-color);
+        }
+        .a4-double-rule.bottom-rule {
+            margin: 1px 0 3px 0;
+            border-top: 0.75px solid var(--decor-color);
+            border-bottom: 1.8px solid var(--decor-color);
+        }
+
+        .a4-page-body {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            z-index: 2;
         }
 
         /* THANH ĐIỀU KHIỂN XEM TRƯỚC PDF (KHÔNG IN RA GIẤY) */
@@ -1246,6 +2020,7 @@
         }
         .col-left-40 .doc-q-img { max-width: 100%; max-height: calc(var(--doc-img-max-h) * 0.82); }
         .col-left-40 mjx-container[jax="SVG"] { max-width: 100% !important; font-size: 95% !important; }
+        .col-left-40 mjx-container[jax="SVG"][display="true"] > svg { max-width: 100% !important; height: auto !important; }
 
         .exam-end-mark { text-align: center; margin: 12px 0 8px 0; font-weight: 800; font-style: italic; }
         .doc-key-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.9em; text-align: center; }
@@ -1273,10 +2048,25 @@
                 box-shadow: none !important;
                 border-radius: 0 !important;
             }
+            #a4-sheets-output {
+                display: block !important;
+                gap: 0 !important;
+            }
+            .a4-sheet {
+                width: 210mm !important;
+                height: 296.4mm !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                page-break-after: always;
+                break-after: page;
+            }
+            .a4-sheet:last-child {
+                page-break-after: auto;
+                break-after: auto;
+            }
             .doc-answer-space-below, .col-right-60-inner {
                 background: #ffffff !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
             }
             * {
                 -webkit-print-color-adjust: exact !important;
@@ -1285,7 +2075,7 @@
         }
     </style>
 </head>
-<body>
+<body class="${useDecorSheets ? "use-a4-sheets" : ""}">
     <div id="mm-ruler"></div>
 
     <div class="no-print-bar">
@@ -1303,14 +2093,24 @@
     </div>
 
     ${bodyHtml}
+    ${useDecorSheets ? '<div id="a4-sheets-output"></div>' : ""}
 
     <script>
         const TARGET_PAGES = ${targetPages ? Number(targetPages) : "null"};
         const REQUESTED_FONT_PT = ${fontSizePt ? Number(fontSizePt) : "null"};
         const EXPORT_MODE = ${JSON.stringify(mode)};
+        const USE_DECOR_SHEETS = ${useDecorSheets ? "true" : "false"};
+        const DECOR_CFG = ${JSON.stringify(decorPrefs)};
+        const EXAM_SHORT_TITLE = ${JSON.stringify(examTitle)};
+        const EXAM_MA_DE = ${JSON.stringify(maDe)};
         let currentFontPt = ${initialPt};
+        let lastAppliedCfg = null;
 
         ${allLogoComboBuilder}
+
+        function escHtml(s) {
+            return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
 
         function handlePdfImgFallback(imgEl) {
             if (!imgEl || !imgEl.src) return;
@@ -1333,6 +2133,7 @@
         }
 
         function applyLayoutParams(cfg) {
+            lastAppliedCfg = cfg;
             const root = document.documentElement;
             currentFontPt = cfg.fontPt;
             root.style.setProperty("--doc-font-pt", cfg.fontPt + "pt");
@@ -1344,18 +2145,35 @@
             root.style.setProperty("--doc-part-gap", cfg.partGap + "px");
             root.style.setProperty("--doc-logo-size", cfg.logoSize + "px");
 
-            const dynPageStyle = document.getElementById("dynamic-page-style");
-            if (dynPageStyle) {
-                dynPageStyle.textContent = "@page { size: A4; margin: " + cfg.marginV + "mm " + cfg.marginH + "mm; }";
-            }
-            const pageEl = document.getElementById("exam-doc-page");
-            if (pageEl) {
-                pageEl.style.padding = cfg.marginV + "mm " + cfg.marginH + "mm";
+            if (USE_DECOR_SHEETS) {
+                const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
+                const mV = Math.max(7, Math.min(12, cfg.marginV));
+                const mH = Math.max(7, Math.min(12, cfg.marginH));
+                root.style.setProperty("--sheet-margin-v", mV + "mm");
+                root.style.setProperty("--sheet-margin-h", mH + "mm");
+                root.style.setProperty("--frame-pad-v", hasBorder ? "4mm" : "0mm");
+                root.style.setProperty("--frame-pad-h", hasBorder ? "5mm" : "0mm");
+
+                const pageEl = document.getElementById("exam-doc-page");
+                if (pageEl) {
+                    const framePadH = hasBorder ? 10 : 0;
+                    const bodyWidthMm = Math.max(150, 210 - (2 * mH) - framePadH - (DECOR_CFG.borderStyle === "double" && hasBorder ? 2 : 0));
+                    pageEl.style.width = bodyWidthMm + "mm";
+                    pageEl.style.padding = "0";
+                }
+            } else {
+                const dynPageStyle = document.getElementById("dynamic-page-style");
+                if (dynPageStyle) {
+                    dynPageStyle.textContent = "@page { size: A4; margin: " + cfg.marginV + "mm " + cfg.marginH + "mm; }";
+                }
+                const pageEl = document.getElementById("exam-doc-page");
+                if (pageEl) {
+                    pageEl.style.padding = cfg.marginV + "mm " + cfg.marginH + "mm";
+                }
             }
 
-            // Điều chỉnh tỷ lệ số dòng chấm nếu cần thiết khi ép chặt
             if (cfg.lineRatio !== undefined) {
-                document.querySelectorAll(".pdf-dots-wrap").forEach(wrap => {
+                document.querySelectorAll("#exam-doc-page .pdf-dots-wrap").forEach(wrap => {
                     const base = parseInt(wrap.dataset.lines || "4", 10);
                     const targetLines = Math.max(2, Math.round(base * cfg.lineRatio));
                     if (wrap.children.length !== targetLines) {
@@ -1367,7 +2185,173 @@
             }
         }
 
-        function estimateA4PagesCount(marginVmm) {
+        function buildAuthorBadgeHtml() {
+            if (!DECOR_CFG.showAuthor) return "";
+            const nameTxt = escHtml((DECOR_CFG.authorName || "").trim() || "Tác giả");
+            const borderCls = "author-border-" + (DECOR_CFG.authorBorder || "none");
+            const logoHtml = (DECOR_CFG.authorWithLogo !== false)
+                ? '<span class="a4-mini-logo js-mini-logo-slot">' + currentLogoSvg + '</span>'
+                : "";
+            return '<span class="a4-author-pill ' + borderCls + '">' + logoHtml + '<span>' + nameTxt + '</span></span>';
+        }
+
+        function buildTopBandHtml() {
+            const needTop = Boolean(DECOR_CFG.twoLines || DECOR_CFG.showAuthor);
+            if (!needTop) return "";
+            let metaRow = "";
+            if (DECOR_CFG.showAuthor) {
+                metaRow = '<div class="a4-meta-row">' +
+                    buildAuthorBadgeHtml() +
+                    '<span class="a4-exam-running-title">' + escHtml(EXAM_SHORT_TITLE) + ' • Mã ' + escHtml(EXAM_MA_DE) + '</span>' +
+                '</div>';
+            }
+            const ruleHtml = DECOR_CFG.twoLines ? '<div class="a4-double-rule top-rule"></div>' : "";
+            return '<div class="a4-page-top-band">' + metaRow + ruleHtml + '</div>';
+        }
+
+        function buildBottomBandHtml(pageIdx, totalPages) {
+            const needPageNum = DECOR_CFG.showPageNum !== false;
+            const needBottom = Boolean(DECOR_CFG.twoLines || DECOR_CFG.showAuthor || needPageNum);
+            if (!needBottom) return "";
+            const ruleHtml = DECOR_CFG.twoLines ? '<div class="a4-double-rule bottom-rule"></div>' : "";
+            const authorHtml = DECOR_CFG.showAuthor ? buildAuthorBadgeHtml() : '<span></span>';
+            const pageNumHtml = needPageNum
+                ? '<span class="a4-page-num-badge">Trang ' + pageIdx + ' / ' + totalPages + '</span>'
+                : '<span></span>';
+            const metaRow = (DECOR_CFG.showAuthor || needPageNum)
+                ? '<div class="a4-meta-row">' + authorHtml + pageNumHtml + '</div>'
+                : "";
+            return '<div class="a4-page-bottom-band">' + ruleHtml + metaRow + '</div>';
+        }
+
+        function measureDecorBandsHeightPx(cfg) {
+            if (!USE_DECOR_SHEETS) return { topH: 0, bottomH: 0, frameOverheadV: 0 };
+            const pxPerMM = getPxPerMM();
+            const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
+            const frameOverheadV = hasBorder ? ((8 + (DECOR_CFG.borderStyle === "double" ? 2.5 : 1)) * pxPerMM) : 0;
+
+            const probe = document.createElement("div");
+            probe.style.cssText = "position:fixed; left:-99999px; top:0; visibility:hidden; width:175mm;";
+            probe.innerHTML = buildTopBandHtml() + buildBottomBandHtml(1, 10);
+            document.body.appendChild(probe);
+
+            const topEl = probe.querySelector(".a4-page-top-band");
+            const botEl = probe.querySelector(".a4-page-bottom-band");
+            const topH = topEl ? (topEl.offsetHeight + 6) : 0;
+            const bottomH = botEl ? (botEl.offsetHeight + 5) : 0;
+            document.body.removeChild(probe);
+
+            return { topH, bottomH, frameOverheadV };
+        }
+
+        function getOrderedFlowBlocks() {
+            const pageEl = document.getElementById("exam-doc-page");
+            if (!pageEl) return [];
+            const blocks = [];
+            Array.from(pageEl.children).forEach(ch => {
+                if (ch.id === "exam-questions-content") {
+                    Array.from(ch.children).forEach(qChild => blocks.push(qChild));
+                } else {
+                    blocks.push(ch);
+                }
+            });
+            return blocks;
+        }
+
+        function paginateBlocksIntoPageGroups(cfg) {
+            const pxPerMM = getPxPerMM();
+            const mV = USE_DECOR_SHEETS ? Math.max(7, Math.min(12, cfg.marginV)) : cfg.marginV;
+            const { topH, bottomH, frameOverheadV } = measureDecorBandsHeightPx(cfg);
+            const totalSheetH = (USE_DECOR_SHEETS ? 296.4 : 297) * pxPerMM;
+            const usableBodyH = Math.max(180, totalSheetH - (2 * mV * pxPerMM) - frameOverheadV - topH - bottomH - 8);
+
+            const blocks = getOrderedFlowBlocks();
+            const pages = [];
+            let curPage = [];
+            let curUsedH = 0;
+
+            for (let i = 0; i < blocks.length; i++) {
+                const el = blocks[i];
+                const cs = getComputedStyle(el);
+                const h = el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+
+                if (curPage.length > 0 && (curUsedH + h > usableBodyH)) {
+                    // Tránh để tiêu đề Phần I/II/III/IV đứng trơ trọi cuối trang
+                    const lastInPage = curPage[curPage.length - 1];
+                    if (lastInPage && lastInPage.classList && lastInPage.classList.contains("part-header-box") && curPage.length > 1) {
+                        const popped = curPage.pop();
+                        pages.push(curPage);
+                        const popCs = getComputedStyle(popped);
+                        const popH = popped.offsetHeight + (parseFloat(popCs.marginTop) || 0) + (parseFloat(popCs.marginBottom) || 0);
+                        curPage = [popped, el];
+                        curUsedH = popH + h;
+                    } else {
+                        pages.push(curPage);
+                        curPage = [el];
+                        curUsedH = h;
+                    }
+                } else {
+                    curPage.push(el);
+                    curUsedH += h;
+                }
+            }
+            if (curPage.length > 0) pages.push(curPage);
+            return pages;
+        }
+
+        function buildA4DecoratedSheets(cfg) {
+            const output = document.getElementById("a4-sheets-output");
+            const staging = document.getElementById("exam-doc-page");
+            if (!output || !staging) return 1;
+
+            staging.classList.add("is-staging-hidden");
+            const pageGroups = paginateBlocksIntoPageGroups(cfg);
+            const totalPages = Math.max(1, pageGroups.length);
+
+            const bModeClass = "border-mode-" + (DECOR_CFG.pageBorderMode || "none");
+            const bStyleClass = "border-style-" + (DECOR_CFG.borderStyle || "double");
+            const wmText = escHtml((DECOR_CFG.authorName || "").trim() || EXAM_SHORT_TITLE);
+            const wmHtml = DECOR_CFG.watermark ? '<div class="a4-watermark"><span>' + wmText + '</span></div>' : "";
+
+            output.innerHTML = "";
+            pageGroups.forEach((nodes, idx) => {
+                const pageNum = idx + 1;
+                const parityClass = (pageNum % 2 === 1) ? "is-odd" : "is-even";
+
+                const sheet = document.createElement("div");
+                sheet.className = "a4-sheet " + parityClass + " " + bModeClass + " " + bStyleClass;
+                sheet.dataset.page = String(pageNum);
+
+                sheet.innerHTML =
+                    '<div class="a4-frame-outer">' +
+                        '<div class="a4-frame-inner">' +
+                            '<span class="a4-corner c-tl"></span>' +
+                            '<span class="a4-corner c-tr"></span>' +
+                            '<span class="a4-corner c-bl"></span>' +
+                            '<span class="a4-corner c-br"></span>' +
+                            wmHtml +
+                            buildTopBandHtml() +
+                            '<div class="a4-page-body"></div>' +
+                            buildBottomBandHtml(pageNum, totalPages) +
+                        '</div>' +
+                    '</div>';
+
+                const bodySlot = sheet.querySelector(".a4-page-body");
+                nodes.forEach(n => {
+                    bodySlot.appendChild(n.cloneNode(true));
+                });
+
+                output.appendChild(sheet);
+            });
+
+            return totalPages;
+        }
+
+        function estimateA4PagesCount(cfg) {
+            if (USE_DECOR_SHEETS) {
+                return paginateBlocksIntoPageGroups(cfg).length;
+            }
+            const marginVmm = cfg.marginV;
             const pxPerMM = getPxPerMM();
             const usablePageHeightPx = Math.max(200, (297 - 2 * marginVmm - 2) * pxPerMM);
             const pageEl = document.getElementById("exam-doc-page");
@@ -1391,8 +2375,8 @@
                 }
             }
 
-            const endMark = document.querySelector(".exam-end-mark");
-            const keyTbl = document.querySelector(".doc-summary-key-section");
+            const endMark = document.querySelector("#exam-doc-page .exam-end-mark");
+            const keyTbl = document.querySelector("#exam-doc-page .doc-summary-key-section");
             const tailH = (endMark ? endMark.offsetHeight + 12 : 0) + (keyTbl ? keyTbl.offsetHeight + 16 : 0);
             if (tailH > 0 && curPageUsed + tailH > usablePageHeightPx) {
                 pages++;
@@ -1407,10 +2391,10 @@
                 if (TARGET_PAGES) {
                     const isExact = (estPages <= TARGET_PAGES);
                     pEl.className = "np-badge " + (isExact ? "is-ok" : "is-warn");
-                    pEl.textContent = "Dự kiến: " + estPages + " / " + TARGET_PAGES + " trang A4" + (noteText ? " (" + noteText + ")" : "");
+                    pEl.textContent = (USE_DECOR_SHEETS ? "Số trang: " : "Dự kiến: ") + estPages + " / " + TARGET_PAGES + " trang A4" + (noteText ? " (" + noteText + ")" : "");
                 } else {
-                    pEl.className = "np-badge";
-                    pEl.textContent = "Dự kiến: " + estPages + " trang A4 (Mặc định)";
+                    pEl.className = "np-badge" + (USE_DECOR_SHEETS ? " is-ok" : "");
+                    pEl.textContent = (USE_DECOR_SHEETS ? "Số trang: " : "Dự kiến: ") + estPages + " trang A4" + (USE_DECOR_SHEETS ? " (Đã trang trí)" : " (Mặc định)");
                 }
             }
             if (fEl) {
@@ -1434,16 +2418,14 @@
                     lineRatio: 1
                 };
                 applyLayoutParams(baseCfg);
-                const est = estimateA4PagesCount(baseCfg.marginV);
+                const est = USE_DECOR_SHEETS ? buildA4DecoratedSheets(baseCfg) : estimateA4PagesCount(baseCfg);
                 updateTopStatusBadges(est);
                 return est;
             }
 
-            // 1. Các cấu hình co giãn từ thoáng -> gọn -> rất chặt
             const startFont = REQUESTED_FONT_PT || ${DEFAULT_FONT_PT};
             const candidates = [];
 
-            // Bước A: Thử giữ nguyên startFont và co dần khoảng cách, lề, dòng kẻ
             const spacingPresets = [
                 { lineHeight: 1.38, qGap: 9, imgMaxH: 200, dotH: 16, headerPad: 5, partGap: 8, logoSize: 46, marginV: 11, marginH: 11, lineRatio: 1.0 },
                 { lineHeight: 1.28, qGap: 6, imgMaxH: 175, dotH: 14, headerPad: 4, partGap: 6, logoSize: 42, marginV: 9,  marginH: 9,  lineRatio: 0.9 },
@@ -1452,7 +2434,6 @@
             ];
             spacingPresets.forEach(sp => candidates.push({ fontPt: startFont, ...sp }));
 
-            // Bước B: Nếu vẫn vượt số trang mục tiêu -> giảm dần cỡ chữ (nhưng ưu tiên cỡ lớn nhất có thể)
             for (let f = Math.round((startFont - 0.5) * 10) / 10; f >= 6.8; f = Math.round((f - 0.4) * 10) / 10) {
                 candidates.push({
                     fontPt: f,
@@ -1474,14 +2455,13 @@
 
             for (let i = 0; i < candidates.length; i++) {
                 applyLayoutParams(candidates[i]);
-                estPages = estimateA4PagesCount(candidates[i].marginV);
+                estPages = estimateA4PagesCount(candidates[i]);
                 chosen = candidates[i];
                 if (estPages <= TARGET_PAGES) {
                     break;
                 }
             }
 
-            // Nếu số trang sau khi dùng cấu hình mặc định ít hơn TARGET_PAGES (VD đề ngắn muốn giãn ra vừa N trang):
             if (estPages < TARGET_PAGES) {
                 const looseCfg = {
                     fontPt: REQUESTED_FONT_PT ? Math.max(REQUESTED_FONT_PT, 11) : 11.5,
@@ -1497,13 +2477,17 @@
                     lineRatio: 1.25
                 };
                 applyLayoutParams(looseCfg);
-                const looseEst = estimateA4PagesCount(looseCfg.marginV);
+                const looseEst = estimateA4PagesCount(looseCfg);
                 if (looseEst <= TARGET_PAGES) {
                     chosen = looseCfg;
                     estPages = looseEst;
                 } else {
                     applyLayoutParams(chosen);
                 }
+            }
+
+            if (USE_DECOR_SHEETS) {
+                estPages = buildA4DecoratedSheets(chosen);
             }
 
             const note = (REQUESTED_FONT_PT && chosen.fontPt < REQUESTED_FONT_PT)
@@ -1515,10 +2499,20 @@
 
         function manualStepFont(delta) {
             const nextPt = Math.max(6.5, Math.min(18, Math.round((currentFontPt + delta) * 10) / 10));
-            currentFontPt = nextPt;
-            document.documentElement.style.setProperty("--doc-font-pt", nextPt + "pt");
-            const curM = TARGET_PAGES ? 8 : 12;
-            const est = estimateA4PagesCount(curM);
+            const baseCfg = lastAppliedCfg ? { ...lastAppliedCfg, fontPt: nextPt } : {
+                fontPt: nextPt,
+                lineHeight: 1.42,
+                qGap: 10,
+                imgMaxH: 215,
+                dotH: 17,
+                headerPad: 6,
+                partGap: 10,
+                logoSize: 48,
+                marginV: TARGET_PAGES ? 8 : 12,
+                marginH: TARGET_PAGES ? 8 : 12
+            };
+            applyLayoutParams(baseCfg);
+            const est = USE_DECOR_SHEETS ? buildA4DecoratedSheets(baseCfg) : estimateA4PagesCount(baseCfg);
             updateTopStatusBadges(est, "Chỉnh tay");
         }
 
@@ -1551,7 +2545,7 @@
                 } catch (e) {}
                 await waitAllImagesLoaded(2000);
                 fitDocumentToTargetPages();
-                setTimeout(() => { window.print(); }, 450);
+                setTimeout(() => { window.print(); }, 480);
             };
 
             const poll = setInterval(() => {
@@ -1580,6 +2574,10 @@
     // Xuất các hàm ra window scope
     window.togglePreviewPdfExporterMenu = togglePreviewPdfExporterMenu;
     window.closePreviewPdfExporterMenu = closePreviewPdfExporterMenu;
+    window.toggleQbPdfDecorPanel = toggleQbPdfDecorPanel;
+    window.onQbDecorBorderModeClick = onQbDecorBorderModeClick;
+    window.onQbDecorColorSelect = onQbDecorColorSelect;
+    window.onQbDecorFieldChange = onQbDecorFieldChange;
     window.onQbPdfPagesSelectChange = onQbPdfPagesSelectChange;
     window.onQbPdfFontSelectChange = onQbPdfFontSelectChange;
     window.resetPreviewPdfOptions = resetPreviewPdfOptions;
