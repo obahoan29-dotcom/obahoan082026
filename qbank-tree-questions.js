@@ -6,7 +6,7 @@
 //   + NÚT "📥 Upload file JSON đề" XÒE RA 4 KHO CHỜ XẾP (10, 11, 12, HSG 11)
 //   + DUYỆT THƯ MỤC 3 CẤP (THƯ MỤC GỐC 4 KHO -> KHO LỚP -> CHI TIẾT ĐỀ) + NÚT BACK
 //   + ĐỀ MỚI LÊN TRÊN, ĐỀ CŨ XUỐNG DƯỚI, ĐỦ NÚT (CHUYỂN LỚP, LÊN, XUỐNG, ĐỔI TÊN, XÓA)
-//   + GIỮ NGUYÊN THANH NÚT BẤM & MA TRẬN THỐNG KÊ SỐ CÂU Ở MỌI CỬA SỔ
+//   + PHÂN TRANG 50 CÂU / TRANG Ở DÒNG CUỐI CỘT GIỮA (GIỮ MƯỢT MATHJAX 1.000 - 10.000+ CÂU)
 //   + MENU XÓA NHIỀU CÂU 3 TÙY CHỌN & DÁN ẢNH CTRL+V (CHẶN TUYỆT ĐỐI BASE64 LỌT VÀO DB)
 // - TRANG CHỦ 8 LỚP: NÚT "🏦 Chuyển ngân hàng đề" MỞ POPUP CHỌN 4 KHO CHỜ XẾP
 // =========================================================
@@ -398,6 +398,7 @@ async function executeTransferClassExamToKho(quizId, categoryId, itemId, targetK
         qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
         qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
         qbankState.assignMode = true; qbankState.hideAssigned = false;
+        qbankState.currentMidPage = 1;
         qbankState.pendingNav = { mode: "kho", khoId: targetKhoId, examId: null };
 
         ensureQbankPendingExamsIntegrity();
@@ -547,6 +548,7 @@ function openPendingRootFolder(event) {
     qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = null;
     qbankState.activeFolderObj = null;
+    qbankState.currentMidPage = 1;
     qbankState.pendingNav = { mode: "root", khoId: null, examId: null };
     syncAssignModeButtonsUI();
     renderQbankTree();
@@ -561,6 +563,7 @@ function openPendingKhoFolder(khoId, event) {
     qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = null;
     qbankState.activeFolderObj = null;
+    qbankState.currentMidPage = 1;
     qbankState.pendingNav = { mode: "kho", khoId: khoId, examId: null };
     syncAssignModeButtonsUI();
     renderQbankTree();
@@ -577,6 +580,7 @@ function openPendingExamDetail(examId, event) {
     qbankState.activeFolderId = null;
     qbankState.activeFolderObj = null;
     qbankState.currentExamTitle = ex.title;
+    qbankState.currentMidPage = 1;
     qbankState.pendingNav = { mode: "exam", khoId: ex.khoId, examId: ex.id };
     syncAssignModeButtonsUI();
     renderQbankTree();
@@ -591,6 +595,7 @@ function navigatePendingBack(event) {
     if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(false);
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
     const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    qbankState.currentMidPage = 1;
     if ((nav.mode === "root" || nav.mode === "kho") && hasPartOrLevelFilter) {
         qbankState.activeFilter.part = null;
         qbankState.activeFilter.level = null;
@@ -610,6 +615,7 @@ function navigatePendingBack(event) {
 function exitPendingBrowserToAll(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
     if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(false);
+    qbankState.currentMidPage = 1;
     qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
     syncAssignModeButtonsUI();
     renderQbankTree();
@@ -750,6 +756,7 @@ async function importFilesIntoPendingKho(fileList, khoId) {
     qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
     qbankState.assignMode = true; qbankState.hideAssigned = false;
+    qbankState.currentMidPage = 1;
     qbankState.pendingNav = { mode: "kho", khoId: khoId, examId: null };
 
     ensureQbankPendingExamsIntegrity();
@@ -869,6 +876,7 @@ function deletePendingExam(examId, event) {
     updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(`🗑️ Đã xóa đề "${ex.title}" (bảo toàn ${assignedInExam.length} câu đã xếp)!`, "warning");
 }
 
@@ -1102,6 +1110,7 @@ function handleFolderNodeClick(folderId) {
     qbankState.activeFolderId = folderId;
     qbankState.activeFolderObj = findNodeInTree(qbankState.currentTree, folderId);
     qbankState.activeFilter = { folderId: folderId, folderName: qbankState.activeFolderObj ? qbankState.activeFolderObj.name : "", part: null, level: null };
+    qbankState.currentMidPage = 1;
     const node = qbankState.activeFolderObj;
     if (node && (!node.children || node.children.length === 0)) qbankState.expandedLeafMatrixIds.add(folderId);
     syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
@@ -1113,6 +1122,7 @@ function setFilterByNodePart(folderId, part) {
     const node = findNodeInTree(qbankState.currentTree, folderId);
     qbankState.activeFolderId = folderId; qbankState.activeFolderObj = node;
     qbankState.activeFilter = { folderId: folderId, folderName: node ? node.name : "", part: part, level: null };
+    qbankState.currentMidPage = 1;
     syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
 }
 
@@ -1129,6 +1139,7 @@ function handleMatrixCellClick(folderId, part, level) {
         const node = findNodeInTree(qbankState.currentTree, folderId);
         qbankState.activeFolderId = folderId; qbankState.activeFolderObj = node;
         qbankState.activeFilter = { folderId: folderId, folderName: node ? node.name : "", part: part, level: level };
+        qbankState.currentMidPage = 1;
         syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     }
 }
@@ -1154,6 +1165,7 @@ function clearQbankFilter() {
     qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
     qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
     qbankState.assignMode = false; qbankState.hideAssigned = false;
+    qbankState.currentMidPage = 1;
     syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
 }
 
@@ -1170,6 +1182,7 @@ function toggleQbankAssignMode() {
     } else {
         qbankState.assignMode = false;
     }
+    qbankState.currentMidPage = 1;
     syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
 }
 
@@ -1181,6 +1194,7 @@ function toggleHideAssignedQuestions() {
     } else {
         qbankState.hideAssigned = !qbankState.hideAssigned;
     }
+    qbankState.currentMidPage = 1;
     syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
 }
 
@@ -1195,6 +1209,7 @@ function promptRenameFolder(folderId) {
         recomputeAllMatrixIds(); saveQbankTreeData(); saveQbankDraftState(false);
         renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
         if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+        if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
         showQbankToast(`✏️ Đã đổi tên thành "${node.name}" & cập nhật ID!`, "success");
     }
 }
@@ -1270,6 +1285,7 @@ function promptDeleteFolder(folderId) {
     if (qbankState.activeFolderId && deletedIds.has(qbankState.activeFolderId)) {
         qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
         qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
+        qbankState.currentMidPage = 1;
     }
     deletedIds.forEach(id => qbankState.exportSelectedFolderIds.delete(id));
 
@@ -1278,6 +1294,7 @@ function promptDeleteFolder(folderId) {
     syncAssignModeButtonsUI(); updateQbankUploadMenuCounts();
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(`🗑️ Đã xóa thư mục "${targetNode.name}".`, "warning");
 }
 
@@ -1368,6 +1385,7 @@ function handleDropZoneDrop(e, folderId, part, level) {
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(idsToMove.length > 1 ? `✅ Đã xếp ${idsToMove.length} câu vào ${folderLabel} (${lastMovedQ.matrixId})` : `✅ Đã đánh số & xếp: ${lastMovedQ.matrixId}`, "success");
 }
 
@@ -1390,6 +1408,7 @@ function assignSelectedQuestionsToMatrix(folderId, part, level) {
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(`✅ Đã đánh số & xếp ${count} câu vào ${folderLabel}`, "success");
 }
 
@@ -1405,6 +1424,7 @@ function applyMatrixToQuestion(qId, folderId, part, level) {
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(`✅ Đã chuyển câu: ${q.matrixId}`, "success");
 }
 
@@ -1419,6 +1439,7 @@ function unassignQbankQuestion(qId) {
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast("↩️ Đã trả câu về mục Chưa xếp!", "info");
 }
 
@@ -1702,6 +1723,7 @@ function executeQbankMultiDelete(mode, event) {
     updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(toastMsg, "warning");
 }
 
@@ -1758,6 +1780,7 @@ function deleteQbankQuestion(qId) {
     renderQbankHeaderAndMidExamTitle(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast("🗑️ Đã xóa câu hỏi.", "warning");
 }
 
@@ -1803,7 +1826,7 @@ function executeMoveQbankQuestion(qId) {
 }
 
 // ============================================================================
-// 6. LỌC, SẮP XẾP & RENDER CỘT GIỮA (3 CẤP THƯ MỤC + DANH SÁCH CÂU HỎI)
+// 6. LỌC, SẮP XẾP & RENDER CỘT GIỮA (3 CẤP THƯ MỤC + PHÂN TRANG 50 CÂU/TRANG)
 // ============================================================================
 function getScopeQuestionsForMatrix() {
     let list = [...(qbankState.rawQuestions || [])];
@@ -1923,12 +1946,14 @@ function updateQbankMatrixStats() {
 function filterByGlobalPart(p) {
     if (qbankState.activeFilter.part === p && !qbankState.activeFilter.level) qbankState.activeFilter.part = null;
     else { qbankState.activeFilter.part = p; qbankState.activeFilter.level = null; }
+    qbankState.currentMidPage = 1;
     renderQbankQuestions(); updateQbankMatrixStats();
 }
 
 function filterByGlobalCell(p, lvl) {
     if (qbankState.activeFilter.part === p && qbankState.activeFilter.level === lvl) { qbankState.activeFilter.part = null; qbankState.activeFilter.level = null; }
     else { qbankState.activeFilter.part = p; qbankState.activeFilter.level = lvl; }
+    qbankState.currentMidPage = 1;
     renderQbankQuestions(); updateQbankMatrixStats();
 }
 
@@ -2152,10 +2177,12 @@ function renderQbankQuestions() {
     const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
     if (!qbankState.activeFilter.folderId && !hasPartOrLevelFilter) {
         if (nav.mode === "root") {
+            if (typeof renderQbankPaginationFooter === "function") renderQbankPaginationFooter(0, 1, qbankState.pageSize || 50);
             renderPendingRootView(container);
             return;
         }
         if (nav.mode === "kho" && nav.khoId) {
+            if (typeof renderQbankPaginationFooter === "function") renderQbankPaginationFooter(0, 1, qbankState.pageSize || 50);
             renderPendingKhoView(container, nav.khoId);
             return;
         }
@@ -2167,6 +2194,7 @@ function renderQbankQuestions() {
         : "";
 
     if (questions.length === 0) {
+        if (typeof renderQbankPaginationFooter === "function") renderQbankPaginationFooter(0, 1, qbankState.pageSize || 50);
         const isFilterActive = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned;
         const unassignedLeft = (qbankState.rawQuestions || []).filter(q => !q.folderId).length;
         const assignedTotal = (qbankState.rawQuestions || []).length - unassignedLeft;
@@ -2193,16 +2221,38 @@ function renderQbankQuestions() {
         return;
     }
 
-    const assignedQuestions = questions.filter(q => Boolean(q.folderId && q.matrixId));
-    const unassignedQuestions = questions.filter(q => !Boolean(q.folderId && q.matrixId));
+    // PHÂN TRANG 50 CÂU / TRANG ĐỂ GIỮ HIỆU NĂNG TỐI ĐA CHO MATHJAX & DOM
+    const paged = (typeof paginateQbankQuestionsList === "function")
+        ? paginateQbankQuestionsList(questions)
+        : { items: questions, page: 1, pageSize: questions.length, total: questions.length, totalPages: 1, startIdx: 0, endIdx: questions.length };
+
+    const totalAssignedAll = questions.filter(q => Boolean(q && q.folderId && q.matrixId)).length;
+    const totalUnassignedAll = questions.length - totalAssignedAll;
+
+    const pageAssigned = paged.items.filter(q => Boolean(q && q.folderId && q.matrixId));
+    const pageUnassigned = paged.items.filter(q => !Boolean(q && q.folderId && q.matrixId));
+
     let html = topPendingNavHtml;
-    const showGroupHeaders = !qbankState.activeFilter.folderId && assignedQuestions.length > 0;
-    if (showGroupHeaders) html += `<div class="qbank-section-banner assigned-banner"><span>📌 CÂU ĐÃ XẾP VÀO THƯ MỤC &amp; ĐÁNH SỐ ID TỰ ĐỘNG (${assignedQuestions.length} câu)</span><span style="font-size:10px; font-weight:700;">Xếp trên cùng</span></div>`;
-    assignedQuestions.forEach((q, idx) => { html += renderQbankCardHtml(q, idx); });
-    if (showGroupHeaders && unassignedQuestions.length > 0) html += `<div class="qbank-section-banner unassigned-banner"><span>📥 CÂU CHƯA KÉO THẢ / CHƯA CÓ ID (${unassignedQuestions.length} câu)</span><span style="font-size:10px; font-weight:700;">Giữ nguyên thứ tự đề gốc</span></div>`;
-    unassignedQuestions.forEach((q, idx) => { html += renderQbankCardHtml(q, idx); });
+    const showGroupHeaders = !qbankState.activeFilter.folderId && pageAssigned.length > 0;
+    if (showGroupHeaders) {
+        html += `<div class="qbank-section-banner assigned-banner"><span>📌 CÂU ĐÃ XẾP VÀO THƯ MỤC &amp; ĐÁNH SỐ ID TỰ ĐỘNG (${totalAssignedAll} câu)</span><span style="font-size:10px; font-weight:700;">Trang ${paged.page}/${paged.totalPages} • Xếp trên cùng</span></div>`;
+    }
+    pageAssigned.forEach((q, idx) => { html += renderQbankCardHtml(q, paged.startIdx + idx); });
+
+    if (showGroupHeaders && pageUnassigned.length > 0) {
+        html += `<div class="qbank-section-banner unassigned-banner"><span>📥 CÂU CHƯA KÉO THẢ / CHƯA CÓ ID (${totalUnassignedAll} câu)</span><span style="font-size:10px; font-weight:700;">Giữ nguyên thứ tự đề gốc</span></div>`;
+    }
+    pageUnassigned.forEach((q, idx) => { html += renderQbankCardHtml(q, paged.startIdx + pageAssigned.length + idx); });
+
     container.innerHTML = html;
-    if (window.MathJax && MathJax.typesetPromise) { try { MathJax.typesetPromise([container]).catch(() => {}); } catch (e) {} }
+
+    if (typeof renderQbankPaginationFooter === "function") {
+        renderQbankPaginationFooter(paged.total, paged.page, paged.pageSize);
+    }
+
+    if (window.MathJax && MathJax.typesetPromise) {
+        try { MathJax.typesetPromise([container]).catch(() => {}); } catch (e) {}
+    }
 }
 
 function handleQuestionDragStart(e, qId) {
@@ -2230,6 +2280,7 @@ function clearSelectedQuestions() {
     qbankState.selectedQuestionIds.clear();
     updateQbankDeleteSelectedButtonUI(); renderQbankQuestions();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
 }
 
 // ============================================================================
@@ -2376,6 +2427,13 @@ document.addEventListener("paste", function(e) {
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf("image") !== -1) { e.preventDefault(); uploadQBankImage(items[i].getAsFile(), qId, imgKey); break; }
         }
+    } else if (activeEl.id.startsWith("zone-qbpreview-")) {
+        const qId = activeEl.id.replace("zone-qbpreview-", "");
+        const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
+        const imgKey = q ? (q.imageKey || `img_q_${q.id}`) : `img_q_${qId}`;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") !== -1) { e.preventDefault(); uploadQBankImage(items[i].getAsFile(), qId, imgKey); break; }
+        }
     } else if (activeEl.id.startsWith("qb-edit-zone-")) {
         const qId = activeEl.id.replace("qb-edit-zone-", "");
         const q = (qbankMidEditState.questions || []).find(x => String(x.id) === String(qId));
@@ -2394,7 +2452,9 @@ function handleQBankImgSelect(input, qId, imgKey) { if (input.files && input.fil
 
 async function uploadQBankImage(file, qId, imgKey) {
     const stEl = document.getElementById(`status-qbank-${qId}`);
+    const stPreviewEl = document.getElementById(`status-qbpreview-${qId}`);
     if (stEl) { stEl.style.color = "#0284c7"; stEl.innerText = "⏳ Đang tải..."; }
+    if (stPreviewEl) { stPreviewEl.style.color = "#0284c7"; stPreviewEl.innerText = "⏳ Đang tải..."; }
     try {
         const directUrl = await uploadImageToHostOrDrive(file, `qbank_img_${qId}`);
         if (!qbankState.imagesMap || typeof qbankState.imagesMap !== "object") qbankState.imagesMap = {};
@@ -2402,9 +2462,11 @@ async function uploadQBankImage(file, qId, imgKey) {
         const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
         if (q) { q.imageUrl = directUrl; q.imageKey = imgKey; }
         saveQbankDraftState(false); renderQbankQuestions();
+        if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
         showQbankToast("🖼️ Đã chèn ảnh (link URL) cho câu hỏi thành công!", "success");
     } catch (e) {
         if (stEl) { stEl.style.color = "#dc2626"; stEl.innerText = "❌ Lỗi"; }
+        if (stPreviewEl) { stPreviewEl.style.color = "#dc2626"; stPreviewEl.innerText = "❌ Lỗi"; }
         showQbankToast("❌ Lỗi tải ảnh: " + e.message, "error");
         alert("❌ Lỗi tải ảnh:\n" + e.message);
     }
@@ -2416,6 +2478,7 @@ function deleteQBankImg(qId, imgKey) {
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (q) q.imageUrl = "";
     saveQbankDraftState(false); renderQbankQuestions();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast("🗑️ Đã xóa ảnh của câu hỏi.", "info");
 }
 
