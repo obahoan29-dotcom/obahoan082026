@@ -12,6 +12,7 @@
 //    - Bo viền 4 cạnh từng trang
 //    - Bo viền luân phiên 3 cạnh (Trang lẻ: Trên-Dưới-Trái | Trang chẵn: Trên-Dưới-Phải)
 //    - Chọn 4 kiểu nét viền (Đôi cổ điển, Bo góc thanh lịch, Góc chữ L, Nét đứt), 5 màu, số trang, watermark
+//    - Chọn độ rộng 4 lề trang PDF (Trên / Dưới / Trái / Phải theo mm) để giảm lề, mở rộng vùng chữ
 // 3. TẶNG MỖI ĐỀ XUẤT RA 1 LOGO SVG NGHỆ THUẬT SINH NGẪU NHIÊN
 // 4. PHÂN TRANG TỪNG TỜ A4 THỰC TẾ KHI BẬT TRANG TRÍ & CO GIÃN ĐO TRANG SAU KHI MATHJAX RENDER
 // =========================================================
@@ -22,6 +23,13 @@
     const DEFAULT_FONT_PT = 10.5;
     const DECOR_PREFS_STORAGE_KEY = "qb_pdf_decor_prefs_v1";
 
+    const MARGIN_PRESETS = {
+        default: { top: 12, bottom: 12, left: 12, right: 12 },
+        compact: { top: 7, bottom: 7, left: 7, right: 7 },
+        narrow:  { top: 4, bottom: 4, left: 5, right: 5 },
+        ultra:   { top: 2.5, bottom: 2.5, left: 3, right: 3 }
+    };
+
     const DEFAULT_DECOR_PREFS = {
         twoLines: false,
         showAuthor: false,
@@ -31,6 +39,11 @@
         pageBorderMode: "none",  // none | all4 | alt3
         borderStyle: "double",   // double | rounded | corner | dashed
         borderColor: "#1e293b",  // #1e293b | #0369a1 | #0f766e | #6d28d9 | #b91c1c
+        marginPreset: "default", // default | compact | narrow | ultra | custom
+        marginTop: 12,
+        marginBottom: 12,
+        marginLeft: 12,
+        marginRight: 12,
         showPageNum: true,
         watermark: false
     };
@@ -45,6 +58,23 @@
 
     let _decorPrefs = null;
 
+    function clampMarginMm(val, fallback = 12) {
+        const n = parseFloat(String(val ?? "").replace(",", "."));
+        if (isNaN(n)) return fallback;
+        return Math.round(Math.max(0, Math.min(35, n)) * 10) / 10;
+    }
+
+    function hasCustomMarginConfig(prefs) {
+        const p = prefs || loadDecorPrefs();
+        if (p.marginPreset && p.marginPreset !== "default") return true;
+        return (
+            clampMarginMm(p.marginTop, 12) !== 12 ||
+            clampMarginMm(p.marginBottom, 12) !== 12 ||
+            clampMarginMm(p.marginLeft, 12) !== 12 ||
+            clampMarginMm(p.marginRight, 12) !== 12
+        );
+    }
+
     function loadDecorPrefs() {
         if (_decorPrefs) return _decorPrefs;
         let loaded = { ...DEFAULT_DECOR_PREFS };
@@ -57,12 +87,21 @@
                 }
             }
         } catch (e) {}
+        loaded.marginTop = clampMarginMm(loaded.marginTop, 12);
+        loaded.marginBottom = clampMarginMm(loaded.marginBottom, 12);
+        loaded.marginLeft = clampMarginMm(loaded.marginLeft, 12);
+        loaded.marginRight = clampMarginMm(loaded.marginRight, 12);
         _decorPrefs = loaded;
         return _decorPrefs;
     }
 
     function saveDecorPrefs(nextPrefs) {
-        _decorPrefs = { ...DEFAULT_DECOR_PREFS, ...nextPrefs };
+        const merged = { ...DEFAULT_DECOR_PREFS, ...nextPrefs };
+        merged.marginTop = clampMarginMm(merged.marginTop, 12);
+        merged.marginBottom = clampMarginMm(merged.marginBottom, 12);
+        merged.marginLeft = clampMarginMm(merged.marginLeft, 12);
+        merged.marginRight = clampMarginMm(merged.marginRight, 12);
+        _decorPrefs = merged;
         try {
             localStorage.setItem(DECOR_PREFS_STORAGE_KEY, JSON.stringify(_decorPrefs));
         } catch (e) {}
@@ -383,6 +422,78 @@
                 transform: scale(1.14);
             }
 
+            /* Ô CHỌN ĐỘ RỘNG 4 LỀ TRANG (MM) */
+            .qb-decor-margin-box {
+                background: #f8fafc;
+                border: 1.2px solid #cbd5e1;
+                border-radius: 8px;
+                padding: 7px 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .qb-decor-margin-top-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 6px;
+            }
+            .qb-decor-margin-top-row select {
+                flex: 1;
+                padding: 4px 6px;
+                border: 1.2px solid #93c5fd;
+                border-radius: 6px;
+                background: #ffffff;
+                font-size: 11px;
+                font-weight: 800;
+                color: #0f172a;
+                font-family: inherit;
+                outline: none;
+            }
+            .qb-decor-margin-top-row select:focus {
+                border-color: #0284c7;
+            }
+            .qb-decor-margin-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 5px;
+            }
+            .qb-decor-margin-cell {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .qb-decor-margin-cell label {
+                font-size: 10px;
+                font-weight: 800;
+                color: #475569;
+                text-align: center;
+            }
+            .qb-decor-margin-cell input {
+                width: 100%;
+                padding: 4px 3px;
+                border: 1.2px solid #cbd5e1;
+                border-radius: 6px;
+                background: #ffffff;
+                font-size: 11.5px;
+                font-weight: 800;
+                color: #0f172a;
+                text-align: center;
+                font-family: inherit;
+                outline: none;
+                box-sizing: border-box;
+            }
+            .qb-decor-margin-cell input:focus {
+                border-color: #0284c7;
+                box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.16);
+            }
+            .qb-decor-margin-hint {
+                font-size: 9.8px;
+                font-weight: 600;
+                color: #64748b;
+                line-height: 1.25;
+            }
+
             .qb-pdf-config-hint-row {
                 display: flex;
                 align-items: center;
@@ -681,6 +792,11 @@
         const chkAuthorLogo = document.getElementById("qb-decor-author-logo");
         const selAuthorBorder = document.getElementById("qb-decor-author-border");
         const selBorderStyle = document.getElementById("qb-decor-border-style");
+        const selMarginPreset = document.getElementById("qb-decor-margin-preset");
+        const inMarginTop = document.getElementById("qb-decor-margin-top");
+        const inMarginBottom = document.getElementById("qb-decor-margin-bottom");
+        const inMarginLeft = document.getElementById("qb-decor-margin-left");
+        const inMarginRight = document.getElementById("qb-decor-margin-right");
         const chkPageNum = document.getElementById("qb-decor-page-num");
         const chkWatermark = document.getElementById("qb-decor-watermark");
         const alt3Hint = document.getElementById("qb-decor-alt3-hint");
@@ -693,6 +809,11 @@
         if (chkAuthorLogo) chkAuthorLogo.checked = prefs.authorWithLogo !== false;
         if (selAuthorBorder) selAuthorBorder.value = prefs.authorBorder || "rounded";
         if (selBorderStyle) selBorderStyle.value = prefs.borderStyle || "double";
+        if (selMarginPreset) selMarginPreset.value = prefs.marginPreset || "default";
+        if (inMarginTop && document.activeElement !== inMarginTop) inMarginTop.value = prefs.marginTop;
+        if (inMarginBottom && document.activeElement !== inMarginBottom) inMarginBottom.value = prefs.marginBottom;
+        if (inMarginLeft && document.activeElement !== inMarginLeft) inMarginLeft.value = prefs.marginLeft;
+        if (inMarginRight && document.activeElement !== inMarginRight) inMarginRight.value = prefs.marginRight;
         if (chkPageNum) chkPageNum.checked = prefs.showPageNum !== false;
         if (chkWatermark) chkWatermark.checked = !!prefs.watermark;
 
@@ -724,9 +845,13 @@
 
         const tags = [];
         if (prefs.twoLines) tags.push("2 dòng kẻ");
-        if (prefs.showAuthor) tags.push(`Tác giả`);
+        if (prefs.showAuthor) tags.push("Tác giả");
         if (prefs.pageBorderMode === "all4") tags.push("Viền 4 cạnh");
         else if (prefs.pageBorderMode === "alt3") tags.push("Viền 3 cạnh luân phiên");
+        if (hasCustomMarginConfig(prefs)) {
+            const { marginTop: t, marginBottom: b, marginLeft: l, marginRight: r } = prefs;
+            tags.push((t === b && t === l && t === r) ? `Lề ${t}mm` : `Lề ${t}-${b}-${l}-${r}mm`);
+        }
         if (prefs.watermark) tags.push("Watermark");
 
         const hasDecor = tags.length > 0;
@@ -805,7 +930,7 @@
 
                 <!-- Ô CHỌN TRANG TRÍ XÒE RA -->
                 <div class="qb-pdf-decor-wrap">
-                    <button type="button" class="qb-pdf-decor-trigger" id="qb-pdf-decor-trigger" onclick="toggleQbPdfDecorPanel(event)" title="Bấm để xòe ra các tùy chọn trang trí: 2 dòng kẻ, tên tác giả + logo, bo viền 4 cạnh hoặc luân phiên 3 cạnh">
+                    <button type="button" class="qb-pdf-decor-trigger" id="qb-pdf-decor-trigger" onclick="toggleQbPdfDecorPanel(event)" title="Bấm để xòe ra các tùy chọn trang trí: 2 dòng kẻ, tên tác giả + logo, bo viền 4 cạnh hoặc luân phiên 3 cạnh, chỉnh độ rộng 4 lề">
                         <span class="qb-pdf-decor-trigger-left">
                             <span>✨</span>
                             <span>Trang trí:</span>
@@ -883,6 +1008,39 @@
                                     <div class="qb-decor-color-row">${colorSwatchesHtml}</div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Ô CHỌN ĐỘ RỘNG 4 LỀ TRANG PDF -->
+                        <div class="qb-decor-margin-box">
+                            <div class="qb-decor-margin-top-row">
+                                <span class="qb-decor-section-title" style="margin-top:0; white-space:nowrap;">📏 Độ rộng 4 lề (mm):</span>
+                                <select id="qb-decor-margin-preset" onchange="onQbDecorMarginPresetChange(this.value)">
+                                    <option value="default">Mặc định (12 - 12 - 12 - 12 mm)</option>
+                                    <option value="compact">Gọn vừa (7 - 7 - 7 - 7 mm)</option>
+                                    <option value="narrow">Lề bé (4 - 4 - 5 - 5 mm)</option>
+                                    <option value="ultra">Siêu bé (2.5 - 2.5 - 3 - 3 mm)</option>
+                                    <option value="custom">Tùy chỉnh 4 lề riêng...</option>
+                                </select>
+                            </div>
+                            <div class="qb-decor-margin-grid">
+                                <div class="qb-decor-margin-cell">
+                                    <label for="qb-decor-margin-top">Trên</label>
+                                    <input type="number" id="qb-decor-margin-top" min="0" max="35" step="0.5" value="12" oninput="onQbDecorMarginInputChange(false)" onchange="onQbDecorMarginInputChange(true)">
+                                </div>
+                                <div class="qb-decor-margin-cell">
+                                    <label for="qb-decor-margin-bottom">Dưới</label>
+                                    <input type="number" id="qb-decor-margin-bottom" min="0" max="35" step="0.5" value="12" oninput="onQbDecorMarginInputChange(false)" onchange="onQbDecorMarginInputChange(true)">
+                                </div>
+                                <div class="qb-decor-margin-cell">
+                                    <label for="qb-decor-margin-left">Trái</label>
+                                    <input type="number" id="qb-decor-margin-left" min="0" max="35" step="0.5" value="12" oninput="onQbDecorMarginInputChange(false)" onchange="onQbDecorMarginInputChange(true)">
+                                </div>
+                                <div class="qb-decor-margin-cell">
+                                    <label for="qb-decor-margin-right">Phải</label>
+                                    <input type="number" id="qb-decor-margin-right" min="0" max="35" step="0.5" value="12" oninput="onQbDecorMarginInputChange(false)" onchange="onQbDecorMarginInputChange(true)">
+                                </div>
+                            </div>
+                            <div class="qb-decor-margin-hint">💡 Giảm lề xuống <b>3–5mm</b> giúp vùng chữ rộng rãi, đỡ xuống dòng.</div>
                         </div>
 
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; padding-top:3px; border-top:1px dashed #e2e8f0;">
@@ -965,6 +1123,81 @@
         const cur = loadDecorPrefs();
         saveDecorPrefs({ ...cur, borderColor: hex });
         syncDecorControlsWithPrefs();
+    }
+
+    function onQbDecorMarginPresetChange(presetKey) {
+        const cur = loadDecorPrefs();
+        if (presetKey === "custom") {
+            saveDecorPrefs({ ...cur, marginPreset: "custom" });
+            syncDecorControlsWithPrefs();
+            const topIn = document.getElementById("qb-decor-margin-top");
+            if (topIn) { topIn.focus(); topIn.select(); }
+            return;
+        }
+        const preset = MARGIN_PRESETS[presetKey] || MARGIN_PRESETS.default;
+        saveDecorPrefs({
+            ...cur,
+            marginPreset: presetKey,
+            marginTop: preset.top,
+            marginBottom: preset.bottom,
+            marginLeft: preset.left,
+            marginRight: preset.right
+        });
+        syncDecorControlsWithPrefs();
+    }
+
+    function onQbDecorMarginInputChange(commitAndSync = false) {
+        const cur = loadDecorPrefs();
+        const inTop = document.getElementById("qb-decor-margin-top");
+        const inBottom = document.getElementById("qb-decor-margin-bottom");
+        const inLeft = document.getElementById("qb-decor-margin-left");
+        const inRight = document.getElementById("qb-decor-margin-right");
+        const selPreset = document.getElementById("qb-decor-margin-preset");
+
+        const parseRaw = (el, fallback) => {
+            if (!el) return fallback;
+            const raw = String(el.value || "").trim().replace(",", ".");
+            if (raw === "" || raw === "." || raw.endsWith(".")) {
+                return commitAndSync ? fallback : null;
+            }
+            const n = parseFloat(raw);
+            if (isNaN(n)) return commitAndSync ? fallback : null;
+            return clampMarginMm(n, fallback);
+        };
+
+        const t = parseRaw(inTop, cur.marginTop);
+        const b = parseRaw(inBottom, cur.marginBottom);
+        const l = parseRaw(inLeft, cur.marginLeft);
+        const r = parseRaw(inRight, cur.marginRight);
+
+        const nextTop = (t !== null) ? t : cur.marginTop;
+        const nextBottom = (b !== null) ? b : cur.marginBottom;
+        const nextLeft = (l !== null) ? l : cur.marginLeft;
+        const nextRight = (r !== null) ? r : cur.marginRight;
+
+        let matchedPreset = "custom";
+        for (const pKey in MARGIN_PRESETS) {
+            const p = MARGIN_PRESETS[pKey];
+            if (p.top === nextTop && p.bottom === nextBottom && p.left === nextLeft && p.right === nextRight) {
+                matchedPreset = pKey;
+                break;
+            }
+        }
+
+        if (selPreset) selPreset.value = matchedPreset;
+
+        saveDecorPrefs({
+            ...cur,
+            marginPreset: matchedPreset,
+            marginTop: nextTop,
+            marginBottom: nextBottom,
+            marginLeft: nextLeft,
+            marginRight: nextRight
+        });
+
+        if (commitAndSync) {
+            syncDecorControlsWithPrefs();
+        }
     }
 
     function onQbDecorFieldChange() {
@@ -1076,7 +1309,7 @@
 
         const rect = btn.getBoundingClientRect();
         const popW = Math.min(418, window.innerWidth - 16);
-        const popH = Math.min(pop.offsetHeight || 480, window.innerHeight - 20);
+        const popH = Math.min(pop.offsetHeight || 520, window.innerHeight - 20);
         let left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
         let top = rect.bottom + 8;
         if (top + popH > window.innerHeight - 8) {
@@ -1405,7 +1638,7 @@
     }
 
     // =========================================================================
-    // 5. MỞ CỬA SỔ XUẤT PDF (HỖ TRỢ ĐẦY ĐỦ TRANG TRÍ TỪNG TRANG A4 & CO GIÃN ĐÚNG N TRANG)
+    // 5. MỞ CỬA SỔ XUẤT PDF (HỖ TRỢ ĐẦY ĐỦ TRANG TRÍ TỪNG TRANG A4, 4 LỀ TÙY CHỌN & CO GIÃN ĐÚNG N TRANG)
     // =========================================================================
     function openPreviewPdfWindow(mode) {
         const collected = collectPreviewQuestionsSafely();
@@ -1417,6 +1650,12 @@
 
         const { targetPages, fontSizePt, decorPrefs } = getConfiguredPreviewPdfOptions();
         const useDecorSheets = hasAnyPageDecorationActive(decorPrefs);
+        const useCustomMargins = hasCustomMarginConfig(decorPrefs);
+
+        const mTopInit = clampMarginMm(decorPrefs.marginTop, 12);
+        const mRightInit = clampMarginMm(decorPrefs.marginRight, 12);
+        const mBottomInit = clampMarginMm(decorPrefs.marginBottom, 12);
+        const mLeftInit = clampMarginMm(decorPrefs.marginLeft, 12);
 
         const titleInp = document.getElementById("qbank-exam-name");
         const gradeSel = document.getElementById("qbank-exam-grade");
@@ -1458,6 +1697,7 @@
 
         const initialPt = fontSizePt || DEFAULT_FONT_PT;
         const safeDecorColor = /^#[0-9a-f]{3,8}$/i.test(decorPrefs.borderColor || "") ? decorPrefs.borderColor : "#1e293b";
+        const initialPageRule = useDecorSheets ? "0" : `${mTopInit}mm ${mRightInit}mm ${mBottomInit}mm ${mLeftInit}mm`;
 
         win.document.open();
         win.document.write(`<!DOCTYPE html>
@@ -1477,7 +1717,7 @@
     <\/script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"><\/script>
     <style id="dynamic-page-style">
-        @page { size: A4; margin: ${useDecorSheets ? "0" : "12mm 12mm 12mm 12mm"}; }
+        @page { size: A4; margin: ${initialPageRule}; }
     </style>
     <style>
         :root {
@@ -1490,10 +1730,12 @@
             --doc-part-gap: 10px;
             --doc-logo-size: 48px;
             --decor-color: ${safeDecorColor};
-            --sheet-margin-v: 10mm;
-            --sheet-margin-h: 10mm;
-            --frame-pad-v: 5mm;
-            --frame-pad-h: 6mm;
+            --sheet-margin-top: ${mTopInit}mm;
+            --sheet-margin-right: ${mRightInit}mm;
+            --sheet-margin-bottom: ${mBottomInit}mm;
+            --sheet-margin-left: ${mLeftInit}mm;
+            --frame-pad-v: 4mm;
+            --frame-pad-h: 5mm;
         }
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -1510,7 +1752,7 @@
             max-width: 100%;
             margin: 0 auto;
             background: #ffffff;
-            padding: 12mm;
+            padding: ${mTopInit}mm ${mRightInit}mm ${mBottomInit}mm ${mLeftInit}mm;
             box-shadow: 0 10px 35px rgba(15, 23, 42, 0.22);
             border-radius: 6px;
         }
@@ -1537,7 +1779,7 @@
             width: 210mm;
             height: 296.4mm;
             background: #ffffff;
-            padding: var(--sheet-margin-v) var(--sheet-margin-h);
+            padding: var(--sheet-margin-top) var(--sheet-margin-right) var(--sheet-margin-bottom) var(--sheet-margin-left);
             box-shadow: 0 12px 34px rgba(15, 23, 42, 0.24);
             border-radius: 4px;
             display: flex;
@@ -2083,6 +2325,7 @@
             <span style="font-weight:900; color:#34d399;">📄 XEM TRƯỚC IN PDF</span>
             <span class="np-badge" id="np-page-stat">Đang tính số trang...</span>
             <span class="np-badge" id="np-font-stat">Cỡ chữ: ${initialPt}pt</span>
+            <span class="np-badge" id="np-margin-stat">Lề: ${mTopInit}-${mBottomInit}-${mLeftInit}-${mRightInit}mm</span>
         </div>
         <div class="no-print-actions">
             <button type="button" class="btn-np btn-np-logo" onclick="changeRandomExamLogo()">🎨 Đổi logo khác</button>
@@ -2100,6 +2343,7 @@
         const REQUESTED_FONT_PT = ${fontSizePt ? Number(fontSizePt) : "null"};
         const EXPORT_MODE = ${JSON.stringify(mode)};
         const USE_DECOR_SHEETS = ${useDecorSheets ? "true" : "false"};
+        const HAS_CUSTOM_MARGINS = ${useCustomMargins ? "true" : "false"};
         const DECOR_CFG = ${JSON.stringify(decorPrefs)};
         const EXAM_SHORT_TITLE = ${JSON.stringify(examTitle)};
         const EXAM_MA_DE = ${JSON.stringify(maDe)};
@@ -2132,6 +2376,36 @@
             return ruler && ruler.offsetHeight > 0 ? (ruler.offsetHeight / 100) : 3.779527559;
         }
 
+        function resolveEffectiveMargins(cfg) {
+            if (HAS_CUSTOM_MARGINS) {
+                const clampM = (v, fb) => {
+                    const n = parseFloat(v);
+                    return (!isNaN(n) && n >= 0 && n <= 35) ? n : fb;
+                };
+                return {
+                    top: clampM(DECOR_CFG.marginTop, 12),
+                    right: clampM(DECOR_CFG.marginRight, 12),
+                    bottom: clampM(DECOR_CFG.marginBottom, 12),
+                    left: clampM(DECOR_CFG.marginLeft, 12)
+                };
+            }
+            if (USE_DECOR_SHEETS) {
+                const mV = Math.max(7, Math.min(12, cfg.marginV));
+                const mH = Math.max(7, Math.min(12, cfg.marginH));
+                return { top: mV, right: mH, bottom: mV, left: mH };
+            }
+            return { top: cfg.marginV, right: cfg.marginH, bottom: cfg.marginV, left: cfg.marginH };
+        }
+
+        function resolveFramePaddingMm(margins) {
+            const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
+            if (!hasBorder) return { padV: 0, padH: 0 };
+            const minM = Math.min(margins.top, margins.right, margins.bottom, margins.left);
+            if (HAS_CUSTOM_MARGINS && minM <= 3.5) return { padV: 1.8, padH: 2.2 };
+            if (HAS_CUSTOM_MARGINS && minM <= 6) return { padV: 2.5, padH: 3.2 };
+            return { padV: 4.0, padH: 5.0 };
+        }
+
         function applyLayoutParams(cfg) {
             lastAppliedCfg = cfg;
             const root = document.documentElement;
@@ -2145,30 +2419,34 @@
             root.style.setProperty("--doc-part-gap", cfg.partGap + "px");
             root.style.setProperty("--doc-logo-size", cfg.logoSize + "px");
 
+            const m = resolveEffectiveMargins(cfg);
+
             if (USE_DECOR_SHEETS) {
                 const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
-                const mV = Math.max(7, Math.min(12, cfg.marginV));
-                const mH = Math.max(7, Math.min(12, cfg.marginH));
-                root.style.setProperty("--sheet-margin-v", mV + "mm");
-                root.style.setProperty("--sheet-margin-h", mH + "mm");
-                root.style.setProperty("--frame-pad-v", hasBorder ? "4mm" : "0mm");
-                root.style.setProperty("--frame-pad-h", hasBorder ? "5mm" : "0mm");
+                const fp = resolveFramePaddingMm(m);
+                root.style.setProperty("--sheet-margin-top", m.top + "mm");
+                root.style.setProperty("--sheet-margin-right", m.right + "mm");
+                root.style.setProperty("--sheet-margin-bottom", m.bottom + "mm");
+                root.style.setProperty("--sheet-margin-left", m.left + "mm");
+                root.style.setProperty("--frame-pad-v", fp.padV + "mm");
+                root.style.setProperty("--frame-pad-h", fp.padH + "mm");
 
                 const pageEl = document.getElementById("exam-doc-page");
                 if (pageEl) {
-                    const framePadH = hasBorder ? 10 : 0;
-                    const bodyWidthMm = Math.max(150, 210 - (2 * mH) - framePadH - (DECOR_CFG.borderStyle === "double" && hasBorder ? 2 : 0));
+                    const framePadH_total = hasBorder ? (2 * fp.padH) : 0;
+                    const borderThicknessH = hasBorder ? (DECOR_CFG.borderStyle === "double" ? 2 : 1) : 0;
+                    const bodyWidthMm = Math.max(135, 210 - (m.left + m.right) - framePadH_total - borderThicknessH);
                     pageEl.style.width = bodyWidthMm + "mm";
                     pageEl.style.padding = "0";
                 }
             } else {
                 const dynPageStyle = document.getElementById("dynamic-page-style");
                 if (dynPageStyle) {
-                    dynPageStyle.textContent = "@page { size: A4; margin: " + cfg.marginV + "mm " + cfg.marginH + "mm; }";
+                    dynPageStyle.textContent = "@page { size: A4; margin: " + m.top + "mm " + m.right + "mm " + m.bottom + "mm " + m.left + "mm; }";
                 }
                 const pageEl = document.getElementById("exam-doc-page");
                 if (pageEl) {
-                    pageEl.style.padding = cfg.marginV + "mm " + cfg.marginH + "mm";
+                    pageEl.style.padding = m.top + "mm " + m.right + "mm " + m.bottom + "mm " + m.left + "mm";
                 }
             }
 
@@ -2228,7 +2506,10 @@
             if (!USE_DECOR_SHEETS) return { topH: 0, bottomH: 0, frameOverheadV: 0 };
             const pxPerMM = getPxPerMM();
             const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
-            const frameOverheadV = hasBorder ? ((8 + (DECOR_CFG.borderStyle === "double" ? 2.5 : 1)) * pxPerMM) : 0;
+            const m = resolveEffectiveMargins(cfg);
+            const fp = resolveFramePaddingMm(m);
+            const borderThicknessV = hasBorder ? (DECOR_CFG.borderStyle === "double" ? 2.5 : 1) : 0;
+            const frameOverheadV = hasBorder ? (((2 * fp.padV) + borderThicknessV) * pxPerMM) : 0;
 
             const probe = document.createElement("div");
             probe.style.cssText = "position:fixed; left:-99999px; top:0; visibility:hidden; width:175mm;";
@@ -2260,10 +2541,10 @@
 
         function paginateBlocksIntoPageGroups(cfg) {
             const pxPerMM = getPxPerMM();
-            const mV = USE_DECOR_SHEETS ? Math.max(7, Math.min(12, cfg.marginV)) : cfg.marginV;
+            const m = resolveEffectiveMargins(cfg);
             const { topH, bottomH, frameOverheadV } = measureDecorBandsHeightPx(cfg);
             const totalSheetH = (USE_DECOR_SHEETS ? 296.4 : 297) * pxPerMM;
-            const usableBodyH = Math.max(180, totalSheetH - (2 * mV * pxPerMM) - frameOverheadV - topH - bottomH - 8);
+            const usableBodyH = Math.max(180, totalSheetH - ((m.top + m.bottom) * pxPerMM) - frameOverheadV - topH - bottomH - 8);
 
             const blocks = getOrderedFlowBlocks();
             const pages = [];
@@ -2276,7 +2557,6 @@
                 const h = el.offsetHeight + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
 
                 if (curPage.length > 0 && (curUsedH + h > usableBodyH)) {
-                    // Tránh để tiêu đề Phần I/II/III/IV đứng trơ trọi cuối trang
                     const lastInPage = curPage[curPage.length - 1];
                     if (lastInPage && lastInPage.classList && lastInPage.classList.contains("part-header-box") && curPage.length > 1) {
                         const popped = curPage.pop();
@@ -2351,9 +2631,9 @@
             if (USE_DECOR_SHEETS) {
                 return paginateBlocksIntoPageGroups(cfg).length;
             }
-            const marginVmm = cfg.marginV;
+            const m = resolveEffectiveMargins(cfg);
             const pxPerMM = getPxPerMM();
-            const usablePageHeightPx = Math.max(200, (297 - 2 * marginVmm - 2) * pxPerMM);
+            const usablePageHeightPx = Math.max(200, (297 - (m.top + m.bottom) - 2) * pxPerMM);
             const pageEl = document.getElementById("exam-doc-page");
             if (!pageEl) return 1;
 
@@ -2387,6 +2667,7 @@
         function updateTopStatusBadges(estPages, noteText = "") {
             const pEl = document.getElementById("np-page-stat");
             const fEl = document.getElementById("np-font-stat");
+            const mEl = document.getElementById("np-margin-stat");
             if (pEl) {
                 if (TARGET_PAGES) {
                     const isExact = (estPages <= TARGET_PAGES);
@@ -2399,6 +2680,13 @@
             }
             if (fEl) {
                 fEl.textContent = "Cỡ chữ: " + currentFontPt + "pt";
+            }
+            if (mEl && lastAppliedCfg) {
+                const m = resolveEffectiveMargins(lastAppliedCfg);
+                mEl.className = "np-badge" + (HAS_CUSTOM_MARGINS ? " is-ok" : "");
+                mEl.textContent = (m.top === m.bottom && m.top === m.left && m.top === m.right)
+                    ? ("Lề: " + m.top + "mm")
+                    : ("Lề: " + m.top + "-" + m.bottom + "-" + m.left + "-" + m.right + "mm");
             }
         }
 
@@ -2577,6 +2865,8 @@
     window.toggleQbPdfDecorPanel = toggleQbPdfDecorPanel;
     window.onQbDecorBorderModeClick = onQbDecorBorderModeClick;
     window.onQbDecorColorSelect = onQbDecorColorSelect;
+    window.onQbDecorMarginPresetChange = onQbDecorMarginPresetChange;
+    window.onQbDecorMarginInputChange = onQbDecorMarginInputChange;
     window.onQbDecorFieldChange = onQbDecorFieldChange;
     window.onQbPdfPagesSelectChange = onQbPdfPagesSelectChange;
     window.onQbPdfFontSelectChange = onQbPdfFontSelectChange;
