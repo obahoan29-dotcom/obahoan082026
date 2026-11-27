@@ -4,8 +4,7 @@
 // - LƯU MỖI CÂU HỎI = 1 DÒNG TRONG BẢNG RIÊNG qbank_questions (PHÂN TRANG + DIFF SYNC)
 // - TỰ ĐỘNG DI TRÚ TỪ DÒNG JSON CŨ (qbank_workspace_draft) SANG qbank_questions
 // - CHẶN TRIỆT ĐỂ ẢNH BASE64 LỌT VÀO SUPABASE
-// - BỔ SUNG NÚT & MODAL KHÔI PHỤC TỪ BACKUP DRIVE / FILE JSON + TẢI BACKUP JSON
-// - FIX: Date.now() THIẾU NGOẶC, PHÂN TRANG TIE-BREAKER ID, KHỬ TRÙNG ID KHI UPSERT
+// - BỔ SUNG THANH TIẾN TRÌNH LOAD NGANG THÔNG MINH KHỚP TỐC ĐỘ TẢI THỰC TẾ
 // =========================================================
 
 const QBANK_PENDING_KHOS = [
@@ -20,6 +19,8 @@ let qbankState = {
     savedExamFilter: "all",
     currentExamTitle: "",
     useDedicatedTable: false,
+    currentMidPage: 1,
+    pageSize: 50,
     currentTree: [
         {
             id: "node_lop10",
@@ -636,6 +637,7 @@ function pushQbankUndoState(actionLabel = "Thao tác") {
             selectedQuestionIds: Array.from(qbankState.selectedQuestionIds || []),
             assignMode: !!qbankState.assignMode,
             hideAssigned: !!qbankState.hideAssigned,
+            currentMidPage: qbankState.currentMidPage || 1,
             activeFilter: JSON.parse(JSON.stringify(qbankState.activeFilter || {}))
         };
         qbankState.undoStack.push(snapshot);
@@ -674,6 +676,7 @@ function undoQbankAction() {
     qbankState.selectedQuestionIds = new Set(prev.selectedQuestionIds || []);
     qbankState.assignMode = prev.assignMode !== undefined ? !!prev.assignMode : true;
     qbankState.hideAssigned = !!prev.hideAssigned;
+    qbankState.currentMidPage = prev.currentMidPage || 1;
     qbankState.activeFilter = prev.activeFilter || { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = qbankState.activeFilter.folderId || null;
     qbankState.activeFolderObj = qbankState.activeFolderId ? findNodeInTree(qbankState.currentTree, qbankState.activeFolderId) : null;
@@ -693,6 +696,7 @@ function undoQbankAction() {
     if (typeof updateQbankMatrixStats === "function") updateQbankMatrixStats();
     if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
     if (typeof refreshQbankExportPopoverIfOpen === "function") refreshQbankExportPopoverIfOpen();
+    if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast(`↩️ Đã lùi lại: ${prev.label}`, "warning");
 }
 
@@ -792,20 +796,40 @@ function rebuildSyncedFingerprintsFromState() {
     _qbankSyncedFingerprints = map;
 }
 
-async function fetchAllQbankQuestionsFromTable(client) {
+async function fetchAllQbankQuestionsFromTable(client, onProgress = null) {
     const allRows = [];
     let from = 0;
     const pageSize = 1000;
+    let totalCount = 0;
+    let chunkIdx = 0;
+
     while (true) {
-        const { data, error } = await client
+        const query = client
             .from("qbank_questions")
-            .select("*")
+            .select("*", from === 0 ? { count: "exact" } : undefined)
             .order("orig_index", { ascending: true })
             .order("id", { ascending: true })
             .range(from, from + pageSize - 1);
+
+        const { data, error, count } = await query;
         if (error) return { ok: false, error, rows: [] };
+
+        if (from === 0 && typeof count === "number" && count >= 0) {
+            totalCount = count;
+        }
+
         if (!data || data.length === 0) break;
         allRows.push(...data);
+        chunkIdx++;
+
+        if (typeof onProgress === "function") {
+            const pct = totalCount > 0
+                ? Math.min(88, 32 + Math.round((allRows.length / totalCount) * 56))
+                : Math.min(86, 38 + chunkIdx * 16);
+            const totalLabel = totalCount > 0 ? totalCount.toLocaleString("vi-VN") : `${allRows.length.toLocaleString("vi-VN")}+`;
+            onProgress(pct, `Đang tải từ Supabase: ${allRows.length.toLocaleString("vi-VN")} / ${totalLabel} câu hỏi...`);
+        }
+
         if (data.length < pageSize) break;
         from += pageSize;
     }
@@ -1052,7 +1076,12 @@ async function manualSaveQbankDraftState(event) {
     }
 }
 
-async function loadQbankDraftState() {
+async function loadQbankDraftState(onProgress = null) {
+    const report = (pct, text) => {
+        if (typeof onProgress === "function") onProgress(pct, text);
+    };
+
+    report(8, "Đang đọc bộ nhớ đệm & IndexedDB trên máy...");
     let hasLocalTree = loadQbankTreeData();
     let localQuestions = [];
     let localPendingExams = [];
@@ -1113,13 +1142,19 @@ async function loadQbankDraftState() {
     qbankState.draftUpdatedAt = localDraftTs;
     _qbankSyncedFingerprints = new Map();
 
+    report(22, localQuestions.length > 0
+        ? `Đã đọc ${localQuestions.length.toLocaleString("vi-VN")} câu cục bộ, đang đồng bộ Cloud...`
+        : "Đang kết nối máy chủ Supabase...");
+
     const client = getQbankSupabaseClient();
     if (client) {
         try {
             const [tableRes, kvRes] = await Promise.all([
-                fetchAllQbankQuestionsFromTable(client),
+                fetchAllQbankQuestionsFromTable(client, onProgress),
                 client.from("app_key_values").select("key, value").in("key", [QBANK_CLOUD_TREE_KEY, QBANK_CLOUD_META_KEY, QBANK_CLOUD_DRAFT_KEY])
             ]);
+
+            report(90, "Đang đối chiếu & hợp nhất cây thư mục...");
 
             const rows = (kvRes && Array.isArray(kvRes.data)) ? kvRes.data : [];
             const treeRow = rows.find(r => r.key === QBANK_CLOUD_TREE_KEY);
@@ -1243,6 +1278,7 @@ async function loadQbankDraftState() {
         }
     }
 
+    report(95, "Đang đánh số ID ma trận & chia trang...");
     ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
 }
@@ -1333,6 +1369,7 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
         qbankState.activeFolderId = null;
         qbankState.activeFolderObj = null;
         qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
+        qbankState.currentMidPage = 1;
     } else {
         if (incomingTree && qbankState.currentTree.length === 0) {
             qbankState.currentTree = incomingTree;
@@ -1608,13 +1645,36 @@ async function openQbankCreatorModal(options = {}) {
     const menu = document.getElementById("qbank-dropdown-menu");
     if (menu) menu.classList.remove("show");
     const modal = document.getElementById("modal-qbank-creator");
-    if (modal) {
-        modal.style.display = "flex";
-        if (typeof ensureQbankMidEditControlsInDOM === "function") ensureQbankMidEditControlsInDOM();
-        if (typeof ensureQbankUploadDropdownInDOM === "function") ensureQbankUploadDropdownInDOM();
-        if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(true);
-        if (!options || !options.skipDraftReload) await loadQbankDraftState();
-        initQbankColumnResizers();
+    if (!modal) return;
+
+    modal.style.display = "flex";
+    if (typeof ensureQbankMidEditControlsInDOM === "function") ensureQbankMidEditControlsInDOM();
+    if (typeof ensureQbankUploadDropdownInDOM === "function") ensureQbankUploadDropdownInDOM();
+    if (typeof ensureQbankPreviewAndPaginationUI === "function") ensureQbankPreviewAndPaginationUI();
+    if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(true);
+
+    initQbankColumnResizers();
+
+    const loadStartTime = performance.now();
+    if (typeof startQbankProgressBar === "function") {
+        startQbankProgressBar(
+            options && options.skipDraftReload
+                ? "Đang chuẩn bị giao diện làm việc..."
+                : "Đang khởi tạo & đồng bộ dữ liệu Ngân hàng câu hỏi..."
+        );
+    }
+
+    try {
+        if (!options || !options.skipDraftReload) {
+            await loadQbankDraftState((pct, label) => {
+                if (typeof updateQbankProgressBar === "function") updateQbankProgressBar(pct, label);
+            });
+        } else {
+            if (typeof updateQbankProgressBar === "function") updateQbankProgressBar(75, "Đang sắp xếp ma trận câu hỏi...");
+        }
+
+        if (typeof updateQbankProgressBar === "function") updateQbankProgressBar(96, "Đang dựng cây thư mục & phân trang 50 câu/trang...");
+
         if (typeof syncAssignModeButtonsUI === "function") syncAssignModeButtonsUI();
         updateQbankUndoButtonUI();
         if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
@@ -1624,6 +1684,16 @@ async function openQbankCreatorModal(options = {}) {
         if (typeof renderQbankQuestions === "function") renderQbankQuestions();
         if (typeof updateQbankMatrixStats === "function") updateQbankMatrixStats();
         if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
+
+        if (typeof finishQbankProgressBar === "function") {
+            const elapsedSec = ((performance.now() - loadStartTime) / 1000).toFixed(2);
+            const totalQ = (qbankState.rawQuestions || []).length;
+            finishQbankProgressBar(totalQ, elapsedSec);
+        }
+    } catch (err) {
+        if (typeof finishQbankProgressBar === "function") {
+            finishQbankProgressBar((qbankState.rawQuestions || []).length, "0.00", true);
+        }
     }
 }
 
@@ -1632,6 +1702,7 @@ function closeQbankCreatorModal() {
     if (typeof closeQbankDeleteMultiMenu === "function") closeQbankDeleteMultiMenu();
     if (typeof closeQbankUploadMenu === "function") closeQbankUploadMenu();
     if (typeof closeClassTransferKhoPopover === "function") closeClassTransferKhoPopover();
+    if (typeof closeQbankExamPreviewModal === "function") closeQbankExamPreviewModal();
     closeQbankRestoreModal();
     if (qbankMidEditState.isActive && typeof closeQbankMidEditMode === "function") closeQbankMidEditMode(false);
     const modal = document.getElementById("modal-qbank-creator");
