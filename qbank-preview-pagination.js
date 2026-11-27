@@ -106,6 +106,9 @@
             .qbank-mid-pagination-bar.show {
                 display: flex;
             }
+            #qbank-col-mid:has(#qbank-mid-edit-workspace.show) #qbank-mid-pagination-bar {
+                display: none !important;
+            }
             .qbank-page-info-txt {
                 font-size: 10px;
                 font-weight: 800;
@@ -426,7 +429,6 @@
         wrap.classList.add("show");
         setProgressVisual(6, `⏳ ${initialLabel}`);
 
-        // Nhích nhẹ khi đang chờ phản hồi mạng đầu tiên để người dùng thấy thanh luôn sống động
         _qbProgressSmoothTimer = setInterval(() => {
             if (_qbCurrentPct < 28) {
                 setProgressVisual(_qbCurrentPct + 2, null);
@@ -655,8 +657,8 @@
                         <button type="button" class="btn-qbank btn-qbank-warning" id="btn-qb-preview-undo-remove" onclick="undoRemoveInExamPreviewModal()" style="display:none; padding:5px 10px; font-size:11.5px;" title="Hoàn tác bỏ chọn câu vừa rút khỏi đề">
                             ↩️ Hoàn tác bỏ câu
                         </button>
-                        <button type="button" class="btn-qbank" style="background:#0d9488; padding:5px 10px; font-size:11.5px;" onclick="exportFromExamPreviewModal('pdf')" title="Xem bản in A4 & Xuất PDF đề đang xem">
-                            📄 Xuất PDF
+                        <button type="button" id="btn-qb-preview-export-pdf" class="btn-qbank btn-qb-preview-pdf-trigger" style="background:#0d9488; padding:5px 10px; font-size:11.5px;" onclick="typeof togglePreviewPdfExporterMenu==='function' ? togglePreviewPdfExporterMenu(event) : exportFromExamPreviewModal('pdf')" title="Mở tùy chọn Xuất PDF (4 chế độ, chọn số trang & cỡ chữ)">
+                            📄 Xuất PDF ▾
                         </button>
                         <button type="button" class="btn-qbank btn-qbank-primary" style="padding:5px 10px; font-size:11.5px;" onclick="exportFromExamPreviewModal('word')" title="Tải file Word (.doc) đề đang xem">
                             📝 Xuất Word
@@ -867,6 +869,7 @@
     }
 
     function closeQbankExamPreviewModal() {
+        if (typeof closePreviewPdfExporterMenu === "function") closePreviewPdfExporterMenu();
         const modal = document.getElementById("modal-qbank-exam-preview");
         if (modal) modal.classList.remove("show");
         _qbPreviewRemovedUndoStack = [];
@@ -891,13 +894,9 @@
         const idStr = String(qId);
         if (isChecked) return;
 
-        // 1. Lưu vào stack hoàn tác riêng của modal xem thử
         _qbPreviewRemovedUndoStack.push(idStr);
-
-        // 2. Bỏ chọn câu hỏi -> tự rút khỏi đề
         qbankState.selectedQuestionIds.delete(idStr);
 
-        // 3. Đồng bộ lại checkbox & viền xanh ở cột giữa mà không làm mất trang đang đứng
         const midCard = document.getElementById(`qbank-card-${idStr}`);
         if (midCard) {
             midCard.classList.remove("selected");
@@ -907,7 +906,6 @@
         if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
         if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
 
-        // 4. Thu gọn mượt câu vừa bỏ tích rồi cập nhật lại danh sách câu trong đề
         const previewCard = checkboxEl ? checkboxEl.closest(".qb-preview-qcard") : document.getElementById(`qb-preview-qcard-${idStr}`);
         if (previewCard) previewCard.classList.add("is-removing");
 
@@ -974,9 +972,14 @@
         await saveExtractedExamToBank();
     }
 
-    // Phím tắt ESC ưu tiên đóng Modal Xem thử đề trước
     document.addEventListener("keydown", function(e) {
         if (e.key !== "Escape") return;
+        const pdfPop = document.getElementById("qb-pdf-export-popover");
+        if (pdfPop && pdfPop.classList.contains("show")) {
+            e.stopPropagation();
+            if (typeof closePreviewPdfExporterMenu === "function") closePreviewPdfExporterMenu();
+            return;
+        }
         const prevModal = document.getElementById("modal-qbank-exam-preview");
         if (prevModal && prevModal.classList.contains("show")) {
             e.stopPropagation();
@@ -990,7 +993,6 @@
         ensureQbankPreviewAndPaginationUI();
     }
 
-    // Xuất toàn bộ ra window scope
     window.ensureQbankPreviewAndPaginationUI = ensureQbankPreviewAndPaginationUI;
     window.startQbankProgressBar = startQbankProgressBar;
     window.updateQbankProgressBar = updateQbankProgressBar;
