@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: portal-tuluan-core.js (BẢN CHUẨN HÓA LỚP & CĂN GIỮA BẢNG ĐIỂM MOBILE 100%)
+// FILE: portal-tuluan-core.js (BẢN CHUẨN HÓA LỚP, FIX LAYOUT THANH ĐỀ & CĂN GIỮA BẢNG ĐIỂM MOBILE 100%)
 // =========================================================
 
 let currentTuLuanModalData = {
@@ -239,7 +239,7 @@ let tuLuanRealtimeChannel = null;
         .tuluan-class-compact-select { width: 85px !important; max-width: 85px !important; padding: 2px 4px !important; font-size: 11px !important; font-weight: 800 !important; border-radius: 6px !important; border: 1.2px solid #cbd5e1 !important; background: #ffffff !important; color: #0f172a !important; height: 27px !important; cursor: pointer !important; }
         #tuluan-exam-selector { padding: 2px 6px !important; border: 1.2px solid #cbd5e1 !important; border-radius: 6px !important; font-size: 11.5px !important; font-weight: 700 !important; background: #ffffff !important; color: #0f172a !important; outline: none !important; cursor: pointer !important; height: 27px !important; flex: 1 !important; min-width: 110px !important; }
         .tuluan-dapan-mini-box { display: inline-flex !important; align-items: center !important; gap: 3px !important; flex-shrink: 0 !important; }
-        .btn-tuluan-upload-dapan, .btn-tuluan-schedule-dapan, .btn-del-exam-selector, .btn-tuluan-add-exam, .btn-tuluan-approve-all, .btn-tuluan-export-excel { height: 27px !important; padding: 2px 7px !important; font-size: 10.5px !important; border-radius: 6px !important; font-weight: 800 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 2px !important; white-space: nowrap !important; cursor: pointer !important; }
+        .btn-tuluan-upload-dapan, .btn-tuluan-schedule-dapan, .btn-del-exam-selector, .btn-tuluan-add-exam, .btn-tuluan-approve-all, .btn-tuluan-export-excel { height: 27px !important; padding: 2px 7px !important; font-size: 10.5px !important; border-radius: 6px !important; font-weight: 800 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 2px !important; white-space: nowrap !important; cursor: pointer !important; flex-shrink: 0 !important; }
         .btn-tuluan-upload-dapan { background: linear-gradient(135deg, #0284c7, #0369a1) !important; color: #fff !important; border: 1px solid #38bdf8 !important; }
         .btn-tuluan-schedule-dapan { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: #fff !important; border: 1px solid #fde68a !important; }
         .btn-tuluan-schedule-dapan.has-schedule { background: linear-gradient(135deg, #10b981, #059669) !important; border-color: #86efac !important; }
@@ -315,6 +315,7 @@ function getCleanDriveClassName(rawClass) {
     if (!rawClass) return "Lớp 11A";
     let str = String(rawClass).trim().toLowerCase();
 
+    if (str.includes("hsg")) return "HSG Toán 11";
     if (str.includes("11c")) return "Lớp 11C";
     if (str.includes("11a") && !str.includes("hsg")) return "Lớp 11A";
     if (str.includes("10p")) return "Lớp 10P";
@@ -487,6 +488,7 @@ function ensureTuLuanModalDOM() {
                         <option value="them-11">Thêm 11</option>
                         <option value="them-10">Thêm 10</option>
                         <option value="them-12">Thêm 12</option>
+                        <option value="hsg-toan-11">HSG Toán 11</option>
                     </select>
                 </div>
 
@@ -545,9 +547,9 @@ function ensureTuLuanModalDOM() {
 
                 <div class="tuluan-select-group" style="flex:1; min-width:140px;">
                     <label>📝 Đề:</label>
-                    <div style="display:flex; align-items:center; gap:3px; width:100%;">
-                        <select id="tuluan-exam-selector" onchange="onTuLuanExamChanged(this.value)"></select>
-                        <button type="button" class="btn-del-exam-selector" id="btn-del-current-exam" style="display:none;" onclick="deleteCurrentTuLuanExam(event)" title="Xóa đề này khỏi danh sách đề tự luận">
+                    <div style="display:flex; align-items:center; gap:3px; flex:1; min-width:0;">
+                        <select id="tuluan-exam-selector" style="min-width:0;" onchange="onTuLuanExamChanged(this.value)"></select>
+                        <button type="button" class="btn-del-exam-selector" id="btn-del-current-exam" style="display:none; flex-shrink:0;" onclick="deleteCurrentTuLuanExam(event)" title="Xóa đề này khỏi danh sách đề tự luận">
                             🗑️ Xóa đề
                         </button>
                     </div>
