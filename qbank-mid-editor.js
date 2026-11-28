@@ -1,10 +1,10 @@
 // =========================================================
 // FILE: qbank-mid-editor.js
 // MODULE 3/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
-// - CHẾ ĐỘ "✏️ SỬA ĐỀ" CHIA ĐÔI MÀN HÌNH NGAY TRONG CỘT GIỮA
-// - CHỈNH SỬA FORM TỪNG CÂU / MÃ NGUỒN THÔ / PASTE ĐÈ & PASTE THÊM
-// - TỰ ĐỘNG GẮN NGỮ CẢNH ĐỀ CHỜ XẾP (pendingExamId, pendingKhoId) KHI THÊM CÂU & UPDATE
-// - ĐỒNG BỘ CUỘN 2 CHIỀU TRÁI <-> PHẢI & NÚT ⚡ UPDATE
+// - BỎ NÚT "✏️ SỬA ĐỀ" TRÊN THANH CÔNG CỤ TRÊN CÙNG CỘT GIỮA
+// - MỞ CHẾ ĐỘ SỬA ĐỀ CHIA ĐÔI MÀN HÌNH NGAY KHI BẤM "✏️ SỬA" TRÊN TỪNG CÂU HỎI
+// - TỰ ĐỘNG CUỘN & TÔ SÁNG ĐÚNG CÂU VỪA BẤM Ở CẢ 2 NỬA TRÁI & PHẢI
+// - HỖ TRỢ UPLOAD ẢNH 2 TẦNG (IMGBB + NGẦM DRIVE) & NÚT "🔄 TẢI LẠI ẢNH"
 // =========================================================
 
 let _qbEditResizerInitialized = false;
@@ -13,19 +13,9 @@ let _qbEditLastSyncedRightToLeft = null;
 let _qbEditLastSyncedLeftToRight = null;
 
 function ensureQbankMidEditControlsInDOM() {
-    const toolsRow = document.querySelector("#qbank-col-mid .qbank-tools-row");
-    if (toolsRow && !document.getElementById("btn-qbank-toggle-edit-mode")) {
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = "btn-qbank btn-qbank-edit-mid";
-        editBtn.id = "btn-qbank-toggle-edit-mode";
-        editBtn.onclick = () => toggleQbankMidEditMode();
-        editBtn.title = "Chia đôi cột giữa để sửa đề trực tiếp giống công cụ Soi đề";
-        editBtn.innerHTML = `<span>✏️</span> <span>Sửa đề</span>`;
-        const soiDeBtn = Array.from(toolsRow.querySelectorAll("button")).find(b => (b.textContent || "").includes("Soi đề"));
-        if (soiDeBtn && soiDeBtn.parentNode) soiDeBtn.parentNode.insertBefore(editBtn, soiDeBtn.nextSibling);
-        else toolsRow.appendChild(editBtn);
-    }
+    // Gỡ bỏ nút "Sửa đề" ở thanh trên cùng cột giữa (nếu có) vì đã tích hợp vào từng câu hỏi
+    const oldTopEditBtn = document.getElementById("btn-qbank-toggle-edit-mode");
+    if (oldTopEditBtn) oldTopEditBtn.remove();
 
     const colMid = document.getElementById("qbank-col-mid");
     if (colMid && !document.getElementById("qbank-mid-edit-workspace")) {
@@ -78,23 +68,38 @@ function ensureQbankMidEditControlsInDOM() {
     }
 }
 
-function toggleQbankMidEditMode() {
-    if (qbankMidEditState.isActive) closeQbankMidEditMode(false);
-    else openQbankMidEditMode();
+function toggleQbankMidEditMode(focusQId = null) {
+    if (qbankMidEditState.isActive && !focusQId) closeQbankMidEditMode(false);
+    else openQbankMidEditMode(focusQId);
 }
 
-function openQbankMidEditMode() {
+function openQbankMidEditMode(focusQId = null) {
     if (!requireQbankAdminOrPrompt()) return;
 
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
     const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
-    if ((nav.mode === "root" || nav.mode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter) {
-        showQbankToast("⚠️ Hãy bấm vào tên 1 Đề (hoặc chọn 1 thư mục bên trái) trước khi bấm Sửa đề!", "warning");
+    if (!focusQId && (nav.mode === "root" || nav.mode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter) {
+        showQbankToast("⚠️ Hãy bấm vào tên 1 Đề (hoặc chọn 1 thư mục bên trái) trước khi sửa!", "warning");
         return;
     }
 
     ensureQbankMidEditControlsInDOM();
-    const visibleList = getFilteredAndSortedQuestions();
+    let visibleList = getFilteredAndSortedQuestions();
+
+    // Nếu danh sách hiện tại quá dài (> 120 câu), tự lấy đúng trang 50 câu chứa focusQId để MathJax chạy siêu mượt
+    if (visibleList.length > 120) {
+        const pageSize = qbankState.pageSize || 50;
+        let targetPage = qbankState.currentMidPage || 1;
+        if (focusQId) {
+            const foundIdx = visibleList.findIndex(q => q && String(q.id) === String(focusQId));
+            if (foundIdx !== -1) {
+                targetPage = Math.floor(foundIdx / pageSize) + 1;
+            }
+        }
+        const startIdx = (targetPage - 1) * pageSize;
+        visibleList = visibleList.slice(startIdx, startIdx + pageSize);
+    }
+
     const clonedQ = JSON.parse(JSON.stringify(visibleList));
 
     let activePendingExamId = null;
@@ -106,6 +111,13 @@ function openQbankMidEditMode() {
         activePendingExamId = nav.examId;
         activePendingKhoId = (ex && ex.khoId) || nav.khoId || null;
         if (ex && ex.title) activeTitle = ex.title;
+    } else if (focusQId) {
+        const focusedQ = clonedQ.find(q => q && String(q.id) === String(focusQId));
+        if (focusedQ && focusedQ.pendingExamId) {
+            activePendingExamId = focusedQ.pendingExamId;
+            activePendingKhoId = focusedQ.pendingKhoId || null;
+            if (focusedQ.sourceExam) activeTitle = focusedQ.sourceExam;
+        }
     }
 
     qbankMidEditState.isActive = true;
@@ -121,9 +133,6 @@ function openQbankMidEditMode() {
     qbankMidEditState.rawEditingCardIds = new Set();
     qbankMidEditState.isDirty = false;
 
-    const btnToggle = document.getElementById("btn-qbank-toggle-edit-mode");
-    if (btnToggle) { btnToggle.classList.add("is-active"); btnToggle.innerHTML = `<span>←</span> <span>Đóng sửa đề</span>`; }
-
     const midExamBar = document.getElementById("qbank-mid-exam-bar"), matrixBar = document.getElementById("qbank-matrix-bar");
     const qList = document.getElementById("qbank-questions-list"), ws = document.getElementById("qbank-mid-edit-workspace");
     if (midExamBar) midExamBar.style.display = "none";
@@ -133,8 +142,21 @@ function openQbankMidEditMode() {
 
     qbEditSetMode("cards");
     qbEditRenderBothSides();
-    setTimeout(qbEditAutoResizeAllTextareas, 60);
-    showQbankToast(`✏️ Đã mở chế độ Sửa đề chia đôi màn hình (${clonedQ.length} câu)!`, "info");
+
+    setTimeout(() => {
+        qbEditAutoResizeAllTextareas();
+        if (focusQId) {
+            qbEditScrollToLeftPreview(focusQId, true);
+            qbEditScrollToRightEditor(focusQId, true);
+        }
+    }, 80);
+
+    showQbankToast(
+        focusQId
+            ? `✏️ Đã mở Sửa đề chia đôi ngay tại câu đang chọn (${clonedQ.length} câu)!`
+            : `✏️ Đã mở chế độ Sửa đề chia đôi màn hình (${clonedQ.length} câu)!`,
+        "info"
+    );
 }
 
 async function closeQbankMidEditMode(forceSkipPrompt = false) {
@@ -149,9 +171,6 @@ async function closeQbankMidEditMode(forceSkipPrompt = false) {
     qbankMidEditState.isDirty = false;
     qbankMidEditState.pendingExamId = null;
     qbankMidEditState.pendingKhoId = null;
-
-    const btnToggle = document.getElementById("btn-qbank-toggle-edit-mode");
-    if (btnToggle) { btnToggle.classList.remove("is-active"); btnToggle.innerHTML = `<span>✏️</span> <span>Sửa đề</span>`; }
 
     const midExamBar = document.getElementById("qbank-mid-exam-bar"), matrixBar = document.getElementById("qbank-matrix-bar");
     const qList = document.getElementById("qbank-questions-list"), ws = document.getElementById("qbank-mid-edit-workspace");
@@ -391,13 +410,22 @@ function qbEditRenderLeftLivePreview() {
         const currentPartType = pNum === 4 ? "part4" : (pNum === 2 ? "true_false" : (pNum === 3 ? "short_answer" : "multiple_choice"));
 
         const imgUrl = resolveQbankImageUrl(q, imageMap), imgKey = q.imageKey || `img_q_${qId}`, safeImgKey = safeQbankJsArg(imgKey);
-        const imgHtml = imgUrl ? `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}"><div class="quiz-img-wrapper" style="position:relative; display:inline-block;"><img src="${escapeQbankAttr(imgUrl)}" class="quiz-img" style="max-height:220px;" onerror="handleQbankImgError(this)" alt="Hình câu ${displayIndex}"></div></div>` : `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}" style="display:none;"></div>`;
+        const hasAnyImgOrDrive = Boolean(imgUrl || q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
+        const hasDrive = Boolean(q.imageDriveFileId || q.imageBackupUrl);
+        const driveOpenUrl = q.imageDriveFolderUrl || q.imageDriveUrl || q.imageBackupUrl || "";
+        const driveBadge = hasDrive
+            ? (driveOpenUrl ? `<a href="${escapeQbankAttr(driveOpenUrl)}" target="_blank" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; border-radius:6px; padding:3px 7px; font-size:10.5px; font-weight:800; text-decoration:none;">☁️ Đã lưu Drive</a>` : `<span style="background:#dcfce7; color:#15803d; border:1px solid #86efac; border-radius:6px; padding:3px 7px; font-size:10.5px; font-weight:800;">☁️ Đã lưu Drive</span>`)
+            : "";
+
+        const imgHtml = imgUrl ? `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}"><div class="quiz-img-wrapper" style="position:relative; display:inline-block;"><img id="qb-edit-img-el-${escapeQbankAttr(qId)}" src="${escapeQbankAttr(imgUrl)}" class="quiz-img" style="max-height:220px;" onerror="handleQbankImgError(this, '${safeQId}')" alt="Hình câu ${displayIndex}"></div></div>` : `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}" style="display:none;"></div>`;
         const uploaderHtml = `
             <div class="admin-img-uploader-zone" id="qb-edit-zone-${escapeQbankAttr(qId)}" tabindex="0" style="margin:4px 0 6px 0; padding:4px 7px; background:rgba(255,255,255,0.75); border-radius:7px;">
                 <div class="admin-uploader-btn-group">
                     <button type="button" class="btn-admin-paste-img" style="padding:3px 9px; font-size:11px;" onclick="qbEditTriggerPastePrompt('${safeQId}', '${safeImgKey}')">📋 Dán ảnh (Ctrl+V)</button>
                     <button type="button" class="btn-admin-file-img" style="padding:3px 9px; font-size:11px;" onclick="document.getElementById('qb-edit-img-file-${safeQId}').click()">📁 Tệp ảnh</button>
-                    ${imgUrl ? `<button type="button" class="btn-admin-del-img" style="padding:3px 9px; font-size:11px;" onclick="qbEditDeleteQuestionImage('${safeQId}', '${safeImgKey}')">🗑️ Xóa ảnh</button>` : ""}
+                    ${hasAnyImgOrDrive ? `<button type="button" style="background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; padding:3px 8px; font-size:11px; font-weight:800; cursor:pointer;" onclick="qbEditReloadQuestionImage('${safeQId}')">🔄 Tải lại ảnh</button>` : ""}
+                    ${driveBadge}
+                    ${hasAnyImgOrDrive ? `<button type="button" class="btn-admin-del-img" style="padding:3px 9px; font-size:11px;" onclick="qbEditDeleteQuestionImage('${safeQId}', '${safeImgKey}')">🗑️ Xóa ảnh</button>` : ""}
                     <input type="file" id="qb-edit-img-file-${escapeQbankAttr(qId)}" accept="image/*" style="display:none;" onchange="qbEditHandleImageSelected(this, '${safeQId}', '${safeImgKey}')">
                 </div>
                 <span class="admin-uploader-status" id="qb-edit-img-status-${escapeQbankAttr(qId)}"></span>
@@ -483,11 +511,32 @@ async function qbEditUploadImage(file, qId, imgKey) {
     if (!file) return;
     const statusEl = document.getElementById(`qb-edit-img-status-${qId}`);
     if (statusEl) { statusEl.className = "admin-uploader-status loading"; statusEl.innerText = "⏳ Đang tải ảnh..."; }
+    const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
     try {
-        const directUrl = await uploadImageToHostOrDrive(file, `qbank_edit_${qId}`);
+        let directUrl = "";
+        if (typeof window.uploadDualQuestionImage === "function" && targetQ) {
+            const res = await window.uploadDualQuestionImage(file, targetQ, {
+                contextTitle: qbankMidEditState.title || "",
+                imgKey: imgKey,
+                onStatus: (msg) => {
+                    const el = document.getElementById(`qb-edit-img-status-${qId}`);
+                    if (el) { el.className = "admin-uploader-status loading"; el.innerText = msg; }
+                },
+                onBackupComplete: (updatedQ) => {
+                    if (!qbankMidEditState.images) qbankMidEditState.images = {};
+                    if (updatedQ.imageUrl) qbankMidEditState.images[imgKey] = updatedQ.imageUrl;
+                    qbankMidEditState.isDirty = true;
+                    qbEditRenderLeftLivePreview();
+                    showQbankToast("☁️ Đã sao lưu ngầm ảnh sang Google Drive!", "success");
+                }
+            });
+            directUrl = res.primaryUrl;
+        } else {
+            directUrl = await uploadImageToHostOrDrive(file, `qbank_edit_${qId}`, targetQ);
+        }
+
         if (!qbankMidEditState.images) qbankMidEditState.images = {};
         qbankMidEditState.images[imgKey] = directUrl;
-        const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
         if (targetQ) { targetQ.imageUrl = directUrl; targetQ.imageKey = imgKey; }
         qbankMidEditState.isDirty = true;
         qbEditRenderBothSides();
@@ -498,11 +547,50 @@ async function qbEditUploadImage(file, qId, imgKey) {
     }
 }
 
+async function qbEditReloadQuestionImage(qId) {
+    const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
+    if (!targetQ || typeof window.reloadQuestionImageAction !== "function") return;
+    const statusEl = document.getElementById(`qb-edit-img-status-${qId}`);
+    const res = await window.reloadQuestionImageAction(targetQ, {
+        onStatus: (msg, color) => {
+            if (statusEl) { statusEl.style.color = color; statusEl.innerText = msg; }
+        },
+        onSuccess: (info) => {
+            if (info.directUrl && !targetQ.imageUrl) {
+                targetQ.imageUrl = info.directUrl;
+                const imgKey = targetQ.imageKey || `img_q_${targetQ.id}`;
+                if (!qbankMidEditState.images) qbankMidEditState.images = {};
+                qbankMidEditState.images[imgKey] = info.directUrl;
+            }
+            qbankMidEditState.isDirty = true;
+            const imgEl = document.getElementById(`qb-edit-img-el-${targetQ.id}`);
+            if (imgEl) {
+                const box = imgEl.parentElement && imgEl.parentElement.querySelector(".img-recovery-box");
+                if (box) box.remove();
+                imgEl.style.display = "inline-block";
+                imgEl.src = info.displaySrc;
+            } else {
+                qbEditRenderLeftLivePreview();
+            }
+        }
+    });
+    if (res && res.ok) showQbankToast("🔄 Đã tải lại ảnh thành công!", "success");
+    else if (res && res.message) alert(res.message);
+}
+
 function qbEditDeleteQuestionImage(qId, imgKey) {
     if (!confirm("⚠️ Bạn có chắc chắn muốn XÓA ảnh của câu này không?")) return;
     if (qbankMidEditState.images) { delete qbankMidEditState.images[imgKey]; delete qbankMidEditState.images[`img_q_${qId}`]; }
     const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
-    if (targetQ) targetQ.imageUrl = "";
+    if (targetQ) {
+        targetQ.imageUrl = "";
+        targetQ.imageBackupUrl = "";
+        targetQ.imageDriveFileId = "";
+        targetQ.imageDriveUrl = "";
+        targetQ.imageDriveFolderUrl = "";
+        targetQ.imageDrivePath = "";
+        targetQ.imageDriveFilename = "";
+    }
     qbankMidEditState.isDirty = true;
     qbEditRenderBothSides();
 }
@@ -675,8 +763,8 @@ function qbEditApplyCardRawInput(qIdx, qId) {
         if (qObj.correct !== undefined) targetQ.correct = qObj.correct;
         if (qObj.correctAnswer !== undefined) targetQ.correctAnswer = qObj.correctAnswer;
         if (qObj.explanation !== undefined) targetQ.explanation = qObj.explanation;
-        if (qObj.imageUrl !== undefined) targetQ.imageUrl = qObj.imageUrl;
-        if (qObj.imageKey !== undefined) targetQ.imageKey = qObj.imageKey;
+        if (qObj.imageUrl !== undefined && qObj.imageUrl !== "") targetQ.imageUrl = qObj.imageUrl;
+        if (qObj.imageKey !== undefined && qObj.imageKey !== "") targetQ.imageKey = qObj.imageKey;
 
         const explicitPart = parseInt(qObj.part, 10);
         if (explicitPart >= 1 && explicitPart <= 4) {
@@ -1023,4 +1111,5 @@ window.qbEditHandlePasteOnQuestion = qbEditHandlePasteOnQuestion;
 window.qbEditTriggerPastePrompt = qbEditTriggerPastePrompt;
 window.qbEditHandleImageSelected = qbEditHandleImageSelected;
 window.qbEditUploadImage = qbEditUploadImage;
+window.qbEditReloadQuestionImage = qbEditReloadQuestionImage;
 window.qbEditDeleteQuestionImage = qbEditDeleteQuestionImage;
