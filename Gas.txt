@@ -1,23 +1,14 @@
 // =============================================================================
 // MÁY CHỦ GOOGLE APPS SCRIPT - BẢN ĐIỀU HÀNH CHUẨN 8 LỚP & CHỐNG NGHẼN HÀNG ĐỢI
 // TỐI ƯU TỐC ĐỘ XỬ LÝ (SUB-SECOND), HỖ TRỢ XUẤT SHEET THU TẠM & FILE JSON NHÁP
-// TÍCH HỢP HỆ THỐNG LƯU TRỮ NGÂN HÀNG CÂU HỎI (QUESTION BANK) ĐA CẤP
-// =============================================================================
-// CẤU TRÚC LƯU TRỮ CHUẨN TRÊN GOOGLE DRIVE:
-// FILE_SHEET_AND_JSON_DU_PHONG
-//   └── <ĐÚNG 1 TRONG 8 LỚP: Thêm 10, Thêm 11, Thêm 12, Lớp 11A, Lớp 11C, Lớp 11E, Lớp 10P, HSG Toán 11>
-//         └── <Tên đề thi chính xác 100%>
-//               ├── <SBD>_<Họ và tên>.json (GHI ĐÈ BẢN MỚI NHẤT, KHÔNG SINH ĐUÔI (1))
-//               ├── tam_<SBD>_<Họ và tên>.json (XUẤT KHI THU BÀI TẠM THỜI)
-//               ├── file điểm thi cuối_<Tên đề>_sheet (UPSERT ĐIỂM CHÍNH THỨC)
-//               └── file điểm thi thu tạm_<Tên đề>_sheet (UPSERT ĐIỂM TẠM TÍNH)
+// TÍCH HỢP ĐẦY ĐỦ: NGÂN HÀNG CÂU HỎI, KHÔI PHỤC BACKUP, LƯU & TẢI LẠI ẢNH 2 TẦNG
+// BỔ SUNG: backupImageUrlToDrive (TẢI ẢNH TỪ URL NGOÀI KHÔNG BỊ CORS) & CACHING PATH
 // =============================================================================
 
 const ROOT_BACKUP_FOLDER_NAME = "FILE_SHEET_AND_JSON_DU_PHONG";
 const ROOT_TULUAN_FOLDER_NAME = "BAI_TAP_TU_LUAN";
 const ROOT_DOCS_FOLDER_NAME   = "KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO";
 
-// DANH SÁCH 8 LỚP CHUẨN ĐƯỢC PHÉP LƯU TRỮ
 const ALLOWED_8_CLASSES = [
   "Thêm 10",
   "Thêm 11",
@@ -35,7 +26,7 @@ const ALLOWED_8_CLASSES = [
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
-    message: "Máy chủ Google Apps Script Drive 5TB đang vận hành chuẩn hóa 8 lớp & hàng đợi LockService an toàn 100%!",
+    message: "Máy chủ Google Apps Script Drive 5TB đang vận hành chuẩn hóa 8 lớp, hỗ trợ Ngân hàng câu hỏi & Ảnh 2 tầng!",
     rootFolder: ROOT_BACKUP_FOLDER_NAME,
     allowedClasses: ALLOWED_8_CLASSES,
     timestamp: new Date().toISOString()
@@ -50,7 +41,6 @@ function doPost(e) {
   var hasLock = false;
 
   try {
-    // Chờ khóa tối đa 45 giây để đảm bảo không rớt thí sinh nộp sau
     hasLock = lock.tryLock(45000);
   } catch (eLock) {
     hasLock = false;
@@ -87,11 +77,9 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
       }
 
-      // 1. Chuẩn hóa tên lớp về ĐÚNG 1 TRONG 8 LỚP (Ưu tiên SBD số 1)
       var rawClass = data.className || data.class || data.lop || sub.class_name || sub.className || sub.studentClass || sub.category_id || "";
       var className = standardizeClassName(rawClass, sbd);
 
-      // 2. Trích xuất tên đề thi chính xác
       var rawExamTitle = data.examTitle || data.folderKey || data.title || sub.exam_title || sub.examTitle || sub.title || "";
       var examTitle = sanitizeExamTitle(rawExamTitle);
 
@@ -102,12 +90,10 @@ function doPost(e) {
         })).setMimeType(ContentService.MimeType.JSON);
       }
 
-      // 3. Khởi tạo cây thư mục bằng bộ nhớ đệm tăng tốc
       var rootFolder = getCachedFolderExact(DriveApp.getRootFolder(), ROOT_BACKUP_FOLDER_NAME, "ROOT_BACKUP");
       var classFolder = getCachedFolderExact(rootFolder, className, "CLASS_" + className);
       var examFolder = getCachedFolderExact(classFolder, examTitle, "EXAM_" + className + "_" + examTitle);
 
-      // 4. Lưu File JSON chính thức: <SBD>_<Họ và tên>.json (GHI ĐÈ BẢN MỚI NHẤT)
       var jsonFileName = cleanFilePartName(sbd) + "_" + cleanFilePartName(studentName) + ".json";
       var jsonContent = "";
       if (data.base64) {
@@ -121,7 +107,6 @@ function doPost(e) {
 
       var savedJsonFile = saveOrOverwriteJsonFile(examFolder, jsonFileName, jsonContent);
 
-      // 5. Ghi điểm vào Sheet CHÍNH THỨC: "file điểm thi cuối_<Tên đề>_sheet"
       try {
         var finalSheetName = "file điểm thi cuối_" + examTitle + "_sheet";
         recordSubmissionToTargetSheet(examFolder, finalSheetName, className, sub, false);
@@ -170,7 +155,6 @@ function doPost(e) {
       var classF = getCachedFolderExact(rootF, classDraftName, "CLASS_" + classDraftName);
       var examF = getCachedFolderExact(classF, examDraftTitle, "EXAM_" + classDraftName + "_" + examDraftTitle);
 
-      // 1. Tự động lưu file JSON nháp: tam_<SBD>_<Họ_Tên>.json (ghi đè theo SBD)
       var savedDraftFileUrl = "";
       try {
         var draftJsonName = "tam_" + cleanFilePartName(sbdDraft) + "_" + cleanFilePartName(studentNameDraft) + ".json";
@@ -179,7 +163,6 @@ function doPost(e) {
         if (draftFile) savedDraftFileUrl = draftFile.getUrl();
       } catch(eJson) {}
 
-      // 2. Ghi điểm vào Sheet thu tạm: "file điểm thi thu tạm_<Tên đề>_sheet"
       var tempSheetName = "file điểm thi thu tạm_" + examDraftTitle + "_sheet";
       recordSubmissionToTargetSheet(examF, tempSheetName, classDraftName, draft, true);
 
@@ -276,6 +259,225 @@ function doPost(e) {
     }
 
     // -------------------------------------------------------------------------
+    // NHIỆM VỤ 8: LƯU TRỮ NGÂN HÀNG CÂU HỎI & WORKSPACE BACKUP LÊN DRIVE
+    // -------------------------------------------------------------------------
+    if (action === "saveQuestionBankData") {
+      try {
+        var pathString = data.path || (ROOT_DOCS_FOLDER_NAME + "/Kho_ngan_hang_cau_hoi/Workspace_Backup");
+        var filename = data.filename || "NganHangCauHoi_Workspace.json";
+        var currentFolder = getCachedPathFolder(pathString);
+        var jsonContentQB = JSON.stringify(data.data, null, 2);
+        var savedFileQB = saveOrOverwriteJsonFile(currentFolder, filename, jsonContentQB);
+        if (savedFileQB) {
+          savedFileQB.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        }
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          fileUrl: savedFileQB ? savedFileQB.getUrl() : "",
+          folderUrl: currentFolder.getUrl(),
+          message: "Lưu Ngân hàng câu hỏi vào Google Drive thành công!"
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errQB) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "Lỗi tạo thư mục/file GAS (Question Bank): " + errQB.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 9: ĐỌC FILE WORKSPACE BACKUP TỪ DRIVE ĐỂ KHÔI PHỤC NGÂN HÀNG ĐỀ
+    // -------------------------------------------------------------------------
+    if (action === "loadQuestionBankData") {
+      try {
+        var loadPath = data.path || (ROOT_DOCS_FOLDER_NAME + "/Kho_ngan_hang_cau_hoi/Workspace_Backup");
+        var loadFilename = data.filename || "NganHangCauHoi_Workspace.json";
+        var targetLoadFolder = findPathFolderReadOnly(loadPath);
+        if (!targetLoadFolder) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "error",
+            message: "Không tìm thấy thư mục Backup: " + loadPath
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        var loadFiles = targetLoadFolder.getFilesByName(loadFilename);
+        if (!loadFiles.hasNext()) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "error",
+            message: "Không tìm thấy tệp " + loadFilename + " trong thư mục Backup trên Drive."
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        var backupFile = loadFiles.next();
+        var rawJsonStr = backupFile.getBlob().getDataAsString("UTF-8");
+        var parsedBackup = JSON.parse(rawJsonStr);
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          data: parsedBackup,
+          fileUrl: backupFile.getUrl(),
+          folderUrl: targetLoadFolder.getUrl()
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errLoad) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "Lỗi đọc file Backup từ Drive: " + errLoad.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 10: LƯU ẢNH DỰ PHÒNG 2 TẦNG CHO TỪNG CÂU HỎI VÀO ĐÚNG THƯ MỤC
+    // -------------------------------------------------------------------------
+    if (action === "uploadQuestionImageBackup") {
+      var imgPath = data.path || data.folderName || (ROOT_DOCS_FOLDER_NAME + "/Kho_anh_ngan_hang_cau_hoi/Chung");
+      var imgFolder = getCachedPathFolder(imgPath);
+      var imgFileName = sanitizeFileNameKeepExt(data.filename || ("Cau_Hoi_" + Date.now() + ".png"));
+      var imgMime = data.mimeType || "image/png";
+      var imgB64 = String(data.base64 || "").replace(/\s+/g, '');
+      if (imgB64.indexOf("base64,") !== -1) imgB64 = imgB64.split("base64,")[1];
+
+      var imgBytes = Utilities.base64Decode(imgB64);
+      deleteFilesMatchingName(imgFolder, imgFileName);
+
+      var savedImgFile = imgFolder.createFile(Utilities.newBlob(imgBytes, imgMime, imgFileName));
+      if (data.description) {
+        try { savedImgFile.setDescription(String(data.description)); } catch (descErr) {}
+      }
+      savedImgFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        fileId: savedImgFile.getId(),
+        fileUrl: savedImgFile.getUrl(),
+        directUrl: "https://lh3.googleusercontent.com/d/" + savedImgFile.getId(),
+        folderUrl: imgFolder.getUrl(),
+        folderPath: imgPath,
+        filename: imgFileName
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 12: TẢI ẢNH TỪ URL NGOÀI (IMGBB/WEB) LƯU THẲNG VÀO DRIVE (CHỐNG CORS)
+    // -------------------------------------------------------------------------
+    if (action === "backupImageUrlToDrive") {
+      try {
+        var sourceUrl = String(data.imageUrl || "").trim();
+        if (!sourceUrl) throw new Error("Thiếu đường dẫn ảnh imageUrl.");
+
+        var resp = UrlFetchApp.fetch(sourceUrl, {
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
+        var code = resp.getResponseCode();
+        if (code < 200 || code >= 300) {
+          throw new Error("Link ảnh nguồn không còn khả dụng (HTTP " + code + ").");
+        }
+
+        var blobSrc = resp.getBlob();
+        var mimeSrc = String(blobSrc.getContentType() || "").toLowerCase();
+        var bytesSrc = blobSrc.getBytes();
+        if (!bytesSrc || bytesSrc.length < 100 || mimeSrc.indexOf("text/html") !== -1) {
+          throw new Error("Tệp trả về từ URL không phải ảnh hợp lệ.");
+        }
+
+        var extByMime = "png";
+        if (mimeSrc.indexOf("jpeg") !== -1 || mimeSrc.indexOf("jpg") !== -1) extByMime = "jpg";
+        else if (mimeSrc.indexOf("webp") !== -1) extByMime = "webp";
+        else if (mimeSrc.indexOf("gif") !== -1) extByMime = "gif";
+
+        var urlPath = data.path || data.folderName || (ROOT_DOCS_FOLDER_NAME + "/Kho_anh_ngan_hang_cau_hoi/Chung");
+        var urlFolder = getCachedPathFolder(urlPath);
+        var rawUrlFname = sanitizeFileNameKeepExt(data.filename || ("Cau_Hoi_" + Date.now() + "." + extByMime));
+        var urlFileName = rawUrlFname.replace(/\.(png|jpg|jpeg|webp|gif)$/i, "." + extByMime);
+
+        deleteFilesMatchingName(urlFolder, urlFileName);
+
+        var finalBlob = Utilities.newBlob(bytesSrc, mimeSrc.indexOf("image/") === 0 ? mimeSrc : ("image/" + extByMime), urlFileName);
+        var savedUrlFile = urlFolder.createFile(finalBlob);
+        if (data.description) {
+          try { savedUrlFile.setDescription(String(data.description)); } catch (descUrlErr) {}
+        }
+        savedUrlFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          fileId: savedUrlFile.getId(),
+          fileUrl: savedUrlFile.getUrl(),
+          directUrl: "https://lh3.googleusercontent.com/d/" + savedUrlFile.getId(),
+          folderUrl: urlFolder.getUrl(),
+          folderPath: urlPath,
+          filename: urlFileName
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errUrlBk) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: errUrlBk.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // NHIỆM VỤ 11: TRUY XUẤT TRỰC TIẾP ẢNH TỪ DRIVE TRẢ VỀ BASE64 (CHO NÚT 🔄 TẢI LẠI ẢNH)
+    // -------------------------------------------------------------------------
+    if (action === "fetchDriveImageBase64") {
+      try {
+        var targetImgFile = null;
+        var parentFolderUrl = "";
+
+        if (data.fileId) {
+          try {
+            var candidate = DriveApp.getFileById(String(data.fileId).trim());
+            if (candidate && !candidate.isTrashed()) targetImgFile = candidate;
+          } catch (fIdErr) {}
+        }
+
+        if (!targetImgFile && data.path && data.filename) {
+          var searchFolder = findPathFolderReadOnly(data.path);
+          if (searchFolder) {
+            parentFolderUrl = searchFolder.getUrl();
+            var matchFiles = searchFolder.getFilesByName(String(data.filename).trim());
+            if (matchFiles.hasNext()) targetImgFile = matchFiles.next();
+          }
+        }
+
+        if (!targetImgFile) {
+          return ContentService.createTextOutput(JSON.stringify({
+            status: "error",
+            message: "Không tìm thấy tệp ảnh dự phòng trên Google Drive."
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        var imgBlob = targetImgFile.getBlob();
+        var contentType = imgBlob.getContentType() || "image/png";
+        var encodedB64 = Utilities.base64Encode(imgBlob.getBytes());
+        var dataUrl = "data:" + contentType + ";base64," + encodedB64;
+
+        if (!parentFolderUrl) {
+          try {
+            var parents = targetImgFile.getParents();
+            if (parents.hasNext()) parentFolderUrl = parents.next().getUrl();
+          } catch (pErr) {}
+        }
+
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success",
+          dataUrl: dataUrl,
+          directUrl: "https://lh3.googleusercontent.com/d/" + targetImgFile.getId(),
+          fileId: targetImgFile.getId(),
+          fileUrl: targetImgFile.getUrl(),
+          folderUrl: parentFolderUrl
+        })).setMimeType(ContentService.MimeType.JSON);
+      } catch (errFetchImg) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "Lỗi đọc ảnh từ Drive: " + errFetchImg.toString()
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // -------------------------------------------------------------------------
     // NHIỆM VỤ 6: TẢI TỆP TÀI LIỆU CHUNG (PDF / WORD / EXCEL / ẢNH) VÀO KHO
     // -------------------------------------------------------------------------
     if (action === "uploadFile" || action === "uploadDocument" || (data.base64 && data.filename && !data.studentFolder)) {
@@ -321,53 +523,6 @@ function doPost(e) {
       }
     }
 
-    // -------------------------------------------------------------------------
-    // NHIỆM VỤ 8 (MỚI TÍNH): LƯU TRỮ VÀO NGÂN HÀNG CÂU HỎI TRÊN DRIVE (QUESTION BANK)
-    // -------------------------------------------------------------------------
-    if (action === "saveQuestionBankData") {
-      try {
-        var pathString = data.path; // VD: KHO_TAI_LIEU_PDF_WORD_ANH_VIDEO/Kho_ngan_hang_cau_hoi/Lop_11/Chuong_1...
-        var filename = data.filename;
-        var pathFolders = pathString.split("/");
-
-        var currentFolder = DriveApp.getRootFolder();
-
-        // Đệ quy trèo theo nhánh cây thư mục, chưa có thì tạo mới
-        for (var i = 0; i < pathFolders.length; i++) {
-            var folderName = String(pathFolders[i]).trim();
-            if (!folderName) continue;
-
-            var folders = currentFolder.getFoldersByName(folderName);
-            if (folders.hasNext()) {
-                currentFolder = folders.next();
-            } else {
-                currentFolder = currentFolder.createFolder(folderName);
-            }
-        }
-
-        // Tạo File JSON trong thư mục đích
-        var jsonContent = JSON.stringify(data.data, null, 2);
-
-        // Xoá file cũ nếu trùng tên (ghi đè bằng hàm hỗ trợ tiện ích có sẵn)
-        deleteFilesMatchingName(currentFolder, filename);
-
-        var file = currentFolder.createFile(filename, jsonContent, MimeType.PLAIN_TEXT);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-        return ContentService.createTextOutput(JSON.stringify({
-            status: "success",
-            fileUrl: file.getUrl(),
-            message: "Lưu Ngân hàng câu hỏi vào Google Drive thành công!"
-        })).setMimeType(ContentService.MimeType.JSON);
-
-      } catch (err) {
-        return ContentService.createTextOutput(JSON.stringify({
-            status: "error",
-            message: "Lỗi tạo thư mục/file GAS (Question Bank): " + err.toString()
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
     return ContentService.createTextOutput(JSON.stringify({
       status: "ignored",
       message: "Không có tác vụ phù hợp."
@@ -393,19 +548,16 @@ function standardizeClassName(rawClass, sbd) {
   var sbdClean = String(sbd || "").toLowerCase().trim();
   var classStr = String(rawClass || "").toLowerCase().trim();
 
-  // 1. Ưu tiên số 1: Nhận diện theo định dạng SBD 4 chữ số (Lớp dạy thêm)
   if (/^11\d{2}$/.test(sbdClean)) return "Thêm 11";
   if (/^10\d{2}$/.test(sbdClean)) return "Thêm 10";
   if (/^12\d{2}$/.test(sbdClean)) return "Thêm 12";
 
-  // 2. Ưu tiên số 2: SBD bắt đầu bằng tiền tố lớp chính khóa hoặc đội tuyển HSG
   if (sbdClean.indexOf("hsg") === 0) return "HSG Toán 11";
   if (sbdClean.indexOf("11a") === 0) return "Lớp 11A";
   if (sbdClean.indexOf("11c") === 0) return "Lớp 11C";
   if (sbdClean.indexOf("11e") === 0) return "Lớp 11E";
   if (sbdClean.indexOf("10p") === 0) return "Lớp 10P";
 
-  // 3. Xét theo tên lớp hoặc mã danh mục nhập vào
   if (classStr.indexOf("hsg") !== -1) return "HSG Toán 11";
   if (classStr.indexOf("them-11") !== -1 || classStr.indexOf("thêm 11") !== -1 || classStr.indexOf("them 11") !== -1) return "Thêm 11";
   if (classStr.indexOf("them-10") !== -1 || classStr.indexOf("thêm 10") !== -1 || classStr.indexOf("them 10") !== -1) return "Thêm 10";
@@ -433,10 +585,30 @@ function getCachedFolderExact(parentFolder, folderName, cacheKey) {
 
   var folderExact = getOrCreateFolderExact(parentFolder, folderName);
   try {
-    cache.put(cleanKey, folderExact.getId(), 21600); // Lưu 6 tiếng
+    cache.put(cleanKey, folderExact.getId(), 21600);
   } catch (ePut) {}
 
   return folderExact;
+}
+
+function getCachedPathFolder(pathString) {
+  var normPath = String(pathString || "").trim();
+  var cache = CacheService.getScriptCache();
+  var cacheKey = "PTH_" + Utilities.base64EncodeWebSafe(normPath).replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 80);
+  var cachedId = cache.get(cacheKey);
+
+  if (cachedId) {
+    try {
+      var folder = DriveApp.getFolderById(cachedId);
+      if (folder && !folder.isTrashed()) return folder;
+    } catch (eCache) {}
+  }
+
+  var created = getOrCreatePathFolder(normPath);
+  try {
+    cache.put(cacheKey, created.getId(), 21600);
+  } catch (ePut) {}
+  return created;
 }
 
 function getOrCreateFolderExact(parentFolder, exactFolderName) {
@@ -448,16 +620,37 @@ function getOrCreateFolderExact(parentFolder, exactFolderName) {
   return parentFolder.createFolder(name);
 }
 
-// LƯU ĐÈ FILE NHANH CHÓNG (KHÔNG QUÉT DUYỆT THỪA - THỜI GIAN < 0.6 GIÂY)
+function getOrCreatePathFolder(pathString) {
+  var parts = String(pathString || "").split("/");
+  var cur = DriveApp.getRootFolder();
+  for (var i = 0; i < parts.length; i++) {
+    var seg = String(parts[i] || "").trim();
+    if (!seg) continue;
+    cur = getOrCreateFolderExact(cur, seg);
+  }
+  return cur;
+}
+
+function findPathFolderReadOnly(pathString) {
+  var parts = String(pathString || "").split("/");
+  var cur = DriveApp.getRootFolder();
+  for (var i = 0; i < parts.length; i++) {
+    var seg = String(parts[i] || "").trim();
+    if (!seg) continue;
+    var folders = cur.getFoldersByName(seg);
+    if (!folders.hasNext()) return null;
+    cur = folders.next();
+  }
+  return cur;
+}
+
 function saveOrOverwriteJsonFile(folder, fileName, jsonString) {
   var files = folder.getFilesByName(fileName);
   var targetFile = null;
 
   if (files.hasNext()) {
     targetFile = files.next();
-    targetFile.setContent(jsonString); // Ghi đè trực tiếp
-    
-    // Dọn các file trùng tên (nếu có)
+    targetFile.setContent(jsonString);
     while (files.hasNext()) {
       try { files.next().setTrashed(true); } catch (eT) {}
     }
@@ -465,7 +658,6 @@ function saveOrOverwriteJsonFile(folder, fileName, jsonString) {
     targetFile = folder.createFile(fileName, jsonString, "application/json");
   }
 
-  // Dọn nhanh các file bị Drive tạo hậu tố (1), (2) bằng lệnh tìm kiếm đích danh
   try {
     var baseName = fileName.replace(/\.json$/i, "");
     var dup1 = folder.getFilesByName(baseName + " (1).json");
@@ -484,7 +676,6 @@ function deleteFilesMatchingName(folder, fileName) {
   }
 }
 
-// GHI HOẶC CẬP NHẬT DÒNG ĐIỂM VÀO SHEET (UPSERT THEO SBD)
 function recordSubmissionToTargetSheet(folder, sheetTitle, className, sub, isTempDraft) {
   if (!sub || (!sub.sbd && !sub.student_name)) return;
 
@@ -571,7 +762,7 @@ function recordSubmissionToTargetSheet(folder, sheetTitle, className, sub, isTem
     if (sub.user_answers && typeof sub.user_answers === "object") {
       answeredCount = Object.keys(sub.user_answers).length;
     }
-    
+
     var tempScore = "Đang làm...";
     if (sub.score10 !== undefined && sub.score10 !== null && sub.score10 !== "") {
       var correctTxt = (sub.correct_count !== undefined) ? (" (" + sub.correct_count + " đúng)") : "";
@@ -638,6 +829,14 @@ function sanitizeExamTitle(titleStr) {
     .trim()
     .replace(/[\\\/\:\*\?\"<>\|]/g, "-")
     .replace(/\s+/g, " ");
+}
+
+function sanitizeFileNameKeepExt(fileStr) {
+  if (!fileStr) return "file_" + Date.now() + ".png";
+  return String(fileStr)
+    .trim()
+    .replace(/[\\\/\:\*\?\"<>\|]/g, "_")
+    .replace(/\s+/g, "_");
 }
 
 function cleanFilePartName(str) {
