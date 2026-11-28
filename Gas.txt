@@ -2,7 +2,7 @@
 // MÁY CHỦ GOOGLE APPS SCRIPT - BẢN ĐIỀU HÀNH CHUẨN 8 LỚP & CHỐNG NGHẼN HÀNG ĐỢI
 // TỐI ƯU TỐC ĐỘ XỬ LÝ (SUB-SECOND), HỖ TRỢ XUẤT SHEET THU TẠM & FILE JSON NHÁP
 // TÍCH HỢP ĐẦY ĐỦ: NGÂN HÀNG CÂU HỎI, KHÔI PHỤC BACKUP, LƯU & TẢI LẠI ẢNH 2 TẦNG
-// BỔ SUNG: backupImageUrlToDrive (TẢI ẢNH TỪ URL NGOÀI KHÔNG BỊ CORS) & CACHING PATH
+// ĐÃ FIX: BĂM SHA-256 CHO CACHE ĐƯỜNG DẪN THƯ MỤC CHỐNG LƯU NHẦM THƯ MỤC CON
 // =============================================================================
 
 const ROOT_BACKUP_FOLDER_NAME = "FILE_SHEET_AND_JSON_DU_PHONG";
@@ -541,8 +541,14 @@ function doPost(e) {
 }
 
 // =============================================================================
-// CÁC HÀM XỬ LÝ CHUẨN HÓA 8 LỚP & BỘ NHỚ ĐỆM TỐI ƯU TỐC ĐỘ
+// CÁC HÀM XỬ LÝ CHUẨN HÓA 8 LỚP & BỘ NHỚ ĐỆM BĂM SHA-256 CHỐNG ĐỤNG ĐỘ
 // =============================================================================
+
+function computeCacheHashKey(prefix, rawInput) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(rawInput || ""), Utilities.Charset.UTF_8);
+  var b64 = Utilities.base64EncodeWebSafe(bytes).replace(/[^a-zA-Z0-9_]/g, "");
+  return String(prefix || "K_") + b64;
+}
 
 function standardizeClassName(rawClass, sbd) {
   var sbdClean = String(sbd || "").toLowerCase().trim();
@@ -573,7 +579,7 @@ function standardizeClassName(rawClass, sbd) {
 
 function getCachedFolderExact(parentFolder, folderName, cacheKey) {
   var cache = CacheService.getScriptCache();
-  var cleanKey = "FLD_" + parentFolder.getId().substring(0, 10) + "_" + cacheKey.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 60);
+  var cleanKey = computeCacheHashKey("FLD2_", parentFolder.getId() + "|" + String(folderName || "") + "|" + String(cacheKey || ""));
   var cachedId = cache.get(cleanKey);
 
   if (cachedId) {
@@ -594,7 +600,7 @@ function getCachedFolderExact(parentFolder, folderName, cacheKey) {
 function getCachedPathFolder(pathString) {
   var normPath = String(pathString || "").trim();
   var cache = CacheService.getScriptCache();
-  var cacheKey = "PTH_" + Utilities.base64EncodeWebSafe(normPath).replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 80);
+  var cacheKey = computeCacheHashKey("PTH2_", normPath);
   var cachedId = cache.get(cacheKey);
 
   if (cachedId) {
@@ -680,7 +686,7 @@ function recordSubmissionToTargetSheet(folder, sheetTitle, className, sub, isTem
   if (!sub || (!sub.sbd && !sub.student_name)) return;
 
   var cache = CacheService.getScriptCache();
-  var sheetCacheKey = "SHT_" + folder.getId().substring(0, 10) + "_" + (isTempDraft ? "TEMP" : "FINAL");
+  var sheetCacheKey = computeCacheHashKey("SHT2_", folder.getId() + "|" + (isTempDraft ? "TEMP" : "FINAL"));
   var cachedSheetId = cache.get(sheetCacheKey);
   var spreadsheet = null;
 
