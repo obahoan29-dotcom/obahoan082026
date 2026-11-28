@@ -6,6 +6,7 @@
 // - CHẶN TRIỆT ĐỂ ẢNH BASE64 LỌT VÀO SUPABASE
 // - BẢO VỆ CHỐNG GHI ĐÈ MẤT DỮ LIỆU CLOUD KHI CACHE LOCAL RỖNG / ĐẦY QUOTA
 // - TỰ PHỤC HỒI ẢNH ĐA TẦNG KHI LỖI THAY VÌ ẨN MẤT ẢNH
+// - TỰ ĐỘNG KÍCH HOẠT SAO LƯU NGẦM TOÀN BỘ ẢNH LÊN GOOGLE DRIVE KHI MỞ NGÂN HÀNG
 // =========================================================
 
 const QBANK_PENDING_KHOS = [
@@ -133,6 +134,7 @@ let _qbankResizersInitialized = false;
 let _qbankCloudTreeSyncTimer = null;
 let _qbankCloudDraftSyncTimer = null;
 let _qbankSyncedFingerprints = new Map();
+let _qbankAutoDriveLaunchTimer = null;
 
 // ============================================================================
 // 0. TIỆN ÍCH 4 KHO CHỜ XẾP, LỌC CHẶN BASE64 & ĐỒNG BỘ ẢNH DỰ PHÒNG
@@ -814,6 +816,7 @@ function serializeQbankQuestionRow(q) {
     if (qCopy.imageBackupUrl && isBase64DataUrl(qCopy.imageBackupUrl)) {
         qCopy.imageBackupUrl = "";
     }
+    delete qCopy._driveBackingUp;
     qCopy.part = part;
     qCopy.isPart4 = (part === 4);
     qCopy.level = level;
@@ -868,6 +871,7 @@ function deserializeQbankQuestionRow(row) {
     if (base.imageBackupUrl && isBase64DataUrl(base.imageBackupUrl)) {
         base.imageBackupUrl = "";
     }
+    delete base._driveBackingUp;
     return base;
 }
 
@@ -1042,8 +1046,14 @@ function writeQbankTreeLocalStorage(ts) {
 async function writeQbankDraftLocalStorages(ts) {
     let savedLocal = false;
     let savedIDB = false;
+    const cleanQuestionsForSave = (qbankState.rawQuestions || []).map(q => {
+        if (!q || !q._driveBackingUp) return q;
+        const { _driveBackingUp, ...rest } = q;
+        return rest;
+    });
+
     try {
-        localStorage.setItem("qbank_draft_questions", JSON.stringify(qbankState.rawQuestions || []));
+        localStorage.setItem("qbank_draft_questions", JSON.stringify(cleanQuestionsForSave));
         localStorage.setItem("qbank_draft_pending_exams", JSON.stringify(qbankState.pendingExams || []));
         localStorage.setItem("qbank_draft_images", JSON.stringify(qbankState.imagesMap || {}));
         localStorage.setItem("qbank_draft_images_backup", JSON.stringify(qbankState.imagesBackupMap || {}));
@@ -1063,7 +1073,7 @@ async function writeQbankDraftLocalStorages(ts) {
         try {
             savedIDB = await examIndexedDB.setItem("exam_states", {
                 key: "qbank_draft_state_v1",
-                questions: qbankState.rawQuestions || [],
+                questions: cleanQuestionsForSave,
                 pendingExams: qbankState.pendingExams || [],
                 images: qbankState.imagesMap || {},
                 imagesBackupMap: qbankState.imagesBackupMap || {},
@@ -1518,6 +1528,7 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
     updateQbankUndoButtonUI();
     if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
     if (typeof updateQbankUploadMenuCounts === "function") updateQbankUploadMenuCounts();
+    if (typeof updateAutoBackupButtonUI === "function") updateAutoBackupButtonUI();
     renderQbankHeaderAndMidExamTitle();
     if (typeof renderQbankTree === "function") renderQbankTree();
     if (typeof renderQbankQuestions === "function") renderQbankQuestions();
@@ -1794,6 +1805,7 @@ async function openQbankCreatorModal(options = {}) {
         updateQbankUndoButtonUI();
         if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
         if (typeof updateQbankUploadMenuCounts === "function") updateQbankUploadMenuCounts();
+        if (typeof updateAutoBackupButtonUI === "function") updateAutoBackupButtonUI();
         renderQbankHeaderAndMidExamTitle();
 
         if (typeof renderQbankTree === "function") {
@@ -1818,6 +1830,14 @@ async function openQbankCreatorModal(options = {}) {
             const totalQ = (qbankState.rawQuestions || []).length;
             finishQbankProgressBar(totalQ, elapsedSec);
         }
+
+        if (_qbankAutoDriveLaunchTimer) clearTimeout(_qbankAutoDriveLaunchTimer);
+        _qbankAutoDriveLaunchTimer = setTimeout(() => {
+            const m = document.getElementById("modal-qbank-creator");
+            if (m && m.style.display === "flex" && typeof runAutoBackupAllQbankImagesToDrive === "function") {
+                runAutoBackupAllQbankImagesToDrive({ autoTriggered: true });
+            }
+        }, 1800);
     } catch (err) {
         if (typeof finishQbankProgressBar === "function") {
             finishQbankProgressBar((qbankState.rawQuestions || []).length, "0.00", true);
@@ -1826,6 +1846,11 @@ async function openQbankCreatorModal(options = {}) {
 }
 
 function closeQbankCreatorModal() {
+    if (_qbankAutoDriveLaunchTimer) {
+        clearTimeout(_qbankAutoDriveLaunchTimer);
+        _qbankAutoDriveLaunchTimer = null;
+    }
+    if (typeof stopAutoBackupQbankImages === "function") stopAutoBackupQbankImages();
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
     if (typeof closeQbankDeleteMultiMenu === "function") closeQbankDeleteMultiMenu();
     if (typeof closeQbankUploadMenu === "function") closeQbankUploadMenu();
