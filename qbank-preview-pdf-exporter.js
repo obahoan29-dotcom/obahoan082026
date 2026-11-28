@@ -1,7 +1,8 @@
 // =========================================================
 // FILE: qbank-preview-pdf-exporter.js
 // QUẢN LÝ ĐỘC LẬP CHỨC NĂNG XUẤT PDF TRONG MODAL "XEM THỬ ĐỀ":
-// 1. MENU XÒE 4 CHẾ ĐỘ XUẤT PDF + CHỌN SỐ TRANG & CỠ CHỮ:
+// 1. MENU XÒE 4 CHẾ ĐỘ XUẤT PDF + CHỌN SỐ TRANG, CỠ CHỮ & KHỔ GIẤY / BỐ CỤC IN:
+//    - Khổ giấy: A4 dọc | A5 dọc | A4 ngang ghép 2 trang/tờ | A4 ngang đóng sách gập đôi (Booklet)
 //    (1) Xuất đề PDF (chỉ đề)
 //    (2) Đề PDF kèm lời giải & bảng đáp án
 //    (3) Xuất PDF đề kèm khoảng trống dưới mỗi câu (dòng kẻ chấm .... hợp lý theo độ khó)
@@ -12,9 +13,9 @@
 //    - Bo viền 4 cạnh từng trang
 //    - Bo viền luân phiên 3 cạnh (Trang lẻ: Trên-Dưới-Trái | Trang chẵn: Trên-Dưới-Phải)
 //    - Chọn 4 kiểu nét viền (Đôi cổ điển, Bo góc thanh lịch, Góc chữ L, Nét đứt), 5 màu, số trang, watermark
-//    - Chọn độ rộng 4 lề trang PDF (Trên / Dưới / Trái / Phải theo mm) để giảm lề, mở rộng vùng chữ
+//    - Chọn độ rộng 4 lề trang PDF (Trên / Dưới / Trái / Phải theo mm)
 // 3. TẶNG MỖI ĐỀ XUẤT RA 1 LOGO SVG NGHỆ THUẬT SINH NGẪU NHIÊN
-// 4. PHÂN TRANG A4 CHUẨN XÁC CHO MỌI CHẾ ĐỘ + GIÀN ĐỀU CHIỀU DỌC CHỐNG THỪA GIẤY TRẮNG
+// 4. PHÂN TRANG CHUẨN XÁC CHO MỌI CHẾ ĐỘ + GIÀN ĐỀU CHIỀU DỌC CHỐNG THỪA GIẤY TRẮNG
 // 5. TỰ ĐỘNG CO HÌNH ẢNH VỪA KHÍT CỠ CHỮ & ĐỘ RỘNG CỘT (CHỐNG CHE/CẮT ẢNH)
 // =========================================================
 
@@ -33,23 +34,26 @@
 
     const SPLIT_RATIO_PRESETS = [30, 35, 40, 50, 60, 65];
 
+    const VALID_PAPER_LAYOUTS = new Set(["a4_portrait", "a5_portrait", "a4_2up", "a4_booklet"]);
+
     const DEFAULT_DECOR_PREFS = {
         twoLines: false,
         showAuthor: false,
         authorName: "Thầy Phạm Công Hoan",
         authorWithLogo: true,
-        authorBorder: "rounded", // none | rounded | double | pill
-        pageBorderMode: "none",  // none | all4 | alt3
-        borderStyle: "double",   // double | rounded | corner | dashed
-        borderColor: "#1e293b",  // #1e293b | #0369a1 | #0f766e | #6d28d9 | #b91c1c
-        marginPreset: "default", // default | compact | narrow | ultra | custom
+        authorBorder: "rounded",   // none | rounded | double | pill
+        pageBorderMode: "none",    // none | all4 | alt3
+        borderStyle: "double",     // double | rounded | corner | dashed
+        borderColor: "#1e293b",    // #1e293b | #0369a1 | #0f766e | #6d28d9 | #b91c1c
+        marginPreset: "default",   // default | compact | narrow | ultra | custom
         marginTop: 12,
         marginBottom: 12,
         marginLeft: 12,
         marginRight: 12,
         showPageNum: true,
         watermark: false,
-        splitLeftPct: 40         // Tỷ lệ cột Đề bên trái (%) trong chế độ chia 2 cột
+        splitLeftPct: 40,          // Tỷ lệ cột Đề bên trái (%) trong chế độ chia 2 cột
+        paperLayout: "a4_portrait" // a4_portrait | a5_portrait | a4_2up | a4_booklet
     };
 
     const DECOR_COLOR_SWATCHES = [
@@ -72,6 +76,11 @@
         const n = parseInt(String(val ?? ""), 10);
         if (isNaN(n)) return fallback;
         return Math.max(25, Math.min(75, n));
+    }
+
+    function normalizePaperLayout(val) {
+        const v = String(val || "a4_portrait").trim();
+        return VALID_PAPER_LAYOUTS.has(v) ? v : "a4_portrait";
     }
 
     function hasCustomMarginConfig(prefs) {
@@ -102,6 +111,7 @@
         loaded.marginLeft = clampMarginMm(loaded.marginLeft, 12);
         loaded.marginRight = clampMarginMm(loaded.marginRight, 12);
         loaded.splitLeftPct = clampSplitLeftPct(loaded.splitLeftPct, 40);
+        loaded.paperLayout = normalizePaperLayout(loaded.paperLayout);
         _decorPrefs = loaded;
         return _decorPrefs;
     }
@@ -113,6 +123,7 @@
         merged.marginLeft = clampMarginMm(merged.marginLeft, 12);
         merged.marginRight = clampMarginMm(merged.marginRight, 12);
         merged.splitLeftPct = clampSplitLeftPct(merged.splitLeftPct, 40);
+        merged.paperLayout = normalizePaperLayout(merged.paperLayout);
         _decorPrefs = merged;
         try {
             localStorage.setItem(DECOR_PREFS_STORAGE_KEY, JSON.stringify(_decorPrefs));
@@ -121,7 +132,7 @@
     }
 
     // =========================================================================
-    // 1. TIÊM CSS CHO MENU XÒE XUẤT PDF, PANEL TRANG TRÍ & TỰ CHỈNH TỶ LỆ 2 CỘT
+    // 1. TIÊM CSS CHO MENU XÒE XUẤT PDF, KHỔ GIẤY, PANEL TRANG TRÍ & TỶ LỆ 2 CỘT
     // =========================================================================
     function injectPreviewPdfExporterStyles() {
         const styleId = "qb-preview-pdf-exporter-styles";
@@ -132,9 +143,9 @@
             .qb-pdf-export-popover {
                 display: none;
                 position: fixed !important;
-                width: 428px;
+                width: 432px;
                 max-width: 95vw;
-                max-height: 88vh;
+                max-height: 89vh;
                 overflow-y: auto;
                 background: #ffffff;
                 border-radius: 14px;
@@ -220,6 +231,19 @@
                 border-color: #0d9488;
                 box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.18);
             }
+            .qb-pdf-layout-hint {
+                display: none;
+                font-size: 10px;
+                font-weight: 700;
+                color: #0369a1;
+                background: #e0f2fe;
+                border: 1px solid #bae6fd;
+                border-radius: 6px;
+                padding: 4px 7px;
+                margin-top: 4px;
+                line-height: 1.3;
+            }
+            .qb-pdf-layout-hint.show { display: block; }
 
             /* Ô CHỌN TRANG TRÍ */
             .qb-pdf-decor-wrap {
@@ -943,7 +967,7 @@
     }
 
     // =========================================================================
-    // 3. UI MENU XÒE CỦA NÚT "📄 Xuất PDF ▾", "✨ TRANG TRÍ" & TỶ LỆ 2 CỘT
+    // 3. UI MENU XÒE CỦA NÚT "📄 Xuất PDF ▾", KHỔ GIẤY, "✨ TRANG TRÍ" & TỶ LỆ 2 CỘT
     // =========================================================================
     function syncSplitRatioUI() {
         const prefs = loadDecorPrefs();
@@ -968,6 +992,30 @@
         document.querySelectorAll(".qb-split-preset-pill").forEach(btn => {
             btn.classList.toggle("active", parseInt(btn.dataset.left, 10) === leftPct);
         });
+    }
+
+    function syncPaperLayoutUI() {
+        const prefs = loadDecorPrefs();
+        const layout = normalizePaperLayout(prefs.paperLayout);
+        const selLayout = document.getElementById("qb-pdf-paper-layout");
+        const hintEl = document.getElementById("qb-pdf-layout-hint");
+
+        if (selLayout) selLayout.value = layout;
+        if (hintEl) {
+            if (layout === "a4_2up") {
+                hintEl.classList.add("show");
+                hintEl.innerHTML = "📰 <b>Ghép 2 trang/tờ A4 ngang:</b> Tự ghép sẵn cặp [1|2], [3|4]... Khi bấm In chỉ cần giữ <b>1 trang/tờ</b>!";
+            } else if (layout === "a4_booklet") {
+                hintEl.classList.add("show");
+                hintEl.innerHTML = "📖 <b>Đóng sách gập đôi (Booklet):</b> In 2 mặt (chọn <b>Lật cạnh ngắn / Flip on short edge</b>) rồi gập đôi thành quyển!";
+            } else if (layout === "a5_portrait") {
+                hintEl.classList.add("show");
+                hintEl.innerHTML = "🗒️ <b>Khổ A5 dọc (148×210 mm):</b> Cỡ chữ &amp; hình ảnh tự động co vừa khít khổ giấy A5.";
+            } else {
+                hintEl.classList.remove("show");
+                hintEl.innerHTML = "";
+            }
+        }
     }
 
     function syncDecorControlsWithPrefs() {
@@ -1022,6 +1070,7 @@
             btn.classList.toggle("active", btn.dataset.color === prefs.borderColor);
         });
 
+        syncPaperLayoutUI();
         syncSplitRatioUI();
         updateDecorTriggerSummaryUI();
     }
@@ -1084,7 +1133,7 @@
             <div class="qb-pdf-config-box">
                 <div class="qb-pdf-config-grid">
                     <div class="qb-pdf-field">
-                        <label for="qb-pdf-target-pages">📑 Số trang xuất (A4):</label>
+                        <label for="qb-pdf-target-pages">📑 Số trang xuất:</label>
                         <select id="qb-pdf-target-pages" onchange="onQbPdfPagesSelectChange(this.value)">
                             <option value="">Mặc định (Tự nhiên)</option>
                             <option value="1">1 trang</option>
@@ -1104,7 +1153,7 @@
                     <div class="qb-pdf-field">
                         <label for="qb-pdf-font-size">🔤 Cỡ chữ (pt):</label>
                         <select id="qb-pdf-font-size" onchange="onQbPdfFontSelectChange(this.value)">
-                            <option value="">Mặc định (10.5pt)</option>
+                            <option value="">Mặc định (Tự chuẩn)</option>
                             <option value="8">8 pt (Siêu gọn)</option>
                             <option value="8.5">8.5 pt (Rất nhỏ)</option>
                             <option value="9">9 pt (Nhỏ)</option>
@@ -1119,6 +1168,18 @@
                         </select>
                         <input type="number" id="qb-pdf-custom-font" min="6.5" max="18" step="0.5" placeholder="VD: 9.2" style="display:none; margin-top:4px;">
                     </div>
+                </div>
+
+                <!-- CHỌN KHỔ GIẤY & BỐ CỤC IN (A4 DỌC / A5 DỌC / A4 GHÉP 2 / BOOKLET) -->
+                <div class="qb-pdf-field">
+                    <label for="qb-pdf-paper-layout">📐 Khổ giấy &amp; Bố cục in:</label>
+                    <select id="qb-pdf-paper-layout" onchange="onQbPdfPaperLayoutChange(this.value)">
+                        <option value="a4_portrait">📄 A4 dọc (1 trang/tờ - Mặc định)</option>
+                        <option value="a5_portrait">🗒️ A5 dọc (148×210 mm - Khổ nhỏ)</option>
+                        <option value="a4_2up">📰 A4 ngang — Ghép sẵn 2 trang/tờ</option>
+                        <option value="a4_booklet">📖 A4 ngang — Đóng sách gập đôi (Booklet)</option>
+                    </select>
+                    <div class="qb-pdf-layout-hint" id="qb-pdf-layout-hint"></div>
                 </div>
 
                 <!-- Ô CHỌN TRANG TRÍ XÒE RA -->
@@ -1165,7 +1226,7 @@
                             </div>
                         </div>
 
-                        <div class="qb-decor-section-title">🖼️ Bo viền khung từng trang A4:</div>
+                        <div class="qb-decor-section-title">🖼️ Bo viền khung từng trang:</div>
                         <div class="qb-decor-radio-pills">
                             <label class="qb-decor-radio-pill" onclick="onQbDecorBorderModeClick('none', event)">
                                 <input type="radio" name="qb-decor-border-mode" value="none">
@@ -1322,6 +1383,12 @@
         document.body.appendChild(pop);
         syncDecorControlsWithPrefs();
         return pop;
+    }
+
+    function onQbPdfPaperLayoutChange(val) {
+        const cur = loadDecorPrefs();
+        saveDecorPrefs({ ...cur, paperLayout: normalizePaperLayout(val) });
+        syncPaperLayoutUI();
     }
 
     function toggleQbPdfSplitPanel(event) {
@@ -1571,8 +1638,8 @@
         btn.classList.add("is-open");
 
         const rect = btn.getBoundingClientRect();
-        const popW = Math.min(428, window.innerWidth - 16);
-        const popH = Math.min(pop.offsetHeight || 540, window.innerHeight - 20);
+        const popW = Math.min(432, window.innerWidth - 16);
+        const popH = Math.min(pop.offsetHeight || 560, window.innerHeight - 20);
         let left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
         let top = rect.bottom + 8;
         if (top + popH > window.innerHeight - 8) {
@@ -1695,7 +1762,6 @@
             let lines = baseMap[lvl] || 6;
             if (p === 2) lines += 2;
             else if (p === 4) lines += 3;
-            // Nếu cột phải hẹp hơn (< 50%) thì tăng nhẹ số dòng để đủ viết
             const rightPct = 100 - clampSplitLeftPct(splitLeftPct, 40);
             if (rightPct < 45) lines += 2;
             return lines;
@@ -1875,7 +1941,7 @@
         <div class="exam-doc-page" id="exam-doc-page">
             <table class="exam-doc-header-table">
                 <tr>
-                    <td class="hdr-logo-cell" style="width: 58px; vertical-align: middle; text-align: center;">
+                    <td class="hdr-logo-cell" style="width: 54px; vertical-align: middle; text-align: center;">
                         <div id="exam-logo-slot" title="Logo ngẫu nhiên tặng kèm đề thi">${logoSvg}</div>
                     </td>
                     <td style="width: 44%; text-align: center; vertical-align: middle;">
@@ -1911,7 +1977,7 @@
     }
 
     // =========================================================================
-    // 5. MỞ CỬA SỔ XUẤT PDF (PHÂN TRANG A4, GIÀN ĐỀU CHIỀU DỌC, CO HÌNH CHỐNG CHE, TỰ CHỈNH 2 CỘT)
+    // 5. MỞ CỬA SỔ XUẤT PDF (A4 DỌC, A5 DỌC, A4 GHÉP 2, BOOKLET + GIÀN ĐỀU + CO ẢNH)
     // =========================================================================
     function openPreviewPdfWindow(mode) {
         const collected = collectPreviewQuestionsSafely();
@@ -1924,6 +1990,8 @@
         const { targetPages, fontSizePt, decorPrefs } = getConfiguredPreviewPdfOptions();
         const useDecorSheets = hasAnyPageDecorationActive(decorPrefs);
         const useCustomMargins = hasCustomMarginConfig(decorPrefs);
+        const initialPaperLayout = normalizePaperLayout(decorPrefs.paperLayout);
+        const isSmallPaperInit = (initialPaperLayout !== "a4_portrait");
 
         const mTopInit = clampMarginMm(decorPrefs.marginTop, 12);
         const mRightInit = clampMarginMm(decorPrefs.marginRight, 12);
@@ -1970,8 +2038,11 @@
 
         closePreviewPdfExporterMenu();
 
-        const initialPt = fontSizePt || DEFAULT_FONT_PT;
+        const initialPt = fontSizePt || (isSmallPaperInit ? 8.8 : DEFAULT_FONT_PT);
         const safeDecorColor = /^#[0-9a-f]{3,8}$/i.test(decorPrefs.borderColor || "") ? decorPrefs.borderColor : "#1e293b";
+        const initialPageRule = initialPaperLayout === "a5_portrait"
+            ? "A5 portrait"
+            : ((initialPaperLayout === "a4_2up" || initialPaperLayout === "a4_booklet") ? "A4 landscape" : "A4 portrait");
 
         win.document.open();
         win.document.write(`<!DOCTYPE html>
@@ -1991,7 +2062,7 @@
     <\/script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"><\/script>
     <style id="dynamic-page-style">
-        @page { size: A4; margin: 0; }
+        @page { size: ${initialPageRule}; margin: 0; }
     </style>
     <style>
         :root {
@@ -2013,6 +2084,8 @@
             --frame-pad-h: 5mm;
             --col-left-pct: ${splitLeftInit}%;
             --col-right-pct: ${splitRightInit}%;
+            --logic-w-mm: 210mm;
+            --logic-h-mm: 296.4mm;
         }
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -2022,7 +2095,7 @@
             color: #0f172a;
             background: #e2e8f0;
             margin: 0;
-            padding: 58px 12px 30px 12px;
+            padding: 62px 12px 30px 12px;
         }
         .exam-doc-page.is-staging-hidden {
             position: fixed !important;
@@ -2041,10 +2114,11 @@
             align-items: center;
             gap: 14px;
             width: 100%;
+            overflow-x: auto;
         }
         .a4-sheet {
-            width: 210mm;
-            height: 296.4mm;
+            width: var(--logic-w-mm);
+            height: var(--logic-h-mm);
             background: #ffffff;
             padding: var(--sheet-margin-top) var(--sheet-margin-right) var(--sheet-margin-bottom) var(--sheet-margin-left);
             box-shadow: 0 12px 34px rgba(15, 23, 42, 0.24);
@@ -2053,7 +2127,46 @@
             flex-direction: column;
             position: relative;
             overflow: hidden;
+            flex-shrink: 0;
         }
+
+        /* TỜ A4 NẰM NGANG GHÉP 2 TRANG CON (2-UP HOẶC BOOKLET) */
+        .a4-landscape-sheet {
+            width: 297mm;
+            height: 209.4mm;
+            background: #ffffff;
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.28);
+            border-radius: 4px;
+            display: grid;
+            grid-template-columns: 148.5mm 148.5mm;
+            overflow: hidden;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .a4-landscape-sheet .a4-sheet {
+            width: 148.5mm !important;
+            height: 209.4mm !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+        }
+        .a4-landscape-sheet.has-center-guide::after {
+            content: "";
+            position: absolute;
+            top: 4mm;
+            bottom: 4mm;
+            left: 50%;
+            border-left: 0.6pt dashed #cbd5e1;
+            pointer-events: none;
+            z-index: 20;
+        }
+        .a4-sheet.is-blank-filler {
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .a4-frame-outer {
             flex: 1;
             display: flex;
@@ -2167,7 +2280,6 @@
             border-left: none;
         }
 
-        /* 4 GÓC HOA VĂN CHỮ L */
         .a4-corner {
             display: none;
             position: absolute;
@@ -2187,7 +2299,6 @@
         .a4-corner.c-bl { bottom: 2px; left: 2px; border-bottom: 2.8px solid var(--decor-color); border-left: 2.8px solid var(--decor-color); }
         .a4-corner.c-br { bottom: 2px; right: 2px; border-bottom: 2.8px solid var(--decor-color); border-right: 2.8px solid var(--decor-color); }
 
-        /* WATERMARK CHÌM */
         .a4-watermark {
             position: absolute;
             inset: 0;
@@ -2209,25 +2320,28 @@
             letter-spacing: 3px;
             user-select: none;
         }
+        body.is-small-paper .a4-watermark span {
+            font-size: 28pt;
+        }
 
-        /* DẢI LỀ TRÊN & LỀ DƯỚI */
         .a4-page-top-band,
         .a4-page-bottom-band {
             flex-shrink: 0;
             position: relative;
             z-index: 2;
         }
-        .a4-page-top-band { margin-bottom: 6px; }
-        .a4-page-bottom-band { margin-top: auto; padding-top: 5px; }
+        .a4-page-top-band { margin-bottom: 5px; }
+        .a4-page-bottom-band { margin-top: auto; padding-top: 4px; }
 
         .a4-meta-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            font-size: 8.8pt;
+            font-size: 8.6pt;
             color: #334155;
         }
+        body.is-small-paper .a4-meta-row { font-size: 7.4pt; }
         .a4-sheet.border-mode-alt3.is-even .a4-meta-row {
             flex-direction: row-reverse;
         }
@@ -2259,8 +2373,8 @@
             background: rgba(248, 250, 252, 0.9);
         }
         .a4-mini-logo {
-            width: 16px;
-            height: 16px;
+            width: 15px;
+            height: 15px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -2269,7 +2383,7 @@
         .a4-mini-logo svg { width: 100%; height: 100%; display: block; }
 
         .a4-exam-running-title {
-            font-size: 8.2pt;
+            font-size: 8pt;
             font-weight: 700;
             color: #64748b;
             font-style: italic;
@@ -2279,7 +2393,7 @@
             white-space: nowrap;
         }
         .a4-page-num-badge {
-            font-size: 8.6pt;
+            font-size: 8.4pt;
             font-weight: 800;
             color: var(--decor-color);
             white-space: nowrap;
@@ -2287,15 +2401,15 @@
 
         .a4-double-rule {
             width: 100%;
-            height: 4.5px;
-            margin: 3px 0 1px 0;
+            height: 4px;
+            margin: 2px 0 1px 0;
         }
         .a4-double-rule.top-rule {
             border-top: 1.8px solid var(--decor-color);
             border-bottom: 0.75px solid var(--decor-color);
         }
         .a4-double-rule.bottom-rule {
-            margin: 1px 0 3px 0;
+            margin: 1px 0 2px 0;
             border-top: 0.75px solid var(--decor-color);
             border-bottom: 1.8px solid var(--decor-color);
         }
@@ -2308,7 +2422,7 @@
             overflow: hidden;
         }
 
-        /* THANH ĐIỀU KHIỂN XEM TRƯỚC PDF (KHÔNG IN RA GIẤY) */
+        /* THANH ĐIỀU KHIỂN XEM TRƯỚC PDF */
         .no-print-bar {
             position: fixed;
             top: 0; left: 0; right: 0;
@@ -2349,7 +2463,7 @@
             gap: 5px;
             flex-wrap: wrap;
         }
-        .np-split-ctrl {
+        .np-split-ctrl, .np-layout-ctrl {
             display: inline-flex;
             align-items: center;
             gap: 3px;
@@ -2357,6 +2471,20 @@
             border: 1px solid #7c3aed;
             padding: 2px 6px;
             border-radius: 8px;
+        }
+        .np-layout-ctrl {
+            border-color: #0284c7;
+        }
+        .np-layout-select {
+            background: #0f172a;
+            color: #38bdf8;
+            border: none;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: 800;
+            outline: none;
+            cursor: pointer;
+            padding: 2px 4px;
         }
         .btn-np {
             border: none;
@@ -2379,14 +2507,14 @@
         .btn-np-print { background: linear-gradient(135deg, #0284c7, #0369a1); box-shadow: 0 2px 8px rgba(2, 132, 199, 0.45); }
         .btn-np:hover { filter: brightness(1.12); }
 
-        /* TIÊU ĐỀ & LOGO NGẪU NHIÊN */
+        /* TIÊU ĐỀ & LOGO */
         .exam-doc-header-table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: var(--doc-header-pad);
             border-bottom: 1.5px solid #0f172a;
         }
-        .exam-doc-header-table td { padding-bottom: 5px; }
+        .exam-doc-header-table td { padding-bottom: 4px; }
         #exam-logo-slot {
             width: var(--doc-logo-size);
             height: var(--doc-logo-size);
@@ -2400,19 +2528,23 @@
             height: 100%;
             display: block;
         }
-        .hdr-org { font-size: 0.96em; font-weight: 800; text-transform: uppercase; line-height: 1.25; }
-        .hdr-school { font-size: 0.98em; font-weight: 900; text-transform: uppercase; color: #0369a1; line-height: 1.25; }
-        .hdr-subject { font-size: 1em; font-weight: 900; color: #b91c1c; text-transform: uppercase; line-height: 1.25; }
-        .hdr-sub { font-size: 0.88em; color: #334155; font-style: italic; margin-top: 1px; }
+        .hdr-org { font-size: 0.94em; font-weight: 800; text-transform: uppercase; line-height: 1.22; }
+        .hdr-school { font-size: 0.96em; font-weight: 900; text-transform: uppercase; color: #0369a1; line-height: 1.22; }
+        .hdr-subject { font-size: 0.98em; font-weight: 900; color: #b91c1c; text-transform: uppercase; line-height: 1.22; }
+        .hdr-sub { font-size: 0.86em; color: #334155; font-style: italic; margin-top: 1px; }
+
+        body.is-small-paper .hdr-logo-cell { width: 40px !important; }
+        body.is-small-paper .exam-doc-header-table td { font-size: 0.88em; }
+        body.is-small-paper .exam-student-info-box { font-size: 0.84em; padding: 4px 7px; }
 
         .exam-doc-banner-title { text-align: center; margin: var(--doc-header-pad) 0; }
-        .exam-doc-banner-title h2 { margin: 0; font-size: 1.2em; font-weight: 900; text-transform: uppercase; color: #0f172a; line-height: 1.25; }
+        .exam-doc-banner-title h2 { margin: 0; font-size: 1.18em; font-weight: 900; text-transform: uppercase; color: #0f172a; line-height: 1.24; }
         .exam-doc-made-badge {
             display: inline-block;
-            border: 1.4px solid #0f172a;
+            border: 1.3px solid #0f172a;
             padding: 1px 10px;
             font-weight: 900;
-            font-size: 0.92em;
+            font-size: 0.9em;
             border-radius: 4px;
             margin-top: 3px;
         }
@@ -2424,15 +2556,15 @@
             font-size: 0.92em;
             display: flex;
             justify-content: space-between;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
         .part-header-box {
             background: #f1f5f9;
             border-left: 4px solid #0284c7;
-            padding: 4px 9px;
-            font-size: 0.98em;
-            margin: var(--doc-part-gap) 0 7px 0;
+            padding: 4px 8px;
+            font-size: 0.96em;
+            margin: var(--doc-part-gap) 0 6px 0;
             page-break-after: avoid;
             break-after: avoid;
         }
@@ -2449,7 +2581,7 @@
             width: 100%;
             max-width: 100%;
             text-align: center;
-            margin: 5px 0;
+            margin: 4px 0;
             page-break-inside: avoid;
             break-inside: avoid;
             overflow: hidden;
@@ -2469,7 +2601,7 @@
         mjx-container[jax="SVG"] { max-width: 100% !important; }
         mjx-container[jax="SVG"] > svg { max-width: 100% !important; height: auto !important; }
 
-        .doc-options-wrapper { display: grid; gap: 3px 12px; margin-top: 4px; }
+        .doc-options-wrapper { display: grid; gap: 3px 10px; margin-top: 4px; }
         .opt-grid-4 { grid-template-columns: repeat(4, 1fr); }
         .opt-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .opt-grid-1 { grid-template-columns: 1fr; }
@@ -2531,7 +2663,7 @@
             border-bottom: 1.05pt dotted #64748b;
         }
 
-        /* CHẾ ĐỘ 4: CHIA 2 CỘT TÙY CHỈNH TỶ LỆ (% ĐỀ | % TRÌNH BÀY) */
+        /* CHẾ ĐỘ 4: CHIA 2 CỘT TÙY CHỈNH TỶ LỆ */
         .doc-question-card.is-two-col-card {
             border-bottom: 1px solid #cbd5e1;
             padding-bottom: 5px;
@@ -2544,7 +2676,7 @@
         .col-left-40 {
             width: var(--col-left-pct, 40%);
             vertical-align: top;
-            padding-right: 9px;
+            padding-right: 8px;
             border-right: 1.2px solid #94a3b8;
             word-wrap: break-word;
             overflow-wrap: break-word;
@@ -2554,13 +2686,13 @@
         .col-right-60 {
             width: var(--col-right-pct, 60%);
             vertical-align: top;
-            padding-left: 10px;
+            padding-left: 8px;
             min-width: 0;
         }
         .col-right-60-inner {
             border: 1px dashed #cbd5e1;
             border-radius: 6px;
-            padding: 4px 8px 6px 8px;
+            padding: 4px 7px 6px 7px;
             background: #fcfcfd;
             min-height: 100%;
         }
@@ -2590,17 +2722,20 @@
             #a4-sheets-output {
                 display: block !important;
                 gap: 0 !important;
+                overflow: visible !important;
             }
-            .a4-sheet {
-                width: 210mm !important;
-                height: 296.4mm !important;
+            .a4-sheet, .a4-landscape-sheet {
                 margin: 0 !important;
                 box-shadow: none !important;
                 border-radius: 0 !important;
                 page-break-after: always;
                 break-after: page;
             }
-            .a4-sheet:last-child {
+            .a4-landscape-sheet .a4-sheet {
+                page-break-after: auto !important;
+                break-after: auto !important;
+            }
+            .a4-sheet:last-child, .a4-landscape-sheet:last-child {
                 page-break-after: auto;
                 break-after: auto;
             }
@@ -2614,7 +2749,7 @@
         }
     </style>
 </head>
-<body>
+<body class="${isSmallPaperInit ? "is-small-paper" : ""}">
     <div id="mm-ruler"></div>
 
     <div class="no-print-bar">
@@ -2625,6 +2760,15 @@
             <span class="np-badge" id="np-margin-stat">Lề: ${mTopInit}-${mBottomInit}-${mLeftInit}-${mRightInit}mm</span>
         </div>
         <div class="no-print-actions">
+            <div class="np-layout-ctrl" title="Chọn khổ giấy &amp; bố cục in trực tiếp">
+                <span>📐</span>
+                <select id="np-paper-layout" class="np-layout-select" onchange="changePaperLayoutLive(this.value)">
+                    <option value="a4_portrait" ${initialPaperLayout === "a4_portrait" ? "selected" : ""}>A4 dọc</option>
+                    <option value="a5_portrait" ${initialPaperLayout === "a5_portrait" ? "selected" : ""}>A5 dọc</option>
+                    <option value="a4_2up" ${initialPaperLayout === "a4_2up" ? "selected" : ""}>A4 ghép 2 trang</option>
+                    <option value="a4_booklet" ${initialPaperLayout === "a4_booklet" ? "selected" : ""}>Sách gập đôi (Booklet)</option>
+                </select>
+            </div>
             ${mode === "two_col_40_60" ? `
             <div class="np-split-ctrl" title="Tự chỉnh tỷ lệ cột Đề (trái) và cột Trình bày (phải)">
                 <span style="font-size:10.5px; font-weight:800; color:#c4b5fd;">▥</span>
@@ -2655,6 +2799,7 @@
         const DECOR_CFG = ${JSON.stringify(decorPrefs)};
         const EXAM_SHORT_TITLE = ${JSON.stringify(examTitle)};
         const EXAM_MA_DE = ${JSON.stringify(maDe)};
+        let currentPaperLayout = ${JSON.stringify(initialPaperLayout)};
         let currentFontPt = ${initialPt};
         let currentSplitLeftPct = ${splitLeftInit};
         let isJustifyEnabled = true;
@@ -2686,6 +2831,20 @@
             return ruler && ruler.offsetHeight > 0 ? (ruler.offsetHeight / 100) : 3.779527559;
         }
 
+        function isSmallPaperLayout() {
+            return currentPaperLayout !== "a4_portrait";
+        }
+
+        function getLogicPageDimensionsMm() {
+            if (currentPaperLayout === "a5_portrait") {
+                return { w: 148, h: 209.4, pageSizeCss: "A5 portrait", isPaired: false };
+            }
+            if (currentPaperLayout === "a4_2up" || currentPaperLayout === "a4_booklet") {
+                return { w: 148.5, h: 209.4, pageSizeCss: "A4 landscape", isPaired: true };
+            }
+            return { w: 210, h: 296.4, pageSizeCss: "A4 portrait", isPaired: false };
+        }
+
         function resolveEffectiveMargins(cfg) {
             if (HAS_CUSTOM_MARGINS) {
                 const clampM = (v, fb) => {
@@ -2699,6 +2858,11 @@
                     left: clampM(DECOR_CFG.marginLeft, 12)
                 };
             }
+            if (isSmallPaperLayout()) {
+                const mV = Math.max(5, Math.min(8, cfg.marginV * 0.72));
+                const mH = Math.max(5, Math.min(8, cfg.marginH * 0.72));
+                return { top: Math.round(mV * 10) / 10, right: Math.round(mH * 10) / 10, bottom: Math.round(mV * 10) / 10, left: Math.round(mH * 10) / 10 };
+            }
             if (USE_DECOR_SHEETS) {
                 const mV = Math.max(7, Math.min(12, cfg.marginV));
                 const mH = Math.max(7, Math.min(12, cfg.marginH));
@@ -2711,26 +2875,41 @@
             const hasBorder = (USE_DECOR_SHEETS && DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
             if (!hasBorder) return { padV: 0, padH: 0 };
             const minM = Math.min(margins.top, margins.right, margins.bottom, margins.left);
+            if (isSmallPaperLayout()) return { padV: 2.0, padH: 2.5 };
             if (HAS_CUSTOM_MARGINS && minM <= 3.5) return { padV: 1.8, padH: 2.2 };
             if (HAS_CUSTOM_MARGINS && minM <= 6) return { padV: 2.5, padH: 3.2 };
             return { padV: 4.0, padH: 5.0 };
         }
 
         function computeAutoImageMaxHeight(cfg) {
-            const baseH = cfg.imgMaxH || 205;
-            const fontScale = Math.min(1.25, Math.max(0.55, cfg.fontPt / 10.5));
-            const fullImgH = Math.round(Math.min(255, Math.max(85, baseH * (0.35 + 0.65 * fontScale))));
+            const dim = getLogicPageDimensionsMm();
+            const paperScale = Math.min(1.0, dim.h / 296.4);
+            const baseH = (cfg.imgMaxH || 205) * paperScale;
+            const refFont = isSmallPaperLayout() ? 8.8 : 10.5;
+            const fontScale = Math.min(1.25, Math.max(0.55, cfg.fontPt / refFont));
+            const fullImgH = Math.round(Math.min(255, Math.max(68, baseH * (0.35 + 0.65 * fontScale))));
             const colRatioScale = Math.min(1.0, Math.max(0.52, currentSplitLeftPct / 50));
-            const colImgH = Math.round(Math.max(75, fullImgH * 0.85 * colRatioScale));
+            const colImgH = Math.round(Math.max(62, fullImgH * 0.85 * colRatioScale));
             return { fullImgH, colImgH };
         }
 
         function applyLayoutParams(cfg) {
             lastAppliedCfg = cfg;
             const root = document.documentElement;
+            const dim = getLogicPageDimensionsMm();
+            document.body.classList.toggle("is-small-paper", isSmallPaperLayout());
+
+            const dynPageStyle = document.getElementById("dynamic-page-style");
+            if (dynPageStyle) {
+                dynPageStyle.textContent = "@page { size: " + dim.pageSizeCss + "; margin: 0; }";
+            }
+
             currentFontPt = cfg.fontPt;
             const imgHeights = computeAutoImageMaxHeight(cfg);
+            const logoSz = isSmallPaperLayout() ? Math.round((cfg.logoSize || 48) * 0.72) : (cfg.logoSize || 48);
 
+            root.style.setProperty("--logic-w-mm", dim.w + "mm");
+            root.style.setProperty("--logic-h-mm", dim.h + "mm");
             root.style.setProperty("--doc-font-pt", cfg.fontPt + "pt");
             root.style.setProperty("--doc-line-height", String(cfg.lineHeight));
             root.style.setProperty("--doc-q-gap", cfg.qGap + "px");
@@ -2739,7 +2918,7 @@
             root.style.setProperty("--doc-dot-h", cfg.dotH + "px");
             root.style.setProperty("--doc-header-pad", cfg.headerPad + "px");
             root.style.setProperty("--doc-part-gap", cfg.partGap + "px");
-            root.style.setProperty("--doc-logo-size", cfg.logoSize + "px");
+            root.style.setProperty("--doc-logo-size", logoSz + "px");
             root.style.setProperty("--col-left-pct", currentSplitLeftPct + "%");
             root.style.setProperty("--col-right-pct", (100 - currentSplitLeftPct) + "%");
 
@@ -2759,7 +2938,7 @@
                 pageEl.classList.add("is-staging-hidden");
                 const framePadH_total = hasBorder ? (2 * fp.padH) : 0;
                 const borderThicknessH = hasBorder ? (DECOR_CFG.borderStyle === "double" ? 2 : 1) : 0;
-                const bodyWidthMm = Math.max(135, 210 - (m.left + m.right) - framePadH_total - borderThicknessH);
+                const bodyWidthMm = Math.max(92, dim.w - (m.left + m.right) - framePadH_total - borderThicknessH);
                 pageEl.style.width = bodyWidthMm + "mm";
                 pageEl.style.padding = "0";
             }
@@ -2776,7 +2955,6 @@
                 });
             }
 
-            // Reset các style override tạm trên staging trước khi đo
             document.querySelectorAll("#exam-doc-page .doc-q-img").forEach(img => {
                 img.style.maxHeight = "";
             });
@@ -2826,6 +3004,7 @@
         function measureDecorBandsHeightPx(cfg) {
             if (!USE_DECOR_SHEETS) return { topH: 0, bottomH: 0, frameOverheadV: 0 };
             const pxPerMM = getPxPerMM();
+            const dim = getLogicPageDimensionsMm();
             const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
             const m = resolveEffectiveMargins(cfg);
             const fp = resolveFramePaddingMm(m);
@@ -2833,14 +3012,14 @@
             const frameOverheadV = hasBorder ? (((2 * fp.padV) + borderThicknessV) * pxPerMM) : 0;
 
             const probe = document.createElement("div");
-            probe.style.cssText = "position:fixed; left:-99999px; top:0; visibility:hidden; width:175mm;";
+            probe.style.cssText = "position:fixed; left:-99999px; top:0; visibility:hidden; width:" + Math.max(92, dim.w - 24) + "mm;";
             probe.innerHTML = buildTopBandHtml() + buildBottomBandHtml(1, 10);
             document.body.appendChild(probe);
 
             const topEl = probe.querySelector(".a4-page-top-band");
             const botEl = probe.querySelector(".a4-page-bottom-band");
-            const topH = topEl ? (topEl.offsetHeight + 6) : 0;
-            const bottomH = botEl ? (botEl.offsetHeight + 5) : 0;
+            const topH = topEl ? (topEl.offsetHeight + 5) : 0;
+            const bottomH = botEl ? (botEl.offsetHeight + 4) : 0;
             document.body.removeChild(probe);
 
             return { topH, bottomH, frameOverheadV };
@@ -2848,10 +3027,11 @@
 
         function getUsableBodyHeightPx(cfg) {
             const pxPerMM = getPxPerMM();
+            const dim = getLogicPageDimensionsMm();
             const m = resolveEffectiveMargins(cfg);
             const { topH, bottomH, frameOverheadV } = measureDecorBandsHeightPx(cfg);
-            const totalSheetH = 296.4 * pxPerMM;
-            return Math.max(180, totalSheetH - ((m.top + m.bottom) * pxPerMM) - frameOverheadV - topH - bottomH - 4);
+            const totalSheetH = dim.h * pxPerMM;
+            return Math.max(150, totalSheetH - ((m.top + m.bottom) * pxPerMM) - frameOverheadV - topH - bottomH - 4);
         }
 
         function clampOversizedStagingImages(usableBodyH) {
@@ -2860,17 +3040,16 @@
                 const imgs = card.querySelectorAll(".doc-q-img");
                 if (!imgs || imgs.length === 0) return;
 
-                // Đảm bảo ảnh vừa bề ngang container và không khiến cả câu hỏi vượt quá chiều cao 1 trang A4
-                const maxAllowedCardH = usableBodyH - 12;
+                const maxAllowedCardH = usableBodyH - 10;
                 let guard = 0;
-                while (card.offsetHeight > maxAllowedCardH && guard < 8) {
+                while (card.offsetHeight > maxAllowedCardH && guard < 10) {
                     const excess = card.offsetHeight - maxAllowedCardH;
-                    const stepReduce = Math.max(12, Math.ceil(excess / imgs.length) + 4);
+                    const stepReduce = Math.max(10, Math.ceil(excess / imgs.length) + 4);
                     let changed = false;
                     imgs.forEach(img => {
                         if (img.style.display === "none") return;
-                        const curH = img.offsetHeight || parseInt(getComputedStyle(img).maxHeight, 10) || 180;
-                        const nextH = Math.max(55, curH - stepReduce);
+                        const curH = img.offsetHeight || parseInt(getComputedStyle(img).maxHeight, 10) || 150;
+                        const nextH = Math.max(48, curH - stepReduce);
                         if (nextH < curH) {
                             img.style.maxHeight = nextH + "px";
                             changed = true;
@@ -2942,7 +3121,6 @@
         }
 
         function ensureImagesInsidePageBounds(bodySlot, availH) {
-            const bodyRect = bodySlot.getBoundingClientRect();
             const imgs = bodySlot.querySelectorAll(".doc-q-img");
             imgs.forEach(img => {
                 if (img.style.display === "none") return;
@@ -2955,16 +3133,15 @@
                 }
             });
 
-            // Nếu trang vẫn bị tràn đáy sau khi clamp ảnh -> co nhẹ ảnh của câu bị tràn
             let guard = 0;
             while (measureContentBottomOffset(bodySlot) > availH && guard < 12) {
                 const curOverflow = measureContentBottomOffset(bodySlot) - availH;
-                const pageImgs = Array.from(bodySlot.querySelectorAll(".doc-q-img")).filter(im => im.style.display !== "none" && im.offsetHeight > 58);
+                const pageImgs = Array.from(bodySlot.querySelectorAll(".doc-q-img")).filter(im => im.style.display !== "none" && im.offsetHeight > 50);
                 if (pageImgs.length === 0) break;
                 let tallest = pageImgs[0];
                 pageImgs.forEach(im => { if (im.offsetHeight > tallest.offsetHeight) tallest = im; });
                 const step = Math.max(8, Math.ceil(curOverflow) + 4);
-                tallest.style.maxHeight = Math.max(55, tallest.offsetHeight - step) + "px";
+                tallest.style.maxHeight = Math.max(48, tallest.offsetHeight - step) + "px";
                 guard++;
             }
         }
@@ -2981,7 +3158,6 @@
             let usedH = measureContentBottomOffset(bodySlot);
             let slack = availH - usedH;
 
-            // Nếu bị tràn nhẹ vài px do làm tròn sub-pixel -> thu gọn marginBottom trên trang
             if (slack < -0.5) {
                 let shrinkGuard = 0;
                 while (measureContentBottomOffset(bodySlot) > availH && shrinkGuard < 24) {
@@ -3003,8 +3179,6 @@
             if (!isJustifyEnabled || slack <= 4) return;
 
             const fillRatio = usedH / availH;
-            // Trang trung gian: luôn giàn đều lấp kín 100% trang.
-            // Trang cuối: nếu đã chiếm >= 42% trang thì giàn kín 100%; nếu ít hơn thì giãn nhẹ tự nhiên.
             const shouldFillFull = !isLastPage || (fillRatio >= 0.42);
             const targetFillSlack = shouldFillFull
                 ? Math.max(0, slack - 2)
@@ -3012,7 +3186,6 @@
 
             if (targetFillSlack <= 3) return;
 
-            // Bước 1: Nếu ở chế độ 3 hoặc 4 (có dòng kẻ chấm ....), ưu tiên dùng ~45% khoảng dư để thêm dòng viết cho học sinh
             if (EXPORT_MODE === "blank_below" || EXPORT_MODE === "two_col_40_60") {
                 const dotsWraps = Array.from(bodySlot.querySelectorAll(".pdf-dots-wrap"));
                 if (dotsWraps.length > 0) {
@@ -3047,7 +3220,6 @@
                 }
             }
 
-            // Bước 2: Phân bổ phần khoảng trống còn lại vào khoảng cách giữa các phần tử trên trang
             const remUsed = measureContentBottomOffset(bodySlot);
             const remSlack = availH - remUsed;
             if (remSlack <= 2) return;
@@ -3061,7 +3233,6 @@
             const gapTargets = [];
             for (let i = 0; i < children.length - 1; i++) {
                 const el = children[i];
-                // Tiêu đề phần (part-header-box) luôn giữ gần câu hỏi đầu tiên của phần đó
                 const weight = (el.classList && el.classList.contains("part-header-box")) ? 0.25 : 1.0;
                 gapTargets.push({ el, weight });
             }
@@ -3075,7 +3246,6 @@
                 });
             }
 
-            // Bước 3: Khóa an toàn 100% chống tràn viền trang sau khi giãn
             let safeGuard = 0;
             while (measureContentBottomOffset(bodySlot) > availH && safeGuard < 25) {
                 for (let i = 0; i < gapTargets.length; i++) {
@@ -3089,10 +3259,57 @@
             }
         }
 
-        function buildA4SheetsFromCurrentCfg(cfg) {
+        function createBlankFillerSheet() {
+            const filler = document.createElement("div");
+            filler.className = "a4-sheet is-blank-filler border-mode-none";
+            return filler;
+        }
+
+        function assemblePairedLandscapeSheets(output, sheetList) {
+            const showCenterGuide = !(USE_DECOR_SHEETS && DECOR_CFG.pageBorderMode === "alt3");
+            const pairedSheets = [];
+
+            if (currentPaperLayout === "a4_2up") {
+                for (let i = 0; i < sheetList.length; i += 2) {
+                    const wrap = document.createElement("div");
+                    wrap.className = "a4-landscape-sheet" + (showCenterGuide ? " has-center-guide" : "");
+                    wrap.appendChild(sheetList[i]);
+                    wrap.appendChild(sheetList[i + 1] ? sheetList[i + 1] : createBlankFillerSheet());
+                    pairedSheets.push(wrap);
+                }
+            } else if (currentPaperLayout === "a4_booklet") {
+                const n = sheetList.length;
+                const P = Math.max(4, Math.ceil(n / 4) * 4);
+                const padded = [...sheetList];
+                while (padded.length < P) padded.push(createBlankFillerSheet());
+
+                const pairCount = P / 4;
+                for (let k = 0; k < pairCount; k++) {
+                    // Mặt trước: [P - 2k | 2k + 1]
+                    const front = document.createElement("div");
+                    front.className = "a4-landscape-sheet" + (showCenterGuide ? " has-center-guide" : "");
+                    front.appendChild(padded[P - 2 * k - 1]);
+                    front.appendChild(padded[2 * k]);
+                    pairedSheets.push(front);
+
+                    // Mặt sau: [2k + 2 | P - 2k - 1]
+                    const back = document.createElement("div");
+                    back.className = "a4-landscape-sheet" + (showCenterGuide ? " has-center-guide" : "");
+                    back.appendChild(padded[2 * k + 1]);
+                    back.appendChild(padded[P - 2 * k - 2]);
+                    pairedSheets.push(back);
+                }
+            }
+
+            output.innerHTML = "";
+            pairedSheets.forEach(ps => output.appendChild(ps));
+            return pairedSheets.length;
+        }
+
+        function buildSheetsFromCurrentCfg(cfg) {
             const output = document.getElementById("a4-sheets-output");
             const staging = document.getElementById("exam-doc-page");
-            if (!output || !staging) return 1;
+            if (!output || !staging) return { logicPages: 1, physicalSheets: 1 };
 
             staging.classList.add("is-staging-hidden");
             const { pages: pageGroups } = paginateBlocksIntoPageGroups(cfg);
@@ -3104,6 +3321,8 @@
             const wmHtml = (USE_DECOR_SHEETS && DECOR_CFG.watermark) ? '<div class="a4-watermark"><span>' + wmText + '</span></div>' : "";
 
             output.innerHTML = "";
+            const createdSheets = [];
+
             pageGroups.forEach((nodes, idx) => {
                 const pageNum = idx + 1;
                 const parityClass = (pageNum % 2 === 1) ? "is-odd" : "is-even";
@@ -3132,34 +3351,51 @@
                 });
 
                 output.appendChild(sheet);
-
-                // Giàn đều chiều dọc và kiểm tra co ảnh ngay trên sheet thật
                 justifySinglePageBody(bodySlot, pageNum === totalPages);
+                createdSheets.push(sheet);
             });
 
-            return totalPages;
+            let physicalSheets = totalPages;
+            if (currentPaperLayout === "a4_2up" || currentPaperLayout === "a4_booklet") {
+                physicalSheets = assemblePairedLandscapeSheets(output, createdSheets);
+            }
+
+            return { logicPages: totalPages, physicalSheets };
         }
 
-        function estimateA4PagesCount(cfg) {
+        function estimatePagesCount(cfg) {
             const { pages } = paginateBlocksIntoPageGroups(cfg);
             return pages.length;
         }
 
-        function updateTopStatusBadges(estPages, noteText = "") {
+        function updateTopStatusBadges(resObj, noteText = "") {
+            const estPages = (typeof resObj === "object" && resObj) ? resObj.logicPages : (resObj || 1);
+            const physSheets = (typeof resObj === "object" && resObj) ? resObj.physicalSheets : estPages;
+
             const pEl = document.getElementById("np-page-stat");
             const fEl = document.getElementById("np-font-stat");
             const mEl = document.getElementById("np-margin-stat");
             const sEl = document.getElementById("np-split-val");
             const jBtn = document.getElementById("btn-np-justify");
+            const lSel = document.getElementById("np-paper-layout");
+
+            const unitName = isSmallPaperLayout() ? "trang A5" : "trang A4";
 
             if (pEl) {
+                let extraSheetTxt = "";
+                if (currentPaperLayout === "a4_2up") {
+                    extraSheetTxt = " (" + physSheets + " tờ A4 ngang)";
+                } else if (currentPaperLayout === "a4_booklet") {
+                    extraSheetTxt = " (" + (physSheets / 2) + " tờ in 2 mặt)";
+                }
+
                 if (TARGET_PAGES) {
                     const isExact = (estPages <= TARGET_PAGES);
                     pEl.className = "np-badge " + (isExact ? "is-ok" : "is-warn");
-                    pEl.textContent = "Số trang: " + estPages + " / " + TARGET_PAGES + " trang A4" + (noteText ? " (" + noteText + ")" : "");
+                    pEl.textContent = estPages + " / " + TARGET_PAGES + " " + unitName + extraSheetTxt + (noteText ? " (" + noteText + ")" : "");
                 } else {
                     pEl.className = "np-badge is-ok";
-                    pEl.textContent = "Số trang: " + estPages + " trang A4" + (isJustifyEnabled ? " (Đã giàn đều)" : "");
+                    pEl.textContent = estPages + " " + unitName + extraSheetTxt + (isJustifyEnabled ? " • Giàn đều" : "");
                 }
             }
             if (fEl) {
@@ -3179,47 +3415,56 @@
                 jBtn.textContent = isJustifyEnabled ? "📐 Giàn đều: BẬT" : "📐 Giàn đều: TẮT";
                 jBtn.classList.toggle("is-off", !isJustifyEnabled);
             }
+            if (lSel && lSel.value !== currentPaperLayout) {
+                lSel.value = currentPaperLayout;
+            }
+        }
+
+        function getDefaultFontForCurrentPaper() {
+            if (REQUESTED_FONT_PT) return REQUESTED_FONT_PT;
+            return isSmallPaperLayout() ? 8.8 : ${DEFAULT_FONT_PT};
         }
 
         function fitDocumentToTargetPages() {
+            const defaultFont = getDefaultFontForCurrentPaper();
             if (!TARGET_PAGES) {
                 const baseCfg = {
-                    fontPt: REQUESTED_FONT_PT || ${DEFAULT_FONT_PT},
-                    lineHeight: 1.42,
-                    qGap: 10,
+                    fontPt: defaultFont,
+                    lineHeight: isSmallPaperLayout() ? 1.32 : 1.42,
+                    qGap: isSmallPaperLayout() ? 7 : 10,
                     imgMaxH: 205,
-                    dotH: 17,
-                    headerPad: 6,
-                    partGap: 10,
+                    dotH: isSmallPaperLayout() ? 14 : 17,
+                    headerPad: isSmallPaperLayout() ? 4 : 6,
+                    partGap: isSmallPaperLayout() ? 6 : 10,
                     logoSize: 48,
                     marginV: 12,
                     marginH: 12,
                     lineRatio: 1
                 };
                 applyLayoutParams(baseCfg);
-                const est = buildA4SheetsFromCurrentCfg(baseCfg);
-                updateTopStatusBadges(est);
-                return est;
+                const res = buildSheetsFromCurrentCfg(baseCfg);
+                updateTopStatusBadges(res);
+                return res.logicPages;
             }
 
-            const startFont = REQUESTED_FONT_PT || ${DEFAULT_FONT_PT};
+            const startFont = defaultFont;
             const candidates = [];
 
             const spacingPresets = [
-                { lineHeight: 1.38, qGap: 9, imgMaxH: 195, dotH: 16, headerPad: 5, partGap: 8, logoSize: 46, marginV: 11, marginH: 11, lineRatio: 1.0 },
-                { lineHeight: 1.28, qGap: 6, imgMaxH: 170, dotH: 14, headerPad: 4, partGap: 6, logoSize: 42, marginV: 9,  marginH: 9,  lineRatio: 0.9 },
-                { lineHeight: 1.20, qGap: 4, imgMaxH: 145, dotH: 13, headerPad: 3, partGap: 5, logoSize: 38, marginV: 7,  marginH: 8,  lineRatio: 0.8 },
-                { lineHeight: 1.13, qGap: 3, imgMaxH: 120, dotH: 11.5, headerPad: 2, partGap: 4, logoSize: 34, marginV: 6, marginH: 7, lineRatio: 0.7 }
+                { lineHeight: 1.35, qGap: 8, imgMaxH: 195, dotH: 15, headerPad: 5, partGap: 8, logoSize: 46, marginV: 11, marginH: 11, lineRatio: 1.0 },
+                { lineHeight: 1.26, qGap: 6, imgMaxH: 170, dotH: 13.5, headerPad: 4, partGap: 6, logoSize: 42, marginV: 9,  marginH: 9,  lineRatio: 0.9 },
+                { lineHeight: 1.18, qGap: 4, imgMaxH: 145, dotH: 12.5, headerPad: 3, partGap: 5, logoSize: 38, marginV: 7,  marginH: 8,  lineRatio: 0.8 },
+                { lineHeight: 1.12, qGap: 3, imgMaxH: 120, dotH: 11, headerPad: 2, partGap: 4, logoSize: 34, marginV: 6, marginH: 7, lineRatio: 0.7 }
             ];
             spacingPresets.forEach(sp => candidates.push({ fontPt: startFont, ...sp }));
 
-            for (let f = Math.round((startFont - 0.5) * 10) / 10; f >= 6.6; f = Math.round((f - 0.4) * 10) / 10) {
+            for (let f = Math.round((startFont - 0.5) * 10) / 10; f >= 6.4; f = Math.round((f - 0.4) * 10) / 10) {
                 candidates.push({
                     fontPt: f,
-                    lineHeight: f >= 9 ? 1.22 : 1.13,
+                    lineHeight: f >= 9 ? 1.22 : 1.12,
                     qGap: f >= 9 ? 5 : 3,
                     imgMaxH: f >= 9 ? 150 : 112,
-                    dotH: f >= 9 ? 13 : 11,
+                    dotH: f >= 9 ? 13 : 10.5,
                     headerPad: 3,
                     partGap: 5,
                     logoSize: f >= 9 ? 38 : 34,
@@ -3234,7 +3479,7 @@
 
             for (let i = 0; i < candidates.length; i++) {
                 applyLayoutParams(candidates[i]);
-                estPages = estimateA4PagesCount(candidates[i]);
+                estPages = estimatePagesCount(candidates[i]);
                 chosen = candidates[i];
                 if (estPages <= TARGET_PAGES) {
                     break;
@@ -3243,20 +3488,20 @@
 
             if (estPages < TARGET_PAGES) {
                 const looseCfg = {
-                    fontPt: REQUESTED_FONT_PT ? Math.max(REQUESTED_FONT_PT, 11) : 11.5,
-                    lineHeight: 1.62,
-                    qGap: 16,
-                    imgMaxH: 235,
-                    dotH: 20,
-                    headerPad: 9,
-                    partGap: 13,
-                    logoSize: 52,
-                    marginV: 13,
-                    marginH: 13,
-                    lineRatio: 1.25
+                    fontPt: REQUESTED_FONT_PT ? Math.max(REQUESTED_FONT_PT, 10.5) : (isSmallPaperLayout() ? 9.8 : 11.5),
+                    lineHeight: 1.56,
+                    qGap: 14,
+                    imgMaxH: 230,
+                    dotH: 18,
+                    headerPad: 8,
+                    partGap: 12,
+                    logoSize: 50,
+                    marginV: 12,
+                    marginH: 12,
+                    lineRatio: 1.2
                 };
                 applyLayoutParams(looseCfg);
-                const looseEst = estimateA4PagesCount(looseCfg);
+                const looseEst = estimatePagesCount(looseCfg);
                 if (looseEst <= TARGET_PAGES) {
                     chosen = looseCfg;
                     estPages = looseEst;
@@ -3265,32 +3510,32 @@
                 }
             }
 
-            estPages = buildA4SheetsFromCurrentCfg(chosen);
+            const finalRes = buildSheetsFromCurrentCfg(chosen);
 
             const note = (REQUESTED_FONT_PT && chosen.fontPt < REQUESTED_FONT_PT)
                 ? "Co từ " + REQUESTED_FONT_PT + "pt -> " + chosen.fontPt + "pt"
                 : "";
-            updateTopStatusBadges(estPages, note);
-            return estPages;
+            updateTopStatusBadges(finalRes, note);
+            return finalRes.logicPages;
         }
 
         function manualStepFont(delta) {
-            const nextPt = Math.max(6.5, Math.min(18, Math.round((currentFontPt + delta) * 10) / 10));
+            const nextPt = Math.max(6.2, Math.min(18, Math.round((currentFontPt + delta) * 10) / 10));
             const baseCfg = lastAppliedCfg ? { ...lastAppliedCfg, fontPt: nextPt } : {
                 fontPt: nextPt,
-                lineHeight: 1.42,
-                qGap: 10,
+                lineHeight: isSmallPaperLayout() ? 1.32 : 1.42,
+                qGap: isSmallPaperLayout() ? 7 : 10,
                 imgMaxH: 205,
-                dotH: 17,
+                dotH: 16,
                 headerPad: 6,
-                partGap: 10,
+                partGap: 9,
                 logoSize: 48,
                 marginV: TARGET_PAGES ? 8 : 12,
                 marginH: TARGET_PAGES ? 8 : 12
             };
             applyLayoutParams(baseCfg);
-            const est = buildA4SheetsFromCurrentCfg(baseCfg);
-            updateTopStatusBadges(est, "Chỉnh tay");
+            const res = buildSheetsFromCurrentCfg(baseCfg);
+            updateTopStatusBadges(res, "Chỉnh tay");
         }
 
         function setSplitRatioExact(newLeftPct) {
@@ -3301,42 +3546,47 @@
             }
             const cfg = lastAppliedCfg || {
                 fontPt: currentFontPt,
-                lineHeight: 1.42,
-                qGap: 10,
+                lineHeight: 1.4,
+                qGap: 9,
                 imgMaxH: 205,
-                dotH: 17,
+                dotH: 16,
                 headerPad: 6,
-                partGap: 10,
+                partGap: 9,
                 logoSize: 48,
                 marginV: TARGET_PAGES ? 8 : 12,
                 marginH: TARGET_PAGES ? 8 : 12
             };
             applyLayoutParams(cfg);
-            const est = buildA4SheetsFromCurrentCfg(cfg);
-            updateTopStatusBadges(est, "2 cột " + currentSplitLeftPct + "/" + (100 - currentSplitLeftPct));
+            const res = buildSheetsFromCurrentCfg(cfg);
+            updateTopStatusBadges(res, "2 cột " + currentSplitLeftPct + "/" + (100 - currentSplitLeftPct));
         }
 
         function stepSplitRatio(delta) {
             setSplitRatioExact(currentSplitLeftPct + delta);
         }
 
+        function changePaperLayoutLive(newLayout) {
+            currentPaperLayout = newLayout || "a4_portrait";
+            fitDocumentToTargetPages();
+        }
+
         function toggleJustifyMode() {
             isJustifyEnabled = !isJustifyEnabled;
             const cfg = lastAppliedCfg || {
                 fontPt: currentFontPt,
-                lineHeight: 1.42,
-                qGap: 10,
+                lineHeight: 1.4,
+                qGap: 9,
                 imgMaxH: 205,
-                dotH: 17,
+                dotH: 16,
                 headerPad: 6,
-                partGap: 10,
+                partGap: 9,
                 logoSize: 48,
                 marginV: TARGET_PAGES ? 8 : 12,
                 marginH: TARGET_PAGES ? 8 : 12
             };
             applyLayoutParams(cfg);
-            const est = buildA4SheetsFromCurrentCfg(cfg);
-            updateTopStatusBadges(est);
+            const res = buildSheetsFromCurrentCfg(cfg);
+            updateTopStatusBadges(res);
         }
 
         function waitAllImagesLoaded(maxWaitMs = 2800) {
@@ -3397,6 +3647,7 @@
     // Xuất các hàm ra window scope
     window.togglePreviewPdfExporterMenu = togglePreviewPdfExporterMenu;
     window.closePreviewPdfExporterMenu = closePreviewPdfExporterMenu;
+    window.onQbPdfPaperLayoutChange = onQbPdfPaperLayoutChange;
     window.toggleQbPdfSplitPanel = toggleQbPdfSplitPanel;
     window.selectQbSplitPreset = selectQbSplitPreset;
     window.onQbSplitRatioChange = onQbSplitRatioChange;
