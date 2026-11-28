@@ -4,6 +4,7 @@
 // - LƯU MỖI CÂU HỎI = 1 DÒNG TRONG BẢNG RIÊNG qbank_questions (PHÂN TRANG + DIFF SYNC)
 // - ĐỒNG BỘ & BẢO LƯU METADATA LINK ẢNH DỰ PHÒNG GOOGLE DRIVE (imagesBackupMap)
 // - CHẶN TRIỆT ĐỂ ẢNH BASE64 LỌT VÀO SUPABASE
+// - BẢO VỆ CHỐNG GHI ĐÈ MẤT DỮ LIỆU CLOUD KHI CACHE LOCAL RỖNG / ĐẦY QUOTA
 // - TỰ PHỤC HỒI ẢNH ĐA TẦNG KHI LỖI THAY VÌ ẨN MẤT ẢNH
 // =========================================================
 
@@ -21,6 +22,7 @@ let qbankState = {
     useDedicatedTable: false,
     currentMidPage: 1,
     pageSize: 50,
+    searchQuery: "",
     currentTree: [
         {
             id: "node_lop10",
@@ -717,6 +719,7 @@ function pushQbankUndoState(actionLabel = "Thao tác") {
             selectedQuestionIds: Array.from(qbankState.selectedQuestionIds || []),
             assignMode: !!qbankState.assignMode,
             hideAssigned: !!qbankState.hideAssigned,
+            searchQuery: qbankState.searchQuery || "",
             currentMidPage: qbankState.currentMidPage || 1,
             activeFilter: JSON.parse(JSON.stringify(qbankState.activeFilter || {}))
         };
@@ -757,6 +760,7 @@ function undoQbankAction() {
     qbankState.selectedQuestionIds = new Set(prev.selectedQuestionIds || []);
     qbankState.assignMode = prev.assignMode !== undefined ? !!prev.assignMode : true;
     qbankState.hideAssigned = !!prev.hideAssigned;
+    qbankState.searchQuery = prev.searchQuery || "";
     qbankState.currentMidPage = prev.currentMidPage || 1;
     qbankState.activeFilter = prev.activeFilter || { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = qbankState.activeFilter.folderId || null;
@@ -1052,7 +1056,7 @@ async function writeQbankDraftLocalStorages(ts) {
             localStorage.removeItem("qbank_draft_images");
             localStorage.removeItem("qbank_draft_images_backup");
             localStorage.removeItem("qbank_draft_pending_exams");
-            localStorage.setItem("qbank_draft_updated_at", String(ts));
+            localStorage.removeItem("qbank_draft_updated_at");
         } catch (e2) {}
     }
     if (typeof examIndexedDB !== "undefined") {
@@ -1226,7 +1230,12 @@ async function loadQbankDraftState(onProgress = null) {
         } catch (e) {}
     }
 
-    if ((localQuestions.length > 0 || localPendingExams.length > 0) && localDraftTs === 0) localDraftTs = 1;
+    const hasLocalData = (localQuestions.length > 0 || localPendingExams.length > 0);
+    if (!hasLocalData) {
+        localDraftTs = 0;
+    } else if (localDraftTs === 0) {
+        localDraftTs = 1;
+    }
 
     stripBase64FromQuestions(localQuestions);
     localImages = sanitizeImagesMapNoBase64(localImages).clean;
@@ -1297,7 +1306,7 @@ async function loadQbankDraftState(onProgress = null) {
                     });
 
                     const localTsNow = qbankState.draftUpdatedAt || 0;
-                    const shouldTakeCloud = (localTsNow === 0) || (cloudMetaTs >= localTsNow);
+                    const shouldTakeCloud = !hasLocalData || (localTsNow === 0) || (cloudMetaTs >= localTsNow);
 
                     if (shouldTakeCloud) {
                         qbankState.rawQuestions = cloudQuestions;
@@ -1318,7 +1327,7 @@ async function loadQbankDraftState(onProgress = null) {
                     const legacyQuestions = (legacyDraft && Array.isArray(legacyDraft.questions)) ? legacyDraft.questions : [];
                     const legacyTs = Number(legacyDraft && legacyDraft.updatedAt) || 0;
 
-                    if (legacyQuestions.length > 0 && legacyTs >= (qbankState.draftUpdatedAt || 0)) {
+                    if (legacyQuestions.length > 0 && (!hasLocalData || legacyTs >= (qbankState.draftUpdatedAt || 0))) {
                         stripBase64FromQuestions(legacyQuestions);
                         qbankState.rawQuestions = legacyQuestions;
                         qbankState.pendingExams = Array.isArray(legacyDraft.pendingExams) ? legacyDraft.pendingExams : [];
@@ -1337,7 +1346,7 @@ async function loadQbankDraftState(onProgress = null) {
                             }, { onConflict: "key" }).then(() => {});
                             showQbankToast(`🚀 Đã di trú tự động ${legacyQuestions.length} câu sang bảng riêng qbank_questions!`, "success");
                         }
-                    } else if ((qbankState.rawQuestions || []).length > 0 || (qbankState.pendingExams || []).length > 0) {
+                    } else if (hasLocalData) {
                         qbankState.draftUpdatedAt = Date.now();
                         await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
                         await syncQbankDraftToCloud();
@@ -1352,7 +1361,7 @@ async function loadQbankDraftState(onProgress = null) {
 
                 if (cloudQuestions) {
                     const localTsNow = qbankState.draftUpdatedAt || 0;
-                    const shouldTakeCloud = (localTsNow === 0 && (cloudQuestions.length > 0 || (cloudPendingExams && cloudPendingExams.length > 0))) || (cloudDraftTs > localTsNow);
+                    const shouldTakeCloud = !hasLocalData || (localTsNow === 0 && (cloudQuestions.length > 0 || (cloudPendingExams && cloudPendingExams.length > 0))) || (cloudDraftTs >= localTsNow);
                     if (shouldTakeCloud) {
                         stripBase64FromQuestions(cloudQuestions);
                         qbankState.rawQuestions = cloudQuestions;
@@ -1365,7 +1374,7 @@ async function loadQbankDraftState(onProgress = null) {
                     } else if (localTsNow > cloudDraftTs) {
                         await syncQbankDraftToCloud();
                     }
-                } else if (localQuestions.length > 0 || localPendingExams.length > 0) {
+                } else if (hasLocalData) {
                     qbankState.draftUpdatedAt = Date.now();
                     await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
                     await syncQbankDraftToCloud();
@@ -1472,6 +1481,7 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
         qbankState.activeFolderId = null;
         qbankState.activeFolderObj = null;
         qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
+        qbankState.searchQuery = "";
         qbankState.currentMidPage = 1;
     } else {
         if (incomingTree && qbankState.currentTree.length === 0) {
@@ -1785,8 +1795,21 @@ async function openQbankCreatorModal(options = {}) {
         if (typeof updateQbankDeleteSelectedButtonUI === "function") updateQbankDeleteSelectedButtonUI();
         if (typeof updateQbankUploadMenuCounts === "function") updateQbankUploadMenuCounts();
         renderQbankHeaderAndMidExamTitle();
-        if (typeof renderQbankTree === "function") renderQbankTree();
-        if (typeof renderQbankQuestions === "function") renderQbankQuestions();
+
+        if (typeof renderQbankTree === "function") {
+            renderQbankTree();
+        } else {
+            const treeRoot = document.getElementById("qbank-tree-root");
+            if (treeRoot) treeRoot.innerHTML = `<div style="padding:14px; color:#dc2626; font-weight:800; font-size:12px;">⚠️ Lỗi chưa nạp được module cây thư mục (qbank-tree-questions.js). Vui lòng tải lại trang (Ctrl+F5)!</div>`;
+        }
+
+        if (typeof renderQbankQuestions === "function") {
+            renderQbankQuestions();
+        } else {
+            const qList = document.getElementById("qbank-questions-list");
+            if (qList) qList.innerHTML = `<div style="padding:24px; text-align:center; color:#dc2626; font-weight:800;">⚠️ Module hiển thị câu hỏi (qbank-tree-questions.js) bị lỗi tải hoặc lỗi cú pháp. Vui lòng kiểm tra Console (F12) và nhấn Ctrl+F5!</div>`;
+        }
+
         if (typeof updateQbankMatrixStats === "function") updateQbankMatrixStats();
         if (typeof updateQbankBuilderStats === "function") updateQbankBuilderStats();
 
@@ -1806,6 +1829,7 @@ function closeQbankCreatorModal() {
     if (typeof closeQbankExportPopover === "function") closeQbankExportPopover();
     if (typeof closeQbankDeleteMultiMenu === "function") closeQbankDeleteMultiMenu();
     if (typeof closeQbankUploadMenu === "function") closeQbankUploadMenu();
+    if (typeof closeQbankTreeVisMenu === "function") closeQbankTreeVisMenu();
     if (typeof closeClassTransferKhoPopover === "function") closeClassTransferKhoPopover();
     if (typeof closeQbankExamPreviewModal === "function") closeQbankExamPreviewModal();
     closeQbankRestoreModal();
@@ -1898,6 +1922,8 @@ window.recomputeAllMatrixIds = recomputeAllMatrixIds;
 window.pushQbankUndoState = pushQbankUndoState;
 window.updateQbankUndoButtonUI = updateQbankUndoButtonUI;
 window.undoQbankAction = undoQbankAction;
+window.syncQbankTreeToCloud = syncQbankTreeToCloud;
+window.syncQbankDraftToCloud = syncQbankDraftToCloud;
 window.saveQbankTreeData = saveQbankTreeData;
 window.loadQbankTreeData = loadQbankTreeData;
 window.saveQbankDraftState = saveQbankDraftState;
