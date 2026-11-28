@@ -1,10 +1,10 @@
 // =========================================================
-// FILE: qbank-preview-pagination.js (FILE MỚI TINH)
+// FILE: qbank-preview-pagination.js
 // BỔ SUNG 3 NÂNG CẤP CHO MODAL NGÂN HÀNG CÂU HỎI & ĐỀ THI:
 // 1. THANH CHẠY NGANG LOAD TRANG THÔNG MINH (TỰ KHỚP TỐC ĐỘ NHANH / CHẬM THỰC TẾ)
 // 2. PHÂN TRANG 50 CÂU / TRANG Ở DÒNG CUỐI CỘT GIỮA (SỐ TRANG NHỎ GỌN, ĐÁNH DẤU RÕ RÀNG)
 // 3. NÚT "👁️ Xem thử đề" Ở CỘT PHẢI (NGAY TRÊN NÚT LƯU ĐỀ) + MODAL XEM THỬ ĐỀ ĐẦY ĐỦ
-//    CÓ ĐỦ CÁC NÚT CHỨC NĂNG TỪNG CÂU & NÚT CHỌN TÍCH SẴN (BỎ TÍCH LÀ TỰ RÚT KHỎI ĐỀ)
+//    CÓ ĐỦ CÁC NÚT CHỨC NĂNG TỪNG CÂU, TẢI LẠI ẢNH / DRIVE & NÚT CHỌN TÍCH SẴN
 // =========================================================
 
 (function initQbankPreviewAndPaginationModule() {
@@ -708,6 +708,22 @@
         });
     }
 
+    function buildPreviewDriveBadgeHtml(q, imgUrl, safeQId) {
+        const hasDriveBackup = Boolean(q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
+        if (hasDriveBackup) {
+            const openUrl = q.imageDriveFolderUrl || q.imageDriveUrl || q.imageBackupUrl || "";
+            const tip = `Đã sao lưu dự phòng lên Google Drive 5TB\n📁 Đường dẫn: ${q.imageDrivePath || "Kho_anh_ngan_hang_cau_hoi"}\n📄 Tên file: ${q.imageDriveFilename || "Đã lưu"}`;
+            if (openUrl) {
+                return `<a href="${escapeQbankAttr(openUrl)}" target="_blank" class="btn-qbank-img" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; text-decoration:none;" title="${escapeQbankAttr(tip)}">☁️ Đã lưu Drive</a>`;
+            }
+            return `<span class="btn-qbank-img" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; cursor:default;" title="${escapeQbankAttr(tip)}">☁️ Đã lưu Drive</span>`;
+        }
+        if (imgUrl) {
+            return `<button type="button" class="btn-qbank-img" style="background:#fef3c7; color:#b45309; border:1px solid #fcd34d;" onclick="backupSingleQbankImageToDrive('${safeQId}')" title="Câu này mới chỉ có link ngoài (ImgBB/Web). Bấm để tạo bản sao lưu vĩnh viễn lên Google Drive 5TB!">☁️ Lưu Drive</button>`;
+        }
+        return "";
+    }
+
     function buildPreviewQuestionCardHtml(q, displayNum) {
         const letters = ["A", "B", "C", "D"];
         const p = getQbankQuestionPart(q);
@@ -718,17 +734,21 @@
         const imgUrl = resolveQbankImageUrl(q, qbankState.imagesMap);
         const safeQId = safeQbankJsArg(q.id);
         const attrQId = escapeQbankAttr(q.id);
+        const hasAnyImgOrDrive = Boolean(imgUrl || q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
+        const driveBadgeHtml = buildPreviewDriveBadgeHtml(q, imgUrl, safeQId);
 
         const uploaderHtml = `
-            <div class="qbank-img-tool-zone" id="zone-qbpreview-${attrQId}" tabindex="0" title="Bấm vào đây rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; gap:5px; background:#f8fafc; padding:3px 7px; border-radius:6px; border:1px dashed #cbd5e1; margin:5px 0;">
+            <div class="qbank-img-tool-zone" id="zone-qbpreview-${attrQId}" tabindex="0" title="Bấm vào đây rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; background:#f8fafc; padding:3px 7px; border-radius:6px; border:1px dashed #cbd5e1; margin:5px 0;">
                 <span style="font-size:10.5px; font-weight:800; color:#475569;">🖼️ Ảnh:</span>
                 <button type="button" class="btn-qbank-img" onclick="triggerQbPreviewPaste('${safeQId}')">📋 Dán (Ctrl+V)</button>
                 <input type="file" id="file-qbpreview-${attrQId}" accept="image/*" style="display:none;" onchange="handleQBankImgSelect(this, '${safeQId}', '${safeQbankJsArg(imgKey)}')">
                 <button type="button" class="btn-qbank-img" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;" onclick="document.getElementById('file-qbpreview-${safeQId}').click()">📁 Tệp</button>
-                ${imgUrl ? `<button type="button" class="btn-qbank-img" style="background:#fee2e2; color:#dc2626;" onclick="deleteQBankImg('${safeQId}', '${safeQbankJsArg(imgKey)}')">🗑 Xóa</button>` : ""}
+                ${hasAnyImgOrDrive ? `<button type="button" class="btn-qbank-img" style="background:#e0f2fe; color:#0369a1; border:1px solid #7dd3fc;" onclick="reloadQBankImg('${safeQId}')" title="Truy cập Google Drive / làm mới lại hình ảnh của câu này">🔄 Tải lại ảnh</button>` : ""}
+                ${driveBadgeHtml}
+                ${hasAnyImgOrDrive ? `<button type="button" class="btn-qbank-img" style="background:#fee2e2; color:#dc2626;" onclick="deleteQBankImg('${safeQId}', '${safeQbankJsArg(imgKey)}')">🗑 Xóa</button>` : ""}
                 <span id="status-qbpreview-${attrQId}" style="font-size:10px; font-weight:800; margin-left:auto;"></span>
             </div>
-            ${imgUrl ? `<div style="text-align:center; margin:6px 0;"><img src="${escapeQbankAttr(imgUrl)}" onerror="handleQbankImgError(this)" style="max-height:220px; max-width:100%; border-radius:8px; border:1px solid #cbd5e1;" alt="Hình câu ${displayNum}"></div>` : ""}
+            ${imgUrl ? `<div style="text-align:center; margin:6px 0;"><img src="${escapeQbankAttr(imgUrl)}" onerror="handleQbankImgError(this, '${safeQId}')" style="max-height:220px; max-width:100%; border-radius:8px; border:1px solid #cbd5e1;" alt="Hình câu ${displayNum}"></div>` : ""}
         `;
 
         let contentDetailsHtml = "";
