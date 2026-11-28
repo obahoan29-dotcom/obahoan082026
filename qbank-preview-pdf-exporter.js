@@ -5,7 +5,7 @@
 //    (1) Xuất đề PDF (chỉ đề)
 //    (2) Đề PDF kèm lời giải & bảng đáp án
 //    (3) Xuất PDF đề kèm khoảng trống dưới mỗi câu (dòng kẻ chấm .... hợp lý theo độ khó)
-//    (4) Xuất PDF chia 2 cột: Trái 40% Đề | Phải 60% Khoảng trống trình bày (dòng kẻ chấm ....)
+//    (4) Xuất PDF chia 2 cột: Nút tự chỉnh tỷ lệ % Đề | % Trình bày theo ý muốn (mặc định 40% - 60%)
 // 2. Ô CHỌN "✨ TRANG TRÍ" XÒE RA ĐẦY ĐỦ TÙY CHỌN:
 //    - 2 dòng kẻ trang trí trên cùng & dưới cùng mỗi trang
 //    - Tên tác giả lề trên & dưới (kèm logo, ô nhập tên, chọn bo viền nhãn)
@@ -14,7 +14,8 @@
 //    - Chọn 4 kiểu nét viền (Đôi cổ điển, Bo góc thanh lịch, Góc chữ L, Nét đứt), 5 màu, số trang, watermark
 //    - Chọn độ rộng 4 lề trang PDF (Trên / Dưới / Trái / Phải theo mm) để giảm lề, mở rộng vùng chữ
 // 3. TẶNG MỖI ĐỀ XUẤT RA 1 LOGO SVG NGHỆ THUẬT SINH NGẪU NHIÊN
-// 4. PHÂN TRANG TỪNG TỜ A4 THỰC TẾ KHI BẬT TRANG TRÍ & CO GIÃN ĐO TRANG SAU KHI MATHJAX RENDER
+// 4. PHÂN TRANG A4 CHUẨN XÁC CHO MỌI CHẾ ĐỘ + GIÀN ĐỀU CHIỀU DỌC CHỐNG THỪA GIẤY TRẮNG
+// 5. TỰ ĐỘNG CO HÌNH ẢNH VỪA KHÍT CỠ CHỮ & ĐỘ RỘNG CỘT (CHỐNG CHE/CẮT ẢNH)
 // =========================================================
 
 (function initQbankPreviewPdfExporter() {
@@ -29,6 +30,8 @@
         narrow:  { top: 4, bottom: 4, left: 5, right: 5 },
         ultra:   { top: 2.5, bottom: 2.5, left: 3, right: 3 }
     };
+
+    const SPLIT_RATIO_PRESETS = [30, 35, 40, 50, 60, 65];
 
     const DEFAULT_DECOR_PREFS = {
         twoLines: false,
@@ -45,7 +48,8 @@
         marginLeft: 12,
         marginRight: 12,
         showPageNum: true,
-        watermark: false
+        watermark: false,
+        splitLeftPct: 40         // Tỷ lệ cột Đề bên trái (%) trong chế độ chia 2 cột
     };
 
     const DECOR_COLOR_SWATCHES = [
@@ -62,6 +66,12 @@
         const n = parseFloat(String(val ?? "").replace(",", "."));
         if (isNaN(n)) return fallback;
         return Math.round(Math.max(0, Math.min(35, n)) * 10) / 10;
+    }
+
+    function clampSplitLeftPct(val, fallback = 40) {
+        const n = parseInt(String(val ?? ""), 10);
+        if (isNaN(n)) return fallback;
+        return Math.max(25, Math.min(75, n));
     }
 
     function hasCustomMarginConfig(prefs) {
@@ -91,6 +101,7 @@
         loaded.marginBottom = clampMarginMm(loaded.marginBottom, 12);
         loaded.marginLeft = clampMarginMm(loaded.marginLeft, 12);
         loaded.marginRight = clampMarginMm(loaded.marginRight, 12);
+        loaded.splitLeftPct = clampSplitLeftPct(loaded.splitLeftPct, 40);
         _decorPrefs = loaded;
         return _decorPrefs;
     }
@@ -101,6 +112,7 @@
         merged.marginBottom = clampMarginMm(merged.marginBottom, 12);
         merged.marginLeft = clampMarginMm(merged.marginLeft, 12);
         merged.marginRight = clampMarginMm(merged.marginRight, 12);
+        merged.splitLeftPct = clampSplitLeftPct(merged.splitLeftPct, 40);
         _decorPrefs = merged;
         try {
             localStorage.setItem(DECOR_PREFS_STORAGE_KEY, JSON.stringify(_decorPrefs));
@@ -109,7 +121,7 @@
     }
 
     // =========================================================================
-    // 1. TIÊM CSS CHO MENU XÒE XUẤT PDF & PANEL TRANG TRÍ
+    // 1. TIÊM CSS CHO MENU XÒE XUẤT PDF, PANEL TRANG TRÍ & TỰ CHỈNH TỶ LỆ 2 CỘT
     // =========================================================================
     function injectPreviewPdfExporterStyles() {
         const styleId = "qb-preview-pdf-exporter-styles";
@@ -120,7 +132,7 @@
             .qb-pdf-export-popover {
                 display: none;
                 position: fixed !important;
-                width: 418px;
+                width: 428px;
                 max-width: 95vw;
                 max-height: 88vh;
                 overflow-y: auto;
@@ -604,6 +616,157 @@
                 box-shadow: 0 0 0 2.5px rgba(45, 212, 191, 0.55) !important;
                 filter: brightness(1.08);
             }
+
+            /* KHỐI MỤC 4 KÈM NÚT TỰ CHỈNH TỶ LỆ CHIA 2 CỘT */
+            .qb-pdf-mode4-wrap {
+                display: flex;
+                flex-direction: column;
+                border: 1.3px solid #cbd5e1;
+                border-radius: 10px;
+                background: #f8fafc;
+                overflow: hidden;
+                transition: border-color 0.14s ease, box-shadow 0.14s ease;
+            }
+            .qb-pdf-mode4-wrap:hover {
+                border-color: #9333ea;
+                box-shadow: 0 3px 10px rgba(147, 51, 234, 0.13);
+            }
+            .qb-pdf-mode4-wrap .qb-pdf-mode-btn {
+                border: none;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
+            }
+            .qb-pdf-mode4-wrap .qb-pdf-mode-btn:hover {
+                background: #faf5ff;
+                transform: none;
+                box-shadow: none;
+            }
+            .qb-pdf-split-bar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 6px;
+                padding: 5px 10px;
+                background: #f3e8ff;
+                border-top: 1px dashed #d8b4fe;
+            }
+            .qb-pdf-split-toggle-btn {
+                width: 100%;
+                border: 1.2px solid #c084fc;
+                background: #ffffff;
+                color: #6b21a8;
+                border-radius: 7px;
+                padding: 4px 9px;
+                font-size: 11px;
+                font-weight: 800;
+                cursor: pointer;
+                font-family: inherit;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 6px;
+                transition: all 0.13s ease;
+            }
+            .qb-pdf-split-toggle-btn:hover,
+            .qb-pdf-split-toggle-btn.is-open {
+                background: #7c3aed;
+                color: #ffffff;
+                border-color: #6d28d9;
+            }
+            .qb-pdf-split-panel {
+                display: none;
+                flex-direction: column;
+                gap: 7px;
+                padding: 8px 10px 9px 10px;
+                background: #ffffff;
+                border-top: 1px solid #e9d5ff;
+                animation: popInQbank 0.14s ease-out;
+            }
+            .qb-pdf-split-panel.show {
+                display: flex;
+            }
+            .qb-split-presets-row {
+                display: grid;
+                grid-template-columns: repeat(6, 1fr);
+                gap: 4px;
+            }
+            .qb-split-preset-pill {
+                border: 1.2px solid #cbd5e1;
+                background: #f8fafc;
+                color: #334155;
+                border-radius: 6px;
+                padding: 4px 2px;
+                font-size: 10.5px;
+                font-weight: 800;
+                cursor: pointer;
+                text-align: center;
+                font-family: inherit;
+                transition: all 0.12s;
+            }
+            .qb-split-preset-pill:hover {
+                border-color: #9333ea;
+                background: #faf5ff;
+                color: #6b21a8;
+            }
+            .qb-split-preset-pill.active {
+                background: #7c3aed;
+                color: #ffffff;
+                border-color: #6d28d9;
+            }
+            .qb-split-slider-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .qb-split-slider-row input[type="range"] {
+                flex: 1;
+                accent-color: #7c3aed;
+                cursor: pointer;
+                height: 6px;
+            }
+            .qb-split-inputs-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr auto;
+                gap: 6px;
+                align-items: end;
+            }
+            .qb-split-num-box label {
+                display: block;
+                font-size: 10px;
+                font-weight: 800;
+                color: #581c87;
+                margin-bottom: 2px;
+            }
+            .qb-split-num-box input {
+                width: 100%;
+                padding: 4px 6px;
+                border: 1.3px solid #c084fc;
+                border-radius: 6px;
+                font-size: 11.5px;
+                font-weight: 900;
+                text-align: center;
+                color: #0f172a;
+                font-family: inherit;
+                outline: none;
+            }
+            .qb-split-num-box input:focus {
+                border-color: #7c3aed;
+                box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18);
+            }
+            .qb-split-run-now-btn {
+                background: linear-gradient(135deg, #7c3aed, #6d28d9);
+                color: #ffffff;
+                border: none;
+                border-radius: 7px;
+                padding: 6px 10px;
+                font-size: 11px;
+                font-weight: 800;
+                cursor: pointer;
+                font-family: inherit;
+                white-space: nowrap;
+            }
+            .qb-split-run-now-btn:hover { filter: brightness(1.1); }
         `;
         document.head.appendChild(style);
     }
@@ -780,8 +943,33 @@
     }
 
     // =========================================================================
-    // 3. UI MENU XÒE CỦA NÚT "📄 Xuất PDF ▾" & Ô CHỌN "✨ TRANG TRÍ"
+    // 3. UI MENU XÒE CỦA NÚT "📄 Xuất PDF ▾", "✨ TRANG TRÍ" & TỶ LỆ 2 CỘT
     // =========================================================================
+    function syncSplitRatioUI() {
+        const prefs = loadDecorPrefs();
+        const leftPct = clampSplitLeftPct(prefs.splitLeftPct, 40);
+        const rightPct = 100 - leftPct;
+
+        const mode4Title = document.getElementById("qb-pdf-mode4-title");
+        if (mode4Title) {
+            mode4Title.innerHTML = `4. Xuất PDF chia 2 cột (${leftPct}% Đề | ${rightPct}% Trình bày) <span class="qb-pdf-mode-tag is-purple">2 cột</span>`;
+        }
+        const splitBtnLbl = document.getElementById("qb-pdf-split-btn-label");
+        if (splitBtnLbl) {
+            splitBtnLbl.textContent = `🎛️ Tự chỉnh tỷ lệ chia cột: ${leftPct}% Đề | ${rightPct}% Trình bày`;
+        }
+        const rangeEl = document.getElementById("qb-split-range-input");
+        const leftIn = document.getElementById("qb-split-left-input");
+        const rightIn = document.getElementById("qb-split-right-input");
+        if (rangeEl) rangeEl.value = String(leftPct);
+        if (leftIn && document.activeElement !== leftIn) leftIn.value = String(leftPct);
+        if (rightIn && document.activeElement !== rightIn) rightIn.value = String(rightPct);
+
+        document.querySelectorAll(".qb-split-preset-pill").forEach(btn => {
+            btn.classList.toggle("active", parseInt(btn.dataset.left, 10) === leftPct);
+        });
+    }
+
     function syncDecorControlsWithPrefs() {
         const prefs = loadDecorPrefs();
 
@@ -834,6 +1022,7 @@
             btn.classList.toggle("active", btn.dataset.color === prefs.borderColor);
         });
 
+        syncSplitRatioUI();
         updateDecorTriggerSummaryUI();
     }
 
@@ -876,6 +1065,10 @@
 
         const colorSwatchesHtml = DECOR_COLOR_SWATCHES.map(c =>
             `<button type="button" class="qb-decor-swatch" data-color="${escapePdfAttr(c.hex)}" style="background:${escapePdfAttr(c.hex)};" title="${escapePdfAttr(c.name)}" onclick="onQbDecorColorSelect('${escapePdfAttr(c.hex)}')"></button>`
+        ).join("");
+
+        const splitPresetsHtml = SPLIT_RATIO_PRESETS.map(p =>
+            `<button type="button" class="qb-split-preset-pill" data-left="${p}" onclick="selectQbSplitPreset(${p}, event)">${p}/${100 - p}</button>`
         ).join("");
 
         pop = document.createElement("div");
@@ -1057,7 +1250,7 @@
                 </div>
 
                 <div class="qb-pdf-config-hint-row">
-                    <span>💡 Không chọn gì = xuất chuẩn mặc định.</span>
+                    <span>💡 Tự động giàn đều câu hỏi kín trang &amp; co ảnh vừa khung.</span>
                     <button type="button" class="qb-pdf-reset-btn" onclick="resetPreviewPdfOptions()">↺ Mặc định</button>
                 </div>
             </div>
@@ -1067,7 +1260,7 @@
                     <span class="qb-pdf-mode-icon">📄</span>
                     <div class="qb-pdf-mode-text">
                         <b>1. Xuất đề PDF <span class="qb-pdf-mode-tag">Chỉ đề</span></b>
-                        <span>Đề kiểm tra sạch đẹp (không đáp án), tự co dòng vừa khít số trang đã chọn</span>
+                        <span>Đề kiểm tra sạch đẹp (không đáp án), tự co chữ &amp; giàn đều kín trang</span>
                     </div>
                 </button>
 
@@ -1087,18 +1280,88 @@
                     </div>
                 </button>
 
-                <button type="button" class="qb-pdf-mode-btn" onclick="runPreviewPdfExport('two_col_40_60', event)">
-                    <span class="qb-pdf-mode-icon">▥</span>
-                    <div class="qb-pdf-mode-text">
-                        <b>4. Xuất PDF chia 2 cột (40% Đề | 60% Trình bày) <span class="qb-pdf-mode-tag is-purple">2 cột</span></b>
-                        <span>Trái 40% đề từng câu | Phải 60% khoảng trống dòng kẻ .... theo độ khó</span>
+                <!-- MỤC 4: CHIA 2 CỘT + NÚT TỰ CHỈNH TỶ LỆ THEO Ý MUỐN -->
+                <div class="qb-pdf-mode4-wrap">
+                    <button type="button" class="qb-pdf-mode-btn" onclick="runPreviewPdfExport('two_col_40_60', event)">
+                        <span class="qb-pdf-mode-icon">▥</span>
+                        <div class="qb-pdf-mode-text">
+                            <b id="qb-pdf-mode4-title">4. Xuất PDF chia 2 cột (40% Đề | 60% Trình bày) <span class="qb-pdf-mode-tag is-purple">2 cột</span></b>
+                            <span>Trái: Đề từng câu (ảnh tự co vừa cột) | Phải: Khoảng trống dòng kẻ ....</span>
+                        </div>
+                    </button>
+
+                    <div class="qb-pdf-split-bar" onclick="event.stopPropagation()">
+                        <button type="button" class="qb-pdf-split-toggle-btn" id="qb-pdf-split-toggle-btn" onclick="toggleQbPdfSplitPanel(event)" title="Nhấp để tự chỉnh tỷ lệ % phần Đề và phần Trình bày theo ý muốn">
+                            <span id="qb-pdf-split-btn-label">🎛️ Tự chỉnh tỷ lệ chia cột: 40% Đề | 60% Trình bày</span>
+                            <span id="qb-pdf-split-caret">▾</span>
+                        </button>
                     </div>
-                </button>
+
+                    <div class="qb-pdf-split-panel" id="qb-pdf-split-panel" onclick="event.stopPropagation()">
+                        <div class="qb-split-presets-row">${splitPresetsHtml}</div>
+                        <div class="qb-split-slider-row">
+                            <span style="font-size:10px; font-weight:800; color:#6b21a8;">Đề</span>
+                            <input type="range" id="qb-split-range-input" min="25" max="75" step="1" value="40" oninput="onQbSplitRatioChange('left', this.value, false)" onchange="onQbSplitRatioChange('left', this.value, true)">
+                            <span style="font-size:10px; font-weight:800; color:#047857;">Bài làm</span>
+                        </div>
+                        <div class="qb-split-inputs-grid">
+                            <div class="qb-split-num-box">
+                                <label for="qb-split-left-input">% Phần Đề (Trái):</label>
+                                <input type="number" id="qb-split-left-input" min="25" max="75" step="1" value="40" oninput="onQbSplitRatioChange('left', this.value, false)" onchange="onQbSplitRatioChange('left', this.value, true)">
+                            </div>
+                            <div class="qb-split-num-box">
+                                <label for="qb-split-right-input">% Trình bày (Phải):</label>
+                                <input type="number" id="qb-split-right-input" min="25" max="75" step="1" value="60" oninput="onQbSplitRatioChange('right', this.value, false)" onchange="onQbSplitRatioChange('right', this.value, true)">
+                            </div>
+                            <button type="button" class="qb-split-run-now-btn" onclick="runPreviewPdfExport('two_col_40_60', event)" title="Xuất PDF ngay với tỷ lệ vừa chỉnh">🚀 Xuất 2 cột</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
         document.body.appendChild(pop);
         syncDecorControlsWithPrefs();
         return pop;
+    }
+
+    function toggleQbPdfSplitPanel(event) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        const panel = document.getElementById("qb-pdf-split-panel");
+        const btn = document.getElementById("qb-pdf-split-toggle-btn");
+        const caret = document.getElementById("qb-pdf-split-caret");
+        if (!panel || !btn) return;
+        const willShow = !panel.classList.contains("show");
+        panel.classList.toggle("show", willShow);
+        btn.classList.toggle("is-open", willShow);
+        if (caret) caret.textContent = willShow ? "▲" : "▾";
+        if (willShow) syncSplitRatioUI();
+    }
+
+    function selectQbSplitPreset(leftPct, event) {
+        if (event) { event.preventDefault(); event.stopPropagation(); }
+        const cur = loadDecorPrefs();
+        saveDecorPrefs({ ...cur, splitLeftPct: clampSplitLeftPct(leftPct, 40) });
+        syncSplitRatioUI();
+    }
+
+    function onQbSplitRatioChange(side, rawVal, commitAndSync = false) {
+        const cur = loadDecorPrefs();
+        const trimmed = String(rawVal ?? "").trim();
+        if (!trimmed) {
+            if (commitAndSync) syncSplitRatioUI();
+            return;
+        }
+        const n = parseInt(trimmed, 10);
+        if (isNaN(n)) {
+            if (commitAndSync) syncSplitRatioUI();
+            return;
+        }
+        const rawLeft = (side === "right") ? (100 - n) : n;
+        const clampedLeft = clampSplitLeftPct(rawLeft, cur.splitLeftPct || 40);
+        saveDecorPrefs({ ...cur, splitLeftPct: clampedLeft });
+        if (commitAndSync || rawLeft === clampedLeft) {
+            syncSplitRatioUI();
+        }
     }
 
     function toggleQbPdfDecorPanel(event) {
@@ -1308,8 +1571,8 @@
         btn.classList.add("is-open");
 
         const rect = btn.getBoundingClientRect();
-        const popW = Math.min(418, window.innerWidth - 16);
-        const popH = Math.min(pop.offsetHeight || 520, window.innerHeight - 20);
+        const popW = Math.min(428, window.innerWidth - 16);
+        const popH = Math.min(pop.offsetHeight || 540, window.innerHeight - 20);
         let left = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
         let top = rect.bottom + 8;
         if (top + popH > window.innerHeight - 8) {
@@ -1423,7 +1686,7 @@
         return formatted.replace(/(^|[^:])\/\/\s*([^\r\n<]+)/g, (m, p, c) => p + '<span style="color:#78350f; font-weight:800;">// ' + c.trim() + "</span>");
     }
 
-    function computeBlankLinesCount(q, mode) {
+    function computeBlankLinesCount(q, mode, splitLeftPct = 40) {
         const lvl = (q && q.level) || "nb";
         const p = (q && q.part) || 1;
 
@@ -1432,6 +1695,9 @@
             let lines = baseMap[lvl] || 6;
             if (p === 2) lines += 2;
             else if (p === 4) lines += 3;
+            // Nếu cột phải hẹp hơn (< 50%) thì tăng nhẹ số dòng để đủ viết
+            const rightPct = 100 - clampSplitLeftPct(splitLeftPct, 40);
+            if (rightPct < 45) lines += 2;
             return lines;
         }
 
@@ -1455,7 +1721,7 @@
         return html;
     }
 
-    function buildSingleQuestionInnerHtml(q, qNum, mode, includeKey, imagesMap) {
+    function buildSingleQuestionInnerHtml(q, qNum, mode, includeKey, imagesMap, splitLeftPct = 40) {
         const letters = ["A", "B", "C", "D"];
         const p = q.part || 1;
         const imgUrl = q.imageUrl || (q.imageKey && imagesMap[q.imageKey]) || "";
@@ -1468,7 +1734,11 @@
             const maxOptLen = Math.max(0, ...(q.options || []).map(o => String(o || "").length));
             let optLayoutClass = "opt-grid-4";
             if (mode === "two_col_40_60") {
-                optLayoutClass = maxOptLen > 24 ? "opt-grid-1" : "opt-grid-2";
+                if (splitLeftPct >= 58) {
+                    optLayoutClass = maxOptLen > 34 ? "opt-grid-1" : (maxOptLen > 14 ? "opt-grid-2" : "opt-grid-4");
+                } else {
+                    optLayoutClass = maxOptLen > 22 ? "opt-grid-1" : "opt-grid-2";
+                }
             } else {
                 optLayoutClass = maxOptLen > 52 ? "opt-grid-1" : (maxOptLen > 22 ? "opt-grid-2" : "opt-grid-4");
             }
@@ -1505,18 +1775,21 @@
         };
     }
 
-    function buildPrintableExamBodyHtml(examTitle, gradeText, maDe, timeLimit, questions, imagesMap, mode, logoSvg) {
+    function buildPrintableExamBodyHtml(examTitle, gradeText, maDe, timeLimit, questions, imagesMap, mode, logoSvg, splitLeftPct = 40) {
         const includeKey = (mode === "with_solution");
         const p1List = questions.filter(q => q.part === 1);
         const p2List = questions.filter(q => q.part === 2);
         const p3List = questions.filter(q => q.part === 3);
         const p4List = questions.filter(q => q.part === 4);
 
+        const safeLeftPct = clampSplitLeftPct(splitLeftPct, 40);
+        const safeRightPct = 100 - safeLeftPct;
+
         const modeLabelMap = {
             exam_only: "ĐỀ THI CHÍNH THỨC",
             with_solution: "ĐỀ THI KÈM ĐÁP ÁN & LỜI GIẢI",
             blank_below: "PHIẾU ĐỀ THI & BÀI LÀM TỰ LUẬN",
-            two_col_40_60: "ĐỀ THI 2 CỘT (40% ĐỀ | 60% BÀI LÀM)"
+            two_col_40_60: `ĐỀ THI 2 CỘT (${safeLeftPct}% ĐỀ | ${safeRightPct}% BÀI LÀM)`
         };
 
         let qNum = 1;
@@ -1530,11 +1803,11 @@
 
             list.forEach(q => {
                 const curNum = qNum++;
-                const parts = buildSingleQuestionInnerHtml(q, curNum, mode, includeKey, imagesMap);
+                const parts = buildSingleQuestionInnerHtml(q, curNum, mode, includeKey, imagesMap, safeLeftPct);
                 const levelText = getLevelShortLabel(q.level);
 
                 if (mode === "blank_below") {
-                    const lineCount = computeBlankLinesCount(q, mode);
+                    const lineCount = computeBlankLinesCount(q, mode, safeLeftPct);
                     questionsHtml += `
                         <div class="doc-question-card has-blank-below" data-level="${escapePdfAttr(q.level)}" data-base-lines="${lineCount}">
                             ${parts.titleHtml}
@@ -1546,7 +1819,7 @@
                             </div>
                         </div>`;
                 } else if (mode === "two_col_40_60") {
-                    const lineCount = computeBlankLinesCount(q, mode);
+                    const lineCount = computeBlankLinesCount(q, mode, safeLeftPct);
                     questionsHtml += `
                         <div class="doc-question-card is-two-col-card" data-level="${escapePdfAttr(q.level)}" data-base-lines="${lineCount}">
                             <table class="doc-split-40-60-table">
@@ -1611,7 +1884,7 @@
                         <div class="hdr-sub">${escapePdfHtml(gradeText)} • Đề gồm ${questions.length} câu</div>
                     </td>
                     <td style="text-align: center; vertical-align: middle;">
-                        <div class="hdr-org">${escapePdfHtml(modeLabelMap[mode] || "ĐỀ KIỂM TRA")}</div>
+                        <div class="hdr-org" id="hdr-mode-label">${escapePdfHtml(modeLabelMap[mode] || "ĐỀ KIỂM TRA")}</div>
                         <div class="hdr-subject">MÔN: TOÁN HỌC</div>
                         <div class="hdr-sub"><b>Thời gian làm bài: ${timeLimit} phút</b></div>
                     </td>
@@ -1638,7 +1911,7 @@
     }
 
     // =========================================================================
-    // 5. MỞ CỬA SỔ XUẤT PDF (HỖ TRỢ ĐẦY ĐỦ TRANG TRÍ TỪNG TRANG A4, 4 LỀ TÙY CHỌN & CO GIÃN ĐÚNG N TRANG)
+    // 5. MỞ CỬA SỔ XUẤT PDF (PHÂN TRANG A4, GIÀN ĐỀU CHIỀU DỌC, CO HÌNH CHỐNG CHE, TỰ CHỈNH 2 CỘT)
     // =========================================================================
     function openPreviewPdfWindow(mode) {
         const collected = collectPreviewQuestionsSafely();
@@ -1656,6 +1929,8 @@
         const mRightInit = clampMarginMm(decorPrefs.marginRight, 12);
         const mBottomInit = clampMarginMm(decorPrefs.marginBottom, 12);
         const mLeftInit = clampMarginMm(decorPrefs.marginLeft, 12);
+        const splitLeftInit = clampSplitLeftPct(decorPrefs.splitLeftPct, 40);
+        const splitRightInit = 100 - splitLeftInit;
 
         const titleInp = document.getElementById("qbank-exam-name");
         const gradeSel = document.getElementById("qbank-exam-grade");
@@ -1684,7 +1959,7 @@
 
         const bodyHtml = buildPrintableExamBodyHtml(
             examTitle, gradeText, maDe, timeLimit,
-            questions, collected.imagesMap, mode, logoInfo.svg
+            questions, collected.imagesMap, mode, logoInfo.svg, splitLeftInit
         );
 
         const win = window.open("", "_blank");
@@ -1697,7 +1972,6 @@
 
         const initialPt = fontSizePt || DEFAULT_FONT_PT;
         const safeDecorColor = /^#[0-9a-f]{3,8}$/i.test(decorPrefs.borderColor || "") ? decorPrefs.borderColor : "#1e293b";
-        const initialPageRule = useDecorSheets ? "0" : `${mTopInit}mm ${mRightInit}mm ${mBottomInit}mm ${mLeftInit}mm`;
 
         win.document.open();
         win.document.write(`<!DOCTYPE html>
@@ -1717,14 +1991,15 @@
     <\/script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"><\/script>
     <style id="dynamic-page-style">
-        @page { size: A4; margin: ${initialPageRule}; }
+        @page { size: A4; margin: 0; }
     </style>
     <style>
         :root {
             --doc-font-pt: ${initialPt}pt;
             --doc-line-height: 1.42;
             --doc-q-gap: 10px;
-            --doc-img-max-h: 215px;
+            --doc-img-max-h: 205px;
+            --doc-col-img-max-h: 175px;
             --doc-dot-h: 17px;
             --doc-header-pad: 6px;
             --doc-part-gap: 10px;
@@ -1736,6 +2011,8 @@
             --sheet-margin-left: ${mLeftInit}mm;
             --frame-pad-v: 4mm;
             --frame-pad-h: 5mm;
+            --col-left-pct: ${splitLeftInit}%;
+            --col-right-pct: ${splitRightInit}%;
         }
         *, *::before, *::after { box-sizing: border-box; }
         body {
@@ -1745,20 +2022,9 @@
             color: #0f172a;
             background: #e2e8f0;
             margin: 0;
-            padding: 54px 12px 30px 12px;
+            padding: 58px 12px 30px 12px;
         }
-        .exam-doc-page {
-            width: 210mm;
-            max-width: 100%;
-            margin: 0 auto;
-            background: #ffffff;
-            padding: ${mTopInit}mm ${mRightInit}mm ${mBottomInit}mm ${mLeftInit}mm;
-            box-shadow: 0 10px 35px rgba(15, 23, 42, 0.22);
-            border-radius: 6px;
-        }
-
-        /* CHẾ ĐỘ PHÂN TRANG A4 THỰC TẾ KHI BẬT TRANG TRÍ */
-        body.use-a4-sheets .exam-doc-page.is-staging-hidden {
+        .exam-doc-page.is-staging-hidden {
             position: fixed !important;
             left: -99999px !important;
             top: 0 !important;
@@ -1767,6 +2033,7 @@
             box-shadow: none !important;
             margin: 0 !important;
             padding: 0 !important;
+            background: #ffffff;
         }
         #a4-sheets-output {
             display: flex;
@@ -1900,7 +2167,7 @@
             border-left: none;
         }
 
-        /* 4 GÓC HOA VĂN CHỮ L (CHỈ HIỆN KHI CHỌN BORDER STYLE = CORNER) */
+        /* 4 GÓC HOA VĂN CHỮ L */
         .a4-corner {
             display: none;
             position: absolute;
@@ -1943,7 +2210,7 @@
             user-select: none;
         }
 
-        /* DẢI LỀ TRÊN & LỀ DƯỚI (2 DÒNG KẺ + TÊN TÁC GIẢ + LOGO + SỐ TRANG) */
+        /* DẢI LỀ TRÊN & LỀ DƯỚI */
         .a4-page-top-band,
         .a4-page-bottom-band {
             flex-shrink: 0;
@@ -2018,7 +2285,6 @@
             white-space: nowrap;
         }
 
-        /* 2 DÒNG KẺ TRANG TRÍ TRÊN CÙNG & DƯỚI CÙNG MỖI TRANG */
         .a4-double-rule {
             width: 100%;
             height: 4.5px;
@@ -2039,54 +2305,64 @@
             min-height: 0;
             position: relative;
             z-index: 2;
+            overflow: hidden;
         }
 
         /* THANH ĐIỀU KHIỂN XEM TRƯỚC PDF (KHÔNG IN RA GIẤY) */
         .no-print-bar {
             position: fixed;
             top: 0; left: 0; right: 0;
-            background: rgba(15, 23, 42, 0.95);
+            background: rgba(15, 23, 42, 0.96);
             backdrop-filter: blur(8px);
             color: #ffffff;
-            padding: 7px 14px;
+            padding: 6px 12px;
             z-index: 999999;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
             border-bottom: 2px solid #0d9488;
             font-family: 'Be Vietnam Pro', sans-serif;
-            font-size: 12px;
+            font-size: 11.5px;
         }
         .no-print-status {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
         .np-badge {
             background: #1e293b;
             border: 1px solid #475569;
             color: #38bdf8;
-            padding: 3px 9px;
+            padding: 2px 8px;
             border-radius: 999px;
             font-weight: 800;
-            font-size: 11.5px;
+            font-size: 11px;
         }
         .np-badge.is-ok { border-color: #22c55e; color: #4ade80; }
         .np-badge.is-warn { border-color: #f59e0b; color: #fbbf24; }
         .no-print-actions {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             flex-wrap: wrap;
+        }
+        .np-split-ctrl {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: #1e293b;
+            border: 1px solid #7c3aed;
+            padding: 2px 6px;
+            border-radius: 8px;
         }
         .btn-np {
             border: none;
-            border-radius: 8px;
-            padding: 6px 11px;
-            font-size: 11.5px;
+            border-radius: 7px;
+            padding: 5px 10px;
+            font-size: 11px;
             font-weight: 800;
             cursor: pointer;
             font-family: inherit;
@@ -2094,9 +2370,12 @@
             display: inline-flex;
             align-items: center;
             gap: 4px;
+            white-space: nowrap;
         }
         .btn-np-logo { background: #7c3aed; }
-        .btn-np-step { background: #334155; border: 1px solid #64748b; padding: 5px 9px; }
+        .btn-np-step { background: #334155; border: 1px solid #64748b; padding: 4px 8px; }
+        .btn-np-justify { background: #0f766e; border: 1px solid #2dd4bf; }
+        .btn-np-justify.is-off { background: #475569; border-color: #64748b; color: #cbd5e1; }
         .btn-np-print { background: linear-gradient(135deg, #0284c7, #0369a1); box-shadow: 0 2px 8px rgba(2, 132, 199, 0.45); }
         .btn-np:hover { filter: brightness(1.12); }
 
@@ -2158,29 +2437,50 @@
             break-after: avoid;
         }
 
-        /* THẺ CÂU HỎI & NỘI DUNG */
+        /* THẺ CÂU HỎI & CO HÌNH TỰ ĐỘNG KHÔNG BỊ CHE MẤT */
         .doc-question-card {
             margin-bottom: var(--doc-q-gap);
             page-break-inside: avoid;
             break-inside: avoid;
             text-align: justify;
         }
-        .doc-q-title { font-size: 1em; line-height: var(--doc-line-height); white-space: pre-line; }
-        .doc-img-container { text-align: center; margin: 5px 0; page-break-inside: avoid; break-inside: avoid; }
-        .doc-q-img { max-width: 92%; max-height: var(--doc-img-max-h); object-fit: contain; border: 1px solid #cbd5e1; border-radius: 5px; }
+        .doc-q-title { font-size: 1em; line-height: var(--doc-line-height); white-space: pre-line; overflow-wrap: break-word; }
+        .doc-img-container {
+            width: 100%;
+            max-width: 100%;
+            text-align: center;
+            margin: 5px 0;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            overflow: hidden;
+        }
+        .doc-q-img {
+            display: block;
+            margin: 0 auto;
+            width: auto !important;
+            height: auto !important;
+            max-width: 100% !important;
+            max-height: var(--doc-img-max-h);
+            object-fit: contain;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+        }
+
+        mjx-container[jax="SVG"] { max-width: 100% !important; }
+        mjx-container[jax="SVG"] > svg { max-width: 100% !important; height: auto !important; }
 
         .doc-options-wrapper { display: grid; gap: 3px 12px; margin-top: 4px; }
         .opt-grid-4 { grid-template-columns: repeat(4, 1fr); }
         .opt-grid-2 { grid-template-columns: repeat(2, 1fr); }
         .opt-grid-1 { grid-template-columns: 1fr; }
-        .doc-option-item { font-size: 0.98em; padding: 1px 0; line-height: var(--doc-line-height); }
+        .doc-option-item { font-size: 0.98em; padding: 1px 0; line-height: var(--doc-line-height); min-width: 0; overflow-wrap: break-word; }
         .correct-highlight { color: #15803d; font-weight: 800; }
         .key-mark { color: #16a34a; font-weight: 900; }
 
         .doc-statements-list { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
         .doc-statement-row { display: flex; align-items: baseline; gap: 5px; font-size: 0.98em; line-height: var(--doc-line-height); }
         .st-letter { flex-shrink: 0; min-width: 18px; }
-        .st-content { flex: 1; }
+        .st-content { flex: 1; min-width: 0; overflow-wrap: break-word; }
         .st-blank-box { flex-shrink: 0; font-family: monospace; color: #475569; }
         .tf-badge { font-weight: 800; font-size: 0.84em; padding: 0 5px; border-radius: 4px; border: 1px solid #0f172a; }
         .tf-true { background: #dcfce7; color: #15803d; }
@@ -2198,6 +2498,7 @@
             margin-top: 4px;
             color: #78350f;
             line-height: var(--doc-line-height);
+            overflow-wrap: break-word;
         }
 
         /* CHẾ ĐỘ 3: KHOẢNG TRỐNG & DÒNG KẺ CHẤM DƯỚI MỖI CÂU */
@@ -2230,7 +2531,7 @@
             border-bottom: 1.05pt dotted #64748b;
         }
 
-        /* CHẾ ĐỘ 4: CHIA 2 CỘT 40% ĐỀ | 60% TRÌNH BÀY */
+        /* CHẾ ĐỘ 4: CHIA 2 CỘT TÙY CHỈNH TỶ LỆ (% ĐỀ | % TRÌNH BÀY) */
         .doc-question-card.is-two-col-card {
             border-bottom: 1px solid #cbd5e1;
             padding-bottom: 5px;
@@ -2241,17 +2542,20 @@
             table-layout: fixed;
         }
         .col-left-40 {
-            width: 40%;
+            width: var(--col-left-pct, 40%);
             vertical-align: top;
             padding-right: 9px;
             border-right: 1.2px solid #94a3b8;
             word-wrap: break-word;
             overflow-wrap: break-word;
+            min-width: 0;
+            overflow: hidden;
         }
         .col-right-60 {
-            width: 60%;
+            width: var(--col-right-pct, 60%);
             vertical-align: top;
             padding-left: 10px;
+            min-width: 0;
         }
         .col-right-60-inner {
             border: 1px dashed #cbd5e1;
@@ -2260,15 +2564,16 @@
             background: #fcfcfd;
             min-height: 100%;
         }
-        .col-left-40 .doc-q-img { max-width: 100%; max-height: calc(var(--doc-img-max-h) * 0.82); }
-        .col-left-40 mjx-container[jax="SVG"] { max-width: 100% !important; font-size: 95% !important; }
-        .col-left-40 mjx-container[jax="SVG"][display="true"] > svg { max-width: 100% !important; height: auto !important; }
+        .col-left-40 .doc-q-img {
+            max-width: 100% !important;
+            max-height: var(--doc-col-img-max-h);
+        }
+        .col-left-40 mjx-container[jax="SVG"] { font-size: 94% !important; }
 
-        .exam-end-mark { text-align: center; margin: 12px 0 8px 0; font-weight: 800; font-style: italic; }
+        .exam-end-mark { text-align: center; margin: 10px 0 6px 0; font-weight: 800; font-style: italic; }
         .doc-key-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.9em; text-align: center; }
         .doc-key-table td { border: 1px solid #0f172a; padding: 3px 5px; }
 
-        /* THƯỚC ĐO MM THỰC TẾ CỦA TRÌNH DUYỆT */
         #mm-ruler {
             position: fixed;
             left: -9999px;
@@ -2282,14 +2587,6 @@
         @media print {
             .no-print-bar { display: none !important; }
             body { background: #ffffff !important; padding: 0 !important; margin: 0 !important; }
-            .exam-doc-page {
-                width: 100% !important;
-                max-width: none !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                box-shadow: none !important;
-                border-radius: 0 !important;
-            }
             #a4-sheets-output {
                 display: block !important;
                 gap: 0 !important;
@@ -2317,18 +2614,29 @@
         }
     </style>
 </head>
-<body class="${useDecorSheets ? "use-a4-sheets" : ""}">
+<body>
     <div id="mm-ruler"></div>
 
     <div class="no-print-bar">
         <div class="no-print-status">
             <span style="font-weight:900; color:#34d399;">📄 XEM TRƯỚC IN PDF</span>
-            <span class="np-badge" id="np-page-stat">Đang tính số trang...</span>
+            <span class="np-badge" id="np-page-stat">Đang phân trang &amp; giàn đều...</span>
             <span class="np-badge" id="np-font-stat">Cỡ chữ: ${initialPt}pt</span>
             <span class="np-badge" id="np-margin-stat">Lề: ${mTopInit}-${mBottomInit}-${mLeftInit}-${mRightInit}mm</span>
         </div>
         <div class="no-print-actions">
-            <button type="button" class="btn-np btn-np-logo" onclick="changeRandomExamLogo()">🎨 Đổi logo khác</button>
+            ${mode === "two_col_40_60" ? `
+            <div class="np-split-ctrl" title="Tự chỉnh tỷ lệ cột Đề (trái) và cột Trình bày (phải)">
+                <span style="font-size:10.5px; font-weight:800; color:#c4b5fd;">▥</span>
+                <button type="button" class="btn-np btn-np-step" style="padding:2px 6px;" onclick="stepSplitRatio(-5)">−</button>
+                <span id="np-split-val" style="font-size:11px; font-weight:900; color:#facc15; min-width:58px; text-align:center;">${splitLeftInit}%/${splitRightInit}%</span>
+                <button type="button" class="btn-np btn-np-step" style="padding:2px 6px;" onclick="stepSplitRatio(5)">+</button>
+                <button type="button" class="btn-np btn-np-step" style="padding:2px 6px;" onclick="setSplitRatioExact(30)">30/70</button>
+                <button type="button" class="btn-np btn-np-step" style="padding:2px 6px;" onclick="setSplitRatioExact(40)">40/60</button>
+                <button type="button" class="btn-np btn-np-step" style="padding:2px 6px;" onclick="setSplitRatioExact(50)">50/50</button>
+            </div>` : ""}
+            <button type="button" class="btn-np btn-np-justify" id="btn-np-justify" onclick="toggleJustifyMode()" title="Bật/Tắt tự động giàn đều câu hỏi chiếm hết chiều dọc trang giấy">📐 Giàn đều: BẬT</button>
+            <button type="button" class="btn-np btn-np-logo" onclick="changeRandomExamLogo()">🎨 Đổi logo</button>
             <button type="button" class="btn-np btn-np-step" onclick="manualStepFont(-0.5)" title="Giảm cỡ chữ 0.5pt">A−</button>
             <button type="button" class="btn-np btn-np-step" onclick="manualStepFont(0.5)" title="Tăng cỡ chữ 0.5pt">A+</button>
             <button type="button" class="btn-np btn-np-print" onclick="window.print()">🖨️ In / Lưu PDF (Ctrl + P)</button>
@@ -2336,7 +2644,7 @@
     </div>
 
     ${bodyHtml}
-    ${useDecorSheets ? '<div id="a4-sheets-output"></div>' : ""}
+    <div id="a4-sheets-output"></div>
 
     <script>
         const TARGET_PAGES = ${targetPages ? Number(targetPages) : "null"};
@@ -2348,6 +2656,8 @@
         const EXAM_SHORT_TITLE = ${JSON.stringify(examTitle)};
         const EXAM_MA_DE = ${JSON.stringify(maDe)};
         let currentFontPt = ${initialPt};
+        let currentSplitLeftPct = ${splitLeftInit};
+        let isJustifyEnabled = true;
         let lastAppliedCfg = null;
 
         ${allLogoComboBuilder}
@@ -2365,7 +2675,7 @@
                     const fid = m[1];
                     const lvl = parseInt(imgEl.dataset.fb || "0", 10);
                     if (lvl === 0) { imgEl.dataset.fb = "1"; imgEl.src = "https://drive.google.com/thumbnail?id=" + fid + "&sz=w1400"; return; }
-                    if (lvl === 1) { imgEl.dataset.fb = "2"; imgEl.src = "https://drive.google.com/uc?export=view&id=" + fid; return; }
+                    if (lvl === 1) { imgEl.dataset.fb = "2"; imgEl.src = "https://lh3.googleusercontent.com/u/0/d/" + fid; return; }
                 }
             }
             imgEl.style.display = "none";
@@ -2398,7 +2708,7 @@
         }
 
         function resolveFramePaddingMm(margins) {
-            const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
+            const hasBorder = (USE_DECOR_SHEETS && DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
             if (!hasBorder) return { padV: 0, padH: 0 };
             const minM = Math.min(margins.top, margins.right, margins.bottom, margins.left);
             if (HAS_CUSTOM_MARGINS && minM <= 3.5) return { padV: 1.8, padH: 2.2 };
@@ -2406,48 +2716,52 @@
             return { padV: 4.0, padH: 5.0 };
         }
 
+        function computeAutoImageMaxHeight(cfg) {
+            const baseH = cfg.imgMaxH || 205;
+            const fontScale = Math.min(1.25, Math.max(0.55, cfg.fontPt / 10.5));
+            const fullImgH = Math.round(Math.min(255, Math.max(85, baseH * (0.35 + 0.65 * fontScale))));
+            const colRatioScale = Math.min(1.0, Math.max(0.52, currentSplitLeftPct / 50));
+            const colImgH = Math.round(Math.max(75, fullImgH * 0.85 * colRatioScale));
+            return { fullImgH, colImgH };
+        }
+
         function applyLayoutParams(cfg) {
             lastAppliedCfg = cfg;
             const root = document.documentElement;
             currentFontPt = cfg.fontPt;
+            const imgHeights = computeAutoImageMaxHeight(cfg);
+
             root.style.setProperty("--doc-font-pt", cfg.fontPt + "pt");
             root.style.setProperty("--doc-line-height", String(cfg.lineHeight));
             root.style.setProperty("--doc-q-gap", cfg.qGap + "px");
-            root.style.setProperty("--doc-img-max-h", cfg.imgMaxH + "px");
+            root.style.setProperty("--doc-img-max-h", imgHeights.fullImgH + "px");
+            root.style.setProperty("--doc-col-img-max-h", imgHeights.colImgH + "px");
             root.style.setProperty("--doc-dot-h", cfg.dotH + "px");
             root.style.setProperty("--doc-header-pad", cfg.headerPad + "px");
             root.style.setProperty("--doc-part-gap", cfg.partGap + "px");
             root.style.setProperty("--doc-logo-size", cfg.logoSize + "px");
+            root.style.setProperty("--col-left-pct", currentSplitLeftPct + "%");
+            root.style.setProperty("--col-right-pct", (100 - currentSplitLeftPct) + "%");
 
             const m = resolveEffectiveMargins(cfg);
+            const hasBorder = (USE_DECOR_SHEETS && DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
+            const fp = resolveFramePaddingMm(m);
 
-            if (USE_DECOR_SHEETS) {
-                const hasBorder = (DECOR_CFG.pageBorderMode && DECOR_CFG.pageBorderMode !== "none");
-                const fp = resolveFramePaddingMm(m);
-                root.style.setProperty("--sheet-margin-top", m.top + "mm");
-                root.style.setProperty("--sheet-margin-right", m.right + "mm");
-                root.style.setProperty("--sheet-margin-bottom", m.bottom + "mm");
-                root.style.setProperty("--sheet-margin-left", m.left + "mm");
-                root.style.setProperty("--frame-pad-v", fp.padV + "mm");
-                root.style.setProperty("--frame-pad-h", fp.padH + "mm");
+            root.style.setProperty("--sheet-margin-top", m.top + "mm");
+            root.style.setProperty("--sheet-margin-right", m.right + "mm");
+            root.style.setProperty("--sheet-margin-bottom", m.bottom + "mm");
+            root.style.setProperty("--sheet-margin-left", m.left + "mm");
+            root.style.setProperty("--frame-pad-v", fp.padV + "mm");
+            root.style.setProperty("--frame-pad-h", fp.padH + "mm");
 
-                const pageEl = document.getElementById("exam-doc-page");
-                if (pageEl) {
-                    const framePadH_total = hasBorder ? (2 * fp.padH) : 0;
-                    const borderThicknessH = hasBorder ? (DECOR_CFG.borderStyle === "double" ? 2 : 1) : 0;
-                    const bodyWidthMm = Math.max(135, 210 - (m.left + m.right) - framePadH_total - borderThicknessH);
-                    pageEl.style.width = bodyWidthMm + "mm";
-                    pageEl.style.padding = "0";
-                }
-            } else {
-                const dynPageStyle = document.getElementById("dynamic-page-style");
-                if (dynPageStyle) {
-                    dynPageStyle.textContent = "@page { size: A4; margin: " + m.top + "mm " + m.right + "mm " + m.bottom + "mm " + m.left + "mm; }";
-                }
-                const pageEl = document.getElementById("exam-doc-page");
-                if (pageEl) {
-                    pageEl.style.padding = m.top + "mm " + m.right + "mm " + m.bottom + "mm " + m.left + "mm";
-                }
+            const pageEl = document.getElementById("exam-doc-page");
+            if (pageEl) {
+                pageEl.classList.add("is-staging-hidden");
+                const framePadH_total = hasBorder ? (2 * fp.padH) : 0;
+                const borderThicknessH = hasBorder ? (DECOR_CFG.borderStyle === "double" ? 2 : 1) : 0;
+                const bodyWidthMm = Math.max(135, 210 - (m.left + m.right) - framePadH_total - borderThicknessH);
+                pageEl.style.width = bodyWidthMm + "mm";
+                pageEl.style.padding = "0";
             }
 
             if (cfg.lineRatio !== undefined) {
@@ -2461,10 +2775,15 @@
                     }
                 });
             }
+
+            // Reset các style override tạm trên staging trước khi đo
+            document.querySelectorAll("#exam-doc-page .doc-q-img").forEach(img => {
+                img.style.maxHeight = "";
+            });
         }
 
         function buildAuthorBadgeHtml() {
-            if (!DECOR_CFG.showAuthor) return "";
+            if (!USE_DECOR_SHEETS || !DECOR_CFG.showAuthor) return "";
             const nameTxt = escHtml((DECOR_CFG.authorName || "").trim() || "Tác giả");
             const borderCls = "author-border-" + (DECOR_CFG.authorBorder || "none");
             const logoHtml = (DECOR_CFG.authorWithLogo !== false)
@@ -2474,6 +2793,7 @@
         }
 
         function buildTopBandHtml() {
+            if (!USE_DECOR_SHEETS) return "";
             const needTop = Boolean(DECOR_CFG.twoLines || DECOR_CFG.showAuthor);
             if (!needTop) return "";
             let metaRow = "";
@@ -2488,6 +2808,7 @@
         }
 
         function buildBottomBandHtml(pageIdx, totalPages) {
+            if (!USE_DECOR_SHEETS) return "";
             const needPageNum = DECOR_CFG.showPageNum !== false;
             const needBottom = Boolean(DECOR_CFG.twoLines || DECOR_CFG.showAuthor || needPageNum);
             if (!needBottom) return "";
@@ -2525,6 +2846,42 @@
             return { topH, bottomH, frameOverheadV };
         }
 
+        function getUsableBodyHeightPx(cfg) {
+            const pxPerMM = getPxPerMM();
+            const m = resolveEffectiveMargins(cfg);
+            const { topH, bottomH, frameOverheadV } = measureDecorBandsHeightPx(cfg);
+            const totalSheetH = 296.4 * pxPerMM;
+            return Math.max(180, totalSheetH - ((m.top + m.bottom) * pxPerMM) - frameOverheadV - topH - bottomH - 4);
+        }
+
+        function clampOversizedStagingImages(usableBodyH) {
+            const cards = document.querySelectorAll("#exam-doc-page .doc-question-card");
+            cards.forEach(card => {
+                const imgs = card.querySelectorAll(".doc-q-img");
+                if (!imgs || imgs.length === 0) return;
+
+                // Đảm bảo ảnh vừa bề ngang container và không khiến cả câu hỏi vượt quá chiều cao 1 trang A4
+                const maxAllowedCardH = usableBodyH - 12;
+                let guard = 0;
+                while (card.offsetHeight > maxAllowedCardH && guard < 8) {
+                    const excess = card.offsetHeight - maxAllowedCardH;
+                    const stepReduce = Math.max(12, Math.ceil(excess / imgs.length) + 4);
+                    let changed = false;
+                    imgs.forEach(img => {
+                        if (img.style.display === "none") return;
+                        const curH = img.offsetHeight || parseInt(getComputedStyle(img).maxHeight, 10) || 180;
+                        const nextH = Math.max(55, curH - stepReduce);
+                        if (nextH < curH) {
+                            img.style.maxHeight = nextH + "px";
+                            changed = true;
+                        }
+                    });
+                    if (!changed) break;
+                    guard++;
+                }
+            });
+        }
+
         function getOrderedFlowBlocks() {
             const pageEl = document.getElementById("exam-doc-page");
             if (!pageEl) return [];
@@ -2540,11 +2897,8 @@
         }
 
         function paginateBlocksIntoPageGroups(cfg) {
-            const pxPerMM = getPxPerMM();
-            const m = resolveEffectiveMargins(cfg);
-            const { topH, bottomH, frameOverheadV } = measureDecorBandsHeightPx(cfg);
-            const totalSheetH = (USE_DECOR_SHEETS ? 296.4 : 297) * pxPerMM;
-            const usableBodyH = Math.max(180, totalSheetH - ((m.top + m.bottom) * pxPerMM) - frameOverheadV - topH - bottomH - 8);
+            const usableBodyH = getUsableBodyHeightPx(cfg);
+            clampOversizedStagingImages(usableBodyH);
 
             const blocks = getOrderedFlowBlocks();
             const pages = [];
@@ -2576,22 +2930,178 @@
                 }
             }
             if (curPage.length > 0) pages.push(curPage);
-            return pages;
+            return { pages, usableBodyH };
         }
 
-        function buildA4DecoratedSheets(cfg) {
+        function measureContentBottomOffset(bodySlot) {
+            const children = Array.from(bodySlot.children);
+            if (children.length === 0) return 0;
+            const bodyTop = bodySlot.getBoundingClientRect().top;
+            const lastEl = children[children.length - 1];
+            return lastEl.getBoundingClientRect().bottom - bodyTop;
+        }
+
+        function ensureImagesInsidePageBounds(bodySlot, availH) {
+            const bodyRect = bodySlot.getBoundingClientRect();
+            const imgs = bodySlot.querySelectorAll(".doc-q-img");
+            imgs.forEach(img => {
+                if (img.style.display === "none") return;
+                const colParent = img.closest(".col-left-40, .doc-img-container");
+                if (colParent) {
+                    const maxW = colParent.clientWidth;
+                    if (maxW > 20 && img.getBoundingClientRect().width > maxW + 1) {
+                        img.style.maxWidth = maxW + "px";
+                    }
+                }
+            });
+
+            // Nếu trang vẫn bị tràn đáy sau khi clamp ảnh -> co nhẹ ảnh của câu bị tràn
+            let guard = 0;
+            while (measureContentBottomOffset(bodySlot) > availH && guard < 12) {
+                const curOverflow = measureContentBottomOffset(bodySlot) - availH;
+                const pageImgs = Array.from(bodySlot.querySelectorAll(".doc-q-img")).filter(im => im.style.display !== "none" && im.offsetHeight > 58);
+                if (pageImgs.length === 0) break;
+                let tallest = pageImgs[0];
+                pageImgs.forEach(im => { if (im.offsetHeight > tallest.offsetHeight) tallest = im; });
+                const step = Math.max(8, Math.ceil(curOverflow) + 4);
+                tallest.style.maxHeight = Math.max(55, tallest.offsetHeight - step) + "px";
+                guard++;
+            }
+        }
+
+        function justifySinglePageBody(bodySlot, isLastPage) {
+            const availH = bodySlot.clientHeight || 0;
+            if (availH <= 0) return;
+
+            ensureImagesInsidePageBounds(bodySlot, availH);
+
+            const children = Array.from(bodySlot.children);
+            if (children.length === 0) return;
+
+            let usedH = measureContentBottomOffset(bodySlot);
+            let slack = availH - usedH;
+
+            // Nếu bị tràn nhẹ vài px do làm tròn sub-pixel -> thu gọn marginBottom trên trang
+            if (slack < -0.5) {
+                let shrinkGuard = 0;
+                while (measureContentBottomOffset(bodySlot) > availH && shrinkGuard < 24) {
+                    let shrunkAny = false;
+                    for (let i = 0; i < children.length; i++) {
+                        const el = children[i];
+                        const curMb = parseFloat(getComputedStyle(el).marginBottom) || 0;
+                        if (curMb > 1) {
+                            el.style.marginBottom = Math.max(0, curMb - 1.5) + "px";
+                            shrunkAny = true;
+                        }
+                    }
+                    if (!shrunkAny) break;
+                    shrinkGuard++;
+                }
+                return;
+            }
+
+            if (!isJustifyEnabled || slack <= 4) return;
+
+            const fillRatio = usedH / availH;
+            // Trang trung gian: luôn giàn đều lấp kín 100% trang.
+            // Trang cuối: nếu đã chiếm >= 42% trang thì giàn kín 100%; nếu ít hơn thì giãn nhẹ tự nhiên.
+            const shouldFillFull = !isLastPage || (fillRatio >= 0.42);
+            const targetFillSlack = shouldFillFull
+                ? Math.max(0, slack - 2)
+                : Math.min(slack * 0.28, Math.max(0, children.length - 1) * 14);
+
+            if (targetFillSlack <= 3) return;
+
+            // Bước 1: Nếu ở chế độ 3 hoặc 4 (có dòng kẻ chấm ....), ưu tiên dùng ~45% khoảng dư để thêm dòng viết cho học sinh
+            if (EXPORT_MODE === "blank_below" || EXPORT_MODE === "two_col_40_60") {
+                const dotsWraps = Array.from(bodySlot.querySelectorAll(".pdf-dots-wrap"));
+                if (dotsWraps.length > 0) {
+                    const maxHAfterDots = usedH + targetFillSlack * 0.48;
+                    const lvlWeight = { vdc: 4, vdt: 3, th: 2, nb: 1 };
+                    const sortedWraps = [...dotsWraps].sort((a, b) => {
+                        const ca = a.closest(".doc-question-card");
+                        const cb = b.closest(".doc-question-card");
+                        const wa = lvlWeight[(ca && ca.dataset.level) || "nb"] || 1;
+                        const wb = lvlWeight[(cb && cb.dataset.level) || "nb"] || 1;
+                        return wb - wa;
+                    });
+
+                    let addedGuard = 0;
+                    while (measureContentBottomOffset(bodySlot) < maxHAfterDots && addedGuard < 20) {
+                        let addedInRound = false;
+                        for (let i = 0; i < sortedWraps.length; i++) {
+                            const w = sortedWraps[i];
+                            const line = document.createElement("div");
+                            line.className = "pdf-dot-line";
+                            w.appendChild(line);
+                            if (measureContentBottomOffset(bodySlot) > availH - 4) {
+                                w.removeChild(line);
+                                return;
+                            }
+                            addedInRound = true;
+                            if (measureContentBottomOffset(bodySlot) >= maxHAfterDots) break;
+                        }
+                        if (!addedInRound) break;
+                        addedGuard++;
+                    }
+                }
+            }
+
+            // Bước 2: Phân bổ phần khoảng trống còn lại vào khoảng cách giữa các phần tử trên trang
+            const remUsed = measureContentBottomOffset(bodySlot);
+            const remSlack = availH - remUsed;
+            if (remSlack <= 2) return;
+
+            const finalTarget = shouldFillFull
+                ? Math.max(0, remSlack - 2)
+                : Math.min(remSlack * 0.28, Math.max(0, children.length - 1) * 12);
+
+            if (finalTarget <= 2) return;
+
+            const gapTargets = [];
+            for (let i = 0; i < children.length - 1; i++) {
+                const el = children[i];
+                // Tiêu đề phần (part-header-box) luôn giữ gần câu hỏi đầu tiên của phần đó
+                const weight = (el.classList && el.classList.contains("part-header-box")) ? 0.25 : 1.0;
+                gapTargets.push({ el, weight });
+            }
+
+            const totalWeight = gapTargets.reduce((s, item) => s + item.weight, 0);
+            if (totalWeight > 0) {
+                gapTargets.forEach(item => {
+                    const curMb = parseFloat(getComputedStyle(item.el).marginBottom) || 0;
+                    const extra = (finalTarget * item.weight) / totalWeight;
+                    item.el.style.marginBottom = (curMb + extra).toFixed(2) + "px";
+                });
+            }
+
+            // Bước 3: Khóa an toàn 100% chống tràn viền trang sau khi giãn
+            let safeGuard = 0;
+            while (measureContentBottomOffset(bodySlot) > availH && safeGuard < 25) {
+                for (let i = 0; i < gapTargets.length; i++) {
+                    const el = gapTargets[i].el;
+                    const curMb = parseFloat(getComputedStyle(el).marginBottom) || 0;
+                    if (curMb > 1) {
+                        el.style.marginBottom = Math.max(0, curMb - 1) + "px";
+                    }
+                }
+                safeGuard++;
+            }
+        }
+
+        function buildA4SheetsFromCurrentCfg(cfg) {
             const output = document.getElementById("a4-sheets-output");
             const staging = document.getElementById("exam-doc-page");
             if (!output || !staging) return 1;
 
             staging.classList.add("is-staging-hidden");
-            const pageGroups = paginateBlocksIntoPageGroups(cfg);
+            const { pages: pageGroups } = paginateBlocksIntoPageGroups(cfg);
             const totalPages = Math.max(1, pageGroups.length);
 
-            const bModeClass = "border-mode-" + (DECOR_CFG.pageBorderMode || "none");
-            const bStyleClass = "border-style-" + (DECOR_CFG.borderStyle || "double");
+            const bModeClass = USE_DECOR_SHEETS ? ("border-mode-" + (DECOR_CFG.pageBorderMode || "none")) : "border-mode-none";
+            const bStyleClass = USE_DECOR_SHEETS ? ("border-style-" + (DECOR_CFG.borderStyle || "double")) : "border-style-none";
             const wmText = escHtml((DECOR_CFG.authorName || "").trim() || EXAM_SHORT_TITLE);
-            const wmHtml = DECOR_CFG.watermark ? '<div class="a4-watermark"><span>' + wmText + '</span></div>' : "";
+            const wmHtml = (USE_DECOR_SHEETS && DECOR_CFG.watermark) ? '<div class="a4-watermark"><span>' + wmText + '</span></div>' : "";
 
             output.innerHTML = "";
             pageGroups.forEach((nodes, idx) => {
@@ -2622,60 +3132,34 @@
                 });
 
                 output.appendChild(sheet);
+
+                // Giàn đều chiều dọc và kiểm tra co ảnh ngay trên sheet thật
+                justifySinglePageBody(bodySlot, pageNum === totalPages);
             });
 
             return totalPages;
         }
 
         function estimateA4PagesCount(cfg) {
-            if (USE_DECOR_SHEETS) {
-                return paginateBlocksIntoPageGroups(cfg).length;
-            }
-            const m = resolveEffectiveMargins(cfg);
-            const pxPerMM = getPxPerMM();
-            const usablePageHeightPx = Math.max(200, (297 - (m.top + m.bottom) - 2) * pxPerMM);
-            const pageEl = document.getElementById("exam-doc-page");
-            if (!pageEl) return 1;
-
-            const qContainer = document.getElementById("exam-questions-content");
-            const headerOffset = qContainer ? (qContainer.offsetTop - pageEl.offsetTop) : 130;
-            let curPageUsed = headerOffset;
-            let pages = 1;
-
-            const blocks = Array.from(qContainer ? qContainer.children : []);
-            for (let i = 0; i < blocks.length; i++) {
-                const el = blocks[i];
-                const cs = getComputedStyle(el);
-                const h = el.offsetHeight + (parseFloat(cs.marginBottom) || 0);
-                if (curPageUsed + h > usablePageHeightPx && curPageUsed > 40) {
-                    pages++;
-                    curPageUsed = h;
-                } else {
-                    curPageUsed += h;
-                }
-            }
-
-            const endMark = document.querySelector("#exam-doc-page .exam-end-mark");
-            const keyTbl = document.querySelector("#exam-doc-page .doc-summary-key-section");
-            const tailH = (endMark ? endMark.offsetHeight + 12 : 0) + (keyTbl ? keyTbl.offsetHeight + 16 : 0);
-            if (tailH > 0 && curPageUsed + tailH > usablePageHeightPx) {
-                pages++;
-            }
-            return pages;
+            const { pages } = paginateBlocksIntoPageGroups(cfg);
+            return pages.length;
         }
 
         function updateTopStatusBadges(estPages, noteText = "") {
             const pEl = document.getElementById("np-page-stat");
             const fEl = document.getElementById("np-font-stat");
             const mEl = document.getElementById("np-margin-stat");
+            const sEl = document.getElementById("np-split-val");
+            const jBtn = document.getElementById("btn-np-justify");
+
             if (pEl) {
                 if (TARGET_PAGES) {
                     const isExact = (estPages <= TARGET_PAGES);
                     pEl.className = "np-badge " + (isExact ? "is-ok" : "is-warn");
-                    pEl.textContent = (USE_DECOR_SHEETS ? "Số trang: " : "Dự kiến: ") + estPages + " / " + TARGET_PAGES + " trang A4" + (noteText ? " (" + noteText + ")" : "");
+                    pEl.textContent = "Số trang: " + estPages + " / " + TARGET_PAGES + " trang A4" + (noteText ? " (" + noteText + ")" : "");
                 } else {
-                    pEl.className = "np-badge" + (USE_DECOR_SHEETS ? " is-ok" : "");
-                    pEl.textContent = (USE_DECOR_SHEETS ? "Số trang: " : "Dự kiến: ") + estPages + " trang A4" + (USE_DECOR_SHEETS ? " (Đã trang trí)" : " (Mặc định)");
+                    pEl.className = "np-badge is-ok";
+                    pEl.textContent = "Số trang: " + estPages + " trang A4" + (isJustifyEnabled ? " (Đã giàn đều)" : "");
                 }
             }
             if (fEl) {
@@ -2688,6 +3172,13 @@
                     ? ("Lề: " + m.top + "mm")
                     : ("Lề: " + m.top + "-" + m.bottom + "-" + m.left + "-" + m.right + "mm");
             }
+            if (sEl) {
+                sEl.textContent = currentSplitLeftPct + "%/" + (100 - currentSplitLeftPct) + "%";
+            }
+            if (jBtn) {
+                jBtn.textContent = isJustifyEnabled ? "📐 Giàn đều: BẬT" : "📐 Giàn đều: TẮT";
+                jBtn.classList.toggle("is-off", !isJustifyEnabled);
+            }
         }
 
         function fitDocumentToTargetPages() {
@@ -2696,7 +3187,7 @@
                     fontPt: REQUESTED_FONT_PT || ${DEFAULT_FONT_PT},
                     lineHeight: 1.42,
                     qGap: 10,
-                    imgMaxH: 215,
+                    imgMaxH: 205,
                     dotH: 17,
                     headerPad: 6,
                     partGap: 10,
@@ -2706,7 +3197,7 @@
                     lineRatio: 1
                 };
                 applyLayoutParams(baseCfg);
-                const est = USE_DECOR_SHEETS ? buildA4DecoratedSheets(baseCfg) : estimateA4PagesCount(baseCfg);
+                const est = buildA4SheetsFromCurrentCfg(baseCfg);
                 updateTopStatusBadges(est);
                 return est;
             }
@@ -2715,19 +3206,19 @@
             const candidates = [];
 
             const spacingPresets = [
-                { lineHeight: 1.38, qGap: 9, imgMaxH: 200, dotH: 16, headerPad: 5, partGap: 8, logoSize: 46, marginV: 11, marginH: 11, lineRatio: 1.0 },
-                { lineHeight: 1.28, qGap: 6, imgMaxH: 175, dotH: 14, headerPad: 4, partGap: 6, logoSize: 42, marginV: 9,  marginH: 9,  lineRatio: 0.9 },
-                { lineHeight: 1.20, qGap: 4, imgMaxH: 150, dotH: 13, headerPad: 3, partGap: 5, logoSize: 38, marginV: 7,  marginH: 8,  lineRatio: 0.8 },
-                { lineHeight: 1.13, qGap: 3, imgMaxH: 125, dotH: 11.5, headerPad: 2, partGap: 4, logoSize: 34, marginV: 6, marginH: 7, lineRatio: 0.7 }
+                { lineHeight: 1.38, qGap: 9, imgMaxH: 195, dotH: 16, headerPad: 5, partGap: 8, logoSize: 46, marginV: 11, marginH: 11, lineRatio: 1.0 },
+                { lineHeight: 1.28, qGap: 6, imgMaxH: 170, dotH: 14, headerPad: 4, partGap: 6, logoSize: 42, marginV: 9,  marginH: 9,  lineRatio: 0.9 },
+                { lineHeight: 1.20, qGap: 4, imgMaxH: 145, dotH: 13, headerPad: 3, partGap: 5, logoSize: 38, marginV: 7,  marginH: 8,  lineRatio: 0.8 },
+                { lineHeight: 1.13, qGap: 3, imgMaxH: 120, dotH: 11.5, headerPad: 2, partGap: 4, logoSize: 34, marginV: 6, marginH: 7, lineRatio: 0.7 }
             ];
             spacingPresets.forEach(sp => candidates.push({ fontPt: startFont, ...sp }));
 
-            for (let f = Math.round((startFont - 0.5) * 10) / 10; f >= 6.8; f = Math.round((f - 0.4) * 10) / 10) {
+            for (let f = Math.round((startFont - 0.5) * 10) / 10; f >= 6.6; f = Math.round((f - 0.4) * 10) / 10) {
                 candidates.push({
                     fontPt: f,
                     lineHeight: f >= 9 ? 1.22 : 1.13,
                     qGap: f >= 9 ? 5 : 3,
-                    imgMaxH: f >= 9 ? 155 : 115,
+                    imgMaxH: f >= 9 ? 150 : 112,
                     dotH: f >= 9 ? 13 : 11,
                     headerPad: 3,
                     partGap: 5,
@@ -2753,15 +3244,15 @@
             if (estPages < TARGET_PAGES) {
                 const looseCfg = {
                     fontPt: REQUESTED_FONT_PT ? Math.max(REQUESTED_FONT_PT, 11) : 11.5,
-                    lineHeight: 1.65,
-                    qGap: 18,
-                    imgMaxH: 240,
-                    dotH: 21,
-                    headerPad: 10,
-                    partGap: 14,
+                    lineHeight: 1.62,
+                    qGap: 16,
+                    imgMaxH: 235,
+                    dotH: 20,
+                    headerPad: 9,
+                    partGap: 13,
                     logoSize: 52,
-                    marginV: 14,
-                    marginH: 14,
+                    marginV: 13,
+                    marginH: 13,
                     lineRatio: 1.25
                 };
                 applyLayoutParams(looseCfg);
@@ -2774,9 +3265,7 @@
                 }
             }
 
-            if (USE_DECOR_SHEETS) {
-                estPages = buildA4DecoratedSheets(chosen);
-            }
+            estPages = buildA4SheetsFromCurrentCfg(chosen);
 
             const note = (REQUESTED_FONT_PT && chosen.fontPt < REQUESTED_FONT_PT)
                 ? "Co từ " + REQUESTED_FONT_PT + "pt -> " + chosen.fontPt + "pt"
@@ -2791,7 +3280,7 @@
                 fontPt: nextPt,
                 lineHeight: 1.42,
                 qGap: 10,
-                imgMaxH: 215,
+                imgMaxH: 205,
                 dotH: 17,
                 headerPad: 6,
                 partGap: 10,
@@ -2800,11 +3289,57 @@
                 marginH: TARGET_PAGES ? 8 : 12
             };
             applyLayoutParams(baseCfg);
-            const est = USE_DECOR_SHEETS ? buildA4DecoratedSheets(baseCfg) : estimateA4PagesCount(baseCfg);
+            const est = buildA4SheetsFromCurrentCfg(baseCfg);
             updateTopStatusBadges(est, "Chỉnh tay");
         }
 
-        function waitAllImagesLoaded(maxWaitMs = 2500) {
+        function setSplitRatioExact(newLeftPct) {
+            currentSplitLeftPct = Math.max(25, Math.min(75, parseInt(newLeftPct, 10) || 40));
+            const hdrMode = document.getElementById("hdr-mode-label");
+            if (hdrMode && EXPORT_MODE === "two_col_40_60") {
+                hdrMode.textContent = "ĐỀ THI 2 CỘT (" + currentSplitLeftPct + "% ĐỀ | " + (100 - currentSplitLeftPct) + "% BÀI LÀM)";
+            }
+            const cfg = lastAppliedCfg || {
+                fontPt: currentFontPt,
+                lineHeight: 1.42,
+                qGap: 10,
+                imgMaxH: 205,
+                dotH: 17,
+                headerPad: 6,
+                partGap: 10,
+                logoSize: 48,
+                marginV: TARGET_PAGES ? 8 : 12,
+                marginH: TARGET_PAGES ? 8 : 12
+            };
+            applyLayoutParams(cfg);
+            const est = buildA4SheetsFromCurrentCfg(cfg);
+            updateTopStatusBadges(est, "2 cột " + currentSplitLeftPct + "/" + (100 - currentSplitLeftPct));
+        }
+
+        function stepSplitRatio(delta) {
+            setSplitRatioExact(currentSplitLeftPct + delta);
+        }
+
+        function toggleJustifyMode() {
+            isJustifyEnabled = !isJustifyEnabled;
+            const cfg = lastAppliedCfg || {
+                fontPt: currentFontPt,
+                lineHeight: 1.42,
+                qGap: 10,
+                imgMaxH: 205,
+                dotH: 17,
+                headerPad: 6,
+                partGap: 10,
+                logoSize: 48,
+                marginV: TARGET_PAGES ? 8 : 12,
+                marginH: TARGET_PAGES ? 8 : 12
+            };
+            applyLayoutParams(cfg);
+            const est = buildA4SheetsFromCurrentCfg(cfg);
+            updateTopStatusBadges(est);
+        }
+
+        function waitAllImagesLoaded(maxWaitMs = 2800) {
             const imgs = Array.from(document.querySelectorAll("img"));
             if (imgs.length === 0) return Promise.resolve();
             return new Promise(resolve => {
@@ -2831,7 +3366,7 @@
                         await window.MathJax.typesetPromise();
                     }
                 } catch (e) {}
-                await waitAllImagesLoaded(2000);
+                await waitAllImagesLoaded(2500);
                 fitDocumentToTargetPages();
                 setTimeout(() => { window.print(); }, 480);
             };
@@ -2862,6 +3397,9 @@
     // Xuất các hàm ra window scope
     window.togglePreviewPdfExporterMenu = togglePreviewPdfExporterMenu;
     window.closePreviewPdfExporterMenu = closePreviewPdfExporterMenu;
+    window.toggleQbPdfSplitPanel = toggleQbPdfSplitPanel;
+    window.selectQbSplitPreset = selectQbSplitPreset;
+    window.onQbSplitRatioChange = onQbSplitRatioChange;
     window.toggleQbPdfDecorPanel = toggleQbPdfDecorPanel;
     window.onQbDecorBorderModeClick = onQbDecorBorderModeClick;
     window.onQbDecorColorSelect = onQbDecorColorSelect;
