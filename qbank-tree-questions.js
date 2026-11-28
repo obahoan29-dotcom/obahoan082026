@@ -4,15 +4,21 @@
 // - CỘT 1: CÂY THƯ MỤC KIẾN THỨC, NÚT ẨN/HIỆN NÚT CHỨC NĂNG & MA TRẬN 16 Ô
 // - CỘT 2:
 //   + NÚT "📥 Upload file JSON đề" XÒE RA 4 KHO CHỜ XẾP
+//   + NÚT "☁️ Lưu tự động" LƯU NGẦM TOÀN BỘ ẢNH NGÂN HÀNG LÊN GOOGLE DRIVE QUA GAS
 //   + DUYỆT THƯ MỤC 3 CẤP + NÚT BACK + PHÂN TRANG 50 CÂU / TRANG
 //   + Ô TÌM KIẾM NHANH THEO TỪ KHÓA / MÃ ID / NGUỒN ĐỀ NGAY TRÊN THANH ĐỀ GỐC
 //   + NÚT "✏️ Sửa" TRỰC TIẾP TRÊN TỪNG CÂU HỎI (MỞ SỬA ĐỀ CHIA ĐÔI TẠI ĐÚNG CÂU ĐÓ)
-//   + UPLOAD ẢNH 2 TẦNG (IMGBB + NGẦM LƯU GOOGLE DRIVE) + NÚT "🔄 Tải lại ảnh" + "☁️ Drive"
+//   + UPLOAD ẢNH 2 TẦNG (IMGBB + NGẦM LƯU BẮT BUỘC GOOGLE DRIVE) & NÚT "✅ Đã lưu Drive"
 // =========================================================
 
 let _qbankLeafHoverTimer = null;
 let _qbankLeafHoverFolderId = null;
 let _qbankSearchDebounceTimer = null;
+
+let _autoBackupRunning = false;
+let _autoBackupStopRequested = false;
+let _autoBackupProgress = { done: 0, total: 0 };
+const _autoBackupFailedIdsThisSession = new Set();
 
 const QBANK_TREE_VIS_STORAGE_KEY = "qbank_tree_vis_prefs_v1";
 let _qbankTreeVisPrefs = null;
@@ -845,6 +851,13 @@ async function importFilesIntoPendingKho(fileList, khoId) {
         alert(`⚠️ Một số file bị lỗi không nạp được:\n- ${failedFiles.join("\n- ")}`);
     }
     showQbankToast(`✅ Đã nạp ${parsedBatch.length} đề (${totalImportedQ} câu) vào ${khoMeta.name}!`, "success");
+
+    // Tự động đẩy ngầm các ảnh mới nạp lên Google Drive 5TB nếu chưa có trên Drive
+    setTimeout(() => {
+        if (!_autoBackupRunning && getQbankQuestionsNeedingDriveBackup(false).length > 0) {
+            runAutoBackupAllQbankImagesToDrive({ autoTriggered: true });
+        }
+    }, 1200);
 }
 
 function movePendingExamOrder(examId, direction, event) {
@@ -2214,20 +2227,88 @@ function renderPendingKhoView(container, khoId) {
     `;
 }
 
-function buildDriveBackupBadgeHtml(q, imgUrl, safeQId) {
-    const hasDriveBackup = Boolean(q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
-    if (hasDriveBackup) {
-        const openUrl = q.imageDriveFolderUrl || q.imageDriveUrl || q.imageBackupUrl || "";
-        const tip = `Đã sao lưu dự phòng lên Google Drive 5TB\n📁 Đường dẫn: ${q.imageDrivePath || "Kho_anh_ngan_hang_cau_hoi"}\n📄 Tên file: ${q.imageDriveFilename || "Đã lưu"}`;
-        if (openUrl) {
-            return `<a href="${escapeQbankAttr(openUrl)}" target="_blank" class="btn-qbank-img" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; text-decoration:none;" title="${escapeQbankAttr(tip)}">☁️ Đã lưu Drive</a>`;
-        }
-        return `<span class="btn-qbank-img" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; cursor:default;" title="${escapeQbankAttr(tip)}">☁️ Đã lưu Drive</span>`;
+function buildDriveBackupBadgeHtml(q, imgUrl, safeQId, badgePrefix = "qbank") {
+    const badgeId = `drive-badge-${badgePrefix}-${escapeQbankAttr(q.id)}`;
+    if (q._driveBackingUp) {
+        return `<span id="${badgeId}" class="btn-qbank-img btn-drive-saving-status" title="Đang tự động lưu ảnh lên Google Drive 5TB...">⏳ Đang lưu Drive...</span>`;
     }
+
+    const isBackedUp = (typeof window.isQuestionImageBackedUpOnDrive === "function")
+        ? window.isQuestionImageBackedUpOnDrive(q)
+        : Boolean(q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
+
+    if (isBackedUp) {
+        const openUrl = q.imageDriveFolderUrl || q.imageDriveUrl || q.imageBackupUrl || "";
+        const tip = `Đã lưu dự phòng trên Google Drive 5TB\n📁 Thư mục: ${q.imageDrivePath || "Kho_anh_ngan_hang_cau_hoi"}\n📄 Tên file: ${q.imageDriveFilename || "Đã lưu"}`;
+        if (openUrl) {
+            return `<a id="${badgeId}" href="${escapeQbankAttr(openUrl)}" target="_blank" class="btn-qbank-img btn-drive-saved-status" title="${escapeQbankAttr(tip)}">✅ Đã lưu Drive</a>`;
+        }
+        return `<button type="button" id="${badgeId}" class="btn-qbank-img btn-drive-saved-status" onclick="showDriveSavedInfoToast('${safeQId}')" title="${escapeQbankAttr(tip)}">✅ Đã lưu Drive</button>`;
+    }
+
     if (imgUrl) {
-        return `<button type="button" class="btn-qbank-img" style="background:#fef3c7; color:#b45309; border:1px solid #fcd34d;" onclick="backupSingleQbankImageToDrive('${safeQId}')" title="Câu này mới chỉ có link ngoài (ImgBB/Web). Bấm để tạo bản sao lưu vĩnh viễn lên Google Drive 5TB!">☁️ Lưu Drive</button>`;
+        return `<button type="button" id="${badgeId}" class="btn-qbank-img" style="background:#fef3c7; color:#b45309; border:1px solid #fcd34d;" onclick="backupSingleQbankImageToDrive('${safeQId}')" title="Câu này mới có link ngoài (ImgBB/Web). Bấm để lưu dự phòng lên Google Drive 5TB!">☁️ Lưu Drive</button>`;
     }
     return "";
+}
+
+function showDriveSavedInfoToast(qId) {
+    const q = (qbankState.rawQuestions || []).find(x => x && String(x.id) === String(qId));
+    if (!q) return;
+    showQbankToast(`✅ Ảnh đã được sao lưu trên Drive: ${q.imageDriveFilename || q.imageDriveFileId || "An toàn"}`, "success");
+}
+
+function updateCardDriveBadgeInDOM(qId, qObj) {
+    if (!qObj) return;
+    const safeQId = safeQbankJsArg(qId);
+    const imgUrl = resolveQbankImageUrl(qObj, qbankState.imagesMap);
+
+    const targets = [
+        { prefix: "qbank", zoneId: `zone-qbank-${qId}` },
+        { prefix: "qbpreview", zoneId: `zone-qbpreview-${qId}` }
+    ];
+
+    targets.forEach(({ prefix, zoneId }) => {
+        const newBadgeHtml = buildDriveBackupBadgeHtml(qObj, imgUrl, safeQId, prefix);
+        if (!newBadgeHtml) return;
+        const existingBadge = document.getElementById(`drive-badge-${prefix}-${qId}`);
+        if (existingBadge) {
+            const temp = document.createElement("div");
+            temp.innerHTML = newBadgeHtml;
+            if (temp.firstElementChild) existingBadge.replaceWith(temp.firstElementChild);
+            return;
+        }
+        const zone = document.getElementById(zoneId);
+        if (zone) {
+            const temp = document.createElement("div");
+            temp.innerHTML = newBadgeHtml;
+            const statusSpan = document.getElementById(`status-${prefix}-${qId}`);
+            if (temp.firstElementChild) {
+                if (statusSpan && statusSpan.parentNode === zone) zone.insertBefore(temp.firstElementChild, statusSpan);
+                else zone.appendChild(temp.firstElementChild);
+            }
+        }
+    });
+}
+
+function syncDriveMetadataToAllActiveStores(qId, sourceQ) {
+    if (!sourceQ) return;
+    const idStr = String(qId);
+    const fields = ["imageUrl", "imageKey", "imageBackupUrl", "imageDriveFileId", "imageDriveUrl", "imageDriveFolderUrl", "imageDrivePath", "imageDriveFilename", "imageBackedUpAt"];
+
+    const qInBank = (qbankState.rawQuestions || []).find(x => x && String(x.id) === idStr);
+    if (qInBank && qInBank !== sourceQ) {
+        fields.forEach(f => { if (sourceQ[f] !== undefined) qInBank[f] = sourceQ[f]; });
+    }
+    if (typeof qbankMidEditState !== "undefined" && Array.isArray(qbankMidEditState.questions)) {
+        const qInMid = qbankMidEditState.questions.find(x => x && String(x.id) === idStr);
+        if (qInMid && qInMid !== sourceQ) {
+            fields.forEach(f => { if (sourceQ[f] !== undefined) qInMid[f] = sourceQ[f]; });
+        }
+    }
+    if (typeof rebuildQbankImagesBackupMap === "function") {
+        rebuildQbankImagesBackupMap();
+    }
 }
 
 function renderQbankCardHtml(q, idx) {
@@ -2240,7 +2321,7 @@ function renderQbankCardHtml(q, idx) {
     const imgUrl = resolveQbankImageUrl(q, qbankState.imagesMap);
     const safeQId = safeQbankJsArg(q.id);
     const hasAnyImgOrDrive = Boolean(imgUrl || q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
-    const driveBadgeHtml = buildDriveBackupBadgeHtml(q, imgUrl, safeQId);
+    const driveBadgeHtml = buildDriveBackupBadgeHtml(q, imgUrl, safeQId, "qbank");
 
     const uploaderHtml = `
         <div class="qbank-img-tool-zone" id="zone-qbank-${escapeQbankAttr(q.id)}" tabindex="0" title="Bấm vào đây rồi ấn Ctrl+V để dán ảnh" style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; background:#f8fafc; padding:3px 6px; border-radius:5px; border:1px dashed #cbd5e1; margin-top:4px;">
@@ -2299,6 +2380,7 @@ function renderQbankQuestions() {
     ensureQbankMidSearchBarInDOM();
     updateQbankDeleteSelectedButtonUI();
     updateQbankUploadMenuCounts();
+    updateAutoBackupButtonUI();
 
     const container = document.getElementById("qbank-questions-list");
     if (!container) return;
@@ -2413,8 +2495,197 @@ function clearSelectedQuestions() {
 }
 
 // ============================================================================
-// 7. UPLOAD 2 TẦNG, DÁN ẢNH (CTRL+V) & NÚT TẢI LẠI ẢNH TỪ GOOGLE DRIVE
+// 7. UPLOAD 2 TẦNG (IMGBB + BẮT BUỘC LƯU NGẦM DRIVE) & LƯU TỰ ĐỘNG TOÀN NGÂN HÀNG
 // ============================================================================
+function getQbankImageStats(includeFailedInSession = false) {
+    const list = qbankState.rawQuestions || [];
+    let totalImgs = 0;
+    const unbacked = [];
+
+    list.forEach(q => {
+        if (!q) return;
+        const imgUrl = resolveQbankImageUrl(q, qbankState.imagesMap);
+        if (!imgUrl || isBase64DataUrl(imgUrl)) return;
+        totalImgs++;
+
+        const isBacked = (typeof window.isQuestionImageBackedUpOnDrive === "function")
+            ? window.isQuestionImageBackedUpOnDrive(q)
+            : Boolean(q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
+
+        if (!isBacked) {
+            if (includeFailedInSession || !_autoBackupFailedIdsThisSession.has(String(q.id))) {
+                unbacked.push(q);
+            }
+        }
+    });
+
+    return { totalImgs, unbacked };
+}
+
+function getQbankQuestionsNeedingDriveBackup(includeFailedInSession = false) {
+    return getQbankImageStats(includeFailedInSession).unbacked;
+}
+
+function updateAutoBackupButtonUI() {
+    const btn = document.getElementById("btn-qbank-auto-save-drive");
+    const txtEl = document.getElementById("btn-qbank-autosave-drive-text");
+    if (!btn || !txtEl) return;
+
+    btn.classList.remove("is-running", "is-all-saved");
+    const { totalImgs, unbacked } = getQbankImageStats(true);
+
+    if (_autoBackupRunning) {
+        btn.classList.add("is-running");
+        txtEl.textContent = `Đang lưu ngầm (${_autoBackupProgress.done}/${_autoBackupProgress.total})...`;
+        btn.title = "Đang tự động lưu ngầm toàn bộ ảnh ngân hàng lên Google Drive qua GAS — Nhấn để tạm dừng";
+        return;
+    }
+
+    if (totalImgs === 0) {
+        txtEl.textContent = "Lưu tự động";
+        btn.title = "Lưu tự động ngầm tất cả các ảnh hiện có trong Ngân hàng đề lên Google Drive 5TB qua GAS";
+        return;
+    }
+
+    if (unbacked.length === 0) {
+        btn.classList.add("is-all-saved");
+        txtEl.textContent = `Đã lưu Drive (${totalImgs}/${totalImgs})`;
+        btn.title = `Tất cả ${totalImgs} ảnh trong ngân hàng đã được sao lưu an toàn trên Google Drive 5TB!`;
+    } else {
+        txtEl.textContent = `Lưu tự động (${unbacked.length} ảnh)`;
+        btn.title = `Còn ${unbacked.length}/${totalImgs} ảnh chưa sao lưu lên Google Drive 5TB. Bấm để lưu ngầm toàn bộ ngay!`;
+    }
+}
+
+function stopAutoBackupQbankImages() {
+    if (_autoBackupRunning) {
+        _autoBackupStopRequested = true;
+    }
+}
+
+async function runAutoBackupAllQbankImagesToDrive(eventOrOpts = null) {
+    const isDomEvent = Boolean(eventOrOpts && (typeof eventOrOpts.preventDefault === "function" || eventOrOpts.target));
+    const autoTriggered = Boolean(!isDomEvent && eventOrOpts && eventOrOpts.autoTriggered);
+
+    if (isDomEvent && eventOrOpts.preventDefault) {
+        eventOrOpts.preventDefault();
+        eventOrOpts.stopPropagation();
+    }
+
+    if (typeof requireQbankAdminOrPrompt === "function" && !requireQbankAdminOrPrompt()) return;
+
+    if (_autoBackupRunning) {
+        if (!autoTriggered) {
+            _autoBackupStopRequested = true;
+            showQbankToast("⏸️ Đang tạm dừng Lưu tự động (vẫn giữ toàn bộ ảnh đã lưu)...", "info");
+        }
+        return;
+    }
+
+    const gasUrl = (typeof window.getBackupGasUrl === "function")
+        ? window.getBackupGasUrl()
+        : (typeof GOOGLE_DRIVE_UPLOAD_GAS_URL !== "undefined" ? GOOGLE_DRIVE_UPLOAD_GAS_URL : "");
+
+    if (!gasUrl || gasUrl.includes("DÁN_URL")) {
+        if (!autoTriggered) alert("⚠️ Chưa cấu hình GOOGLE_DRIVE_UPLOAD_GAS_URL trong app-config.js!");
+        return;
+    }
+
+    // Khi người dùng bấm tay, xóa danh sách skip trong phiên để thử lại toàn bộ
+    if (!autoTriggered) {
+        _autoBackupFailedIdsThisSession.clear();
+    }
+
+    const queue = getQbankQuestionsNeedingDriveBackup(!autoTriggered);
+    if (queue.length === 0) {
+        updateAutoBackupButtonUI();
+        if (!autoTriggered) {
+            const { totalImgs } = getQbankImageStats(true);
+            showQbankToast(
+                totalImgs > 0
+                    ? `✅ Tất cả ${totalImgs} ảnh trong Ngân hàng đề đều đã lưu trên Google Drive!`
+                    : "ℹ️ Hiện chưa có câu hỏi nào gắn ảnh trong Ngân hàng đề.",
+                "success"
+            );
+        }
+        return;
+    }
+
+    _autoBackupRunning = true;
+    _autoBackupStopRequested = false;
+    _autoBackupProgress = { done: 0, total: queue.length };
+    updateAutoBackupButtonUI();
+
+    if (!autoTriggered) {
+        showQbankToast(`☁️ Bắt đầu lưu tự động ngầm ${queue.length} ảnh lên Google Drive 5TB...`, "info");
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const modal = document.getElementById("modal-qbank-creator");
+        if (_autoBackupStopRequested || !modal || modal.style.display !== "flex") {
+            break;
+        }
+
+        const q = queue[i];
+        if (!q || (typeof window.isQuestionImageBackedUpOnDrive === "function" && window.isQuestionImageBackedUpOnDrive(q))) {
+            _autoBackupProgress.done = i + 1;
+            updateAutoBackupButtonUI();
+            continue;
+        }
+
+        q._driveBackingUp = true;
+        updateCardDriveBadgeInDOM(q.id, q);
+
+        try {
+            await window.backupExistingImageToDrive(q, q.folderName || q.sourceExam || qbankState.currentExamTitle || "");
+            q._driveBackingUp = false;
+            syncDriveMetadataToAllActiveStores(q.id, q);
+            updateCardDriveBadgeInDOM(q.id, q);
+            successCount++;
+
+            if (successCount % 5 === 0) {
+                saveQbankDraftState(false);
+            }
+        } catch (err) {
+            q._driveBackingUp = false;
+            _autoBackupFailedIdsThisSession.add(String(q.id));
+            updateCardDriveBadgeInDOM(q.id, q);
+            failCount++;
+            console.warn(`Lỗi sao lưu tự động ảnh câu ${q.id}:`, err);
+        }
+
+        _autoBackupProgress.done = i + 1;
+        updateAutoBackupButtonUI();
+
+        if (i < queue.length - 1 && !_autoBackupStopRequested) {
+            await new Promise(r => setTimeout(r, 350));
+        }
+    }
+
+    const wasStopped = _autoBackupStopRequested;
+    _autoBackupRunning = false;
+    _autoBackupStopRequested = false;
+    updateAutoBackupButtonUI();
+
+    if (successCount > 0) {
+        await saveQbankDraftState(false);
+        if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
+    }
+
+    if (!autoTriggered || successCount > 0) {
+        if (wasStopped) {
+            showQbankToast(`⏸️ Đã tạm dừng! Vừa lưu thêm ${successCount} ảnh lên Google Drive.`, "warning");
+        } else if (failCount === 0 && successCount > 0) {
+            showQbankToast(`🎉 Đã lưu tự động xong ${successCount} ảnh lên Google Drive 5TB!`, "success");
+        } else if (successCount > 0 || failCount > 0) {
+            showQbankToast(`☁️ Lưu tự động xong: ${successCount} thành công${failCount > 0 ? `, ${failCount} ảnh lỗi nguồn` : ""}.`, failCount > 0 ? "warning" : "success");
+        }
+    }
+}
+
 function triggerQBankPaste(qId, imgKey) {
     const zone = document.getElementById(`zone-qbank-${qId}`);
     if (zone) zone.focus();
@@ -2528,13 +2799,16 @@ async function uploadQBankImage(file, qId, imgKey) {
     const stEl = document.getElementById(`status-qbank-${qId}`);
     const stPreviewEl = document.getElementById(`status-qbpreview-${qId}`);
     const setStatus = (msg, color = "#0284c7") => {
-        if (stEl) { stEl.style.color = color; stEl.innerText = msg; }
-        if (stPreviewEl) { stPreviewEl.style.color = color; stPreviewEl.innerText = msg; }
+        const el1 = document.getElementById(`status-qbank-${qId}`);
+        const el2 = document.getElementById(`status-qbpreview-${qId}`);
+        if (el1) { el1.style.color = color; el1.innerText = msg; }
+        if (el2) { el2.style.color = color; el2.innerText = msg; }
     };
 
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (!q) return;
 
+    _autoBackupFailedIdsThisSession.delete(String(qId));
     setStatus("⏳ Đang tải ảnh...", "#0284c7");
 
     try {
@@ -2546,11 +2820,23 @@ async function uploadQBankImage(file, qId, imgKey) {
                 onBackupComplete: (updatedQ, driveRes) => {
                     if (!qbankState.imagesMap || typeof qbankState.imagesMap !== "object") qbankState.imagesMap = {};
                     if (updatedQ.imageUrl) qbankState.imagesMap[imgKey] = updatedQ.imageUrl;
-                    if (typeof rebuildQbankImagesBackupMap === "function") rebuildQbankImagesBackupMap();
+                    syncDriveMetadataToAllActiveStores(qId, updatedQ);
                     saveQbankDraftState(false);
-                    renderQbankQuestions();
+
+                    const liveQ = (qbankState.rawQuestions || []).find(x => x && String(x.id) === String(qId)) || updatedQ;
+                    updateCardDriveBadgeInDOM(qId, liveQ);
+                    updateAutoBackupButtonUI();
+                    setStatus("✅ Đã lưu Drive!", "#16a34a");
+                    setTimeout(() => setStatus("", "#16a34a"), 3000);
                     if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
-                    showQbankToast(`☁️ Đã sao lưu dự phòng lên Google Drive: ${driveRes.filename}`, "success");
+                    showQbankToast(`☁️ Đã tự động sao lưu lên Google Drive: ${driveRes.filename}`, "success");
+                },
+                onBackupFailed: (updatedQ) => {
+                    const liveQ = (qbankState.rawQuestions || []).find(x => x && String(x.id) === String(qId)) || updatedQ;
+                    updateCardDriveBadgeInDOM(qId, liveQ);
+                    updateAutoBackupButtonUI();
+                    setStatus("⚠️ Chưa lưu Drive (bấm Lưu tự động để thử lại)", "#d97706");
+                    showQbankToast("⚠️ Ảnh đã lên ImgBB, nhưng sao lưu Drive tạm lỗi. Bấm [☁️ Lưu tự động] để đồng bộ lại!", "warning");
                 }
             });
 
@@ -2564,7 +2850,7 @@ async function uploadQBankImage(file, qId, imgKey) {
             if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
             showQbankToast(
                 res.source === "ImgBB"
-                    ? "🖼️ Đã chèn ảnh nhanh (ImgBB) & đang sao lưu ngầm lên Drive!"
+                    ? "🖼️ Đã chèn ảnh nhanh (ImgBB) & đang tự động lưu ngầm lên Google Drive!"
                     : "☁️ Đã lưu ảnh trực tiếp lên Google Drive 5TB!",
                 "success"
             );
@@ -2580,7 +2866,8 @@ async function uploadQBankImage(file, qId, imgKey) {
             showQbankToast("🖼️ Đã chèn ảnh cho câu hỏi thành công!", "success");
         }
     } catch (e) {
-        setStatus("❌ Lỗi", "#dc2626");
+        if (stEl) { stEl.style.color = "#dc2626"; stEl.innerText = "❌ Lỗi"; }
+        if (stPreviewEl) { stPreviewEl.style.color = "#dc2626"; stPreviewEl.innerText = "❌ Lỗi"; }
         showQbankToast("❌ Lỗi tải ảnh: " + e.message, "error");
         alert("❌ Lỗi tải ảnh:\n" + e.message);
     }
@@ -2590,11 +2877,11 @@ async function reloadQBankImg(qId) {
     const q = qbankState.rawQuestions.find(x => String(x.id) === String(qId));
     if (!q) return;
 
-    const stEl = document.getElementById(`status-qbank-${qId}`);
-    const stPreviewEl = document.getElementById(`status-qbpreview-${qId}`);
     const setStatus = (msg, color = "#0284c7") => {
-        if (stEl) { stEl.style.color = color; stEl.innerText = msg; }
-        if (stPreviewEl) { stPreviewEl.style.color = color; stPreviewEl.innerText = msg; }
+        const el1 = document.getElementById(`status-qbank-${qId}`);
+        const el2 = document.getElementById(`status-qbpreview-${qId}`);
+        if (el1) { el1.style.color = color; el1.innerText = msg; }
+        if (el2) { el2.style.color = color; el2.innerText = msg; }
     };
 
     if (typeof window.reloadQuestionImageAction === "function") {
@@ -2609,7 +2896,7 @@ async function reloadQBankImg(qId) {
                         q.imageUrl = info.directUrl;
                         qbankState.imagesMap[imgKey] = info.directUrl;
                     }
-                    if (typeof rebuildQbankImagesBackupMap === "function") rebuildQbankImagesBackupMap();
+                    syncDriveMetadataToAllActiveStores(qId, q);
                     saveQbankDraftState(false);
                 }
 
@@ -2622,6 +2909,9 @@ async function reloadQBankImg(qId) {
                 } else {
                     renderQbankQuestions();
                 }
+
+                updateCardDriveBadgeInDOM(q.id, q);
+                updateAutoBackupButtonUI();
 
                 const previewCard = document.getElementById(`qb-preview-qcard-${q.id}`);
                 if (previewCard) {
@@ -2653,17 +2943,25 @@ async function backupSingleQbankImageToDrive(qId) {
     }
 
     const stEl = document.getElementById(`status-qbank-${qId}`);
-    if (stEl) { stEl.style.color = "#0284c7"; stEl.innerText = "⏳ Đang sao lưu Drive..."; }
+    if (stEl) { stEl.style.color = "#0284c7"; stEl.innerText = "⏳ Đang lưu Drive..."; }
+    q._driveBackingUp = true;
+    updateCardDriveBadgeInDOM(qId, q);
 
     try {
-        const driveRes = await window.backupExistingImageToDrive(q, qbankState.currentExamTitle || qbankState.activeFilter.folderName || "");
-        if (typeof rebuildQbankImagesBackupMap === "function") rebuildQbankImagesBackupMap();
+        const driveRes = await window.backupExistingImageToDrive(q, q.folderName || q.sourceExam || qbankState.currentExamTitle || "");
+        q._driveBackingUp = false;
+        _autoBackupFailedIdsThisSession.delete(String(qId));
+        syncDriveMetadataToAllActiveStores(qId, q);
         saveQbankDraftState(false);
-        renderQbankQuestions();
+        updateCardDriveBadgeInDOM(qId, q);
+        updateAutoBackupButtonUI();
+        if (stEl) { stEl.style.color = "#16a34a"; stEl.innerText = "✅ Đã lưu Drive!"; setTimeout(() => { stEl.innerText = ""; }, 2500); }
         if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
-        showQbankToast(`☁️ Đã sao lưu vào Drive: ${driveRes.filename}`, "success");
+        showQbankToast(`✅ Đã lưu vào Google Drive: ${driveRes.filename}`, "success");
     } catch (err) {
-        if (stEl) { stEl.style.color = "#dc2626"; stEl.innerText = "❌ Lỗi sao lưu"; }
+        q._driveBackingUp = false;
+        updateCardDriveBadgeInDOM(qId, q);
+        if (stEl) { stEl.style.color = "#dc2626"; stEl.innerText = "❌ Lỗi lưu Drive"; }
         alert("❌ Không thể sao lưu tự động: " + err.message);
     }
 }
@@ -2681,7 +2979,9 @@ function deleteQBankImg(qId, imgKey) {
         q.imageDriveFolderUrl = "";
         q.imageDrivePath = "";
         q.imageDriveFilename = "";
+        q._driveBackingUp = false;
     }
+    _autoBackupFailedIdsThisSession.delete(String(qId));
     saveQbankDraftState(false); renderQbankQuestions();
     if (typeof refreshQbankExamPreviewModalIfOpen === "function") refreshQbankExamPreviewModalIfOpen();
     showQbankToast("🗑️ Đã xóa ảnh của câu hỏi.", "info");
@@ -2766,3 +3066,12 @@ window.handleQBankImgSelect = handleQBankImgSelect;
 window.reloadQBankImg = reloadQBankImg;
 window.backupSingleQbankImageToDrive = backupSingleQbankImageToDrive;
 window.deleteQBankImg = deleteQBankImg;
+window.buildDriveBackupBadgeHtml = buildDriveBackupBadgeHtml;
+window.showDriveSavedInfoToast = showDriveSavedInfoToast;
+window.updateCardDriveBadgeInDOM = updateCardDriveBadgeInDOM;
+window.syncDriveMetadataToAllActiveStores = syncDriveMetadataToAllActiveStores;
+window.getQbankImageStats = getQbankImageStats;
+window.getQbankQuestionsNeedingDriveBackup = getQbankQuestionsNeedingDriveBackup;
+window.updateAutoBackupButtonUI = updateAutoBackupButtonUI;
+window.stopAutoBackupQbankImages = stopAutoBackupQbankImages;
+window.runAutoBackupAllQbankImagesToDrive = runAutoBackupAllQbankImagesToDrive;
