@@ -4,6 +4,7 @@
 // - BỎ NÚT "✏️ SỬA ĐỀ" TRÊN THANH CÔNG CỤ TRÊN CÙNG CỘT GIỮA
 // - MỞ CHẾ ĐỘ SỬA ĐỀ CHIA ĐÔI MÀN HÌNH NGAY KHI BẤM "✏️ SỬA" TRÊN TỪNG CÂU HỎI
 // - TỰ ĐỘNG CUỘN & TÔ SÁNG ĐÚNG CÂU VỪA BẤM Ở CẢ 2 NỬA TRÁI & PHẢI
+// - GẮN THÔNG BÁO TRẠNG THÁI LƯU NGẦM LÊN DRIVE NGAY TRÊN TIÊU ĐỀ CÂU HỎI (.soide-preview-head-row)
 // - HỖ TRỢ UPLOAD ẢNH 2 TẦNG (IMGBB + NGẦM DRIVE BẮT BUỘC), NÚT "✅ Đã lưu Drive" & "🔄 Tải lại ảnh"
 // - TỰ ĐỘNG NHẬN DIỆN & ÁP DỤNG CÁC Ô 💻 MÃ THÔ ĐANG MỞ KHI BẤM ⚡ UPDATE
 // - ĐỒNG BỘ THẲNG LÊN SUPABASE NGAY KHI BẤM ⚡ UPDATE
@@ -388,6 +389,34 @@ function qbEditRenderRightEditor() {
     setTimeout(qbEditAutoResizeAllTextareas, 20);
 }
 
+function buildQbEditHeaderDriveBadgeHtml(q, imgUrl, safeQId) {
+    const attrQId = escapeQbankAttr(q.id);
+    const hdrId = `qb-edit-hdr-drive-badge-${attrQId}`;
+    const isBackedUp = (typeof window.isQuestionImageBackedUpOnDrive === "function")
+        ? window.isQuestionImageBackedUpOnDrive(q)
+        : Boolean(q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
+
+    if (!imgUrl && !isBackedUp && !q._driveBackingUp && !q._driveSaveFailed) {
+        return `<span id="${hdrId}" style="display:none;"></span>`;
+    }
+    if (q._driveBackingUp) {
+        return `<span id="${hdrId}" class="qb-hdr-drive-badge is-saving" style="margin-left:4px;">⏳ Đang lưu ngầm lên Drive...</span>`;
+    }
+    if (isBackedUp) {
+        const openUrl = q.imageDriveFolderUrl || q.imageDriveUrl || q.imageBackupUrl || "";
+        const justCls = q._driveJustSaved ? " just-saved" : "";
+        const tip = `Đã sao lưu ngầm trên Google Drive 5TB\n📁 Thư mục: ${q.imageDrivePath || "Kho_anh_ngan_hang_cau_hoi"}\n📄 Tên file: ${q.imageDriveFilename || "Đã lưu"}`;
+        if (openUrl) {
+            return `<a id="${hdrId}" href="${escapeQbankAttr(openUrl)}" target="_blank" class="qb-hdr-drive-badge is-saved${justCls}" style="margin-left:4px;" title="${escapeQbankAttr(tip)}">✅ Đã lưu ngầm lên Google Drive</a>`;
+        }
+        return `<span id="${hdrId}" class="qb-hdr-drive-badge is-saved${justCls}" style="margin-left:4px;" onclick="showDriveSavedInfoToast('${safeQId}')" title="${escapeQbankAttr(tip)}">✅ Đã lưu ngầm lên Google Drive</span>`;
+    }
+    if (q._driveSaveFailed) {
+        return `<button type="button" id="${hdrId}" class="qb-hdr-drive-badge is-failed" style="margin-left:4px;" onclick="qbEditBackupSingleImageToDrive('${safeQId}')">⚠️ Lỗi lưu Drive (Bấm thử lại)</button>`;
+    }
+    return `<button type="button" id="${hdrId}" class="qb-hdr-drive-badge is-pending" style="margin-left:4px;" onclick="qbEditBackupSingleImageToDrive('${safeQId}')">☁️ Chờ lưu Drive (Bấm lưu)</button>`;
+}
+
 function buildQbEditDriveBadgeHtml(q, imgUrl, safeQId) {
     const attrQId = escapeQbankAttr(q.id);
     if (q._driveBackingUp) {
@@ -432,6 +461,7 @@ function qbEditRenderLeftLivePreview() {
         const imgUrl = resolveQbankImageUrl(q, imageMap), imgKey = q.imageKey || `img_q_${qId}`, safeImgKey = safeQbankJsArg(imgKey);
         const hasAnyImgOrDrive = Boolean(imgUrl || q.imageDriveFileId || q.imageBackupUrl || (q.imageDrivePath && q.imageDriveFilename));
         const driveBadge = buildQbEditDriveBadgeHtml(q, imgUrl, safeQId);
+        const headerDriveBadge = buildQbEditHeaderDriveBadgeHtml(q, imgUrl, safeQId);
 
         const imgHtml = imgUrl ? `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}"><div class="quiz-img-wrapper" style="position:relative; display:inline-block;"><img id="qb-edit-img-el-${escapeQbankAttr(qId)}" src="${escapeQbankAttr(imgUrl)}" class="quiz-img" style="max-height:220px;" onerror="handleQbankImgError(this, '${safeQId}')" alt="Hình câu ${displayIndex}"></div></div>` : `<div class="quiz-img-container" id="qb-edit-img-box-${escapeQbankAttr(qId)}" style="display:none;"></div>`;
         const uploaderHtml = `
@@ -471,8 +501,10 @@ function qbEditRenderLeftLivePreview() {
 
         html += `
             <div class="soide-preview-card" id="qb-edit-preview-card-${escapeQbankAttr(qId)}" data-qid="${escapeQbankAttr(qId)}" style="background:${palette.bg}; border:1.8px solid ${palette.border};">
-                <div class="soide-preview-head-row">
-                    <div class="soide-preview-title-badge" style="color:${palette.text}; font-size:12.5px;"><b>Câu ${displayIndex}</b> <span style="font-size:10.5px; opacity:0.85; font-weight:700;">(ID: ${escapeQbankHtml(qId)})</span> ${redIdTag}</div>
+                <div class="soide-preview-head-row" style="flex-wrap:wrap;">
+                    <div class="soide-preview-title-badge" style="color:${palette.text}; font-size:12.5px; display:flex; align-items:center; flex-wrap:wrap; gap:4px;">
+                        <b>Câu ${displayIndex}</b> <span style="font-size:10.5px; opacity:0.85; font-weight:700;">(ID: ${escapeQbankHtml(qId)})</span> ${redIdTag} ${headerDriveBadge}
+                    </div>
                     <div class="soide-head-actions">
                         <select class="soide-part-select-mini" onchange="qbEditChangeQuestionType(${qIdx}, this.value)">
                             <option value="multiple_choice" ${currentPartType === "multiple_choice" ? "selected" : ""}>Phần I</option>
@@ -524,23 +556,44 @@ function qbEditHandleImageSelected(input, qId, imgKey) {
 }
 
 async function qbEditBackupSingleImageToDrive(qId) {
+    if (typeof ensureQbankImageBackupModuleLoaded === "function") {
+        await ensureQbankImageBackupModuleLoaded();
+    }
     const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
     if (!targetQ || typeof window.backupExistingImageToDrive !== "function") return;
     const statusEl = document.getElementById(`qb-edit-img-status-${qId}`);
-    if (statusEl) { statusEl.className = "admin-uploader-status loading"; statusEl.innerText = "⏳ Đang lưu Drive..."; }
+    if (statusEl) { statusEl.className = "admin-uploader-status loading"; statusEl.innerText = "⏳ Đang lưu ngầm lên Drive..."; }
     targetQ._driveBackingUp = true;
+    targetQ._driveJustSaved = false;
+    targetQ._driveSaveFailed = false;
     qbEditRenderLeftLivePreview();
 
     try {
-        const driveRes = await window.backupExistingImageToDrive(targetQ, qbankMidEditState.title || "");
+        const folderCtx = (typeof resolveQuestionTargetFolderNameForDrive === "function")
+            ? resolveQuestionTargetFolderNameForDrive(targetQ)
+            : (qbankMidEditState.title || "");
+        const driveRes = await window.backupExistingImageToDrive(targetQ, folderCtx);
         targetQ._driveBackingUp = false;
+        targetQ._driveJustSaved = true;
+        targetQ._driveSaveFailed = false;
         if (typeof syncDriveMetadataToAllActiveStores === "function") syncDriveMetadataToAllActiveStores(qId, targetQ);
-        saveQbankDraftState(false);
+        await saveQbankDraftState(false);
+        if (typeof syncQbankDraftToCloud === "function") {
+            try { await syncQbankDraftToCloud(); } catch (e) {}
+        }
         if (typeof updateAutoBackupButtonUI === "function") updateAutoBackupButtonUI();
         qbEditRenderLeftLivePreview();
-        showQbankToast(`✅ Đã lưu vào Drive: ${driveRes.filename}`, "success");
+        setTimeout(() => {
+            if (targetQ) {
+                targetQ._driveJustSaved = false;
+                if (qbankMidEditState.isActive) qbEditRenderLeftLivePreview();
+            }
+        }, 6000);
+        showQbankToast(`✅ Đã lưu vào Drive (${folderCtx}): ${driveRes.filename}`, "success");
     } catch (err) {
         targetQ._driveBackingUp = false;
+        targetQ._driveJustSaved = false;
+        targetQ._driveSaveFailed = true;
         qbEditRenderLeftLivePreview();
         const st = document.getElementById(`qb-edit-img-status-${qId}`);
         if (st) { st.className = "admin-uploader-status error"; st.innerText = "❌ Lỗi lưu Drive"; }
@@ -550,22 +603,31 @@ async function qbEditBackupSingleImageToDrive(qId) {
 
 async function qbEditUploadImage(file, qId, imgKey) {
     if (!file) return;
+    if (typeof ensureQbankImageBackupModuleLoaded === "function") {
+        await ensureQbankImageBackupModuleLoaded();
+    }
     const statusEl = document.getElementById(`qb-edit-img-status-${qId}`);
     if (statusEl) { statusEl.className = "admin-uploader-status loading"; statusEl.innerText = "⏳ Đang tải ảnh..."; }
     const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
     try {
         let directUrl = "";
+        const folderCtx = (typeof resolveQuestionTargetFolderNameForDrive === "function" && targetQ)
+            ? resolveQuestionTargetFolderNameForDrive(targetQ)
+            : (qbankMidEditState.title || "");
+
         if (typeof window.uploadDualQuestionImage === "function" && targetQ) {
             const res = await window.uploadDualQuestionImage(file, targetQ, {
-                contextTitle: qbankMidEditState.title || "",
+                contextTitle: folderCtx,
                 imgKey: imgKey,
                 onStatus: (msg) => {
                     const el = document.getElementById(`qb-edit-img-status-${qId}`);
                     if (el) { el.className = "admin-uploader-status loading"; el.innerText = msg; }
                 },
-                onBackupComplete: (updatedQ) => {
+                onBackupComplete: (updatedQ, driveRes) => {
                     if (!qbankMidEditState.images) qbankMidEditState.images = {};
                     if (updatedQ.imageUrl) qbankMidEditState.images[imgKey] = updatedQ.imageUrl;
+                    updatedQ._driveJustSaved = true;
+                    updatedQ._driveSaveFailed = false;
                     if (typeof syncDriveMetadataToAllActiveStores === "function") {
                         syncDriveMetadataToAllActiveStores(qId, updatedQ);
                     }
@@ -576,10 +638,18 @@ async function qbEditUploadImage(file, qId, imgKey) {
                         qbankMidEditState.isDirty = true;
                         qbEditRenderLeftLivePreview();
                     }
+                    setTimeout(() => {
+                        if (updatedQ) {
+                            updatedQ._driveJustSaved = false;
+                            if (qbankMidEditState.isActive) qbEditRenderLeftLivePreview();
+                            else if (typeof updateCardDriveBadgeInDOM === "function") updateCardDriveBadgeInDOM(qId, updatedQ);
+                        }
+                    }, 6000);
                     if (typeof updateAutoBackupButtonUI === "function") updateAutoBackupButtonUI();
-                    showQbankToast("☁️ Đã tự động sao lưu ngầm ảnh sang Google Drive!", "success");
+                    showQbankToast(`✅ Đã lưu ngầm lên Google Drive (${folderCtx}): ${driveRes.filename}`, "success");
                 },
-                onBackupFailed: () => {
+                onBackupFailed: (updatedQ) => {
+                    if (updatedQ) updatedQ._driveSaveFailed = true;
                     if (qbankMidEditState.isActive) qbEditRenderLeftLivePreview();
                     if (typeof updateAutoBackupButtonUI === "function") updateAutoBackupButtonUI();
                     showQbankToast("⚠️ Ảnh đã lên ImgBB, nhưng sao lưu Drive tạm lỗi. Bấm [☁️ Lưu Drive] để thử lại!", "warning");
@@ -603,6 +673,9 @@ async function qbEditUploadImage(file, qId, imgKey) {
 }
 
 async function qbEditReloadQuestionImage(qId) {
+    if (typeof ensureQbankImageBackupModuleLoaded === "function") {
+        await ensureQbankImageBackupModuleLoaded();
+    }
     const targetQ = (qbankMidEditState.questions || []).find(item => String(item.id) === String(qId));
     if (!targetQ || typeof window.reloadQuestionImageAction !== "function") return;
     const statusEl = document.getElementById(`qb-edit-img-status-${qId}`);
@@ -647,6 +720,8 @@ function qbEditDeleteQuestionImage(qId, imgKey) {
         targetQ.imageDrivePath = "";
         targetQ.imageDriveFilename = "";
         targetQ._driveBackingUp = false;
+        targetQ._driveJustSaved = false;
+        targetQ._driveSaveFailed = false;
     }
     qbankMidEditState.isDirty = true;
     qbEditRenderBothSides();
@@ -1256,3 +1331,5 @@ window.qbEditBackupSingleImageToDrive = qbEditBackupSingleImageToDrive;
 window.qbEditUploadImage = qbEditUploadImage;
 window.qbEditReloadQuestionImage = qbEditReloadQuestionImage;
 window.qbEditDeleteQuestionImage = qbEditDeleteQuestionImage;
+window.buildQbEditHeaderDriveBadgeHtml = buildQbEditHeaderDriveBadgeHtml;
+window.buildQbEditDriveBadgeHtml = buildQbEditDriveBadgeHtml;
