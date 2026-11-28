@@ -5,111 +5,14 @@
 // - CỘT 2:
 //   + NÚT "📥 Upload file JSON đề" XÒE RA 4 KHO CHỜ XẾP
 //   + DUYỆT THƯ MỤC 3 CẤP + NÚT BACK + PHÂN TRANG 50 CÂU / TRANG
+//   + Ô TÌM KIẾM NHANH THEO TỪ KHÓA / MÃ ID / NGUỒN ĐỀ NGAY TRÊN THANH ĐỀ GỐC
 //   + NÚT "✏️ Sửa" TRỰC TIẾP TRÊN TỪNG CÂU HỎI (MỞ SỬA ĐỀ CHIA ĐÔI TẠI ĐÚNG CÂU ĐÓ)
 //   + UPLOAD ẢNH 2 TẦNG (IMGBB + NGẦM LƯU GOOGLE DRIVE) + NÚT "🔄 Tải lại ảnh" + "☁️ Drive"
 // =========================================================
 
 let _qbankLeafHoverTimer = null;
 let _qbankLeafHoverFolderId = null;
-
-const QBANK_TREE_VIS_STORAGE_KEY = "qbank_tree_vis_prefs_v1";
-let _qbankTreeVisPrefs = null;
-
-function cancelLeafAutoExpandTimer() {
-    if (_qbankLeafHoverTimer) {
-        clearTimeout(_qbankLeafHoverTimer);
-        _qbankLeafHoverTimer = null;
-    }
-    _qbankLeafHoverFolderId = null;
-}
-
-// ============================================================================
-// 0. TÙY CHỌN ẨN/HIỆN CÁC NÚT CHỨC NĂNG CUỐI MỖI THƯ MỤC (CỘT TRÁI)
-// ============================================================================
-function getQbankTreeVisPrefs() {
-    if (_qbankTreeVisPrefs) return _qbankTreeVisPrefs;
-    const prefs = { hideEditTools: false, hideMatrixBtn: false };
-    try {
-        const raw = localStorage.getItem(QBANK_TREE_VIS_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === "object") {
-                prefs.hideEditTools = Boolean(parsed.hideEditTools);
-                prefs.hideMatrixBtn = Boolean(parsed.hideMatrixBtn);
-            }
-        }
-    } catch (e) {}
-    _qbankTreeVisPrefs = prefs;
-    return _qbankTreeVisPrefs;
-}
-
-function saveQbankTreeVisPrefs(prefs) {
-    _qbankTreeVisPrefs = {
-        hideEditTools: Boolean(prefs && prefs.hideEditTools),
-        hideMatrixBtn: Boolean(prefs && prefs.hideMatrixBtn)
-    };
-    try {
-        localStorage.setItem(QBANK_TREE_VIS_STORAGE_KEY, JSON.stringify(_qbankTreeVisPrefs));
-    } catch (e) {}
-}
-
-function ensureQbankTreeVisMenuInDOM() {
-    let menu = document.getElementById("qbank-tree-vis-menu");
-    if (menu) return menu;
-
-    const host = document.getElementById("modal-qbank-creator") || document.body;
-    if (!host) return null;
-
-    menu = document.createElement("div");
-    menu.id = "qbank-tree-vis-menu";
-    menu.className = "qbank-tree-vis-menu";
-    menu.onclick = function(e) { e.stopPropagation(); };
-    menu.innerHTML = `
-        <div class="qbank-tree-vis-header">
-            <span>👁️ ẨN NÚT CUỐI THƯ MỤC</span>
-            <button type="button" class="qbank-tree-vis-close" onclick="closeQbankTreeVisMenu()" title="Đóng">✕</button>
-        </div>
-        <label class="qbank-tree-vis-opt">
-            <input type="checkbox" id="chk-tree-hide-edit-tools" onchange="setQbankTreeVisOption('hideEditTools', this.checked)">
-            <div>
-                <b>Ẩn Đổi màu, Sửa (✏️), +, Xóa (✕)</b>
-                <small>Giúp tên chương / bài hiển thị rộng tối đa</small>
-            </div>
-        </label>
-        <label class="qbank-tree-vis-opt">
-            <input type="checkbox" id="chk-tree-hide-matrix-btn" onchange="setQbankTreeVisOption('hideMatrixBtn', this.checked)">
-            <div>
-                <b>Ẩn nút Ma trận 16 ô (⊞)</b>
-                <
-Citations
-
-https://github.com/jays-visionAI/visionchain
-Model 11:21 PM
-ThinkingThoughts
-Expand to view model thoughts
-
-Ở câu trả lời trước, 3 file đầu (**1. `qbank-image-backup.js`**, **2. `Code.gs`**, **3. `qbank-core-sync.js`**) đã được xuất hoàn chỉnh 100%.
-
-Dưới đây là **100% toàn bộ file đang viết dở (`qbank-tree-questions.js`)** và **100% toàn bộ các file còn lại** (`qbank-mid-editor.js`, `exam-img-uploader.js`, `soide-actions-cloud.js`, `index.html`, `thi.html`).
-
----
-
-### 4. File viết lại đầy đủ 100%: `qbank-tree-questions.js`
-
-```javascript
-// =========================================================
-// FILE: qbank-tree-questions.js
-// MODULE 2/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
-// - CỘT 1: CÂY THƯ MỤC KIẾN THỨC, NÚT ẨN/HIỆN NÚT CHỨC NĂNG & MA TRẬN 16 Ô
-// - CỘT 2:
-//   + NÚT "📥 Upload file JSON đề" XÒE RA 4 KHO CHỜ XẾP
-//   + DUYỆT THƯ MỤC 3 CẤP + NÚT BACK + PHÂN TRANG 50 CÂU / TRANG
-//   + NÚT "✏️ Sửa" TRỰC TIẾP TRÊN TỪNG CÂU HỎI (MỞ SỬA ĐỀ CHIA ĐÔI TẠI ĐÚNG CÂU ĐÓ)
-//   + UPLOAD ẢNH 2 TẦNG (IMGBB + NGẦM LƯU GOOGLE DRIVE) + NÚT "🔄 Tải lại ảnh" + "☁️ Drive"
-// =========================================================
-
-let _qbankLeafHoverTimer = null;
-let _qbankLeafHoverFolderId = null;
+let _qbankSearchDebounceTimer = null;
 
 const QBANK_TREE_VIS_STORAGE_KEY = "qbank_tree_vis_prefs_v1";
 let _qbankTreeVisPrefs = null;
@@ -259,6 +162,72 @@ function setAllQbankTreeVisOptions(hideAll) {
     const btn = document.getElementById("btn-qbank-tree-vis-toggle");
     const menu = document.getElementById("qbank-tree-vis-menu");
     if (btn && menu && menu.classList.contains("show")) btn.classList.add("is-open");
+}
+
+// ============================================================================
+// 0.5. THANH TÌM KIẾM NHANH TRONG CỘT GIỮA (LỌC TỨC THÌ TRÊN 1.300+ CÂU)
+// ============================================================================
+function ensureQbankMidSearchBarInDOM() {
+    const bar = document.getElementById("qbank-mid-exam-bar");
+    if (!bar) return null;
+
+    let wrap = document.getElementById("qbank-mid-search-wrap");
+    if (!wrap) {
+        wrap = document.createElement("div");
+        wrap.id = "qbank-mid-search-wrap";
+        wrap.style.cssText = "display:inline-flex; align-items:center; gap:3px; flex-shrink:0;";
+        wrap.innerHTML = `
+            <input type="text" id="qbank-mid-search-input"
+                   placeholder="🔍 Tìm câu / ID..."
+                   title="Tìm nhanh theo nội dung câu hỏi, đáp án, mã ID hoặc tên đề gốc"
+                   oninput="onQbankMidSearchInput(this.value)"
+                   style="width:145px; max-width:34vw; padding:1.5px 7px; border-radius:999px; border:1px solid #93c5fd; font-size:10.5px; font-weight:700; outline:none; background:#ffffff; color:#0f172a; height:20px; box-sizing:border-box;">
+            <button type="button" id="btn-qbank-mid-search-clear"
+                    onclick="clearQbankMidSearch()"
+                    title="Xóa từ khóa tìm kiếm"
+                    style="display:none; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:900; cursor:pointer; padding:0; line-height:1; align-items:center; justify-content:center;">✕</button>
+        `;
+        const counter = document.getElementById("qbank-mid-exam-counter");
+        if (counter && counter.parentNode === bar) {
+            bar.insertBefore(wrap, counter);
+        } else {
+            bar.appendChild(wrap);
+        }
+    }
+
+    const inp = document.getElementById("qbank-mid-search-input");
+    const clr = document.getElementById("btn-qbank-mid-search-clear");
+    const qStr = (typeof qbankState !== "undefined" && qbankState.searchQuery) ? String(qbankState.searchQuery) : "";
+    if (inp && document.activeElement !== inp && inp.value !== qStr) {
+        inp.value = qStr;
+    }
+    if (clr) {
+        clr.style.display = qStr.trim() ? "inline-flex" : "none";
+    }
+    return wrap;
+}
+
+function onQbankMidSearchInput(val) {
+    const clr = document.getElementById("btn-qbank-mid-search-clear");
+    if (clr) clr.style.display = String(val || "").trim() ? "inline-flex" : "none";
+    if (_qbankSearchDebounceTimer) clearTimeout(_qbankSearchDebounceTimer);
+    _qbankSearchDebounceTimer = setTimeout(() => {
+        qbankState.searchQuery = String(val || "");
+        qbankState.currentMidPage = 1;
+        renderQbankQuestions();
+        updateQbankMatrixStats();
+    }, 150);
+}
+
+function clearQbankMidSearch() {
+    qbankState.searchQuery = "";
+    const inp = document.getElementById("qbank-mid-search-input");
+    if (inp) inp.value = "";
+    const clr = document.getElementById("btn-qbank-mid-search-clear");
+    if (clr) clr.style.display = "none";
+    qbankState.currentMidPage = 1;
+    renderQbankQuestions();
+    updateQbankMatrixStats();
 }
 
 // ============================================================================
@@ -495,6 +464,7 @@ async function executeTransferClassExamToKho(quizId, categoryId, itemId, targetK
         qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
         qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
         qbankState.assignMode = true; qbankState.hideAssigned = false;
+        qbankState.searchQuery = "";
         qbankState.currentMidPage = 1;
         qbankState.pendingNav = { mode: "kho", khoId: targetKhoId, examId: null };
 
@@ -853,6 +823,7 @@ async function importFilesIntoPendingKho(fileList, khoId) {
     qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
     qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
     qbankState.assignMode = true; qbankState.hideAssigned = false;
+    qbankState.searchQuery = "";
     qbankState.currentMidPage = 1;
     qbankState.pendingNav = { mode: "kho", khoId: khoId, examId: null };
 
@@ -1262,6 +1233,9 @@ function clearQbankFilter() {
     qbankState.activeFolderId = null; qbankState.activeFolderObj = null;
     qbankState.pendingNav = { mode: "none", khoId: null, examId: null };
     qbankState.assignMode = false; qbankState.hideAssigned = false;
+    qbankState.searchQuery = "";
+    const sInp = document.getElementById("qbank-mid-search-input");
+    if (sInp) sInp.value = "";
     qbankState.currentMidPage = 1;
     syncAssignModeButtonsUI(); renderQbankTree(); renderQbankQuestions(); updateQbankMatrixStats();
 }
@@ -1641,7 +1615,7 @@ function ensureQbankDeleteMultiDropdownInDOM() {
 function updateQbankDeleteMenuCounts() {
     const allQ = qbankState.rawQuestions || [];
     const navMode = (qbankState.pendingNav && qbankState.pendingNav.mode) || "none";
-    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level || (qbankState.searchQuery || "").trim());
     const isFolderBrowserLevel = (navMode === "root" || navMode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter;
 
     const unassignedCount = allQ.filter(q => Boolean(q && !q.folderId)).length;
@@ -1735,7 +1709,7 @@ function executeQbankMultiDelete(mode, event) {
 
     const allQ = qbankState.rawQuestions || [];
     const navMode = (qbankState.pendingNav && qbankState.pendingNav.mode) || "none";
-    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level || (qbankState.searchQuery || "").trim());
     const isFolderBrowserLevel = (navMode === "root" || navMode === "kho") && !qbankState.activeFilter.folderId && !hasPartOrLevelFilter;
     let targets = [];
     let confirmMsg = "";
@@ -1976,12 +1950,38 @@ function sortAssignedQuestionsArray(arr) {
     });
 }
 
+function questionMatchesSearchQuery(q, queryLower) {
+    if (!q || !queryLower) return true;
+    const haystacks = [
+        q.question,
+        q.matrixId,
+        q.sourceExam,
+        q.folderName,
+        q.explanation,
+        q.correctAnswer,
+        q.id,
+        q.origIndex ? `câu ${q.origIndex}` : ""
+    ];
+    if (Array.isArray(q.options)) haystacks.push(...q.options);
+    if (Array.isArray(q.statements)) haystacks.push(...q.statements.map(s => s && s.statement));
+
+    for (let i = 0; i < haystacks.length; i++) {
+        const val = haystacks[i];
+        if (val && String(val).toLowerCase().includes(queryLower)) return true;
+    }
+    return false;
+}
+
 function getFilteredAndSortedQuestions() {
     let list = getScopeQuestionsForMatrix();
     if (qbankState.activeFilter.part) list = list.filter(q => getQbankQuestionPart(q) === qbankState.activeFilter.part);
     if (qbankState.activeFilter.level) {
         const filterLvl = normalizeQbankLevel(qbankState.activeFilter.level);
         list = list.filter(q => normalizeQbankLevel(q.level) === filterLvl);
+    }
+    const qStr = (qbankState.searchQuery || "").trim().toLowerCase();
+    if (qStr) {
+        list = list.filter(q => questionMatchesSearchQuery(q, qStr));
     }
     const assigned = list.filter(q => Boolean(q && q.folderId && q.matrixId));
     const unassigned = list.filter(q => Boolean(q && !(q.folderId && q.matrixId)));
@@ -1993,7 +1993,11 @@ function updateQbankMatrixStats() {
     if (!bar) return;
 
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
-    const scopedQuestions = getScopeQuestionsForMatrix();
+    let scopedQuestions = getScopeQuestionsForMatrix();
+    const qStr = (qbankState.searchQuery || "").trim().toLowerCase();
+    if (qStr) {
+        scopedQuestions = scopedQuestions.filter(q => questionMatchesSearchQuery(q, qStr));
+    }
 
     if ((qbankState.rawQuestions || []).length === 0 && nav.mode === "none") {
         bar.innerHTML = `<span style="color:#64748b; font-style:italic;">Bấm "Upload file JSON đề" (chọn 1 trong 4 kho) hoặc bấm "🏦 Chuyển ngân hàng đề" trên lớp để xem ma trận thống kê 4 mức độ</span>`;
@@ -2039,6 +2043,7 @@ function updateQbankMatrixStats() {
     }
     if (qbankState.activeFilter.part) filterLabels.push(`Phần ${qbankState.activeFilter.part}`);
     if (qbankState.activeFilter.level) filterLabels.push(`Mức: ${getQbankLevelLabel(qbankState.activeFilter.level)}`);
+    if (qStr) filterLabels.push(`Từ khóa: "${qbankState.searchQuery.trim()}"`);
 
     if (filterLabels.length > 0) {
         html += `<div class="qbank-active-filter-bar" style="width:100%;"><span>🔍 Đang xem: <b>${escapeQbankHtml(filterLabels.join(" • "))}</b></span><button type="button" class="btn-clear-filter" onclick="clearQbankFilter()">✕ Hiện tất cả ngân hàng</button></div>`;
@@ -2291,6 +2296,7 @@ function renderQbankQuestions() {
     ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
     renderQbankHeaderAndMidExamTitle();
+    ensureQbankMidSearchBarInDOM();
     updateQbankDeleteSelectedButtonUI();
     updateQbankUploadMenuCounts();
 
@@ -2298,7 +2304,7 @@ function renderQbankQuestions() {
     if (!container) return;
 
     const nav = qbankState.pendingNav || { mode: "none", khoId: null, examId: null };
-    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level);
+    const hasPartOrLevelFilter = Boolean(qbankState.activeFilter.part || qbankState.activeFilter.level || (qbankState.searchQuery || "").trim());
     if (!qbankState.activeFilter.folderId && !hasPartOrLevelFilter) {
         if (nav.mode === "root") {
             if (typeof renderQbankPaginationFooter === "function") renderQbankPaginationFooter(0, 1, qbankState.pageSize || 50);
@@ -2319,7 +2325,7 @@ function renderQbankQuestions() {
 
     if (questions.length === 0) {
         if (typeof renderQbankPaginationFooter === "function") renderQbankPaginationFooter(0, 1, qbankState.pageSize || 50);
-        const isFilterActive = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned;
+        const isFilterActive = qbankState.activeFilter.folderId || qbankState.activeFilter.part || qbankState.activeFilter.level || qbankState.hideAssigned || (qbankState.searchQuery || "").trim();
         const unassignedLeft = (qbankState.rawQuestions || []).filter(q => !q.folderId).length;
         const assignedTotal = (qbankState.rawQuestions || []).length - unassignedLeft;
         let emptyHeadline = "Chưa có câu hỏi nào trong danh sách.";
@@ -2334,11 +2340,11 @@ function renderQbankQuestions() {
                 emptyHeadline = "Đề này hiện không còn câu hỏi nào.";
                 emptyHint = 'Bấm <b>← Back</b> để quay về kho hoặc thêm câu mới.';
             }
-        } else if (qbankState.hideAssigned && !qbankState.activeFilter.folderId && assignedTotal > 0 && unassignedLeft === 0) {
+        } else if (qbankState.hideAssigned && !qbankState.activeFilter.folderId && !(qbankState.searchQuery || "").trim() && assignedTotal > 0 && unassignedLeft === 0) {
             emptyHeadline = "🎉 Đã xếp xong 100% câu hỏi của đề gốc vào ngân hàng!";
             emptyHint = `Hiện có <b>${assignedTotal} câu</b> trong các thư mục bên trái.`;
         } else if (isFilterActive) {
-            emptyHeadline = "Không tìm thấy câu hỏi nào phù hợp với bộ lọc này.";
+            emptyHeadline = "Không tìm thấy câu hỏi nào phù hợp với bộ lọc / từ khóa này.";
             emptyHint = '<a href="javascript:void(0)" onclick="clearQbankFilter()" style="color:#0284c7; font-weight:800; text-decoration:underline;">Nhấn vào đây để hủy lọc và xem tất cả</a>';
         }
         container.innerHTML = `${topPendingNavHtml}<div style="text-align:center; padding:40px 16px; color:#64748b;"><div style="font-size:36px; margin-bottom:8px;">${isFilterActive ? "🔍" : "📥"}</div><b>${emptyHeadline}</b><p style="font-size:11.5px; margin-top:6px;">${emptyHint}</p></div>`;
@@ -2607,7 +2613,6 @@ async function reloadQBankImg(qId) {
                     saveQbankDraftState(false);
                 }
 
-                // Hiển thị ngay ảnh vừa lấy về (dataUrl từ Drive hoặc URL mới)
                 const imgEl = document.getElementById(`qbank-img-el-${q.id}`);
                 if (imgEl) {
                     const box = imgEl.parentElement && imgEl.parentElement.querySelector(".img-recovery-box");
@@ -2687,6 +2692,9 @@ window.toggleQbankTreeVisMenu = toggleQbankTreeVisMenu;
 window.closeQbankTreeVisMenu = closeQbankTreeVisMenu;
 window.setQbankTreeVisOption = setQbankTreeVisOption;
 window.setAllQbankTreeVisOptions = setAllQbankTreeVisOptions;
+window.ensureQbankMidSearchBarInDOM = ensureQbankMidSearchBarInDOM;
+window.onQbankMidSearchInput = onQbankMidSearchInput;
+window.clearQbankMidSearch = clearQbankMidSearch;
 window.normalizeQuestionAnswerOnTransfer = normalizeQuestionAnswerOnTransfer;
 window.closeClassTransferKhoPopover = closeClassTransferKhoPopover;
 window.transferClassExamToQBank = transferClassExamToQBank;
@@ -2732,6 +2740,7 @@ window.handleDropZoneOver = handleDropZoneOver;
 window.handleDropZoneLeave = handleDropZoneLeave;
 window.handleDropZoneDrop = handleDropZoneDrop;
 window.assignSelectedQuestionsToMatrix = assignSelectedQuestionsToMatrix;
+window.applyMatrixToQuestion = applyMatrixToQuestion;
 window.unassignQbankQuestion = unassignQbankQuestion;
 window.pruneStaleSelectedQuestionIds = pruneStaleSelectedQuestionIds;
 window.updateQbankDeleteSelectedButtonUI = updateQbankDeleteSelectedButtonUI;
