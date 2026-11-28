@@ -1,10 +1,10 @@
 // =========================================================
 // FILE: qbank-core-sync.js
-// MODULE 1/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ (BẢN NÂNG CẤP CHO 3.000 - 10.000+ CÂU):
+// MODULE 1/4 CỦA HỆ THỐNG NGÂN HÀNG ĐỀ:
 // - LƯU MỖI CÂU HỎI = 1 DÒNG TRONG BẢNG RIÊNG qbank_questions (PHÂN TRANG + DIFF SYNC)
-// - TỰ ĐỘNG DI TRÚ TỪ DÒNG JSON CŨ (qbank_workspace_draft) SANG qbank_questions
+// - ĐỒNG BỘ & BẢO LƯU METADATA LINK ẢNH DỰ PHÒNG GOOGLE DRIVE (imagesBackupMap)
 // - CHẶN TRIỆT ĐỂ ẢNH BASE64 LỌT VÀO SUPABASE
-// - BỔ SUNG THANH TIẾN TRÌNH LOAD NGANG THÔNG MINH KHỚP TỐC ĐỘ TẢI THỰC TẾ
+// - TỰ PHỤC HỒI ẢNH ĐA TẦNG KHI LỖI THAY VÌ ẨN MẤT ẢNH
 // =========================================================
 
 const QBANK_PENDING_KHOS = [
@@ -80,6 +80,7 @@ let qbankState = {
     savedExams: [],
     draggedQId: null,
     imagesMap: {},
+    imagesBackupMap: {},
     currentExamToTransfer: null,
     treeUpdatedAt: 0,
     draftUpdatedAt: 0,
@@ -132,7 +133,7 @@ let _qbankCloudDraftSyncTimer = null;
 let _qbankSyncedFingerprints = new Map();
 
 // ============================================================================
-// 0. TIỆN ÍCH 4 KHO CHỜ XẾP, LỌC CHẶN BASE64 & BẢO TOÀN DỮ LIỆU CŨ
+// 0. TIỆN ÍCH 4 KHO CHỜ XẾP, LỌC CHẶN BASE64 & ĐỒNG BỘ ẢNH DỰ PHÒNG
 // ============================================================================
 function getPendingKhoMeta(khoId) {
     return QBANK_PENDING_KHOS.find(k => k.id === khoId) || QBANK_PENDING_KHOS[1];
@@ -176,8 +177,53 @@ function stripBase64FromQuestions(questions) {
             q.imageUrl = "";
             removedCount++;
         }
+        if (q.imageBackupUrl && isBase64DataUrl(q.imageBackupUrl)) {
+            q.imageBackupUrl = "";
+        }
     });
     return removedCount;
+}
+
+function rebuildQbankImagesBackupMap() {
+    const map = {};
+    const prev = (qbankState.imagesBackupMap && typeof qbankState.imagesBackupMap === "object") ? qbankState.imagesBackupMap : {};
+    (qbankState.rawQuestions || []).forEach((q, idx) => {
+        if (!q) return;
+        const imgKey = q.imageKey || `img_q_${q.id}`;
+        const primaryUrl = (q.imageUrl && !isBase64DataUrl(q.imageUrl)) ? q.imageUrl : ((qbankState.imagesMap && qbankState.imagesMap[imgKey]) || "");
+        const prevMeta = prev[imgKey] || {};
+        const backupUrl = q.imageBackupUrl || prevMeta.backupUrl || "";
+        const driveFileId = q.imageDriveFileId || prevMeta.driveFileId || "";
+        const driveUrl = q.imageDriveUrl || prevMeta.driveUrl || "";
+        const driveFolderUrl = q.imageDriveFolderUrl || prevMeta.driveFolderUrl || "";
+        const drivePath = q.imageDrivePath || prevMeta.drivePath || "";
+        const driveFilename = q.imageDriveFilename || prevMeta.driveFilename || "";
+
+        if (primaryUrl || backupUrl || driveFileId || drivePath) {
+            if (!q.imageBackupUrl && backupUrl) q.imageBackupUrl = backupUrl;
+            if (!q.imageDriveFileId && driveFileId) q.imageDriveFileId = driveFileId;
+            if (!q.imageDriveUrl && driveUrl) q.imageDriveUrl = driveUrl;
+            if (!q.imageDriveFolderUrl && driveFolderUrl) q.imageDriveFolderUrl = driveFolderUrl;
+            if (!q.imageDrivePath && drivePath) q.imageDrivePath = drivePath;
+            if (!q.imageDriveFilename && driveFilename) q.imageDriveFilename = driveFilename;
+
+            map[imgKey] = {
+                questionId: String(q.id),
+                questionNum: q.matrixSeq || q.origIndex || (idx + 1),
+                matrixId: q.matrixId || "",
+                folderName: q.folderName || q.sourceExam || "",
+                primaryUrl,
+                backupUrl,
+                driveFileId,
+                driveUrl,
+                driveFolderUrl,
+                drivePath,
+                driveFilename
+            };
+        }
+    });
+    qbankState.imagesBackupMap = map;
+    return map;
 }
 
 function ensureQbankPendingExamsIntegrity() {
@@ -352,6 +398,22 @@ function resolveQbankImageUrl(q, imageMap) {
     if (q.imageUrl && String(q.imageUrl).trim() !== "" && !isBase64DataUrl(q.imageUrl)) return normalizeDriveImageLinkIfNeeded(q.imageUrl);
     if (q.imageKey && map[q.imageKey] && String(map[q.imageKey]).trim() !== "" && !isBase64DataUrl(map[q.imageKey])) return normalizeDriveImageLinkIfNeeded(map[q.imageKey]);
 
+    if (q.imageBackupUrl && String(q.imageBackupUrl).trim() !== "" && !isBase64DataUrl(q.imageBackupUrl)) {
+        return normalizeDriveImageLinkIfNeeded(q.imageBackupUrl);
+    }
+    if (q.imageDriveFileId && String(q.imageDriveFileId).trim() !== "") {
+        return `https://lh3.googleusercontent.com/d/${String(q.imageDriveFileId).trim()}`;
+    }
+
+    const backupMap = (typeof qbankState !== "undefined" && qbankState.imagesBackupMap) ? qbankState.imagesBackupMap : {};
+    const bKey = q.imageKey || `img_q_${q.id}`;
+    if (backupMap[bKey]) {
+        const bm = backupMap[bKey];
+        if (bm.primaryUrl && !isBase64DataUrl(bm.primaryUrl)) return normalizeDriveImageLinkIfNeeded(bm.primaryUrl);
+        if (bm.backupUrl && !isBase64DataUrl(bm.backupUrl)) return normalizeDriveImageLinkIfNeeded(bm.backupUrl);
+        if (bm.driveFileId) return `https://lh3.googleusercontent.com/d/${bm.driveFileId}`;
+    }
+
     const qIdStr = String(q.id || "").trim();
     const origIdStr = String(q.origIndex || "").trim();
     const idCandidates = [];
@@ -383,8 +445,25 @@ function resolveQbankImageUrl(q, imageMap) {
     return "";
 }
 
-function handleQbankImgError(imgEl) {
-    if (!imgEl || !imgEl.src) return;
+function handleQbankImgError(imgEl, qId = "") {
+    if (!imgEl) return;
+    let qObj = null;
+    if (qId) {
+        if (typeof qbankMidEditState !== "undefined" && qbankMidEditState.isActive && Array.isArray(qbankMidEditState.questions)) {
+            qObj = qbankMidEditState.questions.find(x => x && String(x.id) === String(qId)) || null;
+        }
+        if (!qObj && typeof qbankState !== "undefined" && Array.isArray(qbankState.rawQuestions)) {
+            qObj = qbankState.rawQuestions.find(x => x && String(x.id) === String(qId)) || null;
+        }
+    }
+
+    if (typeof window.handleSmartQuestionImgError === "function") {
+        const reloadFnName = (typeof qbankMidEditState !== "undefined" && qbankMidEditState.isActive) ? "qbEditReloadQuestionImage" : "reloadQBankImg";
+        window.handleSmartQuestionImgError(imgEl, qObj, { qId, reloadFnName });
+        return;
+    }
+
+    if (!imgEl.src) return;
     const currentSrc = imgEl.src;
     if (currentSrc.includes("googleusercontent.com") || currentSrc.includes("drive.google.com")) {
         const m = currentSrc.match(/(?:file\/d\/|id=|open\?id=|\/d\/)([a-zA-Z0-9_-]{25,})/);
@@ -632,6 +711,7 @@ function pushQbankUndoState(actionLabel = "Thao tác") {
             pendingExams: JSON.parse(JSON.stringify(qbankState.pendingExams || [])),
             pendingNav: JSON.parse(JSON.stringify(qbankState.pendingNav || { mode: "none", khoId: null, examId: null })),
             imagesMap: JSON.parse(JSON.stringify(qbankState.imagesMap || {})),
+            imagesBackupMap: JSON.parse(JSON.stringify(qbankState.imagesBackupMap || {})),
             currentTree: JSON.parse(JSON.stringify(qbankState.currentTree || [])),
             currentExamTitle: qbankState.currentExamTitle || "",
             selectedQuestionIds: Array.from(qbankState.selectedQuestionIds || []),
@@ -671,6 +751,7 @@ function undoQbankAction() {
     qbankState.pendingExams = Array.isArray(prev.pendingExams) ? prev.pendingExams : [];
     qbankState.pendingNav = prev.pendingNav || { mode: "none", khoId: null, examId: null };
     if (prev.imagesMap) qbankState.imagesMap = prev.imagesMap;
+    if (prev.imagesBackupMap) qbankState.imagesBackupMap = prev.imagesBackupMap;
     qbankState.currentTree = prev.currentTree || qbankState.currentTree;
     qbankState.currentExamTitle = prev.currentExamTitle || "";
     qbankState.selectedQuestionIds = new Set(prev.selectedQuestionIds || []);
@@ -717,7 +798,7 @@ document.addEventListener("keydown", function(e) {
 });
 
 // ============================================================================
-// 5. ĐỒNG BỘ 2 CHIỀU CLOUD TỐI ƯU BẢNG RIÊNG qbank_questions (3.000 - 10.000+ CÂU)
+// 5. ĐỒNG BỘ 2 CHIỀU CLOUD TỐI ƯU BẢNG RIÊNG qbank_questions
 // ============================================================================
 function serializeQbankQuestionRow(q) {
     const part = getQbankQuestionPart(q);
@@ -725,6 +806,9 @@ function serializeQbankQuestionRow(q) {
     const qCopy = JSON.parse(JSON.stringify(q));
     if (qCopy.imageUrl && isBase64DataUrl(qCopy.imageUrl)) {
         qCopy.imageUrl = "";
+    }
+    if (qCopy.imageBackupUrl && isBase64DataUrl(qCopy.imageBackupUrl)) {
+        qCopy.imageBackupUrl = "";
     }
     qCopy.part = part;
     qCopy.isPart4 = (part === 4);
@@ -776,6 +860,9 @@ function deserializeQbankQuestionRow(row) {
 
     if (base.imageUrl && isBase64DataUrl(base.imageUrl)) {
         base.imageUrl = "";
+    }
+    if (base.imageBackupUrl && isBase64DataUrl(base.imageBackupUrl)) {
+        base.imageBackupUrl = "";
     }
     return base;
 }
@@ -860,8 +947,8 @@ async function syncQbankDraftToCloud() {
         const { clean: cleanImagesMap } = sanitizeImagesMapNoBase64(qbankState.imagesMap || {});
         qbankState.imagesMap = cleanImagesMap;
         stripBase64FromQuestions(qbankState.rawQuestions || []);
+        const cleanBackupMap = rebuildQbankImagesBackupMap();
 
-        // 1. NẾU BẢNG RIÊNG qbank_questions SẴN SÀNG -> CHỈ GỬI DIFF (TỪNG DÒNG THAY ĐỔI)
         if (qbankState.useDedicatedTable) {
             const currentIdSet = new Set();
             const upsertMap = new Map();
@@ -899,12 +986,12 @@ async function syncQbankDraftToCloud() {
 
             _qbankSyncedFingerprints = nextFingerprints;
 
-            // Lưu phần metadata gọn nhẹ vào app_key_values
             const { error: metaErr } = await client.from("app_key_values").upsert({
                 key: QBANK_CLOUD_META_KEY,
                 value: {
                     pendingExams: qbankState.pendingExams || [],
                     images: cleanImagesMap,
+                    imagesBackupMap: cleanBackupMap,
                     currentExamTitle: qbankState.currentExamTitle || "",
                     updatedAt: ts,
                     questionCount: currentIdSet.size
@@ -913,13 +1000,13 @@ async function syncQbankDraftToCloud() {
             return !metaErr;
         }
 
-        // 2. CHẾ ĐỘ TƯƠNG THÍCH CŨ (KHI CHƯA CHẠY SQL TẠO BẢNG qbank_questions)
         const { error } = await client.from("app_key_values").upsert({
             key: QBANK_CLOUD_DRAFT_KEY,
             value: {
                 questions: qbankState.rawQuestions || [],
                 pendingExams: qbankState.pendingExams || [],
                 images: cleanImagesMap,
+                imagesBackupMap: cleanBackupMap,
                 currentExamTitle: qbankState.currentExamTitle || "",
                 updatedAt: ts
             }
@@ -955,6 +1042,7 @@ async function writeQbankDraftLocalStorages(ts) {
         localStorage.setItem("qbank_draft_questions", JSON.stringify(qbankState.rawQuestions || []));
         localStorage.setItem("qbank_draft_pending_exams", JSON.stringify(qbankState.pendingExams || []));
         localStorage.setItem("qbank_draft_images", JSON.stringify(qbankState.imagesMap || {}));
+        localStorage.setItem("qbank_draft_images_backup", JSON.stringify(qbankState.imagesBackupMap || {}));
         localStorage.setItem("qbank_draft_exam_title", qbankState.currentExamTitle || "");
         localStorage.setItem("qbank_draft_updated_at", String(ts));
         savedLocal = true;
@@ -962,6 +1050,7 @@ async function writeQbankDraftLocalStorages(ts) {
         try {
             localStorage.removeItem("qbank_draft_questions");
             localStorage.removeItem("qbank_draft_images");
+            localStorage.removeItem("qbank_draft_images_backup");
             localStorage.removeItem("qbank_draft_pending_exams");
             localStorage.setItem("qbank_draft_updated_at", String(ts));
         } catch (e2) {}
@@ -973,6 +1062,7 @@ async function writeQbankDraftLocalStorages(ts) {
                 questions: qbankState.rawQuestions || [],
                 pendingExams: qbankState.pendingExams || [],
                 images: qbankState.imagesMap || {},
+                imagesBackupMap: qbankState.imagesBackupMap || {},
                 currentExamTitle: qbankState.currentExamTitle || "",
                 currentTree: qbankState.currentTree,
                 updatedAt: ts
@@ -1009,6 +1099,7 @@ function loadQbankTreeData() {
 async function saveQbankDraftState(showFeedback = false) {
     ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
+    rebuildQbankImagesBackupMap();
     const ts = Date.now();
     qbankState.draftUpdatedAt = ts;
     qbankState.treeUpdatedAt = Math.max(qbankState.treeUpdatedAt || 0, ts);
@@ -1063,7 +1154,8 @@ async function manualSaveQbankDraftState(event) {
                         currentTree: qbankState.currentTree,
                         pendingExams: qbankState.pendingExams,
                         questions: qbankState.rawQuestions,
-                        images: qbankState.imagesMap
+                        images: qbankState.imagesMap,
+                        imagesBackupMap: qbankState.imagesBackupMap
                     }
                 })
             }).catch(() => {});
@@ -1086,6 +1178,7 @@ async function loadQbankDraftState(onProgress = null) {
     let localQuestions = [];
     let localPendingExams = [];
     let localImages = {};
+    let localImagesBackup = {};
     let localTitle = "";
     const lsRawQ = localStorage.getItem("qbank_draft_questions");
     const lsDraftTs = parseInt(localStorage.getItem("qbank_draft_updated_at") || "0", 10) || 0;
@@ -1102,6 +1195,7 @@ async function loadQbankDraftState(onProgress = null) {
                     localQuestions = data.questions;
                     if (Array.isArray(data.pendingExams)) localPendingExams = data.pendingExams;
                     localImages = data.images || {};
+                    localImagesBackup = data.imagesBackupMap || {};
                     if (data.currentExamTitle) localTitle = data.currentExamTitle;
                     if (idbTs > localDraftTs) localDraftTs = idbTs;
                 }
@@ -1117,10 +1211,12 @@ async function loadQbankDraftState(onProgress = null) {
         try {
             const pe = localStorage.getItem("qbank_draft_pending_exams");
             const img = localStorage.getItem("qbank_draft_images");
+            const imgBk = localStorage.getItem("qbank_draft_images_backup");
             const title = localStorage.getItem("qbank_draft_exam_title");
             if (lsRawQ) { const pq = JSON.parse(lsRawQ); if (Array.isArray(pq)) localQuestions = pq; }
             if (pe) { const ppe = JSON.parse(pe); if (Array.isArray(ppe)) localPendingExams = ppe; }
             if (img) { const pi = JSON.parse(img); if (pi && typeof pi === "object") localImages = pi; }
+            if (imgBk) { const pib = JSON.parse(imgBk); if (pib && typeof pib === "object") localImagesBackup = pib; }
             if (title) localTitle = title;
         } catch (e) {}
     } else if (localPendingExams.length === 0) {
@@ -1138,6 +1234,7 @@ async function loadQbankDraftState(onProgress = null) {
     qbankState.rawQuestions = localQuestions;
     qbankState.pendingExams = localPendingExams;
     qbankState.imagesMap = localImages;
+    qbankState.imagesBackupMap = (localImagesBackup && typeof localImagesBackup === "object") ? localImagesBackup : {};
     qbankState.currentExamTitle = localTitle;
     qbankState.draftUpdatedAt = localDraftTs;
     _qbankSyncedFingerprints = new Map();
@@ -1161,7 +1258,6 @@ async function loadQbankDraftState(onProgress = null) {
             const metaRow = rows.find(r => r.key === QBANK_CLOUD_META_KEY);
             const draftRow = rows.find(r => r.key === QBANK_CLOUD_DRAFT_KEY);
 
-            // 1. ĐỒNG BỘ CÂY THƯ MỤC
             const cloudTreeVal = treeRow ? treeRow.value : null;
             const cloudTree = Array.isArray(cloudTreeVal)
                 ? cloudTreeVal
@@ -1183,7 +1279,6 @@ async function loadQbankDraftState(onProgress = null) {
                 await syncQbankTreeToCloud();
             }
 
-            // 2. ĐỒNG BỘ CÂU HỎI TỪ BẢNG RIÊNG qbank_questions
             if (tableRes && tableRes.ok) {
                 qbankState.useDedicatedTable = true;
                 const metaVal = (metaRow && metaRow.value) ? metaRow.value : {};
@@ -1193,6 +1288,7 @@ async function loadQbankDraftState(onProgress = null) {
                 if (tableRes.rows.length > 0) {
                     const cloudQuestions = tableRes.rows.map(deserializeQbankQuestionRow).filter(Boolean);
                     const cloudImages = sanitizeImagesMapNoBase64(metaVal.images || {}).clean;
+                    const cloudBackupMap = (metaVal.imagesBackupMap && typeof metaVal.imagesBackupMap === "object") ? metaVal.imagesBackupMap : {};
                     cloudQuestions.forEach(q => {
                         if (q.imageUrl && !isBase64DataUrl(q.imageUrl)) {
                             const k = q.imageKey || `img_q_${q.id}`;
@@ -1207,6 +1303,7 @@ async function loadQbankDraftState(onProgress = null) {
                         qbankState.rawQuestions = cloudQuestions;
                         qbankState.pendingExams = Array.isArray(metaVal.pendingExams) ? metaVal.pendingExams : [];
                         qbankState.imagesMap = cloudImages;
+                        qbankState.imagesBackupMap = cloudBackupMap;
                         qbankState.currentExamTitle = metaVal.currentExamTitle || "";
                         qbankState.draftUpdatedAt = cloudMetaTs || Date.now();
                         rebuildSyncedFingerprintsFromState();
@@ -1226,6 +1323,7 @@ async function loadQbankDraftState(onProgress = null) {
                         qbankState.rawQuestions = legacyQuestions;
                         qbankState.pendingExams = Array.isArray(legacyDraft.pendingExams) ? legacyDraft.pendingExams : [];
                         qbankState.imagesMap = sanitizeImagesMapNoBase64(legacyDraft.images || {}).clean;
+                        qbankState.imagesBackupMap = (legacyDraft.imagesBackupMap && typeof legacyDraft.imagesBackupMap === "object") ? legacyDraft.imagesBackupMap : {};
                         qbankState.currentExamTitle = legacyDraft.currentExamTitle || "";
                         qbankState.draftUpdatedAt = legacyTs || Date.now();
                         ensureQbankPendingExamsIntegrity();
@@ -1246,7 +1344,6 @@ async function loadQbankDraftState(onProgress = null) {
                     }
                 }
             } else {
-                // 3. FALLBACK TƯƠNG THÍCH CŨ
                 qbankState.useDedicatedTable = false;
                 const cloudDraft = draftRow ? draftRow.value : null;
                 const cloudQuestions = (cloudDraft && Array.isArray(cloudDraft.questions)) ? cloudDraft.questions : null;
@@ -1261,6 +1358,7 @@ async function loadQbankDraftState(onProgress = null) {
                         qbankState.rawQuestions = cloudQuestions;
                         qbankState.pendingExams = Array.isArray(cloudPendingExams) ? cloudPendingExams : [];
                         qbankState.imagesMap = sanitizeImagesMapNoBase64(cloudDraft.images || {}).clean;
+                        qbankState.imagesBackupMap = (cloudDraft.imagesBackupMap && typeof cloudDraft.imagesBackupMap === "object") ? cloudDraft.imagesBackupMap : {};
                         qbankState.currentExamTitle = cloudDraft.currentExamTitle || "";
                         qbankState.draftUpdatedAt = cloudDraftTs || Date.now();
                         await writeQbankDraftLocalStorages(qbankState.draftUpdatedAt);
@@ -1281,10 +1379,11 @@ async function loadQbankDraftState(onProgress = null) {
     report(95, "Đang đánh số ID ma trận & chia trang...");
     ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
+    rebuildQbankImagesBackupMap();
 }
 
 // ============================================================================
-// 5.5. SAO LƯU & KHÔI PHỤC TỪ FILE BACKUP DRIVE / JSON (1 CÚ BẤM)
+// 5.5. SAO LƯU & KHÔI PHỤC TỪ FILE BACKUP DRIVE / JSON
 // ============================================================================
 function downloadQbankFullBackupJson(event) {
     if (event) { event.preventDefault(); event.stopPropagation(); }
@@ -1292,6 +1391,7 @@ function downloadQbankFullBackupJson(event) {
 
     ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
+    const backupImgMeta = rebuildQbankImagesBackupMap();
 
     const backupObj = {
         format: "obahoan_qbank_workspace_backup_v2",
@@ -1301,7 +1401,8 @@ function downloadQbankFullBackupJson(event) {
         currentTree: qbankState.currentTree || [],
         pendingExams: qbankState.pendingExams || [],
         questions: qbankState.rawQuestions || [],
-        images: qbankState.imagesMap || {}
+        images: qbankState.imagesMap || {},
+        imagesBackupMap: backupImgMeta
     };
 
     const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: "application/json;charset=utf-8" });
@@ -1313,7 +1414,7 @@ function downloadQbankFullBackupJson(event) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-    showQbankToast(`💾 Đã tải xuống file Backup (${backupObj.questions.length} câu)!`, "success");
+    showQbankToast(`💾 Đã tải xuống file Backup (${backupObj.questions.length} câu, kèm link dự phòng Drive)!`, "success");
 }
 
 function openQbankRestoreModal(event) {
@@ -1356,6 +1457,7 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
     const incomingTree = Array.isArray(parsed.currentTree) && parsed.currentTree.length > 0 ? parsed.currentTree : null;
     const incomingPendingExams = Array.isArray(parsed.pendingExams) ? parsed.pendingExams : [];
     const incomingImages = sanitizeImagesMapNoBase64(parsed.images || {}).clean;
+    const incomingImagesBackup = (parsed.imagesBackupMap && typeof parsed.imagesBackupMap === "object") ? parsed.imagesBackupMap : {};
     const strippedInQ = stripBase64FromQuestions(incomingQuestions);
 
     if (mode === "overwrite") {
@@ -1363,6 +1465,7 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
         qbankState.rawQuestions = incomingQuestions;
         qbankState.pendingExams = incomingPendingExams;
         qbankState.imagesMap = incomingImages;
+        qbankState.imagesBackupMap = incomingImagesBackup;
         qbankState.currentExamTitle = parsed.currentExamTitle || "";
         qbankState.selectedQuestionIds.clear();
         qbankState.activeFilter = { folderId: null, folderName: null, part: null, level: null };
@@ -1392,10 +1495,12 @@ async function applyQbankBackupPayload(parsed, sourceLabel = "Backup") {
         });
 
         qbankState.imagesMap = { ...(qbankState.imagesMap || {}), ...incomingImages };
+        qbankState.imagesBackupMap = { ...(qbankState.imagesBackupMap || {}), ...incomingImagesBackup };
     }
 
     ensureQbankPendingExamsIntegrity();
     recomputeAllMatrixIds();
+    rebuildQbankImagesBackupMap();
     saveQbankTreeData();
     await saveQbankDraftState(true);
 
@@ -1766,6 +1871,7 @@ window.guessPendingKhoId = guessPendingKhoId;
 window.isBase64DataUrl = isBase64DataUrl;
 window.sanitizeImagesMapNoBase64 = sanitizeImagesMapNoBase64;
 window.stripBase64FromQuestions = stripBase64FromQuestions;
+window.rebuildQbankImagesBackupMap = rebuildQbankImagesBackupMap;
 window.ensureQbankPendingExamsIntegrity = ensureQbankPendingExamsIntegrity;
 window.isQbankAdminAuthorized = isQbankAdminAuthorized;
 window.requireQbankAdminOrPrompt = requireQbankAdminOrPrompt;
