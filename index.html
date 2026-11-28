@@ -1378,9 +1378,9 @@
 
                         <button type="button" class="btn-qbank btn-qbank-primary" onclick="triggerQbankUpload()">📥 Upload file JSON đề</button>
                         
-                        <!-- NÚT SOI ĐỀ TRONG NGÂN HÀNG CÂU HỎI -->
-                        <button type="button" class="btn-qbank" style="background:#8b5cf6; color:#fff; border:1px solid #7c3aed;" onclick="openSoiDeFromQBank()" title="Mở công cụ Soi đề để chỉnh sửa hàng loạt toàn bộ ngân hàng">
-                            🔍 Soi đề
+                        <!-- NÚT LƯU TỰ ĐỘNG NGẦM TẤT CẢ ẢNH NGÂN HÀNG LÊN GOOGLE DRIVE QUA GAS -->
+                        <button type="button" class="btn-qbank btn-qbank-autosave-drive" id="btn-qbank-auto-save-drive" onclick="runAutoBackupAllQbankImagesToDrive(event)" title="Lưu tự động ngầm tất cả các ảnh hiện có trong Ngân hàng đề lên Google Drive 5TB qua GAS">
+                            <span>☁️</span> <span id="btn-qbank-autosave-drive-text">Lưu tự động</span>
                         </button>
                         
                         <!-- NÚT LƯU DỮ LIỆU CÓ PHẢN HỒI RÕ RÀNG -->
